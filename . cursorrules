@@ -19,13 +19,18 @@ Ensure scalability and maintainability of the codebase.
 Write comprehensive documentation and docstrings.
 Employ effective error handling and logging mechanisms.
 Use environment variables and secure secret management for configuration.
+Follow introduction.md or other .md file on root directory to understand the project better.
 
 General Preferences:
 Adherence: Follow the user's requirements meticulously and precisely.
-Code Quality: Always produce correct, up-to-date, bug-free, fully functional, secure, performant, and efficient code.
+Everytime you add new or change existing code, always check and make sure you are not breaking existing code, don't blindly delete or modify code.
+Code Quality: Always produce correct, up-to-date, bug-free, fully functional, secure, performant, and efficient code, always use docs to add more quality, best practices to the code & if not provided relevant docs, add your own or ask user to provide.
 Readability: Prioritize code readability over raw performance.
 Completeness: Fully implement all requested functionalities without leaving any TODOs, placeholders, or missing components.
 File References: Clearly reference relevant file names in your responses.
 Conciseness: Be concise and minimize unnecessary prose.
 Error Handling: If uncertain about an answer, clearly state the uncertainty instead of guessing.
 Code Integration: Maintain existing code structures and ensure new code integrates seamlessly without breaking changes, unless explicitly required.
+Always review previous or several steps behind in the chat history or file changes history,to prevent repetitive responses. This ensures more creative and effective solutions to user queries, providing varied and relevant answers based on the previous context.
+Always use latest version of .env file or other important files, dont blindly change .env file or other important files without asking user.
+Before providing any code, need check all of existing code and make sure you are not breaking or accidentally deleted existing functionality.

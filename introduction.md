@@ -14,10 +14,36 @@ Key features include:
 
 - **Profile Creation & Management**: Users can create detailed profiles, set personal preferences, and edit them as needed.
 - **Matching Algorithm**: Automatically match users based on interests, preferences, and compatibility.
-- **Match Viewing & Interaction**: Users can browse matches, and express interest.
+- **Match Viewing & Interaction**: Users can browse matches and express interest.
 - **Security & Privacy Enhancements**: Comprehensive user verification, privacy settings, reporting, and blocking ensure a safe user environment.
 
 This guide will enable you to build a highly scalable and performant Telegram bot, leveraging microservices and serverless architecture for seamless operation and easier scaling as user demand grows.
+
+## Database Settings
+
+### Connection String
+
+- **Source Primary Database**: 
+  - Documentation: 
+    - Python
+
+- **Display Connection Pooler**: 
+  - Mode: transaction
+  - Supavisor
+  - Resolves to IPv4
+  - `user=postgres.ystmtmuwsoanjclgpcge password=[YOUR-PASSWORD] host=aws-0-ap-southeast-1.pooler.supabase.com port=6543 dbname=postgres`
+
+### How to Connect to a Different Database or Switch to Another User
+
+You can use the following URI format to switch to a different database or user when using connection pooling.
+
+`user=[user].ystmtmuwsoanjclgpcge password=[password] host=aws-0-ap-southeast-1.pooler.supabase.com port=6543 dbname=[db-name]`
+
+### Connecting to SQL Alchemy
+
+Please use `postgresql://` instead of `postgres://` as your dialect when connecting via SQLAlchemy.
+
+Example: `create_engine("postgresql+psycopg2://...")`
 
 ## Prerequisites
 
@@ -26,10 +52,9 @@ Before you begin, ensure you have the following:
 - **Python 3.10+** installed on your system for the latest features and long-term support.
 - Basic knowledge of **Python programming**.
 - Familiarity with the **Telegram Bot API**.
-- An account on [Supabase](https://supabase.io/) for database management.
 - Installed required Python libraries:
-  - `python-telegram-bot>=20.0`: To interact with Telegram's API, ensuring compatibility with the latest features.
-  - `supabase-py>=1.0`: To connect to the Supabase database with improved stability.
+  - `python-telegram-bot>=20.6`: To interact with Telegram's API, ensuring compatibility with the latest features.
+  - `supabase>=1.0.3`: To connect to the Supabase database with improved stability.
   - `asyncio`: For handling asynchronous operations, crucial for scalability.
 
 ## Step-by-Step Development Guide
@@ -52,7 +77,7 @@ Before you begin, ensure you have the following:
 3. **Install Required Libraries**: Install the necessary libraries using pip.
 
    ```bash
-   pip install python-telegram-bot>=20.0 supabase-py>=1.0 asyncio
+   pip install python-telegram-bot>=20.6 supabase>=1.0.3 asyncio
    ```
 
 ### Step 2: Creating a Telegram Bot
@@ -68,19 +93,6 @@ Before you begin, ensure you have the following:
 
    - Write a basic Python script to connect to Telegram's API using the bot token.
 
-   ```python
-   from telegram import Update
-   from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
-
-   async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-       await update.message.reply_text('Hello! I am your matching bot. Use /createprofile to get started.')
-
-   app = ApplicationBuilder().token("YOUR_BOT_TOKEN").build()
-   app.add_handler(CommandHandler("start", start))
-
-   app.run_polling()
-   ```
-
 ### Step 3: Setting Up Supabase
 
 1. **Create a Supabase Account**: Sign up at [Supabase](https://supabase.io/) and create a new project.
@@ -90,7 +102,7 @@ Before you begin, ensure you have the following:
 3. **Install Supabase Python Client**: Install the Supabase Python client to interact with your database.
 
    ```bash
-   pip install supabase-py>=1.0
+   pip install supabase>=1.0.3
    ```
 
 4. **Connect to Supabase**:
@@ -100,9 +112,22 @@ Before you begin, ensure you have the following:
    ```python
    from supabase import create_client, Client
 
-   SUPABASE_URL = "your_supabase_url"
-   SUPABASE_KEY = "your_supabase_key"
-   supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+   from .config import SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+   supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+   ```
+
+5. **Managing Supabase from Code**: 
+
+   - You can manage your Supabase database directly from your code by using the Supabase client to create, update, and delete tables and records programmatically. This allows for a more dynamic setup and management of your database schema and data.
+
+   ```python
+   # Example of creating a table
+   supabase.table('users').create({
+       'username': 'example_user',
+       'age': 25,
+       'gender': 'female',
+       'interests': ['music', 'art']
+   }).execute()
    ```
 
 ### Step 4: Designing the Database Schema
@@ -169,7 +194,7 @@ Before you begin, ensure you have the following:
 
 2. **Inline Keyboards**: Use inline keyboards to make navigation easier and enhance user interaction.
 
-3. **Notifications**: Implement notifications for new matches, messages, and other important events, ensuring users are always informed.
+3. **Notifications**: Implement notifications for new matches and other important events, ensuring users are always informed via bot chat room.
 
 ## Conclusion
 
@@ -181,3 +206,5 @@ By following this step-by-step guide, you will be able to develop a fully functi
 - **Deployment**: Deploy the bot using a cloud platform, such as AWS or Heroku, ensuring scalability, security, and reliability.
 - **User Feedback**: Launch a beta version and gather user feedback to identify areas for improvement.
 - **Maintenance**: Regularly update dependencies, monitor performance using tools like Prometheus and Grafana, and enhance security measures to keep the bot running smoothly.
+
+For more information on connecting to Supabase, visit the [Supabase Documentation](https://supabase.com/docs/guides/database/connecting-to-postgres).

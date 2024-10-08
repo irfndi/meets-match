@@ -1,0 +1,1 @@
+MEDIA_CACHE_DIR = os.path.join(os.getcwd(), 'media_cache')

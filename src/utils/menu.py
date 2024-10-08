@@ -1,68 +1,44 @@
-from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
-async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def show_matching_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, profile_data=None):
     keyboard = [
-        [InlineKeyboardButton("View profiles", callback_data='view_profiles')],
-        [InlineKeyboardButton("My profile", callback_data='my_profile')],
-        [InlineKeyboardButton("Pause matching", callback_data='pause_matching')],
-        [InlineKeyboardButton("Invite friends", callback_data='invite_friends')],
-        [InlineKeyboardButton("Settings", callback_data='settings')]
+        [InlineKeyboardButton("Like", callback_data='like'),
+         InlineKeyboardButton("Dislike", callback_data='dislike')],
+        [InlineKeyboardButton("Pause Matching", callback_data='pause')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text('Main Menu - What would you like to do?', reply_markup=reply_markup)
-
-async def show_profile_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [
-        [InlineKeyboardButton("Edit profile", callback_data='edit_profile')],
-        [InlineKeyboardButton("Privacy settings", callback_data='privacy_settings')],
-        [InlineKeyboardButton("Report an issue", callback_data='report_issue')],
-        [InlineKeyboardButton("Change language", callback_data='change_language')],
-        [InlineKeyboardButton("Back to main menu", callback_data='main_menu')]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text('Profile Options:', reply_markup=reply_markup)
-
-async def show_matching_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [
-        [
-            InlineKeyboardButton("👍 Like", callback_data='like'),
-            InlineKeyboardButton("💬 Message", callback_data='send_message'),
-            InlineKeyboardButton("👎 Pass", callback_data='pass'),
-            InlineKeyboardButton("⏸️ Pause", callback_data='pause_matching')
-        ],
-        [InlineKeyboardButton("🔍 View full profile", callback_data='view_full_profile')],
-        [InlineKeyboardButton("⚠️ Report", callback_data='report_profile')]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text('Profile Actions:', reply_markup=reply_markup)
+    
+    if profile_data:
+        message = f"Name: {profile_data['name']}\nAge: {profile_data['age']}\nBio: {profile_data['bio']}"
+    else:
+        message = "No more profiles available at the moment."
+    
+    if update.callback_query:
+        await update.callback_query.edit_message_text(text=message, reply_markup=reply_markup)
+    else:
+        await update.message.reply_text(text=message, reply_markup=reply_markup)
 
 async def show_match_notification(update: Update, context: ContextTypes.DEFAULT_TYPE, num_likes: int, gender: str):
-    keyboard = [
-        [InlineKeyboardButton("View matches", callback_data='view_matches')],
-        [InlineKeyboardButton("Keep browsing", callback_data='continue_browsing')],
-        [InlineKeyboardButton("Pause matching", callback_data='pause_matching')]
-    ]
+    keyboard = [[InlineKeyboardButton("Show Match", callback_data='show_match')]]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    message = f"🎉 You have {num_likes} new {gender} match{'es' if num_likes > 1 else ''}! Would you like to view them?"
-    await update.message.reply_text(message, reply_markup=reply_markup)
+    await update.message.reply_text(f"You have {num_likes} new likes from {gender}!", reply_markup=reply_markup)
 
-async def show_match_result(update: Update, context: ContextTypes.DEFAULT_TYPE, matched_user: dict):
+async def show_match_result(update: Update, context: ContextTypes.DEFAULT_TYPE, matched_user):
     keyboard = [
-        [InlineKeyboardButton("Start chatting 💬", callback_data=f'start_chat_{matched_user["id"]}')],
-        [InlineKeyboardButton("View full profile 🔍", callback_data=f'view_profile_{matched_user["id"]}')],
-        [InlineKeyboardButton("Report ⚠️", callback_data=f'report_{matched_user["id"]}')]
+        [InlineKeyboardButton("Message", callback_data=f'message_{matched_user["id"]}')],
+        [InlineKeyboardButton("Report", callback_data=f'report_{matched_user["id"]}')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    caption = f"You matched with {matched_user['name']}!\n\nAge: {matched_user['age']}\nLocation: {matched_user['location']}\n\nBio: {matched_user['bio']}"
-    
-    await update.message.reply_photo(photo=matched_user['photo'], caption=caption, reply_markup=reply_markup)
+    await update.callback_query.edit_message_text(
+        text=f"You matched with {matched_user['name']}!\nAge: {matched_user['age']}\nBio: {matched_user['bio']}",
+        reply_markup=reply_markup
+    )
 
 async def show_location_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [
-        [InlineKeyboardButton("Share Location 📍", callback_data='share_location')],
-        [InlineKeyboardButton("Not now", callback_data='skip_location')]
-    ]
+    keyboard = [[InlineKeyboardButton("Share Location", callback_data='share_location')]]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("To see profiles near you, we need your location. Would you like to share it?", reply_markup=reply_markup)
+    await update.callback_query.edit_message_text(
+        text="Would you like to share your location to find matches nearby?",
+        reply_markup=reply_markup
+    )

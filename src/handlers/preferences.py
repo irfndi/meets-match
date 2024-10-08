@@ -1,88 +1,67 @@
 # This file contains code for preferences handlers
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, ReplyKeyboardRemove
-from telegram.ext import CallbackContext, ConversationHandler, CommandHandler, MessageHandler, filters, CallbackQueryHandler, ContextTypes
-from database import supabase
-from utils.helpers import update_user_preferences
+from telegram import Update
+from telegram.ext import ContextTypes, ConversationHandler, CommandHandler, MessageHandler, filters
+from database import get_supabase_client, update_user_preferences
+from utils import validate_age_range, parse_interests
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Define conversation states
-GENDER, AGE_RANGE, INTERESTS, NOTIFICATIONS, TOPICS = range(5)
+AGE_RANGE, GENDER_PREFERENCE, INTERESTS = range(3)
 
 async def start_preferences(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    keyboard = [
-        [InlineKeyboardButton("Male", callback_data='male'),
-         InlineKeyboardButton("Female", callback_data='female')],
-        [InlineKeyboardButton("Other", callback_data='other')]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("Let's set your preferences! What gender are you interested in?", reply_markup=reply_markup)
-    return GENDER
-
-async def gender(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    query = update.callback_query
-    await query.answer()
-    context.user_data['gender_preference'] = query.data
-    await query.edit_message_text("Great! Now, what age range are you interested in? (e.g., 20-30)")
+    await update.message.reply_text("Let's set up your preferences. First, what age range are you interested in? (e.g., 25-35)")
     return AGE_RANGE
 
-async def age_range(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    text = update.message.text
-    if '-' not in text or len(text.split('-')) != 2:
-        await update.message.reply_text("Please enter the age range in the correct format (e.g., '20-30').")
+async def handle_age_range(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    try:
+        age_min, age_max = validate_age_range(update.message.text)
+        context.user_data['age_min'] = age_min
+        context.user_data['age_max'] = age_max
+        await update.message.reply_text("Great! Now, what gender are you interested in? (Male/Female/Both)")
+        return GENDER_PREFERENCE
+    except ValueError as e:
+        await update.message.reply_text(str(e))
         return AGE_RANGE
-    min_age, max_age = map(int, text.split('-'))
-    context.user_data['age_range'] = {'min': min_age, 'max': max_age}
-    await update.message.reply_text("Excellent! What are your interests? (Separate with commas)")
-    return INTERESTS
 
-async def interests(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    context.user_data['interests'] = [interest.strip() for interest in update.message.text.split(',')]
-    await update.message.reply_text("Would you like to receive notifications? (yes/no)")
-    return NOTIFICATIONS
-
-async def notifications(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    response = update.message.text.lower()
-    if response in ['yes', 'y']:
-        context.user_data['notifications'] = True
-    elif response in ['no', 'n']:
-        context.user_data['notifications'] = False
+async def handle_gender_preference(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    gender_preference = update.message.text.lower()
+    if gender_preference in ['male', 'female', 'both']:
+        context.user_data['gender_preference'] = gender_preference
+        await update.message.reply_text("Excellent! Lastly, what are your interests? (Separate with commas)")
+        return INTERESTS
     else:
-        await update.message.reply_text('Please respond with "yes" or "no".')
-        return NOTIFICATIONS
-    
-    await update.message.reply_text("What topics are you interested in? (e.g., sports, music)")
-    return TOPICS
+        await update.message.reply_text("Please enter 'Male', 'Female', or 'Both'.")
+        return GENDER_PREFERENCE
 
-async def topics(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    context.user_data['topics'] = [topic.strip() for topic in update.message.text.split(',')]
+async def handle_interests(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    interests = parse_interests(update.message.text)
+    context.user_data['interests'] = interests
     
+    # Save preferences to database
     user_id = update.effective_user.id
-    
-    # Save preferences to Supabase
-    supabase.table('preferences').upsert({
-        'user_id': user_id,
+    preferences = {
+        'age_min': context.user_data['age_min'],
+        'age_max': context.user_data['age_max'],
         'gender_preference': context.user_data['gender_preference'],
-        'min_age': context.user_data['age_range']['min'],
-        'max_age': context.user_data['age_range']['max'],
-        'interests': context.user_data['interests'],
-        'notifications': context.user_data['notifications'],
-        'topics': context.user_data['topics']
-    }).execute()
-
-    await update.message.reply_text("Your preferences have been saved!")
+        'interests': context.user_data['interests']
+    }
+    try:
+        await update_user_preferences(user_id, preferences)
+        await update.message.reply_text("Your preferences have been saved!")
+    except Exception as e:
+        logger.error(f"Error saving preferences: {e}")
+        await update.message.reply_text("There was an error saving your preferences. Please try again later.")
+    
     return ConversationHandler.END
 
-async def cancel(update: Update, context: CallbackContext) -> int:
-    await update.message.reply_text("Preferences setting cancelled.", reply_markup=ReplyKeyboardRemove())
-    return ConversationHandler.END
-
-preferences_handler = ConversationHandler(
-    entry_points=[CommandHandler('set_preferences', start_preferences)],
+preferences_conv_handler = ConversationHandler(
+    entry_points=[CommandHandler('preferences', start_preferences)],
     states={
-        GENDER: [CallbackQueryHandler(gender)],
-        AGE_RANGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, age_range)],
-        INTERESTS: [MessageHandler(filters.TEXT & ~filters.COMMAND, interests)],
-        NOTIFICATIONS: [MessageHandler(filters.TEXT & ~filters.COMMAND, notifications)],
-        TOPICS: [MessageHandler(filters.TEXT & ~filters.COMMAND, topics)],
+        AGE_RANGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_age_range)],
+        GENDER_PREFERENCE: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_gender_preference)],
+        INTERESTS: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_interests)],
     },
-    fallbacks=[CommandHandler('cancel', cancel)],
+    fallbacks=[],
 )

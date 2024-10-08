@@ -1,7 +1,7 @@
 import logging
 import asyncio
 from telegram.ext import ApplicationBuilder, CommandHandler
-from config import TELEGRAM_BOT_TOKEN, SUPABASE_URL, SUPABASE_KEY
+from config import TELEGRAM_BOT_TOKEN, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 from handlers import start_handler, create_profile_handler, view_profile_handler, edit_profile_handler, set_preferences_handler, view_matches_handler, report_handler, block_handler
 from supabase import create_client, Client
 
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 async def main():
     try:
         # Initialize Supabase client
-        supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+        supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
         # Build application with persistent bot data
         application = (

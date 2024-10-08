@@ -1,105 +1,79 @@
-from supabase import create_client, Client
-from config import SUPABASE_URL, SUPABASE_PUBLIC_KEY
 import logging
-from typing import Dict, Any
-
-# Initialize Supabase client
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_PUBLIC_KEY)
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+from typing import Optional, List
+from uuid import UUID, uuid4
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Define schemas for all tables
-USERS_SCHEMA: Dict[str, str] = {
-    'id': 'uuid PRIMARY KEY DEFAULT uuid_generate_v4()',
-    'created_at': 'timestamp with time zone DEFAULT now()',
-    'telegram_id': 'bigint UNIQUE NOT NULL',
-    'username': 'text',
-    'first_name': 'text',
-    'last_name': 'text',
-    'bio': 'text',
-    'preferences': 'jsonb',
-    'updated_at': 'timestamp with time zone DEFAULT now()'
-}
+# Updated User class
+@dataclass
+class User:
+    username: str
+    id: Optional[UUID] = None
+    age: Optional[int] = None
+    gender: Optional[str] = None
+    looking_for: Optional[str] = None
+    city: Optional[str] = None
+    name: Optional[str] = None
+    bio: Optional[str] = None
+    media: List[dict] = field(default_factory=list)
+    language: str = 'english'
+    last_profile_check: Optional[datetime] = None
+    profile_completed: bool = False
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    interests: Optional[List[str]] = None
+    photos: Optional[List[str]] = None  # Add this line
+    videos: Optional[List[str]] = None  # Add this line
 
-MATCHES_SCHEMA: Dict[str, str] = {
-    'id': 'uuid PRIMARY KEY DEFAULT uuid_generate_v4()',
-    'created_at': 'timestamp with time zone DEFAULT now()',
-    'user1_id': 'uuid REFERENCES users(id)',
-    'user2_id': 'uuid REFERENCES users(id)',
-    'status': 'text CHECK (status IN (\'pending\', \'accepted\', \'rejected\'))',
-    'updated_at': 'timestamp with time zone DEFAULT now()'
-}
+    def is_complete(self) -> bool:
+        required_fields = ['age', 'gender', 'looking_for', 'city', 'name', 'bio']
+        return all(getattr(self, field) is not None for field in required_fields) and len(self.media) > 0
 
-REPORTS_SCHEMA: Dict[str, str] = {
-    'id': 'uuid PRIMARY KEY DEFAULT uuid_generate_v4()',
-    'created_at': 'timestamp with time zone DEFAULT now()',
-    'reporter_id': 'uuid REFERENCES users(id)',
-    'reported_id': 'uuid REFERENCES users(id)',
-    'reason': 'text',
-    'status': 'text CHECK (status IN (\'pending\', \'reviewed\', \'resolved\'))',
-    'reviewed_at': 'timestamp with time zone'
-}
+# Updated Preference class
+@dataclass
+class Preference:
+    user_id: UUID
+    age_min: int
+    age_max: int
+    gender_preference: str
+    interests: List[str] = field(default_factory=list)
+    max_distance: int = 0
+    id: UUID = field(default_factory=uuid4)
+    created_at: datetime = field(default_factory=datetime.utcnow)
+    updated_at: datetime = field(default_factory=datetime.utcnow)
 
-PREFERENCES_SCHEMA: Dict[str, str] = {
-    'id': 'uuid PRIMARY KEY DEFAULT uuid_generate_v4()',
-    'created_at': 'timestamp with time zone DEFAULT now()',
-    'user_id': 'uuid REFERENCES users(id) UNIQUE',
-    'age_min': 'integer CHECK (age_min >= 18)',
-    'age_max': 'integer CHECK (age_max <= 100)',
-    'gender_preference': 'text',
-    'interests': 'jsonb',
-    'location': 'point',
-    'max_distance': 'integer',
-    'updated_at': 'timestamp with time zone DEFAULT now()'
-}
+# Updated Match class
+@dataclass
+class Match:
+    user1_id: UUID
+    user2_id: UUID
+    status: str = "pending"
+    id: UUID = field(default_factory=uuid4)
+    created_at: datetime = field(default_factory=datetime.utcnow)
+    updated_at: datetime = field(default_factory=datetime.utcnow)
 
-def ensure_table_schema(table_name: str, schema: Dict[str, str]) -> None:
-    try:
-        # Check if table exists
-        result = supabase.table(table_name).select('id').limit(1).execute()
-        
-        if 'error' in result and 'message' in result['error'] and 'does not exist' in result['error']['message']:
-            # Table doesn't exist, create it
-            create_table_query = f"CREATE TABLE {table_name} ("
-            create_table_query += ", ".join([f"{col} {dtype}" for col, dtype in schema.items()])
-            create_table_query += ");"
-            supabase.query(create_table_query).execute()
-            logger.info(f"Created table: {table_name}")
-        else:
-            # Table exists, check and add missing columns
-            existing_columns = supabase.query(f"SELECT column_name, data_type FROM information_schema.columns WHERE table_name = '{table_name}'").execute()
-            existing_columns = {col['column_name']: col['data_type'] for col in existing_columns.data}
-            
-            for col, dtype in schema.items():
-                if col not in existing_columns:
-                    alter_table_query = f"ALTER TABLE {table_name} ADD COLUMN {col} {dtype};"
-                    supabase.query(alter_table_query).execute()
-                    logger.info(f"Added column {col} to table {table_name}")
-                elif existing_columns[col] != dtype.split()[0]:
-                    alter_table_query = f"ALTER TABLE {table_name} ALTER COLUMN {col} TYPE {dtype.split()[0]};"
-                    supabase.query(alter_table_query).execute()
-                    logger.info(f"Modified column {col} in table {table_name}")
-        
-        logger.info(f"Ensured schema for table: {table_name}")
-    except Exception as e:
-        logger.error(f"Error ensuring schema for table {table_name}: {str(e)}")
-        raise
+# Updated Report class
+@dataclass
+class Report:
+    reporter_id: UUID
+    reported_id: UUID
+    reason: str
+    status: str = "pending"
+    id: UUID = field(default_factory=uuid4)
+    created_at: datetime = field(default_factory=datetime.utcnow)
+    updated_at: datetime = field(default_factory=datetime.utcnow)
 
-def init_database() -> None:
-    """Initialize the database by ensuring all table schemas."""
-    tables = {
-        'users': USERS_SCHEMA,
-        'matches': MATCHES_SCHEMA,
-        'reports': REPORTS_SCHEMA,
-        'preferences': PREFERENCES_SCHEMA
+def get_supabase_type(python_type: type) -> str:
+    type_mapping = {
+        UUID: 'uuid',
+        datetime: 'timestamp with time zone',
+        int: 'integer',
+        str: 'text',
+        bool: 'boolean',
+        List[str]: 'text[]'
     }
-    
-    for table_name, schema in tables.items():
-        ensure_table_schema(table_name, schema)
-
-    logger.info("Database initialization complete.")
-
-if __name__ == "__main__":
-    init_database()
+    return type_mapping.get(python_type, 'text')
