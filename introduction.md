@@ -1,6 +1,6 @@
 # Telegram Matching Bot Development Guide
 
-This guide provides a step-by-step approach to building a scalable and efficient Telegram Matching Bot using Python and Supabase. The bot is designed to offer users an intuitive way to connect, create profiles, set preferences, and match with other users based on shared interests and compatibility. It includes advanced features such as profile management, match viewing, secure communication, and match management, providing an engaging experience for users.
+This guide provides a step-by-step approach to building a scalable and efficient Telegram Matching Bot using Python and Supabase. The bot is designed to offer users an intuitive way to connect, create profiles, set preferences, and match with other users based on shared interests, location, and compatibility factors such as age. It includes advanced features such as profile management with full CRUD capabilities, match viewing, secure communication, and match management, providing an engaging experience for users.
 
 Key enhancements include user verification, privacy controls, reporting/blocking functionality, and security best practices to ensure a safe and trustworthy platform for users. This guide will help you create a robust bot while incorporating modern best practices in serverless architecture, microservices, and performance optimization.
 
@@ -12,12 +12,26 @@ Throughout this guide, you will be walked through every step required to build t
 
 Key features include:
 
-- **Profile Creation & Management**: Users can create detailed profiles, set personal preferences, and edit them as needed.
-- **Matching Algorithm**: Automatically match users based on interests, preferences, and compatibility.
+- **Profile Creation & Management**: Users can create, read, update, and delete their profiles, set personal preferences, and edit them as needed.
+- **Matching Algorithm**: Automatically match users based on interests, preferences, location, and compatibility factors such as age. If both users express mutual interest, their Telegram IDs will be shared, allowing them to chat independently.
 - **Match Viewing & Interaction**: Users can browse matches and express interest.
 - **Security & Privacy Enhancements**: Comprehensive user verification, privacy settings, reporting, and blocking ensure a safe user environment.
 
 This guide will enable you to build a highly scalable and performant Telegram bot, leveraging microservices and serverless architecture for seamless operation and easier scaling as user demand grows.
+
+## User Preference Configuration
+
+To ensure flexibility in user preferences and allow for future changes, the following global user preference settings are defined:
+
+- **AGE_RANGE**: A tuple defining the minimum and maximum age for user matches (e.g., `(18, 35)`).
+- **GENDER_PREFERENCE**: A list of acceptable genders for matching (e.g., `['male', 'female', 'non-binary']`).
+- **LOCATION_RADIUS**: The maximum distance (in kilometers) for matching based on user location (e.g., `50`).
+- **MAX_INTERESTS**: The maximum number of interests a user can select to refine their matches (e.g., `5`).
+- **MEDIA_LIMIT**: The maximum number of media files (pictures/videos) a user can upload for their profile (e.g., `3`).
+- **MEDIA_FILE_SIZE_LIMIT**: The maximum size for each media file in megabytes (e.g., `5 MB`).
+- **LANGUAGE_PREFERENCE**: The preferred language for communication (e.g., `'english'`).
+
+These settings can be easily modified in the configuration file to adapt to changing user needs or preferences.
 
 ## Database Settings
 
@@ -144,7 +158,7 @@ Before you begin, ensure you have the following:
 
    - Collect user information through a series of messages and store it in the Supabase database.
 
-2. **Profile Viewing and Editing**: Implement commands like `/viewprofile` and `/editprofile` to allow users to view and update their profiles.
+2. **Profile Viewing and Editing**: Implement commands like `/viewprofile`, `/editprofile`, and `/deleteprofile` to allow users to view, update, and delete their profiles.
 
 ### Step 6: Implementing Preference Settings
 
@@ -202,7 +216,7 @@ By following this step-by-step guide, you will be able to develop a fully functi
 
 ## Next Steps
 
-- **Testing**: Thoroughly test each feature to ensure the bot works as expected, including unit tests, integration tests, and user acceptance testing.
+- **Testing**: Thoroughly test each feature to ensure the bot works as expected, including unit tests, integration tests, and user acceptance testing. **Ensure that tests are included in your project to validate functionality.**
 - **Deployment**: Deploy the bot using a cloud platform, such as AWS or Heroku, ensuring scalability, security, and reliability.
 - **User Feedback**: Launch a beta version and gather user feedback to identify areas for improvement.
 - **Maintenance**: Regularly update dependencies, monitor performance using tools like Prometheus and Grafana, and enhance security measures to keep the bot running smoothly.

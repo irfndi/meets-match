@@ -1,0 +1,26 @@
+# Start of Selection
+# Add directories or file patterns to ignore during indexing (e.g. foo/ or *.csv)
+*.__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.db
+*.sqlite3
+*.log
+*.env
+*.DS_Store
+*.egg-info/
+*.egg
+*.venv/
+*.idea/
+*.vscode/
+*.cursorignore
+*.log
+*.pytest_cache
+*.migrations/
+*.tests/
+*.coverage
+*.cache
+*.tmp
+# Additional patterns can be added as needed
+# End of Selection
