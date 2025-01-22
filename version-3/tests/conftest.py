@@ -1,8 +1,8 @@
 import os
 import sys
 
-# Add project root to Python path FIRST
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+# Add project root to Python path FIRST (version-3/src)
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
 import pytest
 from sqlalchemy import create_engine, event

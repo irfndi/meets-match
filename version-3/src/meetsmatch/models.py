@@ -157,9 +157,9 @@ class User(Base):
             # Strip whitespace first
             s = s.strip()
             
-            # Check if empty after stripping
-            if not s:
-                logger.debug("Gender is empty after stripping")
+            # Check if empty before or after stripping
+            if not s or not s.strip():
+                logger.debug("Gender is empty")
                 return False
             logger.debug(f"Stripped gender: {s!r}")
                 
