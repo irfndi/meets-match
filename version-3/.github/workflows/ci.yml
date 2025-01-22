@@ -57,11 +57,16 @@ jobs:
         coverage run -m unittest discover
         coverage xml
         
+    - name: Verify coverage file
+      run: ls -la && test -f coverage.xml
+
     - name: Upload coverage to Codecov
+      if: success()
       uses: codecov/codecov-action@v3
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         files: ./coverage.xml
         flags: unittests
+        verbose: true
         name: codecov-umbrella
         fail_ci_if_error: true
