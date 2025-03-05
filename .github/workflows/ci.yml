@@ -75,13 +75,36 @@ jobs:
           exit 1
         fi
 
+    - name: Create required database roles
+      run: |
+        # Create the 'root' role that's needed for tests
+        echo "Creating required database roles..."
+        PGPASSWORD=postgres psql -h localhost -U postgres -d test_db -c "CREATE ROLE root WITH LOGIN SUPERUSER PASSWORD 'root';" || echo "Role 'root' might already exist"
+        
+        # List all roles to verify
+        echo "Verifying database roles:"
+        PGPASSWORD=postgres psql -h localhost -U postgres -d test_db -c "\du"
+
+    - name: Configure environment for tests
+      run: |
+        # Create test environment file from sample
+        cp .env.sample .env.test
+        # Override database connection settings
+        echo "POSTGRES_HOST=localhost" >> .env.test
+        echo "POSTGRES_PORT=5432" >> .env.test
+        echo "POSTGRES_USER=postgres" >> .env.test
+        echo "POSTGRES_PASSWORD=postgres" >> .env.test
+        echo "POSTGRES_DB=test_db" >> .env.test
+        echo "ENVIRONMENT=test" >> .env.test
+        # Display environment (excluding sensitive values)
+        echo "Test environment configuration:"
+        cat .env.test | grep -v PASSWORD | grep -v KEY | grep -v TOKEN
+        # Copy to .env for tests that look for it
+        cp .env.test .env
+
     - name: Run tests with coverage
       env:
-        POSTGRES_HOST: localhost
-        POSTGRES_PORT: 5432
-        POSTGRES_USER: postgres
-        POSTGRES_PASSWORD: postgres
-        POSTGRES_DB: test_db
+        # Secret environment variables (these will not be exposed in logs)
         BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
