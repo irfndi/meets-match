@@ -1,10 +1,11 @@
-from typing import Tuple, Optional
+import io
 import mimetypes
+from datetime import datetime, timedelta
+from functools import lru_cache
+from typing import Optional, Tuple
+
 import magic
 from PIL import Image
-import io
-from functools import lru_cache
-from datetime import datetime, timedelta
 
 
 class MediaValidator:
@@ -22,9 +23,7 @@ class MediaValidator:
         """Get MIME type from file name."""
         return mimetypes.guess_type(file_name)[0]
 
-    async def validate_file_type(
-        self, file_data: bytes, file_name: str
-    ) -> Tuple[bool, str]:
+    async def validate_file_type(self, file_data: bytes, file_name: str) -> Tuple[bool, str]:
         """
         Validate file type using both extension and content analysis.
 
@@ -46,7 +45,7 @@ class MediaValidator:
             if actual_type != mime_type:
                 return False, "File type does not match extension"
         except Exception as e:
-            return False, f"Error validating file type: {str(e)}"
+            return False, f"Error validating file type: {e!s}"
 
         # Validate against allowed types
         if mime_type in self.allowed_image_types:
@@ -71,19 +70,13 @@ class MediaValidator:
             width, height = img.size
 
             # Check dimensions
-            if (
-                width < self.min_image_dimensions[0]
-                or height < self.min_image_dimensions[1]
-            ):
+            if width < self.min_image_dimensions[0] or height < self.min_image_dimensions[1]:
                 return (
                     False,
                     f"Image too small. Minimum dimensions: {self.min_image_dimensions}",
                 )
 
-            if (
-                width > self.max_image_dimensions[0]
-                or height > self.max_image_dimensions[1]
-            ):
+            if width > self.max_image_dimensions[0] or height > self.max_image_dimensions[1]:
                 return (
                     False,
                     f"Image too large. Maximum dimensions: {self.max_image_dimensions}",
@@ -92,11 +85,9 @@ class MediaValidator:
             return True, "Valid image"
 
         except Exception as e:
-            return False, f"Error validating image: {str(e)}"
+            return False, f"Error validating image: {e!s}"
 
-    async def validate_file_size(
-        self, file_size: int, file_type: str
-    ) -> Tuple[bool, str]:
+    async def validate_file_size(self, file_size: int, file_type: str) -> Tuple[bool, str]:
         """
         Validate file size based on type.
 
@@ -108,16 +99,10 @@ class MediaValidator:
             Tuple[bool, str]: (is_valid, error_message)
         """
         if file_type == "image" and file_size > self.max_image_size_bytes:
-            return False, (
-                f"Image too large. Maximum size: "
-                f"{self.max_image_size_bytes // 1024 // 1024}MB"
-            )
+            return False, (f"Image too large. Maximum size: " f"{self.max_image_size_bytes // 1024 // 1024}MB")
 
         if file_type == "video" and file_size > self.max_video_size_bytes:
-            return False, (
-                f"Video too large. Maximum size: "
-                f"{self.max_video_size_bytes // 1024 // 1024}MB"
-            )
+            return False, (f"Video too large. Maximum size: " f"{self.max_video_size_bytes // 1024 // 1024}MB")
 
         return True, "Valid size"
 
@@ -132,9 +117,7 @@ class RateLimiter:
         }
         self.user_actions = {}
 
-    async def check_rate_limit(
-        self, user_id: int, action_type: str
-    ) -> Tuple[bool, Optional[int]]:
+    async def check_rate_limit(self, user_id: int, action_type: str) -> Tuple[bool, Optional[int]]:
         """
         Check if action is within rate limits.
 
@@ -153,9 +136,7 @@ class RateLimiter:
 
         # Clean old actions
         window = timedelta(seconds=self.limits[action_type]["window"])
-        self.user_actions[key] = [
-            ts for ts in self.user_actions[key] if now - ts < window
-        ]
+        self.user_actions[key] = [ts for ts in self.user_actions[key] if now - ts < window]
 
         # Check limit
         if len(self.user_actions[key]) >= self.limits[action_type]["count"]:
@@ -193,11 +174,7 @@ class Cache:
         now = datetime.utcnow()
 
         # Clean expired entries
-        expired = [
-            k
-            for k, t in self.access_times.items()
-            if now - t > timedelta(seconds=self.ttl)
-        ]
+        expired = [k for k, t in self.access_times.items() if now - t > timedelta(seconds=self.ttl)]
         for k in expired:
             del self.cache[k]
             del self.access_times[k]

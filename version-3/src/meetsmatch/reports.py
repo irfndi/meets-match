@@ -1,7 +1,9 @@
 from datetime import datetime, timedelta
 from typing import List, Tuple
+
 from sqlalchemy import func
-from .models import Session, User, Interaction
+
+from .models import Interaction, Session, User
 
 
 class ReportManager:
@@ -17,9 +19,7 @@ class ReportManager:
             "other",
         ]
 
-    async def report_user(
-        self, reporter_id: int, reported_id: int, reason: str
-    ) -> Tuple[bool, str]:
+    async def report_user(self, reporter_id: int, reported_id: int, reason: str) -> Tuple[bool, str]:
         """
         Report a user for inappropriate behavior.
 
@@ -53,8 +53,7 @@ class ReportManager:
                     Interaction.user_id == reporter_id,
                     Interaction.target_user_id == reported_id,
                     Interaction.interaction_type == "report",
-                    Interaction.created_at
-                    > datetime.utcnow() - timedelta(days=self.report_window_days),
+                    Interaction.created_at > datetime.utcnow() - timedelta(days=self.report_window_days),
                 )
                 .first()
             )
@@ -78,8 +77,7 @@ class ReportManager:
                 .filter(
                     Interaction.target_user_id == reported_id,
                     Interaction.interaction_type == "report",
-                    Interaction.created_at
-                    > datetime.utcnow() - timedelta(days=self.report_window_days),
+                    Interaction.created_at > datetime.utcnow() - timedelta(days=self.report_window_days),
                 )
                 .scalar()
             )
@@ -95,7 +93,7 @@ class ReportManager:
 
         except Exception as e:
             session.rollback()
-            return False, f"Error submitting report: {str(e)}"
+            return False, f"Error submitting report: {e!s}"
         finally:
             session.close()
 

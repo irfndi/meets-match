@@ -20,7 +20,6 @@ from src.bot.handlers.start import start_command
 __all__ = [
     # Start handler
     "start_command",
-    
     # Profile handlers
     "profile_command",
     "name_command",
@@ -31,21 +30,17 @@ __all__ = [
     "interests_command",
     "location_command",
     "location_handler",
-    
     # Match handlers
     "match_command",
     "match_callback",
     "matches_command",
-    
     # Chat handlers
     "chat_command",
     "chat_callback",
     "message_handler",
-    
     # Settings handlers
     "settings_command",
     "settings_callback",
-    
     # Help handlers
     "help_command",
     "about_command",

@@ -1,7 +1,8 @@
 from datetime import datetime, timedelta
 from typing import Tuple
-from .models import Session, User, MediaFile, Interaction
+
 from .media import media_handler
+from .models import Interaction, MediaFile, Session, User
 
 
 class AccountManager:
@@ -41,13 +42,12 @@ class AccountManager:
 
             session.commit()
             return True, (
-                f"Account scheduled for deletion. "
-                f"Will be permanently deleted in {self.deletion_window_days} days."
+                f"Account scheduled for deletion. " f"Will be permanently deleted in {self.deletion_window_days} days."
             )
 
         except Exception as e:
             session.rollback()
-            return False, f"Error requesting deletion: {str(e)}"
+            return False, f"Error requesting deletion: {e!s}"
         finally:
             session.close()
 
@@ -63,9 +63,7 @@ class AccountManager:
                 return False, "Account is not pending deletion"
 
             # Check if within cancellation window
-            if user.updated_at < datetime.utcnow() - timedelta(
-                days=self.deletion_window_days
-            ):
+            if user.updated_at < datetime.utcnow() - timedelta(days=self.deletion_window_days):
                 return False, "Deletion cancellation period has expired"
 
             # Reactivate account
@@ -83,7 +81,7 @@ class AccountManager:
 
         except Exception as e:
             session.rollback()
-            return False, f"Error cancelling deletion: {str(e)}"
+            return False, f"Error cancelling deletion: {e!s}"
         finally:
             session.close()
 
@@ -92,15 +90,11 @@ class AccountManager:
         passed the deletion window."""
         session = self.session_factory()
         try:
-            deletion_date = datetime.utcnow() - timedelta(
-                days=self.deletion_window_days
-            )
+            deletion_date = datetime.utcnow() - timedelta(days=self.deletion_window_days)
 
             # Find accounts to delete
             users_to_delete = (
-                session.query(User)
-                .filter(User.is_active is False, User.updated_at <= deletion_date)
-                .all()
+                session.query(User).filter(User.is_active is False, User.updated_at <= deletion_date).all()
             )
 
             for user in users_to_delete:
@@ -109,18 +103,15 @@ class AccountManager:
                     try:
                         await media_handler.delete_file(media.s3_key)
                     except Exception as e:
-                        print(f"Error deleting media {media.s3_key}: {str(e)}")
+                        print(f"Error deleting media {media.s3_key}: {e!s}")
 
                 # Delete interactions
                 session.query(Interaction).filter(
-                    (Interaction.user_id == user.id)
-                    | (Interaction.target_user_id == user.id)
+                    (Interaction.user_id == user.id) | (Interaction.target_user_id == user.id)
                 ).delete(synchronize_session=False)
 
                 # Delete media records
-                session.query(MediaFile).filter_by(user_id=user.id).delete(
-                    synchronize_session=False
-                )
+                session.query(MediaFile).filter_by(user_id=user.id).delete(synchronize_session=False)
 
                 # Delete user
                 session.delete(user)
@@ -129,7 +120,7 @@ class AccountManager:
 
         except Exception as e:
             session.rollback()
-            print(f"Error in permanently_delete_accounts: {str(e)}")
+            print(f"Error in permanently_delete_accounts: {e!s}")
         finally:
             session.close()
 

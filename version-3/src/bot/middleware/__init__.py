@@ -12,7 +12,6 @@ __all__ = [
     "authenticated",
     "admin_only",
     "profile_required",
-    
     # Rate limiting middleware
     "rate_limiter",
     "user_command_limiter",

@@ -1,16 +1,17 @@
+import json
+import logging
+from datetime import datetime
+
 from sqlalchemy import (
-    create_engine,
-    Column,
-    Integer,
-    String,
     Boolean,
+    Column,
     DateTime,
     ForeignKey,
+    Integer,
+    String,
+    create_engine,
 )
-from sqlalchemy.orm import sessionmaker, relationship, DeclarativeBase, scoped_session
-from datetime import datetime
-import logging
-import json
+from sqlalchemy.orm import DeclarativeBase, relationship, scoped_session, sessionmaker
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -41,9 +42,7 @@ class Interaction(Base):
 class User(Base):
     __tablename__ = "users"
 
-    interactions = relationship(
-        "Interaction", foreign_keys="Interaction.user_id", back_populates="user"
-    )
+    interactions = relationship("Interaction", foreign_keys="Interaction.user_id", back_populates="user")
     received_interactions = relationship(
         "Interaction",
         foreign_keys="Interaction.target_user_id",
@@ -124,67 +123,71 @@ class User(Base):
     @property
     def is_profile_complete(self):
         """Check if user profile is complete with all required fields."""
+
         def is_valid_string(s):
             """Validate that a string is not empty or just whitespace."""
             return bool(s and str(s).strip())
-            
+
         def is_valid_gender(s):
             """Validate gender string.
-            
+
             Args:
                 s: String to validate
-                
+
             Returns:
                 bool: True if gender is valid, False otherwise
-                
+
             Valid genders are 'male' or 'female' (case-insensitive).
             Empty strings, None, or other values are invalid.
             """
             logger = logging.getLogger(__name__)
             logger.debug(f"Validating gender: {s!r}")
             logger.debug(f"Type: {type(s)}")
-            
+
             # Check if None
             if s is None:
                 logger.debug("Gender is None")
                 return False
-                
+
             # Check if not a string
             if not isinstance(s, str):
                 logger.debug("Gender is not a string")
                 return False
-                
+
             # Strip whitespace first
             s = s.strip()
-            
+
             # Check if empty before or after stripping
             if not s or not s.strip():
                 logger.debug("Gender is empty")
                 return False
             logger.debug(f"Stripped gender: {s!r}")
-                
+
             # Validate against allowed values
             is_valid = s.lower() in {"male", "female"}
             logger.debug(f"Gender validation result: {is_valid}")
             return is_valid
-            
+
         def is_valid_interests(s):
             """Validate interests JSON string.
-            
+
             Args:
                 s: String to validate
-                
+
             Returns:
                 bool: True if interests is valid, False otherwise
-                
+
             Valid interests must be a non-empty JSON array of non-empty strings.
             """
             if not s:
                 return False
             try:
                 interests = json.loads(s)
-                return bool(interests and isinstance(interests, list) and 
-                          all(isinstance(i, str) and i.strip() for i in interests))
+                return bool(
+                    interests
+                    and isinstance(interests, list)
+                    and all(isinstance(i, str) and i.strip() for i in interests)
+                )
             except (json.JSONDecodeError, TypeError, AttributeError):
                 return False
 
@@ -197,9 +200,9 @@ class User(Base):
             "bio": bool(self.bio and 10 <= len(str(self.bio).strip()) <= 120),
             "location": is_valid_string(self.location),
             "interests": is_valid_interests(self.interests),
-            "media_files": bool(self.media_files and len(self.media_files) >= 1)
+            "media_files": bool(self.media_files and len(self.media_files) >= 1),
         }
-        
+
         # For debugging
         logger = logging.getLogger(__name__)
         logger.debug("Checking profile completeness")
@@ -212,7 +215,7 @@ class User(Base):
                     logger.debug(f"Gender stripped: '{str(self.gender).strip()}'")
                 elif field == "media_files":
                     logger.debug(f"Media files count: {len(self.media_files) if self.media_files else 0}")
-                
+
         logger.debug(f"Profile completeness result: {all(required_fields.values())}")
         return all(required_fields.values())
 

@@ -21,10 +21,8 @@ __all__ = [
     "get_cache",
     "get_cache_model",
     "set_cache",
-    
     # Database utilities
     "execute_query",
-    
     # Error classes
     "MeetMatchError",
     "ConfigurationError",
@@ -35,7 +33,6 @@ __all__ = [
     "RateLimitError",
     "ExternalServiceError",
     "MatchingError",
-    
     # Logging utilities
     "configure_logging",
     "get_logger",

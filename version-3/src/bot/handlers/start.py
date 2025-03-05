@@ -48,16 +48,16 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     """
     # Apply rate limiting
     await user_command_limiter()(update, context)
-    
+
     user_id = str(update.effective_user.id)
     username = update.effective_user.username
     first_name = update.effective_user.first_name
-    
+
     try:
         # Check if user already exists
         user = get_user(user_id)
         logger.info("Existing user started the bot", user_id=user_id)
-        
+
         # Update user data if needed
         if (username and username != user.username) or (first_name and first_name != user.first_name):
             update_user(
@@ -68,7 +68,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
                     "last_active": "now()",
                 },
             )
-        
+
         # Send welcome message with main menu
         await update.message.reply_text(
             f"Welcome back, {user.first_name or 'there'}! {WELCOME_MESSAGE}",
@@ -81,11 +81,11 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
                 resize_keyboard=True,
             ),
         )
-    
+
     except NotFoundError:
         # Create new user
         logger.info("New user registration", user_id=user_id, username=username)
-        
+
         user_data = {
             "id": user_id,
             "username": username,
@@ -93,9 +93,9 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             "last_name": update.effective_user.last_name,
             "is_active": True,
         }
-        
+
         create_user(user_data)
-        
+
         # Send welcome and registration messages
         await update.message.reply_text(WELCOME_MESSAGE)
         await update.message.reply_text(
@@ -109,7 +109,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
                 resize_keyboard=True,
             ),
         )
-    
+
     except Exception as e:
         logger.error(
             "Error in start command",
@@ -117,6 +117,4 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             error=str(e),
             exc_info=e,
         )
-        await update.message.reply_text(
-            "Sorry, something went wrong. Please try again later."
-        )
+        await update.message.reply_text("Sorry, something went wrong. Please try again later.")

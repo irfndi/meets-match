@@ -1,10 +1,12 @@
-import boto3
-from datetime import datetime, timedelta, timezone
-from typing import Optional, List, Dict, Any
-from .models import MediaFile, Session
-from .config import Config
-from sqlalchemy import select, func, and_, not_
 import uuid
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional
+
+import boto3
+from sqlalchemy import and_, func, not_, select
+
+from .config import Config
+from .models import MediaFile, Session
 
 
 class MediaHandler:
@@ -29,20 +31,14 @@ class MediaHandler:
         async with self.session_factory() as session:
             async with session.begin():
                 result = await session.execute(
-                    select(MediaFile).where(
-                        and_(MediaFile.user_id == user_id, not_(MediaFile.is_deleted))
-                    )
+                    select(MediaFile).where(and_(MediaFile.user_id == user_id, not_(MediaFile.is_deleted)))
                 )
                 return list(result.scalars().all())
 
-    async def get_user_media_files(
-        self, user_id: int, file_type: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
+    async def get_user_media_files(self, user_id: int, file_type: Optional[str] = None) -> List[Dict[str, Any]]:
         """Get all media files for a user, optionally filtered by type."""
         async with self.session_factory() as session:
-            query = session.query(MediaFile).filter(
-                MediaFile.user_id == user_id, not_(MediaFile.is_deleted)
-            )
+            query = session.query(MediaFile).filter(MediaFile.user_id == user_id, not_(MediaFile.is_deleted))
 
             if file_type:
                 query = query.filter(MediaFile.file_type == file_type)
@@ -59,9 +55,7 @@ class MediaHandler:
                 for media in media_files
             ]
 
-    async def save_media(
-        self, user_id: int, file_data: bytes, file_type: str
-    ) -> Optional[MediaFile]:
+    async def save_media(self, user_id: int, file_data: bytes, file_type: str) -> Optional[MediaFile]:
         """
         Save a media file for a user.
 
@@ -83,9 +77,7 @@ class MediaHandler:
                 async with session.begin():
                     active_files = await session.execute(
                         select(func.count(MediaFile.id)).where(
-                            and_(
-                                MediaFile.user_id == user_id, not_(MediaFile.is_deleted)
-                            )
+                            and_(MediaFile.user_id == user_id, not_(MediaFile.is_deleted))
                         )
                     )
                     count = active_files.scalar()
@@ -108,9 +100,7 @@ class MediaHandler:
                 raise e
 
             # Save file metadata
-            media_file = await self.save_media_file(
-                user_id, file_type, file_id, s3_key, len(file_data)
-            )
+            media_file = await self.save_media_file(user_id, file_type, file_id, s3_key, len(file_data))
             return media_file
 
         except Exception as e:
@@ -161,17 +151,13 @@ class MediaHandler:
         # Find old media files
         async with self.session_factory() as session:
             async with session.begin():
-                result = await session.execute(
-                    select(MediaFile).where(MediaFile.created_at < cutoff_date)
-                )
+                result = await session.execute(select(MediaFile).where(MediaFile.created_at < cutoff_date))
                 old_files = result.scalars().all()
 
                 # Delete from S3 and update database
                 for media in old_files:
                     try:
-                        await self.s3.delete_object(
-                            Bucket=self.bucket_name, Key=media.s3_key
-                        )
+                        await self.s3.delete_object(Bucket=self.bucket_name, Key=media.s3_key)
                         media.is_deleted = True
                     except Exception as e:
                         print(f"Error deleting {media.s3_key}: {e}")

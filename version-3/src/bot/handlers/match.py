@@ -4,7 +4,6 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMa
 from telegram.ext import ContextTypes
 
 from src.bot.middleware import authenticated, profile_required, user_command_limiter
-from src.models.match import MatchStatus
 from src.services.matching_service import (
     dislike_match,
     get_active_matches,
@@ -20,7 +19,7 @@ logger = get_logger(__name__)
 
 # Match command messages
 NO_MATCHES_MESSAGE = """
-No potential matches found at the moment. 
+No potential matches found at the moment.
 
 Try again later or adjust your matching preferences with /settings.
 """
@@ -39,7 +38,7 @@ Do you like this match?
 """
 
 MATCH_LIKED_MESSAGE = """
-You liked {name}! 
+You liked {name}!
 
 If they like you back, you'll be able to start a conversation.
 """
@@ -51,7 +50,7 @@ Let's find someone else for you.
 """
 
 MUTUAL_MATCH_MESSAGE = """
-🎉 It's a match! 
+🎉 It's a match!
 
 You and {name} liked each other. Start a conversation with /chat {match_id}.
 """
@@ -68,13 +67,13 @@ async def match_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     """
     # Apply rate limiting
     await user_command_limiter()(update, context)
-    
+
     user_id = str(update.effective_user.id)
-    
+
     try:
         # Get potential matches
         potential_matches = get_potential_matches(user_id)
-        
+
         if not potential_matches:
             await update.message.reply_text(
                 NO_MATCHES_MESSAGE,
@@ -87,21 +86,21 @@ async def match_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
                 ),
             )
             return
-        
+
         # Get the first potential match
         match = potential_matches[0]
         match_user = get_user(match.target_user_id)
-        
+
         # Format interests
         interests_text = ", ".join(match_user.interests) if match_user.interests else "None"
-        
+
         # Format location
         location_text = (
             f"{match_user.location_city}, {match_user.location_country}"
             if match_user.location_city
             else "Unknown location"
         )
-        
+
         # Send match profile
         await update.message.reply_text(
             MATCH_PROFILE_TEMPLATE.format(
@@ -124,7 +123,7 @@ async def match_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
                 ]
             ),
         )
-    
+
     except Exception as e:
         logger.error(
             "Error in match command",
@@ -132,9 +131,7 @@ async def match_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             error=str(e),
             exc_info=e,
         )
-        await update.message.reply_text(
-            "Sorry, something went wrong. Please try again later."
-        )
+        await update.message.reply_text("Sorry, something went wrong. Please try again later.")
 
 
 @authenticated
@@ -148,26 +145,26 @@ async def match_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     """
     query = update.callback_query
     user_id = str(update.effective_user.id)
-    
+
     try:
         await query.answer()
         callback_data = query.data
-        
+
         if callback_data.startswith("like_"):
             # Handle like action
             match_id = callback_data[5:]
             await handle_like(update, context, match_id)
-        
+
         elif callback_data.startswith("dislike_"):
             # Handle dislike action
             match_id = callback_data[8:]
             await handle_dislike(update, context, match_id)
-        
+
         elif callback_data == "next_match":
             # Show next match
             await query.delete_message()
             await match_command(update, context)
-    
+
     except Exception as e:
         logger.error(
             "Error in match callback",
@@ -176,9 +173,7 @@ async def match_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             error=str(e),
             exc_info=e,
         )
-        await query.edit_message_text(
-            "Sorry, something went wrong. Please try again with /match."
-        )
+        await query.edit_message_text("Sorry, something went wrong. Please try again with /match.")
 
 
 async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE, match_id: str) -> None:
@@ -191,15 +186,15 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE, match_
     """
     query = update.callback_query
     user_id = str(update.effective_user.id)
-    
+
     try:
         # Get match details
         match = get_match_by_id(match_id)
         target_user = get_user(match.target_user_id)
-        
+
         # Like the match
         is_mutual = like_match(match_id)
-        
+
         if is_mutual:
             # Mutual match
             await query.edit_message_text(
@@ -210,14 +205,10 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE, match_
                 reply_markup=InlineKeyboardMarkup(
                     [
                         [
-                            InlineKeyboardButton(
-                                "💬 Start Chat", callback_data=f"chat_{match_id}"
-                            ),
+                            InlineKeyboardButton("💬 Start Chat", callback_data=f"chat_{match_id}"),
                         ],
                         [
-                            InlineKeyboardButton(
-                                "⏭️ Continue Matching", callback_data="next_match"
-                            ),
+                            InlineKeyboardButton("⏭️ Continue Matching", callback_data="next_match"),
                         ],
                     ]
                 ),
@@ -229,24 +220,20 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE, match_
                 reply_markup=InlineKeyboardMarkup(
                     [
                         [
-                            InlineKeyboardButton(
-                                "⏭️ Continue Matching", callback_data="next_match"
-                            ),
+                            InlineKeyboardButton("⏭️ Continue Matching", callback_data="next_match"),
                         ],
                     ]
                 ),
             )
-    
+
     except NotFoundError:
         logger.warning(
             "Match not found in like handler",
             user_id=user_id,
             match_id=match_id,
         )
-        await query.edit_message_text(
-            "This match is no longer available. Try /match to find new matches."
-        )
-    
+        await query.edit_message_text("This match is no longer available. Try /match to find new matches.")
+
     except Exception as e:
         logger.error(
             "Error in like handler",
@@ -255,9 +242,7 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE, match_
             error=str(e),
             exc_info=e,
         )
-        await query.edit_message_text(
-            "Sorry, something went wrong. Please try again with /match."
-        )
+        await query.edit_message_text("Sorry, something went wrong. Please try again with /match.")
 
 
 async def handle_dislike(update: Update, context: ContextTypes.DEFAULT_TYPE, match_id: str) -> None:
@@ -270,38 +255,34 @@ async def handle_dislike(update: Update, context: ContextTypes.DEFAULT_TYPE, mat
     """
     query = update.callback_query
     user_id = str(update.effective_user.id)
-    
+
     try:
         # Get match details
         match = get_match_by_id(match_id)
         target_user = get_user(match.target_user_id)
-        
+
         # Dislike the match
         dislike_match(match_id)
-        
+
         await query.edit_message_text(
             MATCH_DISLIKED_MESSAGE.format(name=target_user.first_name),
             reply_markup=InlineKeyboardMarkup(
                 [
                     [
-                        InlineKeyboardButton(
-                            "⏭️ Continue Matching", callback_data="next_match"
-                        ),
+                        InlineKeyboardButton("⏭️ Continue Matching", callback_data="next_match"),
                     ],
                 ]
             ),
         )
-    
+
     except NotFoundError:
         logger.warning(
             "Match not found in dislike handler",
             user_id=user_id,
             match_id=match_id,
         )
-        await query.edit_message_text(
-            "This match is no longer available. Try /match to find new matches."
-        )
-    
+        await query.edit_message_text("This match is no longer available. Try /match to find new matches.")
+
     except Exception as e:
         logger.error(
             "Error in dislike handler",
@@ -310,9 +291,7 @@ async def handle_dislike(update: Update, context: ContextTypes.DEFAULT_TYPE, mat
             error=str(e),
             exc_info=e,
         )
-        await query.edit_message_text(
-            "Sorry, something went wrong. Please try again with /match."
-        )
+        await query.edit_message_text("Sorry, something went wrong. Please try again with /match.")
 
 
 @authenticated
@@ -326,13 +305,13 @@ async def matches_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     """
     # Apply rate limiting
     await user_command_limiter()(update, context)
-    
+
     user_id = str(update.effective_user.id)
-    
+
     try:
         # Get active matches
         active_matches = get_active_matches(user_id)
-        
+
         if not active_matches:
             await update.message.reply_text(
                 "You don't have any active matches yet. Use /match to start matching!",
@@ -345,21 +324,19 @@ async def matches_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 ),
             )
             return
-        
+
         # Create message with matches list
         message = "Your matches:\n\n"
         keyboard = []
-        
+
         for match in active_matches:
             # Get match user details
-            match_user_id = (
-                match.target_user_id if match.source_user_id == user_id else match.source_user_id
-            )
+            match_user_id = match.target_user_id if match.source_user_id == user_id else match.source_user_id
             match_user = get_user(match_user_id)
-            
+
             # Add to message
             message += f"👤 {match_user.first_name}, {match_user.age}\n"
-            
+
             # Add chat button
             keyboard.append(
                 [
@@ -369,15 +346,15 @@ async def matches_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     )
                 ]
             )
-        
+
         # Add navigation buttons
         keyboard.append([InlineKeyboardButton("⏭️ Find new matches", callback_data="new_matches")])
-        
+
         await update.message.reply_text(
             message,
             reply_markup=InlineKeyboardMarkup(keyboard),
         )
-    
+
     except Exception as e:
         logger.error(
             "Error in matches command",
@@ -385,6 +362,4 @@ async def matches_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             error=str(e),
             exc_info=e,
         )
-        await update.message.reply_text(
-            "Sorry, something went wrong. Please try again later."
-        )
+        await update.message.reply_text("Sorry, something went wrong. Please try again later.")

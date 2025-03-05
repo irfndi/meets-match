@@ -64,7 +64,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     """
     # Apply rate limiting
     await user_command_limiter()(update, context)
-    
+
     await update.message.reply_text(
         HELP_MESSAGE,
         parse_mode="Markdown",
@@ -88,7 +88,7 @@ async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     """
     # Apply rate limiting
     await user_command_limiter()(update, context)
-    
+
     await update.message.reply_text(
         ABOUT_MESSAGE,
         parse_mode="Markdown",

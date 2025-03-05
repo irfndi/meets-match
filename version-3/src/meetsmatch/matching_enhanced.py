@@ -1,8 +1,11 @@
-from geopy.geocoders import Nominatim
-from geopy.exc import GeocoderTimedOut
 import json
 from difflib import SequenceMatcher
+
+from geopy.exc import GeocoderTimedOut
+from geopy.geocoders import Nominatim
+
 from .models import User
+
 
 class InterestMatcher:
     def __init__(self):
@@ -62,16 +65,11 @@ class InterestMatcher:
         shared_interests = [
             i
             for i in user_interests
-            if any(
-                self.normalize_interest(i) == self.normalize_interest(m)
-                for m in match_interests
-            )
+            if any(self.normalize_interest(i) == self.normalize_interest(m) for m in match_interests)
         ]
 
         # Calculate score based on common interests and total interests
         return len(shared_interests) / max(len(norm1), len(norm2))
-
-
 
 
 class LocationMatcher:
@@ -119,31 +117,28 @@ class LocationMatcher:
             location = self.geolocator.geocode(location_str, exactly_one=True)
             if not location:
                 return {}
-            
+
             # Extract city from structured address components
-            address_data = location.raw.get('address', {})
-            city = address_data.get('city') or \
-                   address_data.get('town') or \
-                   address_data.get('village') or \
-                   "Unknown"
-            country = address_data.get('country', 'Unknown')
-            
+            address_data = location.raw.get("address", {})
+            city = address_data.get("city") or address_data.get("town") or address_data.get("village") or "Unknown"
+            country = address_data.get("country", "Unknown")
+
             return {
                 "lat": location.latitude,
                 "lon": location.longitude,
                 "address": location.address,
                 "city": city,
                 "country": country,
-                "raw": location_str
+                "raw": location_str,
             }
         except GeocoderTimedOut:
             if retries > 0:
-                return self.get_location_info(location_str, retries-1)
+                return self.get_location_info(location_str, retries - 1)
             return {}
 
     def calculate_distance(self, loc1, loc2):
         """Calculate distance between two locations in kilometers using Haversine."""
-        from math import radians, sin, cos, sqrt, atan2
+        from math import atan2, cos, radians, sin, sqrt
 
         # Earth radius in kilometers
         R = 6371.0
@@ -154,8 +149,8 @@ class LocationMatcher:
         dlon = lon2 - lon1
         dlat = lat2 - lat1
 
-        a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
-        c = 2 * atan2(sqrt(a), sqrt(1-a))
+        a = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2
+        c = 2 * atan2(sqrt(a), sqrt(1 - a))
 
         return R * c
 
@@ -163,7 +158,7 @@ class LocationMatcher:
         """Calculate normalized location match score (0-1) based on distance."""
         if not loc1 or not loc2:
             return 0.0
-            
+
         distance = self.calculate_distance(loc1, loc2)
         return max(0.0, 1.0 - (distance / max_distance))
 
@@ -174,8 +169,7 @@ class EnhancedMatcher:
         self.interest_matcher = InterestMatcher()
         self.location_matcher = LocationMatcher()
 
-    def find_matches(self, user: User, limit: int = 10,
-                    max_distance: int = 50, min_shared_interests: int = 1):
+    def find_matches(self, user: User, limit: int = 10, max_distance: int = 50, min_shared_interests: int = 1):
         """
         Get potential matches for a user using enhanced matching algorithm.
 
@@ -202,13 +196,17 @@ class EnhancedMatcher:
                 user_interests = []
 
             # Query for potential matches
-            query = session.query(User).filter(
-                User.id != user.id,
-                User.is_active == True,
-                User.is_deleted == False,
-                User.gender.isnot(None),
-                User.gender != user.gender  # Only match with opposite gender
-            ).all()
+            query = (
+                session.query(User)
+                .filter(
+                    User.id != user.id,
+                    User.is_active is True,
+                    User.is_deleted is False,
+                    User.gender.isnot(None),
+                    User.gender != user.gender,  # Only match with opposite gender
+                )
+                .all()
+            )
 
             # Get location info if needed
             if isinstance(user_loc, str):
@@ -277,7 +275,7 @@ class EnhancedMatcher:
         """Calculate location matching score between two users."""
         if not user_loc or not match_loc:
             return 0.0
-        
+
         try:
             return self.location_matcher.get_location_score(user_loc, match_loc)
         except (KeyError, ValueError):
@@ -288,9 +286,7 @@ class EnhancedMatcher:
         interest_weight = 0.7
         location_weight = 0.3
         total_weight = interest_weight + location_weight
-        return (
-            interest_score * interest_weight + location_score * location_weight
-        ) / total_weight
+        return (interest_score * interest_weight + location_score * location_weight) / total_weight
 
 
 enhanced_matcher = EnhancedMatcher()

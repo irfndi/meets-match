@@ -1,9 +1,11 @@
-from .models import User, Session, Interaction, Report
 import json
-from geopy.geocoders import Nominatim
+import logging
 from datetime import datetime, timedelta
 from typing import List, Optional
-import logging
+
+from geopy.geocoders import Nominatim
+
+from .models import Interaction, Report, Session, User
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +23,7 @@ class Matcher:
                 return location.raw["address"].get("country")
             return None
         except Exception as e:
-            logger.error(f"Error getting country for city {city}: {str(e)}")
+            logger.error(f"Error getting country for city {city}: {e!s}")
             return None
 
     async def get_potential_matches(self, user: User) -> List[User]:
@@ -54,9 +56,7 @@ class Matcher:
                     matches.append(potential_match)
 
             # Sort matches by number of shared interests
-            matches.sort(
-                key=lambda m: len(self.get_shared_interests(user, m)), reverse=True
-            )
+            matches.sort(key=lambda m: len(self.get_shared_interests(user, m)), reverse=True)
 
             return matches
         finally:
@@ -97,10 +97,7 @@ class Matcher:
         Returns:
             bool: True if users match, False otherwise
         """
-        print(
-            f"Checking match between user {user.id} and "
-            f"potential_match {potential_match.id}"
-        )
+        print(f"Checking match between user {user.id} and " f"potential_match {potential_match.id}")
         print(f"User location: {user.location}")
         print(f"Potential match location: {potential_match.location}")
 
@@ -115,11 +112,7 @@ class Matcher:
 
         # Age check (within 4 years)
         if not (user.age - 4 <= potential_match.age <= user.age + 4):
-            print(
-                "Age mismatch - "
-                f"user: {user.age}, "
-                f"potential_match: {potential_match.age}"
-            )
+            print("Age mismatch - " f"user: {user.age}, " f"potential_match: {potential_match.age}")
             return False
 
         # Location check (same country)
@@ -128,11 +121,7 @@ class Matcher:
         print(f"User country: {user_country}")
         print(f"Potential match country: {match_country}")
         if not user_country or not match_country or user_country != match_country:
-            print(
-                "Country mismatch - "
-                f"user: {user_country}, "
-                f"potential_match: {match_country}"
-            )
+            print("Country mismatch - " f"user: {user_country}, " f"potential_match: {match_country}")
             return False
 
         # Interest check (at least one shared interest)
