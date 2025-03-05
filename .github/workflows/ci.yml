@@ -42,6 +42,39 @@ jobs:
         uv pip install -r requirements.txt
         uv pip install coverage codecov
         
+    - name: Check PostgreSQL Service Status
+      run: |
+        # Install PostgreSQL client tools
+        sudo apt-get update && sudo apt-get install -y postgresql-client net-tools
+        # Check if PostgreSQL is running and accessible
+        pg_isready -h localhost -p 5432
+        # Try a basic connection to verify credentials
+        PGPASSWORD=postgres psql -h localhost -U postgres -d test_db -c "SELECT 1" || echo "PostgreSQL connection failed"
+        # Print service logs if available
+        echo "\n--- PostgreSQL Service Status ---"
+        sudo netstat -tulpn | grep 5432 || echo "PostgreSQL port not listening"
+        # Check container logs if possible
+        echo "\n--- Docker Container Status ---"
+        sudo docker ps -a || echo "Docker command not available"
+        
+    - name: Verify PostgreSQL Connection
+      run: |
+        # Wait for PostgreSQL to be fully ready
+        echo "Waiting for PostgreSQL to be fully ready..."
+        for i in {1..10}; do
+          if PGPASSWORD=postgres psql -h localhost -U postgres -d test_db -c "SELECT 1" &>/dev/null; then
+            echo "PostgreSQL is ready!"
+            break
+          fi
+          echo "Attempt $i: PostgreSQL not ready yet, waiting..."
+          sleep 3
+        done
+        # Final check
+        if ! PGPASSWORD=postgres psql -h localhost -U postgres -d test_db -c "SELECT 1" &>/dev/null; then
+          echo "ERROR: PostgreSQL is still not accessible after waiting"
+          exit 1
+        fi
+
     - name: Run tests with coverage
       env:
         POSTGRES_HOST: localhost
