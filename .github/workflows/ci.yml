@@ -38,9 +38,19 @@ jobs:
         
     - name: Install dependencies
       run: |
-        uv venv
-        uv pip install -r requirements.txt
-        uv pip install coverage codecov
+        # Use Python's built-in venv module instead of uv venv
+        python -m venv .venv
+        source .venv/bin/activate
+        
+        # Explicitly install python-dotenv to avoid conflicts
+        pip install python-dotenv>=0.19.0
+        
+        # Install dependencies from version-3 directory
+        pip install -r version-3/requirements.txt
+        pip install coverage codecov
+        
+        # List installed packages for debugging
+        pip list | grep dotenv
         
     - name: Check PostgreSQL Service Status
       run: |
@@ -87,20 +97,26 @@ jobs:
 
     - name: Configure environment for tests
       run: |
-        # Create test environment file from sample
-        cp .env.sample .env.test
+        # Create test environment file from sample in version-3 directory
+        cp version-3/.env.sample version-3/.env.test
+        
         # Override database connection settings
-        echo "POSTGRES_HOST=localhost" >> .env.test
-        echo "POSTGRES_PORT=5432" >> .env.test
-        echo "POSTGRES_USER=postgres" >> .env.test
-        echo "POSTGRES_PASSWORD=postgres" >> .env.test
-        echo "POSTGRES_DB=test_db" >> .env.test
-        echo "ENVIRONMENT=test" >> .env.test
+        echo "POSTGRES_HOST=localhost" >> version-3/.env.test
+        echo "POSTGRES_PORT=5432" >> version-3/.env.test
+        echo "POSTGRES_USER=postgres" >> version-3/.env.test
+        echo "POSTGRES_PASSWORD=postgres" >> version-3/.env.test
+        echo "POSTGRES_DB=test_db" >> version-3/.env.test
+        echo "ENVIRONMENT=test" >> version-3/.env.test
+        
         # Display environment (excluding sensitive values)
         echo "Test environment configuration:"
-        cat .env.test | grep -v PASSWORD | grep -v KEY | grep -v TOKEN
+        cat version-3/.env.test | grep -v PASSWORD | grep -v KEY | grep -v TOKEN
+        
         # Copy to .env for tests that look for it
-        cp .env.test .env
+        cp version-3/.env.test version-3/.env
+        
+        # Also create a copy at the repository root for backward compatibility
+        cp version-3/.env.test .env
 
     - name: Run tests with coverage
       env:
@@ -110,8 +126,16 @@ jobs:
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
       run: |
+        # Activate the virtual environment
+        source .venv/bin/activate
+        
+        # Change to version-3 directory and run tests
+        cd version-3
         coverage run -m unittest discover
         coverage xml
+        
+        # Copy coverage report to the repository root for the next step
+        cp coverage.xml ../coverage.xml
         
     - name: Verify coverage file
       run: ls -la && test -f coverage.xml
