@@ -9,21 +9,6 @@ jobs:
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
 
-    services:
-      postgres:
-        image: postgres:latest
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: test_db
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
     steps:
     - uses: actions/checkout@v4
     
@@ -35,243 +20,63 @@ jobs:
     - name: Install uv
       run: |
         curl -LsSf https://astral.sh/uv/install.sh | sh
-        
-    - name: Install dependencies
-      run: |
-        # Use Python's built-in venv module instead of uv venv
-        python -m venv .venv
-        source .venv/bin/activate
-        
-        # Update pip to the latest version
-        pip install --upgrade pip
-        
-        # Install specific versions of packages with known conflicts first
-        pip install starlette==0.27.0
-        pip install python-dotenv>=0.19.0
-        
-        # Install testing dependencies first
-        pip install pytest pytest-cov pytest-asyncio pytest-mock pytest-freezegun structlog
-        
-        # Install additional modules that may be needed for tests
-        pip install httpx redis sqlalchemy pydantic typing-extensions
-        
-        # Debug package versions
-        echo "Installed package versions:"
-        pip list
-        
-        # Install remaining dependencies with --no-deps first, then resolve deps
-        pip install --no-deps -r version-3/requirements.txt || echo "Continuing despite errors with --no-deps"
-        pip install -r version-3/requirements.txt || echo "Some dependencies might not be installed correctly"
-        
-        # Install coverage tools
-        pip install coverage==7.4.4 codecov
-        
-        # List installed packages for debugging
-        echo "Installed packages:"
-        pip list | grep -E "(fastapi|starlette|dotenv|coverage)"
-        
-    - name: Check PostgreSQL Service Status
-      run: |
-        # Install PostgreSQL client tools
-        sudo apt-get update && sudo apt-get install -y postgresql-client net-tools
-        # Check if PostgreSQL is running and accessible
-        pg_isready -h localhost -p 5432
-        # Try a basic connection to verify credentials
-        PGPASSWORD=postgres psql -h localhost -U postgres -d test_db -c "SELECT 1" || echo "PostgreSQL connection failed"
-        # Print service logs if available
-        echo "\n--- PostgreSQL Service Status ---"
-        sudo netstat -tulpn | grep 5432 || echo "PostgreSQL port not listening"
-        # Check container logs if possible
-        echo "\n--- Docker Container Status ---"
-        sudo docker ps -a || echo "Docker command not available"
-        
-    - name: Verify PostgreSQL Connection
-      run: |
-        # Wait for PostgreSQL to be fully ready
-        echo "Waiting for PostgreSQL to be fully ready..."
-        for i in {1..10}; do
-          if PGPASSWORD=postgres psql -h localhost -U postgres -d test_db -c "SELECT 1" &>/dev/null; then
-            echo "PostgreSQL is ready!"
-            break
-          fi
-          echo "Attempt $i: PostgreSQL not ready yet, waiting..."
-          sleep 3
-        done
-        # Final check
-        if ! PGPASSWORD=postgres psql -h localhost -U postgres -d test_db -c "SELECT 1" &>/dev/null; then
-          echo "ERROR: PostgreSQL is still not accessible after waiting"
-          exit 1
-        fi
+        echo "PATH=$HOME/.cargo/bin:$PATH" >> $GITHUB_ENV
 
-    - name: Create required database roles
+    - name: Setup Virtual Environment and Install Dependencies
       run: |
-        # Create the 'root' role that's needed for tests
-        echo "Creating required database roles..."
-        PGPASSWORD=postgres psql -h localhost -U postgres -d test_db -c "CREATE ROLE root WITH LOGIN SUPERUSER PASSWORD 'root';" || echo "Role 'root' might already exist"
-        
-        # List all roles to verify
-        echo "Verifying database roles:"
-        PGPASSWORD=postgres psql -h localhost -U postgres -d test_db -c "\du"
+        uv --version
+        uv venv
+        echo "source .venv/bin/activate" >> $GITHUB_ENV
+
+    - name: Activate Environment and Install Project
+      shell: bash -el {0}
+      run: |
+        source .venv/bin/activate
+        uv pip install -e ".[dev]"
+        echo "Installed packages:"
+        uv pip list
+
+    - name: Lint with Ruff
+      shell: bash -el {0}
+      run: |
+        source .venv/bin/activate
+        uv run ruff check .
+
+    - name: Check Formatting with Ruff
+      shell: bash -el {0}
+      run: |
+        source .venv/bin/activate
+        uv run ruff format --check .
 
     - name: Configure environment for tests
       run: |
-        # Create directories if they don't exist
-        mkdir -p version-3
-        
-        # Create test environment files directly
-        echo "# Test environment for CI" > version-3/.env.test
-        echo "ENVIRONMENT=test" >> version-3/.env.test
-        echo "LOG_LEVEL=DEBUG" >> version-3/.env.test
-        echo "MATCH_THRESHOLD=0.75" >> version-3/.env.test
-        
-        # Add database settings
-        echo "POSTGRES_HOST=localhost" >> version-3/.env.test
-        echo "POSTGRES_PORT=5432" >> version-3/.env.test
-        echo "POSTGRES_USER=postgres" >> version-3/.env.test
-        echo "POSTGRES_PASSWORD=postgres" >> version-3/.env.test
-        echo "POSTGRES_DB=test_db" >> version-3/.env.test
-        
-        # Add mock values for other required settings
-        echo "TELEGRAM_TOKEN=mock_token_for_tests" >> version-3/.env.test
-        echo "SUPABASE_URL=https://example.supabase.com" >> version-3/.env.test
-        echo "SUPABASE_KEY=mock_key_for_tests" >> version-3/.env.test
-        echo "KV_URL=redis://localhost:6379/0" >> version-3/.env.test
-        
-        # Display environment (excluding sensitive values)
+        echo "# Test environment for CI" > .env.test
+        echo "ENVIRONMENT=test" >> .env.test
+        echo "LOG_LEVEL=DEBUG" >> .env.test
+        echo "MATCH_THRESHOLD=0.75" >> .env.test
+
+        echo "TELEGRAM_TOKEN=mock_token_for_ci_tests" >> .env.test
+
         echo "Test environment configuration:"
-        cat version-3/.env.test | grep -v PASSWORD | grep -v KEY | grep -v TOKEN
-        
-        # Copy to .env for tests that look for it
-        cp version-3/.env.test version-3/.env
-        
-        # Also create a copy at the repository root for backward compatibility
-        cp version-3/.env.test .env
+        cat .env.test | grep -v TOKEN
+
+        cp .env.test .env
 
     - name: Run tests with coverage
+      shell: bash -el {0}
       env:
-        # Secret environment variables (these will not be exposed in logs)
-        BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
-        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+        TELEGRAM_TOKEN: ${{ secrets.BOT_TOKEN || 'mock_token_for_ci_tests' }}
       run: |
-        # Activate the virtual environment
         source .venv/bin/activate
-        
-        # Check Python version and dependencies
         python --version
-        pip list
-        
-        # Handle test execution based on directory structure
-        if [ -d "version-3/tests" ]; then
-          echo "Version 3 structure detected, running tests from version-3 directory"
-          cd version-3
-          TEST_DIR="."
-          
-          # Fix Python path for imports
-          export PYTHONPATH="$PYTHONPATH:$(pwd)"
-          echo "PYTHONPATH set to: $PYTHONPATH"
-          
-          # Create or fix mock module structure
-          if [ -d "tests/mocks" ]; then
-            echo "Setting up test mock modules..."
-            # Ensure __init__.py exists
-            touch tests/mocks/__init__.py
-            
-            # Create base.py if missing
-            if [ ! -f "tests/mocks/base.py" ]; then
-              echo "Creating missing base.py file in tests/mocks"
-              echo 'class Model:\n    """Base model class for mocks"""\n    pass' > tests/mocks/base.py
-            fi
-            
-            # Create models.py if missing
-            if [ ! -f "tests/mocks/models.py" ]; then
-              echo "Creating missing models.py file in tests/mocks"
-              echo 'from .base import Model\n\nclass Conversation(Model):\n    """Mock conversation model"""\n    def __init__(self, **kwargs):\n        self.__dict__.update(kwargs)\n\nclass Message(Model):\n    """Mock message model"""\n    def __init__(self, **kwargs):\n        self.__dict__.update(kwargs)' > tests/mocks/models.py
-            fi
-          fi
-          
-          # Examine test directory structure
-          echo "Test directory structure:"
-          find tests -type f | sort
-          
-        elif [ -d "tests" ]; then
-          echo "Root tests directory detected, running tests from root"
-          TEST_DIR="."
-          export PYTHONPATH="$PYTHONPATH:$(pwd)"
-        else
-          echo "No tests directory found, creating dummy test"
-          mkdir -p tests
-          echo 'import unittest\nclass DummyTest(unittest.TestCase):\n    def test_dummy(self):\n        self.assertTrue(True)' > tests/test_dummy.py
-          TEST_DIR="."
-        fi
-        
-        # List test files
-        echo "Test files found:"
-        find . -name "test_*.py" | sort
-        
-        # Run tests with reduced concurrency and verbose output
+        uv pip list
+
         echo "Running tests..."
-        
-        # Create a minimal passing test as fallback
-        echo 'import unittest\nclass PassingTest(unittest.TestCase):\n    def test_pass(self):\n        self.assertTrue(True)' > passing_test.py
-        
-        # Attempt to run tests but prioritize coverage collection
-        echo "Attempting to run tests with pytest..."
-        python -m pytest tests/ -v --cov=. --cov-report=xml || {
-          echo "Pytest failed with error code $?, trying specific test files..."
-          for test_file in $(find tests -name "test_*.py" | sort); do
-            echo "Running individual test file: $test_file"
-            python -m pytest $test_file -v --cov=. --cov-append || echo "Test $test_file failed but continuing"
-          done
-          
-          # If we still don't have coverage, fall back to unittest
-          if [ ! -f "coverage.xml" ]; then
-            echo "Falling back to unittest..."
-            coverage run --concurrency=thread -m unittest discover -v $TEST_DIR || {
-              echo "Unittest also failed, using minimal passing test"
-              coverage run --concurrency=thread -m unittest passing_test
-            }
-          fi
-        }
-        
-        # Ensure coverage report exists
-        echo "Generating coverage report if needed..."
-        [ -f coverage.xml ] || coverage xml || echo '<?xml version="1.0" ?><coverage version="1.0"><sources/></coverage>' > coverage.xml
-        
-        # Copy coverage report to the repository root if needed
-        echo "Ensuring coverage report is in root directory..."
-        if [ "$(pwd)" != "$(git rev-parse --show-toplevel)" ]; then
-          echo "Currently in subdirectory, copying coverage.xml to root"
-          cp coverage.xml $(git rev-parse --show-toplevel)/coverage.xml || (echo "Could not copy coverage.xml, creating empty file" && touch $(git rev-parse --show-toplevel)/coverage.xml)
-        fi
-        
-    - name: Verify coverage file
-      run: |
-        # List files in both the root and version-3 directories
-        echo "Files in repository root:"
-        ls -la
-        
-        echo "Files in version-3 directory:"
-        ls -la version-3/
-        
-        # Check if coverage file exists in either location
-        if [ -f coverage.xml ]; then
-          echo "coverage.xml found in repository root"
-        elif [ -f version-3/coverage.xml ]; then
-          echo "coverage.xml found in version-3 directory"
-          cp version-3/coverage.xml .
-        else
-          echo "WARNING: No coverage.xml file found!"
-          echo "Creating empty coverage file for continuity"
-          echo '<?xml version="1.0" ?><coverage version="1.0"><sources/></coverage>' > coverage.xml
-        fi
-        
-        # Ensure file exists for next steps
-        test -f coverage.xml
+        uv run pytest tests --cov=src --cov-report=xml --cov-fail-under=95
+
+        echo "Test run finished."
 
     - name: Upload coverage to Codecov
-      if: success()
       uses: codecov/codecov-action@v3
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
@@ -280,3 +85,25 @@ jobs:
         verbose: true
         name: codecov-umbrella
         fail_ci_if_error: true
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: test # Depends on the test job matrix completing successfully
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' # Only run on push to main branch
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18' # Use a compatible Node.js version for wrangler
+
+    - name: Install Wrangler
+      run: npm install -g wrangler
+
+    - name: Deploy to Cloudflare Workers
+      env:
+        CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+        CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+      run: wrangler deploy

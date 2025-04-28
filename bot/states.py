@@ -1,9 +1,0 @@
-# Define conversation states for the bot
-PROFILE_MENU = 0
-UPDATE_PROFILE = 1
-AGE_INPUT = 2
-NAME_INPUT = 3
-GENDER_INPUT = 4
-LOOKING_FOR_INPUT = 5
-CITY_INPUT = 6
-BIO_INPUT = 7

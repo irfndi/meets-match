@@ -1,0 +1,50 @@
+# TODO: Configure Cloudflare Worker Deployment
+# This file is essential for deploying the Python Worker.
+# Fill in the details based on your Cloudflare account and project requirements.
+# Refer to Cloudflare Wrangler documentation: https://developers.cloudflare.com/workers/wrangler/configuration/
+
+name = "meetsmatch-py-worker" # Replace with your desired worker name
+main = "src.bot.main:app" # FIXME: Update with the correct path to your ASGI app entry point (e.g., where FastAPI/Starlette app is defined)
+compatibility_date = "2024-04-05" # Update to a recent date
+
+# TODO: Uncomment and configure account ID (find in Cloudflare dashboard)
+# account_id = "YOUR_CLOUDFLARE_ACCOUNT_ID"
+
+# TODO: Uncomment and define D1 database bindings
+# [[d1_databases]]
+# binding = "DB" # How you'll access it in your code (e.g., env.DB)
+# database_name = "meetsmatch-database-name" # The actual D1 DB name in Cloudflare
+# database_id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" # The D1 DB ID
+# preview_database_id = "meetsmatch-database-name_preview" # Optional: for local dev/preview
+
+# TODO: Uncomment and define KV namespace bindings
+# [[kv_namespaces]]
+# binding = "CACHE_KV" # How you'll access it in your code (e.g., env.CACHE_KV)
+# id = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" # The KV namespace ID
+# preview_id = "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy" # The preview KV namespace ID
+
+# TODO: Uncomment and define R2 bucket bindings
+# [[r2_buckets]]
+# binding = "MEDIA_BUCKET" # How you'll access it in your code (e.g., env.MEDIA_BUCKET)
+# bucket_name = "meetsmatch-media-bucket-name" # The actual R2 bucket name
+# preview_bucket_name = "meetsmatch-media-bucket-name-preview" # Optional: for local dev/preview
+
+# TODO: Add build configuration if needed (e.g., for custom build steps)
+# [build]
+# command = "your_build_command_here"
+# watch_dir = "src"
+
+# TODO: Configure environments (e.g., staging, production) if necessary
+# [env.production]
+# name = "meetsmatch-py-worker-prod"
+# account_id = "YOUR_PROD_ACCOUNT_ID"
+# Routes, different bindings, etc.
+
+# [env.staging]
+# name = "meetsmatch-py-worker-staging"
+# account_id = "YOUR_STAGING_ACCOUNT_ID"
+
+# Python Worker specific configuration
+[python]
+# Specifies the module and function/object for the worker entry point
+module = "src.bot.main:app" # FIXME: Ensure this matches the 'main' field above and points to your ASGI app
