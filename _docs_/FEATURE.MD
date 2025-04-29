@@ -78,34 +78,37 @@ def validate_profile(user: User) -> dict:
 
 ### Delete Account Mechanism
 - Users can delete their account and all associated data via `/configuration`.
-- On database we mark soft delete and keep the data
+- On database (Cloudflare D1) we mark soft delete and keep the data for a retention period.
 - If users create with same telegram username, we still create new account other different ID
 
 ### Media Mechanism
-- Max 5 media files (images/videos) per profile with max size 5MB
-- Have mechanism to store media in S3 compatible storage
-- Have mechanism to delete media in 180 days after their change their media
+- Max 5 media files (images/videos) per profile with max size 5MB.
+- Have mechanism to store media metadata in D1 and potentially use R2 or KV for blobs if needed (evaluate based on cost/performance).
+- Have mechanism to delete media references in 180 days after they change their media or account is deleted.
 
 ## Data Persistence
-- **Profile Data:** Stored in Supabase PostgreSQL with RLS policies
-- **Media Files:** Supabase Storage bucket with automatic CDN distribution
-- **Match History:** Supabase realtime subscriptions for instant updates
+- **Profile Data:** Stored in Cloudflare D1 (SQLite-based serverless database).
+- **Media Metadata:** Stored in Cloudflare D1. Blob storage TBD (R2/KV).
+- **Cache/Session Data:** Cloudflare KV for fast lookups.
 
 ## Security & Privacy
 1. **Data Encryption**
-   - AES-256 for PII at rest
-   - TLS 1.3 for data in transit
+   - Data at rest encrypted by Cloudflare.
+   - TLS 1.3 for data in transit (Cloudflare default).
 
 2. **Access Controls**
+    - Access to D1/KV/R2 managed via Cloudflare Worker bindings and secrets.
+    - Environment variables for API keys/tokens managed securely via Cloudflare dashboard and `.dev.vars`.
 ```yaml
-# IAM Policy Example
-Statement:
-  - Effect: Allow
-    Action: s3:GetObject
-    Resource: arn:aws:s3:::meetmatch-media/*
-    Condition:
-      StringEquals:
-        aws:PrincipalTag/project: meetmatch
+# wrangler.toml example binding (conceptual)
+[[d1_databases]]
+binding = "DB"
+database_name = "meetmatch-db"
+database_id = "your-d1-database-id"
+
+[[kv_namespaces]]
+binding = "CACHE"
+id = "your-kv-namespace-id"
 ```
 
 ## Rate Limits & Quotas
@@ -121,9 +124,6 @@ Statement:
 ### User Notifications:
 - Notify users when they receive a new like or match.
 - Send reminders to complete their profile if incomplete.
-
-### Profile Verification:
-- Add optional profile verification (e.g., photo ID) to increase trust and authenticity.
 
 ### Analytics Dashboard:
 - Track user interactions, matches, and reports for insights and improvements.

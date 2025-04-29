@@ -4,131 +4,131 @@ This document outlines the core technologies, libraries, and tools used in the d
 
 ## Core Technologies
 
-* **Python (3.10+):** The primary programming language for the bot's logic and functionality. Leveraging modern features and security updates.
-* **Telegram Bot API:** The interface provided by Telegram for creating and interacting with bots. Understanding its methods and data structures is crucial.
-* **Supabase:** Open-source Firebase alternative providing PostgreSQL database, authentication, and realtime functionality
-* **Redis:** In-memory data store for real-time matching operations
-* **S3-Compatible Storage:** Object storage for media assets (using DigitalOcean Spaces)
+* **Python (3.10+):** The primary programming language for the bot's logic and functionality, running within the Cloudflare Workers environment via Pyodide/WASI.
+* **Telegram Bot API:** The interface provided by Telegram for creating and interacting with bots.
+* **Cloudflare Workers:** Serverless execution environment for running the bot logic globally.
+* **Cloudflare D1:** Serverless SQL database (SQLite compatible) for persistent relational data.
+* **Cloudflare KV:** Global, low-latency key-value store for caching, session data, or configuration.
+* **Cloudflare R2 (Optional):** S3-compatible object storage, potentially for media files if KV is insufficient.
 
 ## Key Libraries and Tools
 
-* **`python-telegram-bot` (20.0+):** A comprehensive Python wrapper for the Telegram Bot API. This library simplifies asynchronous programming, handling updates, and managing bot interactions efficiently. [GitHub Repository](https://github.com/python-telegram-bot/python-telegram-bot)
-* **`uv` (Latest Version):** A fast and modern Python package installer and resolver, used for managing the project's virtual environment and dependencies. Offers performance benefits over `pip`.
-* **`ruff` (Latest Version):** An extremely fast Python linter and formatter, used to enforce code quality, consistency, and catch potential errors. Replaces tools like `flake8`, `isort`, and `pydocstyle`.
-* **Docker:** A platform for building, sharing, and running applications in containers. Used for packaging the bot and its dependencies for consistent deployment.
-* **SQLAlchemy:** An SQL toolkit and Object-Relational Mapping (ORM) library for Python, used for database interactions with Supabase.
-* **Boto3:** The Amazon Web Services (AWS) SDK for Python, used for interacting with Amazon S3.
-* **`geopy` (Latest Version):** A Python library that provides geocoding and reverse geocoding functionalities. It will be used for location-based matching, specifically to determine the country of a given city and to implement the expanded matching criteria (nearby cities, country, nearby countries). [GitHub Repository](https://github.com/geopy/geopy)
-* **`coverage` (Latest Version):** A tool for measuring code coverage of Python programs. Used to identify which parts of the codebase are being tested and which need more testing.
-* **Codecov:** A tool that provides detailed code coverage reports and integrates with GitHub CI/CD. Used to track code coverage over time and ensure high testing standards.
+* **`python-telegram-bot` (20.0+):** A comprehensive Python wrapper for the Telegram Bot API. Adapts well to the Workers environment. [GitHub Repository](https://github.com/python-telegram-bot/python-telegram-bot)
+* **`uv` (Latest Version):** Used locally for managing the development virtual environment and dependencies. Dependencies are bundled for the Worker deployment.
+* **`ruff` (Latest Version):** Linter and formatter for maintaining code quality locally.
+* **`wrangler` (Latest Version):** CLI tool for developing, testing, and deploying Cloudflare Workers, D1, KV, and R2 resources.
+* **Database Client:** A lightweight SQLite-compatible client or ORM suitable for D1 within the Worker environment (e.g., direct SQL execution, a minimal ORM).
+* **`geopy` (Latest Version):** For location-based matching logic. Ensure compatibility within the Worker environment.
+* **`coverage` (Latest Version):** Tool for measuring code coverage locally during tests.
+* **Codecov:** Service for tracking code coverage reports, integrated with CI.
 
 ## Development Environment
 
-* **Virtual Environment:** Isolated Python environment (created using `uv`) to manage project-specific dependencies and avoid conflicts with system-wide packages.
-* **Code Editor/IDE:** The specific editor or IDE is flexible but should support Python development and integrate with the project's linting and formatting tools.
-* **Git:** Version control system for tracking changes and collaborating with other developers.
+* **Virtual Environment:** Isolated Python environment locally managed by `uv`.
+* **Code Editor/IDE:** Supporting Python, TOML (`wrangler.toml`), and potentially JavaScript (for Worker specifics).
+* **Git:** Version control.
+* **`wrangler` CLI:** For local development (`wrangler dev`) and deployment.
 
 ## CI/CD Tools
 
-* **GitHub Actions:** Used for automating the build, test, and deployment processes.
-* **Codecov Integration:** Integrated with GitHub Actions to provide code coverage reports on pull requests and track coverage trends.
-* **Docker Hub:** Container registry for storing and distributing Docker images.
+* **GitHub Actions:** Automating testing (using `pytest` and `coverage`) and deployment (using `wrangler deploy`).
+* **Codecov Integration:** Uploading coverage reports from GitHub Actions.
 
 ## Testing Framework
 
-* **unittest:** Python's built-in testing framework used for writing and running tests.
-* **coverage.py:** Used for measuring code coverage during test execution.
-* **Codecov GitHub App:** Provides detailed coverage reports and PR comments with coverage changes.
+* **pytest:** Python testing framework for unit and integration tests run locally and in CI.
+* **coverage.py:** Measuring code coverage during test execution. Goal: >95% coverage.
+* **Codecov:** Tracking coverage and providing reports.
 
 ## Code Quality Tools
 
-* **ruff:** Fast Python linter and formatter.
-* **pylyzer:** Static type checker for Python code.
-* **Codecov Quality Gates:** Enforces minimum code coverage requirements for pull requests.
+* **ruff:** Linter and formatter.
+* **pylyzer:** Static type checker.
+* **Codecov Quality Gates:** Enforcing minimum code coverage (>95%) for pull requests.
 
 ## Monitoring and Analytics
 
-* **Telegram Bot Analytics:** Built-in analytics for monitoring bot usage and performance.
-* **AWS CloudWatch:** Used for monitoring application logs and metrics.
-* **Codecov Trends:** Tracks code coverage trends over time to maintain quality standards.
+* **Cloudflare Workers Analytics:** Built-in metrics for requests, CPU time, errors within the Cloudflare dashboard.
+* **Cloudflare Logs:** Access to Worker logs for debugging.
+* **Custom Logging:** Implementing logging within the Worker to send data to external observability platforms if needed.
+* **Codecov Trends:** Tracks code coverage trends.
 
 ## Deployment
 
-* **Docker Container:** The bot will be packaged as a Docker container, ensuring consistent execution across different environments.
-* **Container Registry:** A service (e.g., Docker Hub, GitHub Container Registry) may be used to store and distribute the Docker image.
-* **Container Orchestration (Optional):** For more complex deployments, tools like Docker Compose or Kubernetes might be considered, though not explicitly required by the initial request.
-* **Database Hosting:** A Supabase instance, either self-hosted or using a cloud provider's managed service.
-* **S3 Bucket:** An Amazon S3 bucket configured for the bot's storage needs.
+* **Cloudflare Worker:** The bot logic is deployed as a Worker script.
+* **`wrangler.toml`:** Configuration file defining Worker settings, bindings to D1, KV, R2, and environment variables.
+* **Cloudflare D1:** Database migrations managed via `wrangler d1 execute` or integrated migration tools.
+* **Cloudflare KV/R2:** Provisioned and managed via the Cloudflare dashboard or `wrangler`.
 
 ## Key Concepts
 
-* **Asynchronous Programming:** The bot utilizes `python-telegram-bot`'s asynchronous capabilities to handle multiple incoming messages and events concurrently without blocking.
-* **Update Handling:** The mechanism for the bot to receive and process events from Telegram (e.g., new messages, commands, inline queries) using the library's `Updater` and `Dispatcher` classes.
-* **Command Handlers:** Functions or methods dedicated to processing specific user commands (e.g., `/start`, `/help`) using the `CommandHandler` class.
-* **Conversation Handlers:** Manage multi-step interactions or dialog flows with users using the `ConversationHandler` class.
-* **Inline Queries:** Functionality allowing users to interact with the bot directly from their chat input field, providing suggestions or actions using the `InlineQueryHandler` class.
-* **Database Operations:** Using SQLAlchemy to interact with Supabase for storing and retrieving structured data.
-* **S3 Operations:** Using Boto3 to interact with Amazon S3 for storing and retrieving unstructured data or large files.
+* **Asynchronous Programming:** Handling Telegram events asynchronously within the Worker runtime.
+* **Update Handling:** Processing Telegram updates via webhook configured to the Worker URL.
+* **Command Handlers:** Logic for specific user commands.
+* **Conversation Handlers:** Managing multi-step interactions.
+* **Cloudflare Bindings:** Securely accessing D1, KV, and R2 resources from within the Worker code via predefined bindings.
+* **Worker Environment Variables:** Managing secrets like the Telegram Bot Token.
 
 ## Data Persistence
 
-* **Supabase Database:** Used for storing structured data such as user information, bot states, and other relational data.
-* **Amazon S3:** Used for storing larger files, backups, or any unstructured data that the bot might need to handle.
-* **Connection Pooling:** Implement connection pooling for efficient database connections.
-* **Data Backup and Recovery:** Regular backups of Supabase data and S3 objects, with a defined recovery process.
+* **Cloudflare D1:** Storing structured data (users, profiles, matches).
+* **Cloudflare KV:** Storing ephemeral data (session state, rate limits, cache).
+* **Cloudflare R2 (Potentially):** Storing media file blobs.
+* **Data Backup and Recovery:** Utilizing Cloudflare's built-in D1 backup features.
 
 ## Database Architecture
 
 ```mermaid
 graph TD
-    A[Bot Service] --> B[(Supabase)]
-    B --> C[PostgreSQL]
-    B --> D[Auth]
-    B --> E[Realtime]
-    B --> F[Storage]
+    A[Bot Worker] --> B[(D1: SQL DB)]
+    A --> C[(KV: Key-Value)]
+    A --> D[(R2: Object Storage)]
 ```
 
-### Supabase Features Used:
-1. **Row-Level Security:** Granular access controls
-2. **Postgres Functions:** Server-side matching logic
-3. **Realtime API:** Instant match notifications
-4. **Storage API:** Media file management
+### Cloudflare Features Used:
+1. **Workers:** Serverless compute
+2. **D1:** Relational Database
+3. **KV:** Key-Value Store
+4. **R2:** Object Storage (Optional)
+5. **Wrangler:** CLI for development & deployment
 
 # Technical Architecture Deep Dive
 
 ## System Components
 ```mermaid
 graph LR
-    A[Telegram] <--> B[Bot Server]
-    B <--> C[(Supabase)]
-    B <--> D[(Redis)]
-    B <--> E[S3]
-    E <--> F[CDN]
+    A[Telegram API] <--> B(Cloudflare Worker)
+    B <--> C[(D1 Database)]
+    B <--> D[(KV Store)]
+    B <--> E[(R2 Storage)]
 ```
 
-## Service Interactions
+## Service Interactions (Example: Match Request)
 ```mermaid
 sequenceDiagram
-    User->>+Bot: /match
-    Bot->>+Redis: Get candidates
-    Redis-->>-Bot: Candidate IDs
-    Bot->>+DB: Fetch profiles
-    DB-->>-Bot: Profile data
-    Bot->>User: Display match
+    User->>+Telegram: /match command
+    Telegram->>+Worker: Webhook POST
+    Worker->>+KV: Check rate limits/cache
+    KV-->>-Worker: Cache miss/OK
+    Worker->>+D1: Query potential matches
+    D1-->>-Worker: Candidate Profiles
+    Worker->>Telegram: Send match results
+    Telegram-->>-User: Display match
 ```
 
-## Performance Metrics
+## Performance Metrics (Targets)
 | Component         | Target Latency | Error Budget |
 |-------------------|----------------|--------------|
-| API Response      | <500ms         | 99.9% SLA    |
-| Match Generation  | <2s            | 95th %ile    |
-| Media Upload      | <1s/MB         | 99% Success  |
+| Worker Response   | <500ms         | 99.9% Success|
+| D1 Query (P95)    | <100ms         | -            |
+| KV Read/Write     | <10ms          | 99.99% Success|
 
 ## Monitoring Stack
-1. **Application Metrics**
-   - Prometheus: Request rates, error ratios
-   - Grafana: Dashboards
-   
-2. **Business Metrics**
-   - Daily active matches
-   - Conversion funnel
+1. **Cloudflare Dashboard:**
+   - Worker Analytics (requests, CPU, errors)
+   - D1 Query Stats
+   - KV Operations
+2. **Codecov:**
+   - Coverage reports & trends
+3. **Custom Logging (Optional):**
+   - Worker logs pushed to external system (e.g., Datadog, Sentry)

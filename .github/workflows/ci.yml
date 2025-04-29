@@ -9,21 +9,6 @@ jobs:
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
 
-    services:
-      postgres:
-        image: postgres:latest
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: test_db
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
     steps:
     - uses: actions/checkout@v4
     
@@ -35,89 +20,63 @@ jobs:
     - name: Install uv
       run: |
         curl -LsSf https://astral.sh/uv/install.sh | sh
-        
-    - name: Install dependencies
-      run: |
-        uv venv
-        uv pip install -r requirements.txt
-        uv pip install coverage codecov
-        
-    - name: Check PostgreSQL Service Status
-      run: |
-        # Install PostgreSQL client tools
-        sudo apt-get update && sudo apt-get install -y postgresql-client net-tools
-        # Check if PostgreSQL is running and accessible
-        pg_isready -h localhost -p 5432
-        # Try a basic connection to verify credentials
-        PGPASSWORD=postgres psql -h localhost -U postgres -d test_db -c "SELECT 1" || echo "PostgreSQL connection failed"
-        # Print service logs if available
-        echo "\n--- PostgreSQL Service Status ---"
-        sudo netstat -tulpn | grep 5432 || echo "PostgreSQL port not listening"
-        # Check container logs if possible
-        echo "\n--- Docker Container Status ---"
-        sudo docker ps -a || echo "Docker command not available"
-        
-    - name: Verify PostgreSQL Connection
-      run: |
-        # Wait for PostgreSQL to be fully ready
-        echo "Waiting for PostgreSQL to be fully ready..."
-        for i in {1..10}; do
-          if PGPASSWORD=postgres psql -h localhost -U postgres -d test_db -c "SELECT 1" &>/dev/null; then
-            echo "PostgreSQL is ready!"
-            break
-          fi
-          echo "Attempt $i: PostgreSQL not ready yet, waiting..."
-          sleep 3
-        done
-        # Final check
-        if ! PGPASSWORD=postgres psql -h localhost -U postgres -d test_db -c "SELECT 1" &>/dev/null; then
-          echo "ERROR: PostgreSQL is still not accessible after waiting"
-          exit 1
-        fi
+        echo "PATH=$HOME/.cargo/bin:$PATH" >> $GITHUB_ENV
 
-    - name: Create required database roles
+    - name: Setup Virtual Environment and Install Dependencies
       run: |
-        # Create the 'root' role that's needed for tests
-        echo "Creating required database roles..."
-        PGPASSWORD=postgres psql -h localhost -U postgres -d test_db -c "CREATE ROLE root WITH LOGIN SUPERUSER PASSWORD 'root';" || echo "Role 'root' might already exist"
-        
-        # List all roles to verify
-        echo "Verifying database roles:"
-        PGPASSWORD=postgres psql -h localhost -U postgres -d test_db -c "\du"
+        uv --version
+        uv venv
+        echo "source .venv/bin/activate" >> $GITHUB_ENV
+
+    - name: Activate Environment and Install Project
+      shell: bash -el {0}
+      run: |
+        source .venv/bin/activate
+        uv pip install -e ".[dev]"
+        echo "Installed packages:"
+        uv pip list
+
+    - name: Lint with Ruff
+      shell: bash -el {0}
+      run: |
+        source .venv/bin/activate
+        uv run ruff check .
+
+    - name: Check Formatting with Ruff
+      shell: bash -el {0}
+      run: |
+        source .venv/bin/activate
+        uv run ruff format --check .
 
     - name: Configure environment for tests
       run: |
-        # Create test environment file from sample
-        cp .env.sample .env.test
-        # Override database connection settings
-        echo "POSTGRES_HOST=localhost" >> .env.test
-        echo "POSTGRES_PORT=5432" >> .env.test
-        echo "POSTGRES_USER=postgres" >> .env.test
-        echo "POSTGRES_PASSWORD=postgres" >> .env.test
-        echo "POSTGRES_DB=test_db" >> .env.test
+        echo "# Test environment for CI" > .env.test
         echo "ENVIRONMENT=test" >> .env.test
-        # Display environment (excluding sensitive values)
+        echo "LOG_LEVEL=DEBUG" >> .env.test
+        echo "MATCH_THRESHOLD=0.75" >> .env.test
+
+        echo "TELEGRAM_TOKEN=mock_token_for_ci_tests" >> .env.test
+
         echo "Test environment configuration:"
-        cat .env.test | grep -v PASSWORD | grep -v KEY | grep -v TOKEN
-        # Copy to .env for tests that look for it
+        cat .env.test | grep -v TOKEN
+
         cp .env.test .env
 
     - name: Run tests with coverage
+      shell: bash -el {0}
       env:
-        # Secret environment variables (these will not be exposed in logs)
-        BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
-        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+        TELEGRAM_TOKEN: ${{ secrets.BOT_TOKEN || 'mock_token_for_ci_tests' }}
       run: |
-        coverage run -m unittest discover
-        coverage xml
-        
-    - name: Verify coverage file
-      run: ls -la && test -f coverage.xml
+        source .venv/bin/activate
+        python --version
+        uv pip list
+
+        echo "Running tests..."
+        uv run pytest tests --cov=src --cov-report=xml --cov-fail-under=95
+
+        echo "Test run finished."
 
     - name: Upload coverage to Codecov
-      if: success()
       uses: codecov/codecov-action@v3
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
@@ -126,3 +85,25 @@ jobs:
         verbose: true
         name: codecov-umbrella
         fail_ci_if_error: true
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: test # Depends on the test job matrix completing successfully
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' # Only run on push to main branch
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18' # Use a compatible Node.js version for wrangler
+
+    - name: Install Wrangler
+      run: npm install -g wrangler
+
+    - name: Deploy to Cloudflare Workers
+      env:
+        CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+        CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+      run: wrangler deploy
