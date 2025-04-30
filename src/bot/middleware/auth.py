@@ -37,11 +37,14 @@ def authenticated(func: HandlerType) -> HandlerType:
         user_id = str(update.effective_user.id)
 
         try:
+            # Retrieve env from context
+            env = context.bot_data["env"]
+
             # Try to get user from database
-            user = get_user(user_id)
+            user = await get_user(env, user_id)
 
             # Update last active timestamp
-            update_last_active(user_id)
+            await update_last_active(env, user_id)
 
             # Store user in context
             context.user_data["user"] = user
@@ -70,6 +73,7 @@ def authenticated(func: HandlerType) -> HandlerType:
                 error=str(e),
                 exc_info=e,
             )
+            # Use effective_message for consistency
             await update.effective_message.reply_text(
                 "An error occurred during authentication. Please try again later."
             )

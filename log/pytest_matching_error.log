@@ -1,0 +1,68 @@
+/Users/irfandi/Coding/2025/meetsmatch-py/.venv/lib/python3.12/site-packages/pytest_asyncio/plugin.py:217: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+============================= test session starts ==============================
+platform darwin -- Python 3.12.6, pytest-8.3.5, pluggy-1.5.0 -- /Users/irfandi/Coding/2025/meetsmatch-py/.venv/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/irfandi/Coding/2025/meetsmatch-py
+configfile: pyproject.toml
+plugins: anyio-4.9.0, dotenv-0.5.2, asyncio-0.26.0, mock-3.14.0, cov-6.1.1
+asyncio: mode=Mode.STRICT, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 0 items / 1 error
+
+==================================== ERRORS ====================================
+___________ ERROR collecting tests/services/test_matching_service.py ___________
+ImportError while importing test module '/Users/irfandi/Coding/2025/meetsmatch-py/tests/services/test_matching_service.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+../../../.pyenv/versions/3.12.6/lib/python3.12/importlib/__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+tests/services/test_matching_service.py:9: in <module>
+    from src.services.matching_service import (
+src/services/__init__.py:15: in <module>
+    from src.services.matching_service import (
+src/services/matching_service.py:10: in <module>
+    from src.services.user_service import get_user
+src/services/user_service.py:16: in <module>
+    from src.types import Env
+E   ModuleNotFoundError: No module named 'src.types'
+=============================== warnings summary ===============================
+src/config.py:55
+  /Users/irfandi/Coding/2025/meetsmatch-py/src/config.py:55: PydanticDeprecatedSince20: Pydantic V1 style `@validator` validators are deprecated. You should migrate to Pydantic V2 style `@field_validator` validators, see the migration guide for more details. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.11/migration/
+    @validator("ENABLE_SENTRY", pre=True)
+
+src/config.py:62
+  /Users/irfandi/Coding/2025/meetsmatch-py/src/config.py:62: PydanticDeprecatedSince20: Pydantic V1 style `@validator` validators are deprecated. You should migrate to Pydantic V2 style `@field_validator` validators, see the migration guide for more details. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.11/migration/
+    @validator("DEBUG", pre=True)
+
+src/models/user.py:59
+  /Users/irfandi/Coding/2025/meetsmatch-py/src/models/user.py:59: PydanticDeprecatedSince20: Pydantic V1 style `@validator` validators are deprecated. You should migrate to Pydantic V2 style `@field_validator` validators, see the migration guide for more details. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.11/migration/
+    @validator("min_age", "max_age")
+
+src/models/user.py:83
+  /Users/irfandi/Coding/2025/meetsmatch-py/src/models/user.py:83: PydanticDeprecatedSince20: Pydantic V1 style `@validator` validators are deprecated. You should migrate to Pydantic V2 style `@field_validator` validators, see the migration guide for more details. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.11/migration/
+    @validator("max_distance")
+
+src/models/user.py:121
+  /Users/irfandi/Coding/2025/meetsmatch-py/src/models/user.py:121: PydanticDeprecatedSince20: Pydantic V1 style `@validator` validators are deprecated. You should migrate to Pydantic V2 style `@field_validator` validators, see the migration guide for more details. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.11/migration/
+    @validator("age")
+
+src/models/user.py:138
+  /Users/irfandi/Coding/2025/meetsmatch-py/src/models/user.py:138: PydanticDeprecatedSince20: Pydantic V1 style `@validator` validators are deprecated. You should migrate to Pydantic V2 style `@field_validator` validators, see the migration guide for more details. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.11/migration/
+    @validator("interests")
+
+src/models/user.py:162
+  /Users/irfandi/Coding/2025/meetsmatch-py/src/models/user.py:162: PydanticDeprecatedSince20: Pydantic V1 style `@validator` validators are deprecated. You should migrate to Pydantic V2 style `@field_validator` validators, see the migration guide for more details. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.11/migration/
+    @validator("photos")
+
+.venv/lib/python3.12/site-packages/pydantic/_internal/_config.py:323
+.venv/lib/python3.12/site-packages/pydantic/_internal/_config.py:323
+  /Users/irfandi/Coding/2025/meetsmatch-py/.venv/lib/python3.12/site-packages/pydantic/_internal/_config.py:323: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.11/migration/
+    warnings.warn(DEPRECATION_MESSAGE, DeprecationWarning)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+ERROR tests/services/test_matching_service.py
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+========================= 9 warnings, 1 error in 0.19s =========================

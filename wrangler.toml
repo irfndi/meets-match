@@ -5,29 +5,24 @@
 
 name = "meetsmatch-py-worker" # Replace with your desired worker name
 main = "src.bot.main:app" # FIXME: Update with the correct path to your ASGI app entry point (e.g., where FastAPI/Starlette app is defined)
-compatibility_date = "2024-04-05" # Update to a recent date
+compatibility_date = "2024-04-28" # Updated to today's date
 
-# TODO: Uncomment and configure account ID (find in Cloudflare dashboard)
-# account_id = "YOUR_CLOUDFLARE_ACCOUNT_ID"
+account_id = "4d12ccdb69bc57519b6aac269a04c9af"
 
-# TODO: Uncomment and define D1 database bindings
-# [[d1_databases]]
-# binding = "DB" # How you'll access it in your code (e.g., env.DB)
-# database_name = "meetsmatch-database-name" # The actual D1 DB name in Cloudflare
-# database_id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" # The D1 DB ID
-# preview_database_id = "meetsmatch-database-name_preview" # Optional: for local dev/preview
+[[d1_databases]]
+binding = "DB" # How you'll access it in your code (e.g., env.DB)
+database_name = "prod-tele-meetsmatch-db" 
+database_id = "0aa74e08-f123-460e-ba5e-3c34db8a9538" 
 
-# TODO: Uncomment and define KV namespace bindings
-# [[kv_namespaces]]
-# binding = "CACHE_KV" # How you'll access it in your code (e.g., env.CACHE_KV)
-# id = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" # The KV namespace ID
-# preview_id = "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy" # The preview KV namespace ID
+[[kv_namespaces]]
+binding = "KV" # User-provided binding name
+id = "prod-meetsmatch-KV" # User-provided KV namespace ID
+# preview_id = "YOUR_PREVIEW_KV_NAMESPACE_ID" # Optional: Uncomment and set for 'wrangler dev'
 
-# TODO: Uncomment and define R2 bucket bindings
-# [[r2_buckets]]
-# binding = "MEDIA_BUCKET" # How you'll access it in your code (e.g., env.MEDIA_BUCKET)
-# bucket_name = "meetsmatch-media-bucket-name" # The actual R2 bucket name
-# preview_bucket_name = "meetsmatch-media-bucket-name-preview" # Optional: for local dev/preview
+[[r2_buckets]]
+binding = "R2" # User-provided binding name
+bucket_name = "prod-tele-meetsmatch" # User-provided R2 bucket name
+# preview_bucket_name = "YOUR_PREVIEW_R2_BUCKET_NAME" # Optional: Uncomment and set for 'wrangler dev'
 
 # TODO: Add build configuration if needed (e.g., for custom build steps)
 # [build]

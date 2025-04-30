@@ -46,6 +46,7 @@ You can update any of these later using the same commands.
 """
 
 
+@user_command_limiter()
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle the /start command.
 
@@ -53,21 +54,21 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         update: The update object
         context: The context object
     """
-    # Apply rate limiting
-    await user_command_limiter()(update, context)
-
-    user_id = str(update.effective_user.id)
-    username = update.effective_user.username
-    first_name = update.effective_user.first_name
+    user = update.effective_user
+    user_id = str(user.id)
+    username = user.username
+    first_name = user.first_name
+    env = context.bot_data["env"]  # Retrieve env
 
     try:
         # Check if user already exists
-        user = get_user(user_id)
+        user = await get_user(env, user_id)
         logger.info("Existing user started the bot", user_id=user_id)
 
         # Update user data if needed
         if (username and username != user.username) or (first_name and first_name != user.first_name):
-            update_user(
+            await update_user(
+                env,
                 user_id,
                 {
                     "username": username or user.username,
@@ -97,11 +98,11 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             "id": user_id,
             "username": username,
             "first_name": first_name,
-            "last_name": update.effective_user.last_name,
+            "last_name": user.last_name,
             "is_active": True,
         }
 
-        create_user(user_data)
+        await create_user(env, user_data)
 
         # Send welcome and registration messages
         await update.message.reply_text(WELCOME_MESSAGE)

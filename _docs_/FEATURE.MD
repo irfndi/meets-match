@@ -115,6 +115,24 @@ id = "your-kv-namespace-id"
 - Implement rate limits for API requests to prevent abuse.
 - Set quotas for media storage and profile updates.
 
+## Match Interaction Flow
+1. User initiates matching (e.g., via `/match`).
+2. The bot presents User B's profile to User A.
+3. User A uses inline buttons to **Like**, **Dislike**, or **Report** User B.
+    *   **If Like:**
+        *   The 'Like' is recorded.
+        *   The system checks if User B has previously 'Liked' User A.
+        *   **If Mutual Match:** Both User A and User B receive an immediate notification containing the other's profile information (e.g., username) encouraging direct contact via Telegram.
+        *   **If Not Mutual:** User A is presented with the next potential match (User C).
+    *   **If Dislike:**
+        *   The 'Dislike' is recorded.
+        *   User A is presented with the next potential match (User C).
+    *   **If Report:**
+        *   The report flow is initiated (details TBD, likely involves selecting a reason).
+        *   User A is presented with the next potential match (User C).
+4. The process repeats with the next potential match.
+5. Users are expected to use Telegram's direct messaging feature to communicate *after* a mutual match is confirmed by the bot.
+
 ## Additional Enhancements
 
 ### Profile Status:

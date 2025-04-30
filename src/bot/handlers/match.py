@@ -11,15 +11,17 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMa
 from telegram.ext import ContextTypes
 
 from src.bot.middleware import authenticated, profile_required, user_command_limiter
-from src.services.matching_service import (
+from src.services.action_service import (
     dislike_match,
+    like_match,
+)
+from src.services.matching_service import (
     get_active_matches,
     get_match_by_id,
     get_potential_matches,
-    like_match,
 )
 from src.services.user_service import get_user
-from src.utils.errors import NotFoundError
+from src.utils.errors import ConfigurationError, NotFoundError, RateLimitError
 from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -32,14 +34,14 @@ Try again later or adjust your matching preferences with /settings.
 """
 
 MATCH_PROFILE_TEMPLATE = """
-👤 {name}, {age}
-⚧ {gender}
+{emoji} {name}, {age}
+{gender_emoji} {gender}
 
-📝 {bio}
+{bio}
 
-🌟 Interests: {interests}
+{interests_emoji} Interests: {interests}
 
-📍 {location}
+{location_emoji} {location}
 
 Do you like this match?
 """
@@ -57,7 +59,7 @@ Let's find someone else for you.
 """
 
 MUTUAL_MATCH_MESSAGE = """
-🎉 It's a match!
+{match_emoji} It's a match!
 
 You and {name} liked each other. Start a conversation with /chat {match_id}.
 """
@@ -76,10 +78,11 @@ async def match_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     await user_command_limiter()(update, context)
 
     user_id = str(update.effective_user.id)
+    env = context.bot_data["env"]
 
     try:
         # Get potential matches
-        potential_matches = get_potential_matches(user_id)
+        potential_matches = await get_potential_matches(env, user_id)
 
         if not potential_matches:
             await update.message.reply_text(
@@ -96,7 +99,7 @@ async def match_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
         # Get the first potential match
         match = potential_matches[0]
-        match_user = get_user(match.target_user_id)
+        match_user = await get_user(env, match.target_user_id)
 
         # Format interests
         interests_text = ", ".join(match_user.interests) if match_user.interests else "None"
@@ -111,11 +114,15 @@ async def match_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         # Send match profile
         await update.message.reply_text(
             MATCH_PROFILE_TEMPLATE.format(
+                emoji="👤",
                 name=match_user.first_name,
                 age=match_user.age,
+                gender_emoji="⚧",
                 gender=match_user.gender.value if match_user.gender else "Not specified",
                 bio=match_user.bio or "No bio provided",
+                interests_emoji="📝",
                 interests=interests_text,
+                location_emoji="📍",
                 location=location_text,
             ),
             reply_markup=InlineKeyboardMarkup(
@@ -131,6 +138,12 @@ async def match_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             ),
         )
 
+    except RateLimitError as e:
+        logger.warning("Rate limit hit on /match", user_id=user_id, error=str(e))
+        await update.message.reply_text(str(e))
+    except ConfigurationError as e:
+        logger.error("Configuration error during /match", user_id=user_id, error=str(e), exc_info=True)
+        await update.message.reply_text("A configuration error occurred. Please contact support.")
     except Exception as e:
         logger.error(
             "Error in match command",
@@ -193,19 +206,21 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE, match_
     """
     query = update.callback_query
     user_id = str(update.effective_user.id)
+    env = context.bot_data["env"]
 
     try:
         # Get match details
-        match = get_match_by_id(match_id)
-        target_user = get_user(match.target_user_id)
+        match = await get_match_by_id(env, match_id)
+        target_user = await get_user(env, match.target_user_id)
 
         # Like the match
-        is_mutual = like_match(match_id)
+        is_mutual = await like_match(env, match_id)
 
         if is_mutual:
             # Mutual match
             await query.edit_message_text(
                 MUTUAL_MATCH_MESSAGE.format(
+                    match_emoji="🎉",
                     name=target_user.first_name,
                     match_id=match_id,
                 ),
@@ -262,14 +277,15 @@ async def handle_dislike(update: Update, context: ContextTypes.DEFAULT_TYPE, mat
     """
     query = update.callback_query
     user_id = str(update.effective_user.id)
+    env = context.bot_data["env"]
 
     try:
         # Get match details
-        match = get_match_by_id(match_id)
-        target_user = get_user(match.target_user_id)
+        match = await get_match_by_id(env, match_id)
+        target_user = await get_user(env, match.target_user_id)
 
         # Dislike the match
-        dislike_match(match_id)
+        await dislike_match(env, match_id)
 
         await query.edit_message_text(
             MATCH_DISLIKED_MESSAGE.format(name=target_user.first_name),
@@ -314,10 +330,11 @@ async def matches_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     await user_command_limiter()(update, context)
 
     user_id = str(update.effective_user.id)
+    env = context.bot_data["env"]
 
     try:
         # Get active matches
-        active_matches = get_active_matches(user_id)
+        active_matches = await get_active_matches(env, user_id)
 
         if not active_matches:
             await update.message.reply_text(
@@ -339,23 +356,23 @@ async def matches_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         for match in active_matches:
             # Get match user details
             match_user_id = match.target_user_id if match.source_user_id == user_id else match.source_user_id
-            match_user = get_user(match_user_id)
+            match_user = await get_user(env, match_user_id)
 
             # Add to message
-            message += f"👤 {match_user.first_name}, {match_user.age}\n"
+            message += f"{match_user.first_name}, {match_user.age}\n"
 
             # Add chat button
             keyboard.append(
                 [
                     InlineKeyboardButton(
-                        f"💬 Chat with {match_user.first_name}",
+                        f"Chat with {match_user.first_name}",
                         callback_data=f"chat_{match.id}",
                     )
                 ]
             )
 
         # Add navigation buttons
-        keyboard.append([InlineKeyboardButton("⏭️ Find new matches", callback_data="new_matches")])
+        keyboard.append([InlineKeyboardButton("Find new matches", callback_data="new_matches")])
 
         await update.message.reply_text(
             message,

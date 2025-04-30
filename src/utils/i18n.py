@@ -3,60 +3,109 @@
 # TODO: Integrate this i18n instance properly into the bot application context/handlers
 
 import gettext
-import os
 from functools import lru_cache
 
-SUPPORTED_LANGUAGES = {
-    "en": "English",
-    "id": "Bahasa Indonesia",
-    "es": "Español",
-    "ru": "Русский",
-    "zh": "中文",
-}
+from src.config import settings
+
+# Global dictionary to hold translations, loaded once.
+_translations = {}
 
 
-class I18n:
-    def __init__(self):
-        self.translations = {}
-        self._load_translations()
+def load_translations(locale_dir: str | None = None) -> None:
+    """Loads translations for supported languages."""
+    global _translations
+    locale_dir = locale_dir or settings.LOCALE_DIR
+    supported_langs = settings.SUPPORTED_LANGUAGES
 
-    def _load_translations(self):
-        """Load all available translations."""
-        # FIXME: Verify this path after moving the file
-        localedir = os.path.join(os.path.dirname(__file__), "..", "..", "locales")
-        # Original path relative to src/meetsmatch/:
-        # localedir = os.path.join(os.path.dirname(__file__), "locales")
+    # Ensure English always exists, even if just NullTranslations
+    _translations["en"] = gettext.NullTranslations()
 
-        for lang in SUPPORTED_LANGUAGES:
-            try:
-                translation = gettext.translation("base", localedir, languages=[lang])
-                self.translations[lang] = translation
-            except FileNotFoundError:
-                # Fallback to English if translation not found
-                print(f"Warning: Translation not found for language '{lang}' in {localedir}")
-                self.translations[lang] = gettext.NullTranslations()
-
-    @lru_cache(maxsize=1024)
-    def get_text(self, key: str, lang: str = "en") -> str:
-        """
-        Get translated text for a given key and language.
-
-        Args:
-            key (str): The message key to translate
-            lang (str): The language code (e.g., 'en', 'es')
-
-        Returns:
-            str: The translated text, or the original text if translation not found
-        """
-        if lang not in self.translations:
-            lang = "en"
-        return self.translations[lang].gettext(key)
-
-    def get_supported_languages(self) -> dict:
-        """Get dictionary of supported languages."""
-        return SUPPORTED_LANGUAGES.copy()
+    for lang in supported_langs:
+        if lang == "en":
+            continue
+        try:
+            translation = gettext.translation(
+                "messages",  # Domain name used in pybabel extract/compile
+                localedir=locale_dir,
+                languages=[lang],
+                fallback=True,  # Fallback to parent language (e.g., pt_BR -> pt -> en)
+            )
+            _translations[lang] = translation
+        except FileNotFoundError:
+            print(f"Warning: Translation file for language '{lang}' not found in {locale_dir}. Falling back.")
+            # Use NullTranslations if specific language file is missing
+            if lang not in _translations:
+                _translations[lang] = gettext.NullTranslations()
 
 
-# Global instance - TODO: Consider dependency injection instead
-# This might need to be initialized within the application context
-i18n = I18n()
+# Load translations when the module is imported
+load_translations()
+
+
+@lru_cache(maxsize=1024)  # Cache at the module level
+def get_text(key: str, lang: str = "en") -> str:
+    """
+    Get translated text for a given key and language using module-level cache.
+
+    Args:
+        key (str): The message key to translate
+        lang (str): The language code (e.g., 'en', 'es')
+
+    Returns:
+        str: The translated text, or the key itself if translation not found
+    """
+    global _translations
+    # Fallback logic: specific lang -> base lang (e.g., pt_BR -> pt) -> default 'en'
+    effective_lang = lang
+    if effective_lang not in _translations:
+        # Try base language if applicable (e.g., 'pt_BR' -> 'pt')
+        base_lang = effective_lang.split("_")[0]
+        if base_lang != effective_lang and base_lang in _translations:
+            effective_lang = base_lang
+        else:
+            effective_lang = "en"  # Default fallback
+
+    # Use gettext to handle potential KeyErrors gracefully (returns the key)
+    return _translations[effective_lang].gettext(key)
+
+
+# --- Remove or deprecate the Translator class if no longer needed ---
+# class Translator:
+#     def __init__(self, locale_dir: str | None = None) -> None:
+#         self.locale_dir = locale_dir or settings.LOCALE_DIR
+#         self.supported_langs = settings.SUPPORTED_LANGUAGES
+#         self.translations = {}
+#         self._load_translations()
+
+#     def _load_translations(self) -> None:
+#         # Ensure English always exists
+#         self.translations["en"] = gettext.NullTranslations()
+
+#         for lang in self.supported_langs:
+#             if lang == "en":
+#                 continue
+#             try:
+#                 translation = gettext.translation(
+#                     "messages",
+#                     localedir=self.locale_dir,
+#                     languages=[lang],
+#                     fallback=True,
+#                 )
+#                 self.translations[lang] = translation
+#             except FileNotFoundError:
+#                 print(f"Warning: Translation file for '{lang}' not found in {self.locale_dir}.")
+#                 self.translations[lang] = gettext.NullTranslations()
+
+#     @lru_cache(maxsize=1024) # B019: This caused the warning
+#     def get_text(self, key: str, lang: str = "en") -> str:
+#         """
+#         Get translated text for a given key and language.
+#         Args:
+#             key (str): The message key to translate
+#             lang (str): The language code (e.g., 'en', 'es')
+#         Returns:
+#             str: The translated text, or the original text if translation not found
+#         """
+#         if lang not in self.translations:
+#             lang = "en"
+#         return self.translations[lang].gettext(key)

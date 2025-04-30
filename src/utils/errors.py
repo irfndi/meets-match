@@ -114,6 +114,20 @@ class ExternalServiceError(MeetMatchError):
         super().__init__(message, 502, error_details)
 
 
+class ActionError(MeetMatchError):
+    """Raised when a user action (like, dislike) fails or is invalid."""
+
+    def __init__(self, message: str, details: Optional[Dict[str, Any]] = None) -> None:
+        """Initialize the action error.
+
+        Args:
+            message: Error message
+            details: Additional error details
+        """
+        # Use 500 for server-side failure, could use 400 if it's user input related
+        super().__init__(message, 500, details)
+
+
 class MatchingError(MeetMatchError):
     """Raised when there's an issue with the matching algorithm."""
 

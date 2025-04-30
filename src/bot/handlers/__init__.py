@@ -7,10 +7,10 @@ from src.bot.handlers.profile import (
     age_command,
     bio_command,
     gender_command,
-    gender_selection,
+    handle_location,  # Renamed from location_handler
+    # gender_selection, # Removed as it no longer exists
     interests_command,
     location_command,
-    location_handler,
     name_command,
     profile_command,
 )
@@ -18,30 +18,23 @@ from src.bot.handlers.settings import settings_callback, settings_command
 from src.bot.handlers.start import start_command
 
 __all__ = [
-    # Start handler
-    "start_command",
-    # Profile handlers
-    "profile_command",
-    "name_command",
+    "about_command",
     "age_command",
-    "gender_command",
-    "gender_selection",
     "bio_command",
+    "chat_callback",
+    "chat_command",
+    "gender_command",
+    "handle_location",
+    "help_command",
     "interests_command",
     "location_command",
-    "location_handler",
-    # Match handlers
-    "match_command",
     "match_callback",
+    "match_command",
     "matches_command",
-    # Chat handlers
-    "chat_command",
-    "chat_callback",
     "message_handler",
-    # Settings handlers
-    "settings_command",
+    "name_command",
+    "profile_command",
     "settings_callback",
-    # Help handlers
-    "help_command",
-    "about_command",
+    "settings_command",
+    "start_command",
 ]

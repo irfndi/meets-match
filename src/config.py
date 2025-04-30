@@ -1,8 +1,9 @@
 """Configuration management for the MeetMatch bot."""
 
-from typing import Any, Dict, Optional
+from functools import lru_cache
+from typing import Any
 
-from pydantic import Field, validator
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -12,35 +13,37 @@ class Settings(BaseSettings):
     # Telegram Bot Configuration
     TELEGRAM_TOKEN: str
 
-    # Supabase Configuration
-    SUPABASE_URL: str
-    SUPABASE_KEY: str
-
-    # Redis/KV Configuration
-    REDIS_URL: Optional[str] = None
-    KV_URL: Optional[str] = None
-    KV_REST_API_URL: Optional[str] = None
-    KV_REST_API_TOKEN: Optional[str] = None
-    KV_REST_API_READ_ONLY_TOKEN: Optional[str] = None
-
-    # TODO: Refactor Database/KV/Storage Configuration for Cloudflare Bindings
-    # Cloudflare Workers access D1, KV, R2, etc., via bindings defined in wrangler.toml
-    # and passed through the execution context/environment, not typically via URLs/keys
-    # in environment variables. This section needs revision.
-    # Consider how to handle local development vs. production environments.
-    # Option 1: Define placeholder fields here and populate them from the env context at runtime.
-    # Option 2: Remove these fields and access bindings directly where needed (e.g., in service layers)
-    #           passing the 'env' object down.
-    # Option 3: Use a dependency injection framework to manage access to bindings.
+    # --- Cloudflare Bindings --- #
+    # These are typically injected by the Cloudflare Workers runtime environment
+    # based on wrangler.toml configuration.
+    DB: Any | None = None  # Represents the D1 Database binding
+    KV: Any | None = None  # Represents the KV Namespace binding
+    R2: Any | None = None  # Represents the R2 Bucket binding
 
     # Sentry Configuration
-    SENTRY_DSN: Optional[str] = None
-    ENABLE_SENTRY: bool = Field(default=False)
+    SENTRY_DSN: str | None = None
+    ENABLE_SENTRY: bool = False
+
+    @field_validator("ENABLE_SENTRY", mode="before")
+    @classmethod
+    def validate_enable_sentry(cls, v: Any) -> bool:
+        """Enable Sentry if DSN is provided and explicitly enabled."""
+        if isinstance(v, bool):
+            return v and cls.__fields__["SENTRY_DSN"].get_default() is not None
+        return cls.__fields__["SENTRY_DSN"].get_default() is not None and str(v).lower() == "true"
 
     # Application Configuration
     LOG_LEVEL: str = "INFO"
     ENVIRONMENT: str = "development"
-    DEBUG: bool = Field(default=False)
+    DEBUG: bool = False
+
+    @field_validator("DEBUG", mode="before")
+    @classmethod
+    def validate_debug(cls, v: Any) -> bool:
+        """Set debug mode based on environment."""
+        if isinstance(v, bool):
+            return v
+        return cls.__fields__["ENVIRONMENT"].get_default().lower() == "development"
 
     # API Configuration
     API_HOST: str = "0.0.0.0"
@@ -52,27 +55,10 @@ class Settings(BaseSettings):
     INTERESTS_WEIGHT: float = 0.5
     PREFERENCES_WEIGHT: float = 0.2
 
-    @validator("ENABLE_SENTRY", pre=True)
-    def set_enable_sentry(cls, v: Any, values: Dict[str, Any]) -> bool:
-        """Enable Sentry if DSN is provided and explicitly enabled."""
-        if isinstance(v, bool):
-            return v and values.get("SENTRY_DSN") is not None
-        return values.get("SENTRY_DSN") is not None and str(v).lower() == "true"
-
-    @validator("DEBUG", pre=True)
-    def set_debug(cls, v: Any, values: Dict[str, Any]) -> bool:
-        """Set debug mode based on environment."""
-        if isinstance(v, bool):
-            return v
-        return values.get("ENVIRONMENT", "").lower() == "development"
-
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", case_sensitive=True)
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
 
-# Create a global settings instance
-settings = Settings()  # type: ignore
-
-
+@lru_cache()
 def get_settings() -> Settings:
-    """Return the settings instance."""
-    return settings
+    """Return the settings instance, creating it if necessary."""
+    return Settings()

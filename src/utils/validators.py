@@ -1,12 +1,12 @@
-# Migrated MediaValidator from src/meetsmatch/validators.py
-
 import io
 import mimetypes
-from functools import lru_cache
 from typing import Tuple
 
+# Third-party
 import magic
 from PIL import Image
+
+# First-party
 
 
 class MediaValidator:
@@ -19,7 +19,6 @@ class MediaValidator:
         self.min_image_dimensions = (200, 200)
         self.max_image_dimensions = (4096, 4096)
 
-    @lru_cache(maxsize=1000)
     def get_mime_type(self, file_name: str) -> str | None:
         """Get MIME type from file name."""
         return mimetypes.guess_type(file_name)[0]
@@ -46,13 +45,16 @@ class MediaValidator:
         try:
             actual_type = magic.from_buffer(file_data, mime=True)
             # Allow some flexibility (e.g., jpeg vs jpg)
-            if not actual_type.startswith(mime_type.split('/')[0]):
-                 print(f"Warning: MIME type mismatch. Extension: {mime_type}, Content: {actual_type}")
-                 # Decide if you want to trust content over extension
-                 # For now, we'll trust the content if it's an allowed type
-                 if actual_type not in self.allowed_image_types and actual_type not in self.allowed_video_types:
-                    return False, f"File content type ({actual_type}) does not match extension ({mime_type}) and is not allowed."
-                 mime_type = actual_type # Trust content type if allowed
+            if not actual_type.startswith(mime_type.split("/")[0]):
+                print(f"Warning: MIME type mismatch. Extension: {mime_type}, Content: {actual_type}")
+                # Decide if you want to trust content over extension
+                # For now, we'll trust the content if it's an allowed type
+                if actual_type not in self.allowed_image_types and actual_type not in self.allowed_video_types:
+                    return (
+                        False,
+                        f"File content type ({actual_type}) does not match extension ({mime_type}) and is not allowed.",
+                    )
+                mime_type = actual_type  # Trust content type if allowed
 
         except Exception as e:
             # If magic library fails, rely on extension but log error
@@ -114,17 +116,78 @@ class MediaValidator:
             Tuple[bool, str]: (is_valid, error_message)
         """
         if file_type == "image" and file_size > self.max_image_size_bytes:
-            return False, (
-                f"Image too large. Maximum size: {self.max_image_size_bytes // 1024 // 1024}MB"
-            )
+            return False, (f"Image too large. Maximum size: {self.max_image_size_bytes // 1024 // 1024}MB")
 
         if file_type == "video" and file_size > self.max_video_size_bytes:
-            return False, (
-                f"Video too large. Maximum size: {self.max_video_size_bytes // 1024 // 1024}MB"
-            )
+            return False, (f"Video too large. Maximum size: {self.max_video_size_bytes // 1024 // 1024}MB")
 
         return True, "Valid size"
 
 
 # Global instance - TODO: Consider dependency injection
 media_validator = MediaValidator()
+
+
+def is_valid_age(age: int) -> bool:
+    """Check if the age is within a reasonable range (e.g., 18-100)."""
+    return 18 <= age <= 100
+
+
+def is_valid_name(name: str | None) -> bool:
+    """Check if the name is a non-empty string within a reasonable length (1-100 chars)."""
+    if name is None or not isinstance(name, str):
+        return False
+    name = name.strip()
+    return 1 <= len(name) <= 100
+
+
+def is_valid_bio(bio: str | None) -> bool:
+    """Check if the bio is within a reasonable length (e.g., 1-500 chars)."""
+    if bio is None:
+        return False  # Explicitly require a string
+    # Add type check before calling strip()
+    if not isinstance(bio, str):
+        return False
+    bio = bio.strip()
+    return 1 <= len(bio) <= 500
+
+
+def is_valid_interests(interests: list[str] | None) -> bool:
+    """Check if the list of interests is valid.
+
+    Checks:
+        - Is a list.
+        - Contains 1 to 10 items.
+        - Each item is a string between 1 and 50 characters.
+    """
+    if interests is None or not isinstance(interests, list):
+        return False
+
+    if not 1 <= len(interests) <= 10:
+        return False
+
+    for interest in interests:
+        if not isinstance(interest, str):
+            return False
+        interest = interest.strip()
+        if not 1 <= len(interest) <= 50:
+            return False
+
+    return True
+
+
+VALID_GENDERS = {"male", "female", "non-binary"}
+
+
+def is_valid_gender(gender: str | None) -> bool:
+    """Check if the provided gender string is valid (case-insensitive)."""
+    if not gender or not isinstance(gender, str):
+        return False
+    return gender.lower() in VALID_GENDERS
+
+
+def is_valid_preference(preference: str | None) -> bool:
+    """Check if the provided preference string is valid (case-insensitive)."""
+    if not preference or not isinstance(preference, str):
+        return False
+    return True

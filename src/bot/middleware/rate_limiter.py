@@ -1,180 +1,179 @@
 """Rate limiting middleware for the MeetMatch bot."""
 
-import time
-from collections import defaultdict
-from typing import Callable, Dict, Optional
+import functools
+from typing import Any, Awaitable, Callable, Optional
 
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from src.utils.cache import get_cache, set_cache
-from src.utils.errors import RateLimitError
-from src.utils.logging import get_logger
+from ...config import Settings
+from ...utils.errors import ConfigurationError, RateLimitError
+from ...utils.logging import get_logger
+from ...utils.rate_limiter import RateLimiter
 
 logger = get_logger(__name__)
 
-# In-memory rate limiting (fallback if Redis is unavailable)
-_rate_limits: Dict[str, Dict[str, float]] = defaultdict(dict)
 
-# Cache keys
-RATE_LIMIT_CACHE_KEY = "rate_limit:{key}"
-
-
-async def rate_limiter(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE,
-    limit: int = 5,
-    window: int = 60,
-    key_func: Optional[Callable[[Update], str]] = None,
-) -> None:
-    """Rate limiting middleware for Telegram handlers.
-
-    Args:
-        update: Telegram update
-        context: Telegram context
-        limit: Maximum number of requests in the window
-        window: Time window in seconds
-        key_func: Function to generate rate limit key from update
-
-    Raises:
-        RateLimitError: If rate limit is exceeded
+class RateLimiterMiddleware:
     """
-    # Get user ID
-    user_id = update.effective_user.id if update.effective_user else "anonymous"
+    Middleware to apply rate limiting based on user ID using the new RateLimiter class.
+    """
 
-    # Generate rate limit key
-    if key_func:
-        rate_key = key_func(update)
-    else:
-        # Default: limit by user ID and command/message type
-        if update.message and update.message.text and update.message.text.startswith("/"):
-            command = update.message.text.split()[0]
-            rate_key = f"user:{user_id}:command:{command}"
-        else:
-            rate_key = f"user:{user_id}"
+    def __init__(self, limit: int = 5, period: int = 60, scope: str = "default"):
+        """
+        Initialize the middleware.
 
-    # Check rate limit
-    current_time = time.time()
-    cache_key = RATE_LIMIT_CACHE_KEY.format(key=rate_key)
+        Args:
+            limit: Maximum number of requests allowed in the period.
+            period: The time period in seconds.
+            scope: A string to differentiate rate limits (e.g., 'command', 'global').
+        """
+        self.limit = limit
+        self.period = period
+        self.scope = scope
+        # RateLimiter instance is created dynamically in __call__
+        # as it requires the 'env' object which is only available then.
 
-    try:
-        # Try to use Redis cache
-        cached_data = get_cache(cache_key)
-        if cached_data:
-            timestamps = [float(ts) for ts in cached_data.split(",")]
-        else:
-            timestamps = []
+    async def __call__(
+        self,
+        update: Update,
+        context: ContextTypes.DEFAULT_TYPE,
+        next_middleware: Callable[[Update, ContextTypes.DEFAULT_TYPE], Awaitable[Any]],
+    ) -> Optional[Any]:
+        """
+        Process the update and apply rate limiting.
 
-        # Filter timestamps within the window
-        timestamps = [ts for ts in timestamps if current_time - ts < window]
+        Retrieves the 'env' object, creates a RateLimiter instance, checks the limit,
+        and calls the next middleware if the limit is not exceeded.
 
-        # Check if limit is exceeded
-        if len(timestamps) >= limit:
+        Args:
+            update: The incoming Telegram update.
+            context: The context object for the update.
+            next_middleware: The next function/middleware in the chain.
+
+        Returns:
+            The result of the next middleware, or raises RateLimitError.
+
+        Raises:
+            ConfigurationError: If the 'env' object is not found in context.bot_data.
+            RateLimitError: If the rate limit is exceeded.
+        """
+        # Ensure context contains Env object with KV binding
+        if "env" not in context.bot_data:
+            logger.error("Env object not found in context.bot_data for RateLimiterMiddleware")
+            # Raise an error because rate limiting cannot function without env
+            raise ConfigurationError("Rate limiter environment not configured.")
+
+        env: Settings = context.bot_data["env"]
+
+        # Ensure KV binding exists
+        if not hasattr(env, "KV") or env.KV is None:
+            logger.error("KV binding not found in env object for RateLimiterMiddleware")
+            raise ConfigurationError("KV binding for rate limiter not configured.")
+
+        user_id = str(update.effective_user.id)
+
+        # Create RateLimiter instance dynamically with the retrieved env
+        limiter = RateLimiter()
+
+        try:
+            # Check the rate limit using the new RateLimiter's method
+            is_allowed, time_left = await limiter.check_rate_limit(env, user_id, self.scope)
+
+            if not is_allowed:
+                logger.warning(
+                    "Rate limit exceeded",
+                    user_id=user_id,
+                    scope=self.scope,
+                    limit=self.limit,
+                    period=self.period,
+                )
+                raise RateLimitError("Rate limit exceeded.")
+
+        except RateLimitError as e:
+            # Log and re-raise the specific RateLimitError
             logger.warning(
                 "Rate limit exceeded",
                 user_id=user_id,
-                rate_key=rate_key,
-                limit=limit,
-                window=window,
-            )
-            raise RateLimitError(
-                f"Rate limit exceeded: {limit} requests per {window} seconds",
-                details={"rate_key": rate_key, "limit": limit, "window": window},
-            )
-
-        # Add current timestamp
-        timestamps.append(current_time)
-
-        # Update cache
-        set_cache(cache_key, ",".join(str(ts) for ts in timestamps), expiration=window)
-
-    except Exception as e:
-        if not isinstance(e, RateLimitError):
-            logger.warning(
-                "Failed to use Redis for rate limiting, falling back to in-memory",
+                scope=self.scope,
+                limit=self.limit,
+                period=self.period,
                 error=str(e),
             )
+            raise
 
-            # Fall back to in-memory rate limiting
-            if rate_key in _rate_limits:
-                timestamps = [ts for ts in _rate_limits[rate_key].values() if current_time - ts < window]
+        except Exception as e:
+            # Log unexpected errors but allow the request to proceed
+            # to avoid blocking the bot entirely due to limiter issues.
+            logger.error(
+                "Unexpected error in rate limiter check",
+                user_id=user_id,
+                scope=self.scope,
+                error=str(e),
+                exc_info=True,
+            )
+            # Allow request to proceed, but log the error.
 
-                # Check if limit is exceeded
-                if len(timestamps) >= limit:
-                    logger.warning(
-                        "Rate limit exceeded (in-memory)",
-                        user_id=user_id,
-                        rate_key=rate_key,
-                        limit=limit,
-                        window=window,
-                    )
-                    raise RateLimitError(
-                        f"Rate limit exceeded: {limit} requests per {window} seconds",
-                        details={"rate_key": rate_key, "limit": limit, "window": window},
-                    ) from None
-            else:
-                _rate_limits[rate_key] = {}
-
-            # Add current timestamp
-            request_id = str(int(current_time * 1000))  # Millisecond precision
-            _rate_limits[rate_key][request_id] = current_time
-
-            # Clean up old timestamps
-            _rate_limits[rate_key] = {
-                rid: ts for rid, ts in _rate_limits[rate_key].items() if current_time - ts < window
-            }
-
-            # Re-raise if it was a rate limit error
-            if isinstance(e, RateLimitError):
-                raise
+        # Proceed to the next handler if the limit was not exceeded or an unexpected error occurred
+        return await next_middleware(update, context)
 
 
-def user_command_limiter(limit: int = 5, window: int = 60) -> Callable:
-    """Create a rate limiter for user commands.
+def user_command_limiter(limit: int = 5, period: int = 60, scope: str = "command") -> Callable:
+    """
+    Decorator factory to apply rate limiting to command handlers.
 
     Args:
-        limit: Maximum number of requests in the window
-        window: Time window in seconds
+        limit: Maximum number of requests in the period.
+        period: Time period in seconds.
+        scope: The type of action being limited (maps to keys in RateLimiter.limits).
 
     Returns:
-        Rate limiter function
+        A decorator function.
     """
+    middleware = RateLimiterMiddleware(limit=limit, period=period, scope=scope)
 
-    async def limiter(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Rate limit by user ID and command."""
-        await rate_limiter(
-            update,
-            context,
-            limit=limit,
-            window=window,
-            key_func=lambda u: (
-                f"user:{u.effective_user.id if u.effective_user else 'anonymous'}:"
-                f"command:{u.message.text.split()[0] if u.message and u.message.text else 'message'}"
-            ),
-        )
+    def decorator(func: Callable[[Update, ContextTypes.DEFAULT_TYPE], Awaitable[Any]]):
+        """The actual decorator that takes the handler function."""
 
-    return limiter
+        @functools.wraps(func)  # Preserve original function metadata
+        async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+            """The final wrapper that replaces the original handler."""
+
+            # Define the 'next step' which is the original handler function
+            async def _call_original_handler(u: Update, c: ContextTypes.DEFAULT_TYPE):
+                return await func(u, c)
+
+            # Call the middleware instance, passing the original handler as the next step
+            # The middleware.__call__ will execute the rate limit logic
+            # and if allowed, it will call _call_original_handler.
+            await middleware(update, context, next_middleware=_call_original_handler)
+
+        return wrapper  # Return the final wrapper
+
+    return decorator  # Return the decorator function
 
 
-def global_user_limiter(limit: int = 30, window: int = 60) -> Callable:
-    """Create a global rate limiter for users.
+# TODO: Review if global_user_limiter needs the same structural fix.
+# It likely does if it's intended to be used as a decorator in the same way.
+def global_user_limiter(limit: int = 30, period: int = 60) -> Callable:
+    """
+    Factory function to create a global rate limiter middleware instance for users.
 
     Args:
-        limit: Maximum number of requests in the window
-        window: Time window in seconds
+        limit: Maximum number of requests in the period.
+        period: Time period in seconds.
 
     Returns:
-        Rate limiter function
+        An awaitable function that acts as the rate limiter middleware.
     """
+    middleware = RateLimiterMiddleware(limit=limit, period=period, scope="global")
 
-    async def limiter(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Rate limit by user ID globally."""
-        await rate_limiter(
-            update,
-            context,
-            limit=limit,
-            window=window,
-            key_func=lambda u: f"user:{u.effective_user.id if u.effective_user else 'anonymous'}:global",
-        )
+    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Wrapper function to integrate middleware with handler structure."""
 
-    return limiter
+        async def _dummy_next(*args, **kwargs):
+            pass
+
+        await middleware(update, context, next_middleware=_dummy_next)
+
+    return wrapper

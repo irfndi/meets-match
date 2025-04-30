@@ -8,73 +8,48 @@
 # 3. Check if data structures returned by service calls have changed.
 
 from telegram import ReplyKeyboardMarkup, Update
+from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 
-from src.bot.middleware import user_command_limiter
+from src.bot.middleware import authenticated, user_command_limiter
 from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
 # Help messages
 HELP_MESSAGE = """
-🤖 *MeetMatch Bot Help*
-
-*Basic Commands:*
-/start - Start the bot and register
-/help - Show this help message
-/profile - View and edit your profile
+/start - Start interacting with the bot
+/profile - View and manage your profile
+/preferences - Set your matching preferences
 /match - Find new matches
 /matches - View your current matches
 /settings - Adjust your preferences
-
-*Profile Commands:*
-/name - Set your name
-/age - Set your age
-/gender - Set your gender
-/bio - Set your bio
-/interests - Set your interests
-/location - Set your location
-
-*Chat Commands:*
-/chat [match_id] - Chat with a match
-
-Need more help? Contact support at @MeetMatchSupport
+/about - Learn more about MeetMatch
 """
 
-ABOUT_MESSAGE = """
-*About MeetMatch*
+ABOUT_MESSAGE = """MeetMatch helps you find meaningful connections based on compatibility.
 
-MeetMatch is an AI-powered matchmaking bot that helps you find people with similar interests near you.
-
-*How it works:*
-1. Create your profile
-2. Set your preferences
-3. Get matched with compatible people
-4. Chat and connect
-
-*Privacy:*
-- Your data is secure and never shared with third parties
-- You control what information is visible to others
-- You can delete your account at any time with /delete
-
-*Version:* 3.0
-*Created by:* MeetMatch Team
+Version: 0.1.0
+Developed with ❤️ in Silicon Valley.
 """
 
 
+@authenticated
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle the /help command.
+    """Send a message when the command /help is issued."""
+    user_id = str(update.effective_user.id)
 
-    Args:
-        update: The update object
-        context: The context object
-    """
-    # Apply rate limiting
-    await user_command_limiter()(update, context)
+    # Apply rate limiting explicitly
+    is_limited, remaining_time = await user_command_limiter(limit=5, period=60)(update, context)
+    if is_limited:
+        logger.info("Rate limit exceeded for /help command", user_id=user_id)
+        await update.message.reply_text(f"You're sending commands too quickly! Please wait {remaining_time:.1f}s.")
+        return
 
+    logger.info("/help command invoked", user_id=user_id)
     await update.message.reply_text(
         HELP_MESSAGE,
-        parse_mode="Markdown",
+        parse_mode=ParseMode.MARKDOWN,
         reply_markup=ReplyKeyboardMarkup(
             [
                 ["/profile", "/match"],
@@ -86,6 +61,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     )
 
 
+@authenticated
 async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle the /about command.
 
@@ -93,9 +69,16 @@ async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         update: The update object
         context: The context object
     """
-    # Apply rate limiting
-    await user_command_limiter()(update, context)
+    user_id = str(update.effective_user.id)
 
+    # Apply rate limiting explicitly
+    is_limited, remaining_time = await user_command_limiter(limit=3, period=120)(update, context)
+    if is_limited:
+        logger.info("Rate limit exceeded for /about command", user_id=user_id)
+        await update.message.reply_text(f"You're sending commands too quickly! Please wait {remaining_time:.1f}s.")
+        return
+
+    logger.info("/about command invoked", user_id=user_id)
     await update.message.reply_text(
         ABOUT_MESSAGE,
         parse_mode="Markdown",

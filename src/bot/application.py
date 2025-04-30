@@ -37,9 +37,9 @@ from src.bot.handlers import (
 )
 
 # Middleware imports will be added as needed
-from src.config import settings
+from src.config import get_settings
 from src.utils.errors import MeetMatchError
-from src.utils.logging import get_logger
+from src.utils.logging import configure_logging, get_logger
 
 logger = get_logger(__name__)
 
@@ -50,7 +50,7 @@ class BotApplication:
     def __init__(self) -> None:
         """Initialize the bot application."""
         self.application: Optional[Application] = None
-        self.admin_ids: Set[str] = set(settings.ADMIN_IDS.split(",") if settings.ADMIN_IDS else [])
+        self.admin_ids: Set[str] = set(get_settings().ADMIN_IDS.split(",") if get_settings().ADMIN_IDS else [])
 
         logger.info("Initializing bot application", admin_ids=self.admin_ids)
 
@@ -68,7 +68,7 @@ class BotApplication:
         )
 
         # Initialize application
-        self.application = Application.builder().token(settings.TELEGRAM_BOT_TOKEN).defaults(defaults).build()
+        self.application = Application.builder().token(get_settings().TELEGRAM_BOT_TOKEN).defaults(defaults).build()
 
         # Register handlers
         self._register_handlers()
@@ -227,4 +227,9 @@ def start_bot() -> None:
     Returns:
         None
     """
+    # Configure logging first
+    configure_logging(
+        get_settings().LOG_LEVEL, get_settings().ENVIRONMENT, get_settings().SENTRY_DSN, get_settings().ENABLE_SENTRY
+    )
+
     asyncio.run(run_bot())

@@ -1,26 +1,49 @@
 """Logging configuration for the MeetMatch bot."""
 
 import logging
-import sys
+import os
 from typing import Any, Dict, Optional
 
 import structlog
 from structlog.types import Processor
 
-from src.config import settings
+from src.config import get_settings
 
 
 def configure_logging() -> None:
     """Configure structured logging for the application."""
-    # Set the log level
-    log_level = getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO)
+    # Load settings
+    _settings = get_settings()
 
-    # Configure standard logging
-    logging.basicConfig(
-        format="%(message)s",
-        level=log_level,
-        stream=sys.stdout,
-    )
+    # Set the log level
+    log_level = getattr(logging, _settings.LOG_LEVEL.upper(), logging.INFO)
+
+    # Define log directory and file path
+    log_dir = "log"
+    log_file_path = os.path.join(log_dir, "app.log")
+
+    # Ensure log directory exists
+    os.makedirs(log_dir, exist_ok=True)
+
+    # Configure root logger
+    root_logger = logging.getLogger()
+    root_logger.setLevel(log_level)
+
+    # Remove existing handlers (optional, prevents duplicate logs if run multiple times)
+    # for handler in root_logger.handlers[:]:
+    #     root_logger.removeHandler(handler)
+
+    # Create and add file handler
+    file_handler = logging.FileHandler(log_file_path)
+    # Optional: Add a formatter if needed, though structlog might handle formatting
+    # formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    # file_handler.setFormatter(formatter)
+    root_logger.addHandler(file_handler)
+
+    # Optional: Add console handler back if console output is still desired
+    # console_handler = logging.StreamHandler(sys.stdout)
+    # console_handler.setLevel(log_level) # Set level for console handler
+    # root_logger.addHandler(console_handler)
 
     # Configure structlog processors
     processors: list[Processor] = [
@@ -33,7 +56,7 @@ def configure_logging() -> None:
     ]
 
     # Add environment-specific processors
-    if settings.ENVIRONMENT.lower() == "development":
+    if _settings.ENVIRONMENT.lower() == "development":
         # Pretty printing for development
         processors.append(structlog.dev.ConsoleRenderer())
     else:

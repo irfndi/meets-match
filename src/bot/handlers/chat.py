@@ -7,20 +7,15 @@
 # 2. Update error handling if D1/KV/R2 exceptions differ from previous DB/cache exceptions.
 # 3. Check if data structures returned by service calls have changed.
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, Update
+from telegram import ReplyKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
 from src.bot.middleware import authenticated, profile_required, user_command_limiter
-from src.models.conversation import MessageStatus
-from src.services.conversation_service import (
-    create_message,
-    get_conversation_by_match,
-    get_messages,
-    mark_messages_as_read,
-)
 from src.services.matching_service import get_match_by_id
 from src.services.user_service import get_user
-from src.utils.errors import NotFoundError
+from src.utils.errors import (
+    NotFoundError,
+)
 from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -65,7 +60,8 @@ async def chat_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     # Extract match ID from command
     match_id = message_text[5:].strip()
 
-    await open_chat(update, context, match_id)
+    env = context.bot_data["env"]  # Retrieve env
+    await open_chat(update, context, match_id, env)
 
 
 @authenticated
@@ -79,6 +75,7 @@ async def chat_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     """
     query = update.callback_query
     user_id = str(update.effective_user.id)
+    env = context.bot_data["env"]  # Retrieve env
 
     try:
         await query.answer()
@@ -92,7 +89,7 @@ async def chat_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             await query.delete_message()
 
             # Open chat
-            await open_chat(update, context, match_id)
+            await open_chat(update, context, match_id, env)
 
         elif callback_data == "back_to_matches":
             # Go back to matches
@@ -117,19 +114,20 @@ async def chat_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         await query.edit_message_text("Sorry, something went wrong. Please try again with /matches.")
 
 
-async def open_chat(update: Update, context: ContextTypes.DEFAULT_TYPE, match_id: str) -> None:
+async def open_chat(update: Update, context: ContextTypes.DEFAULT_TYPE, match_id: str, env: str) -> None:
     """Open a chat with a match.
 
     Args:
         update: The update object
         context: The context object
         match_id: Match ID
+        env: Environment
     """
     user_id = str(update.effective_user.id)
 
     try:
         # Get match details
-        match = get_match_by_id(match_id)
+        match = await get_match_by_id(env, match_id)
 
         # Verify user is part of this match
         if user_id not in [match.source_user_id, match.target_user_id]:
@@ -143,15 +141,11 @@ async def open_chat(update: Update, context: ContextTypes.DEFAULT_TYPE, match_id
 
         # Get the other user
         other_user_id = match.target_user_id if match.source_user_id == user_id else match.source_user_id
-        other_user = get_user(other_user_id)
-
-        # Get or create conversation
-        conversation = get_conversation_by_match(match_id)
+        other_user = await get_user(env, other_user_id)
 
         # Store chat context
         context.user_data["current_chat"] = {
             "match_id": match_id,
-            "conversation_id": conversation.id,
             "other_user_id": other_user_id,
             "other_user_name": other_user.first_name,
         }
@@ -170,25 +164,7 @@ async def open_chat(update: Update, context: ContextTypes.DEFAULT_TYPE, match_id
             ),
         )
 
-        # Get messages
-        messages = get_messages(conversation.id)
-
-        if not messages:
-            await send_message_to_user(update, context, NO_MESSAGES_YET)
-            return
-
-        # Display messages
-        for message in messages:
-            sender_name = "You" if message.sender_id == user_id else other_user.first_name
-
-            await send_message_to_user(
-                update,
-                context,
-                f"{sender_name}: {message.content}",
-            )
-
-        # Mark messages as read
-        mark_messages_as_read(conversation.id, user_id)
+        await send_message_to_user(update, context, NO_MESSAGES_YET)
 
     except NotFoundError:
         logger.warning(
@@ -209,7 +185,6 @@ async def open_chat(update: Update, context: ContextTypes.DEFAULT_TYPE, match_id
         await send_message_to_user(update, context, "Sorry, something went wrong. Please try again later.")
 
 
-@authenticated
 @profile_required
 async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle chat messages.
@@ -218,40 +193,13 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         update: The update object
         context: The context object
     """
-    user_id = str(update.effective_user.id)
-    message_text = update.message.text
-
     # Check if user is in a chat
     chat_context = context.user_data.get("current_chat")
     if not chat_context:
         return
 
-    try:
-        # Create message
-        create_message(
-            conversation_id=chat_context["conversation_id"],
-            sender_id=user_id,
-            content=message_text,
-            status=MessageStatus.SENT,
-        )
-
-        # Send message to other user
-        await context.bot.send_message(
-            chat_id=chat_context["other_user_id"],
-            text=f"💬 {chat_context['other_user_name']}: {message_text}",
-            reply_markup=InlineKeyboardMarkup(
-                [[InlineKeyboardButton("Reply", callback_data=f"chat_{chat_context['match_id']}")]]
-            ),
-        )
-
-    except Exception as e:
-        logger.error(
-            "Error sending message",
-            user_id=user_id,
-            error=str(e),
-            exc_info=e,
-        )
-        await update.message.reply_text("Sorry, your message couldn't be sent. Please try again.")
+    logger.warning("message_handler: Conversation logic temporarily disabled.")
+    await update.message.reply_text("(Chat message sending is temporarily disabled)")
 
 
 async def send_message_to_user(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, **kwargs) -> None:

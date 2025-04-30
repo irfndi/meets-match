@@ -84,14 +84,13 @@ async def test_error_handler():
     # Create mock update and context
     update = MockUpdate()
     context = MockContext()
+    error_instance = Exception("Test error")
 
-    # Spy on error_handler method
-    original_handler = app.error_handler
-    handler_spy = AsyncMock(wraps=original_handler)
-    app.error_handler = handler_spy
+    # Call the original error handler directly
+    try:
+        await app.error_handler(update, context, error_instance)
+    except Exception as e:
+        pytest.fail(f"app.error_handler raised an exception unexpectedly: {e}")
 
-    # Call error handler
-    await app.error_handler(update, context, Exception("Test error"))
-
-    # Verify it was called
-    assert handler_spy.called
+    # Optional: Add assertion if the handler modifies state or logs
+    # For now, just ensure it runs without TypeError

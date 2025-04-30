@@ -2,6 +2,9 @@
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools.packages.find]
+where = ["src"]
+
 [project]
 name = "meetsmatch"
 version = "0.1.0"
@@ -24,7 +27,8 @@ dependencies = [
     "fastapi>=0.104.1",
     "uvicorn>=0.23.2",
     "geopy>=2.3.0",
-    "sentry-sdk>=1.32.0",
+    "python-magic>=0.4.27",
+    "Pillow>=10.0.0", # Add Pillow for image validation
 ]
 
 [project.optional-dependencies]
@@ -36,6 +40,7 @@ dev = [
     "mypy>=1.6.1",
     "pre-commit>=3.5.0",
     "black>=23.10.1",
+    "bandit",
 ]
 
 [tool.ruff]
@@ -57,12 +62,13 @@ disallow_untyped_defs = true
 disallow_incomplete_defs = true
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
-python_files = "test_*.py"
-python_functions = "test_*"
+addopts = "-ra -q"
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = [
+    "tests",
+]
+python_files = "test_*.py"
 
 [tool.uv]
-pip-version = "24.1"
 resolution = "highest"
-python = ">=3.10"
