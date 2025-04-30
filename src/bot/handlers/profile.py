@@ -13,7 +13,7 @@ from telegram.ext import ContextTypes
 
 from ...models.user import Gender
 from ...services.user_service import get_user, update_user
-from ...utils.errors import NotFoundError, ValidationError, ExternalServiceError
+from ...utils.errors import ExternalServiceError, NotFoundError, ValidationError
 from ...utils.location import geocode_location, reverse_geocode_coordinates
 from ...utils.logging import get_logger
 from ...utils.validators import (
@@ -35,9 +35,9 @@ from .messages import (
     GENDER_UPDATE_MESSAGE,
     GENDER_UPDATED_MESSAGE,
     GEOCODING_FAILED_MESSAGE,
-    INVALID_LOCATION_FORMAT_MESSAGE,
     INTERESTS_UPDATE_MESSAGE,
     INTERESTS_UPDATED_MESSAGE,
+    INVALID_LOCATION_FORMAT_MESSAGE,
     LOCATION_UPDATE_MESSAGE,
     LOCATION_UPDATED_SUCCESS_MESSAGE,
     PROFILE_COMPLETE_MESSAGE,
