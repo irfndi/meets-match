@@ -26,26 +26,19 @@ jobs:
       run: |
         uv --version
         uv venv
-        echo "source .venv/bin/activate" >> $GITHUB_ENV
 
     - name: Activate Environment and Install Project
-      shell: bash -el {0}
       run: |
-        source .venv/bin/activate
         uv pip install -e ".[dev]"
         echo "Installed packages:"
         uv pip list
 
     - name: Lint with Ruff
-      shell: bash -el {0}
       run: |
-        source .venv/bin/activate
         uv run ruff check .
 
     - name: Check Formatting with Ruff
-      shell: bash -el {0}
       run: |
-        source .venv/bin/activate
         uv run ruff format --check .
 
     - name: Configure environment for tests
@@ -63,11 +56,9 @@ jobs:
         cp .env.test .env
 
     - name: Run tests with coverage
-      shell: bash -el {0}
       env:
         TELEGRAM_TOKEN: ${{ secrets.BOT_TOKEN || 'mock_token_for_ci_tests' }}
       run: |
-        source .venv/bin/activate
         python --version
         uv pip list
 
