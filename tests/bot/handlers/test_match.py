@@ -10,7 +10,6 @@ import pytest
 
 @pytest.mark.asyncio
 async def test_match_command_no_matches():
-    update = MagicMock()
     context = MagicMock()
     context.bot.send_message = AsyncMock()
     # Mock matching_service.find_matches to return empty list
@@ -23,7 +22,6 @@ async def test_match_command_no_matches():
 
 @pytest.mark.asyncio
 async def test_match_command_with_match():
-    update = MagicMock()
     context = MagicMock()
     context.bot.send_photo = AsyncMock()
     # Mock matching_service.find_matches to return a match

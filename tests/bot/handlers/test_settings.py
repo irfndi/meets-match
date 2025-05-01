@@ -13,7 +13,6 @@ from src.bot.constants import (
 from src.bot.handlers.settings import (
     _display_settings_menu,  # Import private function for testing
     build_age_range_keyboard,
-    build_settings_keyboard,
     handle_age_range,
     handle_max_distance,
     handle_reset_settings,
@@ -70,7 +69,7 @@ async def test_settings_command_success(mock_update: AsyncMock, mock_context: As
         # Patch get_user from the auth middleware to prevent DB call
         with patch("src.bot.middleware.auth.get_user", new_callable=AsyncMock) as mock_get_user:
             # Also patch update_last_active from the auth middleware
-            with patch("src.bot.middleware.auth.update_last_active", new_callable=AsyncMock) as mock_update_active:
+            with patch("src.bot.middleware.auth.update_last_active", new_callable=AsyncMock) as _:
                 mock_get_user.return_value = mock_user
                 # Call the function that the @authenticated decorator wraps
                 await settings_command.__wrapped__(mock_update, mock_context)
@@ -99,7 +98,7 @@ async def test_settings_command_replies_message(
         # Patch get_user from the auth middleware to prevent DB call
         with patch("src.bot.middleware.auth.get_user", new_callable=AsyncMock) as mock_get_user:
             # Also patch update_last_active from the auth middleware
-            with patch("src.bot.middleware.auth.update_last_active", new_callable=AsyncMock) as mock_update_active:
+            with patch("src.bot.middleware.auth.update_last_active", new_callable=AsyncMock) as _:
                 mock_get_user.return_value = mock_user
                 # Call the function that the @authenticated decorator wraps
                 await settings_command.__wrapped__(mock_update, mock_context)
