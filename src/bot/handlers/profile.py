@@ -40,8 +40,6 @@ from .messages import (
     INVALID_LOCATION_FORMAT_MESSAGE,
     LOCATION_UPDATE_MESSAGE,
     LOCATION_UPDATED_SUCCESS_MESSAGE,
-    PROFILE_COMPLETE_MESSAGE,
-    PROFILE_INCOMPLETE_MESSAGE,
 )
 
 logger = get_logger(__name__)
@@ -53,6 +51,20 @@ logger = get_logger(__name__)
 
 
 # Confirmation messages
+
+PROFILE_MESSAGE_TEMPLATE = """
+👤 *Your Profile*
+
+*Name:* {full_name}
+*Age:* {age}
+*Gender:* {gender}
+*Bio:* {bio}
+
+*Preferences:*
+  Looking for: {gender_preference}
+  Age Range: {min_age} - {max_age}
+  Max Distance: {max_distance} km
+"""
 
 
 @authenticated
@@ -71,6 +83,21 @@ async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     try:
         user = await get_user(env, user_id)  # Use await and pass env
+        prefs = user.preferences  # Get preferences
+
+        profile_text = PROFILE_MESSAGE_TEMPLATE.format(
+            full_name=user.full_name or "Not set",
+            age=user.age or "Not set",
+            gender=user.gender.value.capitalize() if user.gender else "Not specified",
+            bio=user.bio or "Not set",
+            gender_preference=prefs.gender_preference.capitalize() if prefs.gender_preference else "Any",
+            min_age=prefs.min_age or "Not set",
+            max_age=prefs.max_age or "Not set",
+            max_distance=f"{prefs.max_distance} km" if prefs.max_distance is not None else "Any",
+        )
+
+        await update.message.reply_text(profile_text, parse_mode="Markdown")
+
     except NotFoundError:
         await update.message.reply_text("Could not find your profile. Try /start again.")
         return
@@ -78,55 +105,6 @@ async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         logger.error("Error fetching profile", user_id=user_id, error=str(e), exc_info=True)
         await update.message.reply_text("An error occurred fetching your profile.")
         return
-
-    # Check if profile is complete
-    if user.is_profile_complete:
-        # Show complete profile
-        await update.message.reply_text(
-            PROFILE_COMPLETE_MESSAGE.format(
-                name=user.first_name,
-                age=user.age,
-                gender=user.gender.value if user.gender else "Not set",
-                bio=user.bio or "Not set",
-                interests=", ".join(user.interests) if user.interests else "Not set",
-                location=f"{user.location_city}, {user.location_country}" if user.location_city else "Not set",
-            ),
-            reply_markup=ReplyKeyboardMarkup(
-                [
-                    ["/name", "/age", "/gender"],
-                    ["/bio", "/interests", "/location"],
-                    ["/match", "/back"],
-                ],
-                resize_keyboard=True,
-            ),
-        )
-    else:
-        # Show incomplete profile with missing fields
-        missing_fields = []
-        if not user.first_name:
-            missing_fields.append(" /name - Set your name")
-        if not user.age:
-            missing_fields.append(" /age - Set your age")
-        if not user.gender:
-            missing_fields.append(" /gender - Set your gender")
-        if not user.bio:
-            missing_fields.append(" /bio - Add a brief bio")
-        if not user.interests:
-            missing_fields.append(" /interests - Add your interests")
-        if not user.location_city:
-            missing_fields.append(" /location - Set your location")
-
-        await update.message.reply_text(
-            PROFILE_INCOMPLETE_MESSAGE.format(missing_fields="\n".join(missing_fields)),
-            reply_markup=ReplyKeyboardMarkup(
-                [
-                    ["/name", "/age", "/gender"],
-                    ["/bio", "/interests", "/location"],
-                    ["/help", "/back"],
-                ],
-                resize_keyboard=True,
-            ),
-        )
 
 
 @authenticated

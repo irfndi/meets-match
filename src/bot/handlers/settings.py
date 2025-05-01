@@ -7,32 +7,39 @@
 # 2. Update error handling if D1/KV/R2 exceptions differ from previous DB/cache exceptions.
 # 3. Check if data structures returned by service calls have changed.
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+# Standard library imports
+
+# Third-party imports
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, constants
 from telegram.ext import ContextTypes
 
-from src.bot.middleware import authenticated, user_command_limiter
-from src.models.user import Gender
-from src.services.user_service import get_user, update_user
+# Local application imports
+from src.bot.middleware.auth import authenticated
+from src.bot.middleware.rate_limiter import user_command_limiter
+from src.models.user import Gender, User
+from src.services.user_service import update_user
 from src.utils.logging import get_logger
 
+# Relative imports within the bot handlers/constants
+from ..constants import CALLBACK_DATA_PREFIX_SETTINGS, SETTINGS_MESSAGE
+
+# Initialize logger
 logger = get_logger(__name__)
 
-# Settings messages
-SETTINGS_MESSAGE = """
-⚙️ *Settings*
 
-Adjust your matching preferences below:
-
-*Current preferences:*
-🔍 Looking for: {looking_for}
-📏 Age range: {min_age}-{max_age}
-📍 Max distance: {max_distance} km
-🔔 Notifications: {notifications}
-
-Select an option to change:
-"""
+# Keyboards
+def build_settings_keyboard() -> InlineKeyboardMarkup:
+    """Builds the main settings keyboard."""
+    keyboard = [
+        [InlineKeyboardButton("🔍 Looking for", callback_data=f"{CALLBACK_DATA_PREFIX_SETTINGS}looking_for")],
+        [InlineKeyboardButton("🎂 Age Range", callback_data=f"{CALLBACK_DATA_PREFIX_SETTINGS}age_range")],
+        [InlineKeyboardButton("📍 Max Distance", callback_data=f"{CALLBACK_DATA_PREFIX_SETTINGS}max_distance")],
+        [InlineKeyboardButton("🔄 Reset Settings", callback_data=f"{CALLBACK_DATA_PREFIX_SETTINGS}reset")],
+    ]
+    return InlineKeyboardMarkup(keyboard)
 
 
+@user_command_limiter()
 @authenticated
 async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle the /settings command.
@@ -41,61 +48,73 @@ async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         update: The update object
         context: The context object
     """
-    # Apply rate limiting
-    await user_command_limiter()(update, context)
+    user: User | None = context.user_data.get("user")
+    if not user:  # Should not happen due to @authenticated but check anyway
+        logger.error("User not found in context for settings_command", user_id=update.effective_user.id)
+        await update.message.reply_text("Could not retrieve your profile. Try /start again.")
+        return
 
-    user_id = str(update.effective_user.id)
+    await _display_settings_menu(update, context)
 
-    try:
-        # Get user preferences
-        user = get_user(user_id)
 
-        # Format looking for
-        if user.looking_for:
-            looking_for_map = {
-                Gender.MALE.value: "Men",
-                Gender.FEMALE.value: "Women",
-                Gender.OTHER.value: "Everyone",
-            }
-            looking_for = looking_for_map.get(user.looking_for, "Everyone")
-        else:
-            looking_for = "Everyone"
+# Helper to display the main settings menu
+async def _display_settings_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, query=None) -> None:
+    """Sends or edits the message to show the main settings menu."""
+    user: User | None = context.user_data.get("user")
+    if not user:
+        logger.error("User not found in context for _display_settings_menu", user_id=update.effective_user.id)
+        error_text = "Could not retrieve your profile. Try /start again."
+        if query:
+            await query.edit_message_text(error_text)
+        elif update.message:
+            await update.message.reply_text(error_text)
+        return
 
-        # Format other preferences
-        min_age = user.preference_min_age or 18
-        max_age = user.preference_max_age or 100
-        max_distance = user.preference_max_distance or 50
-        notifications = "On" if user.notifications_enabled else "Off"
+    # Format settings message
+    prefs = user.preferences
+    gender_preference = prefs.gender_preference.capitalize() if prefs else "Any"
+    min_age = prefs.min_age if prefs else "Not set"
+    max_age = prefs.max_age if prefs else "Not set"
+    max_distance = prefs.max_distance if prefs else "Not set"
 
-        # Send settings message
+    settings_text = SETTINGS_MESSAGE.format(
+        gender_preference=gender_preference,
+        min_age=min_age,
+        max_age=max_age,
+        max_distance=max_distance,
+    )
+
+    reply_markup = build_settings_keyboard()
+    if query:
+        await query.edit_message_text(settings_text, reply_markup=reply_markup, parse_mode=constants.ParseMode.MARKDOWN)
+    elif update.message:
         await update.message.reply_text(
-            SETTINGS_MESSAGE.format(
-                looking_for=looking_for,
-                min_age=min_age,
-                max_age=max_age,
-                max_distance=max_distance,
-                notifications=notifications,
-            ),
-            parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup(
-                [
-                    [InlineKeyboardButton("🔍 Looking for", callback_data="settings_looking_for")],
-                    [InlineKeyboardButton("📏 Age range", callback_data="settings_age_range")],
-                    [InlineKeyboardButton("📍 Max distance", callback_data="settings_max_distance")],
-                    [InlineKeyboardButton("🔔 Notifications", callback_data="settings_notifications")],
-                    [InlineKeyboardButton("🔄 Reset to defaults", callback_data="settings_reset")],
-                ]
-            ),
+            settings_text, reply_markup=reply_markup, parse_mode=constants.ParseMode.MARKDOWN
         )
 
-    except Exception as e:
-        logger.error(
-            "Error in settings command",
-            user_id=user_id,
-            error=str(e),
-            exc_info=e,
-        )
-        await update.message.reply_text("Sorry, something went wrong. Please try again later.")
+
+def build_age_range_keyboard() -> InlineKeyboardMarkup:
+    """Builds the keyboard markup for selecting age range."""
+    keyboard = [
+        # Min Age Row 1
+        [
+            InlineKeyboardButton("Min: 18+", callback_data="min_age_18"),
+            InlineKeyboardButton("Min: 26+", callback_data="min_age_26"),
+        ],
+        # Min Age Row 2
+        [
+            InlineKeyboardButton("Min: 36+", callback_data="min_age_36"),
+            InlineKeyboardButton("Min: 46+", callback_data="min_age_46"),
+        ],
+        # Max Age Row (adjust values as needed)
+        [
+            InlineKeyboardButton("Max: -35", callback_data="max_age_35"),
+            InlineKeyboardButton("Max: -50", callback_data="max_age_50"),
+            InlineKeyboardButton("Max: -100", callback_data="max_age_100"),
+        ],
+        [InlineKeyboardButton("« Back", callback_data="back_to_settings")],
+    ]
+    return InlineKeyboardMarkup(keyboard)
 
 
 @authenticated
@@ -113,7 +132,7 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         await query.answer()
         callback_data = query.data
 
-        if callback_data == "settings_looking_for":
+        if callback_data == f"{CALLBACK_DATA_PREFIX_SETTINGS}looking_for":
             # Show looking for options
             await query.edit_message_text(
                 "Who are you interested in meeting?",
@@ -132,39 +151,24 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             looking_for = callback_data[12:]
             await handle_looking_for(update, context, looking_for)
 
-        elif callback_data == "settings_age_range":
-            # Show age range options
+        elif callback_data == f"{CALLBACK_DATA_PREFIX_SETTINGS}age_range":
+            # Corrected logic: Show separate menus for min and max, then handle individually
             await query.edit_message_text(
-                "Select minimum and maximum age range:",
-                reply_markup=InlineKeyboardMarkup(
-                    [
-                        [
-                            InlineKeyboardButton("Min: 18-25", callback_data="min_age_18"),
-                            InlineKeyboardButton("Min: 26-35", callback_data="min_age_26"),
-                        ],
-                        [
-                            InlineKeyboardButton("Min: 36-45", callback_data="min_age_36"),
-                            InlineKeyboardButton("Min: 46+", callback_data="min_age_46"),
-                        ],
-                        [
-                            InlineKeyboardButton("Max: 25-35", callback_data="max_age_35"),
-                            InlineKeyboardButton("Max: 36-50", callback_data="max_age_50"),
-                        ],
-                        [
-                            InlineKeyboardButton("Max: 51-70", callback_data="max_age_70"),
-                            InlineKeyboardButton("Max: 71+", callback_data="max_age_100"),
-                        ],
-                        [InlineKeyboardButton("« Back", callback_data="back_to_settings")],
-                    ]
-                ),
+                "Select the desired age range:",
+                reply_markup=build_age_range_keyboard(),  # Assuming a helper creates this
             )
 
-        elif callback_data.startswith("min_age_") or callback_data.startswith("max_age_"):
-            # Handle age range selection
-            age_type, age_value = callback_data.split("_")[0:2]
-            await handle_age_range(update, context, age_type, int(age_value))
+        elif callback_data.startswith("min_age_"):
+            # Handle min age selection
+            age_value = int(callback_data[8:])
+            await handle_age_range(update, context, "min", age_value)
 
-        elif callback_data == "settings_max_distance":
+        elif callback_data.startswith("max_age_"):
+            # Handle max age selection
+            age_value = int(callback_data[8:])
+            await handle_age_range(update, context, "max", age_value)
+
+        elif callback_data == f"{CALLBACK_DATA_PREFIX_SETTINGS}max_distance":
             # Show max distance options
             await query.edit_message_text(
                 "Select maximum distance for matches:",
@@ -192,31 +196,14 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             distance = int(callback_data[13:])
             await handle_max_distance(update, context, distance)
 
-        elif callback_data == "settings_notifications":
-            # Show notifications options
-            await query.edit_message_text(
-                "Notification settings:",
-                reply_markup=InlineKeyboardMarkup(
-                    [
-                        [InlineKeyboardButton("Turn On", callback_data="notifications_on")],
-                        [InlineKeyboardButton("Turn Off", callback_data="notifications_off")],
-                        [InlineKeyboardButton("« Back", callback_data="back_to_settings")],
-                    ]
-                ),
-            )
-
-        elif callback_data.startswith("notifications_"):
-            # Handle notifications selection
-            enabled = callback_data[14:] == "on"
-            await handle_notifications(update, context, enabled)
-
-        elif callback_data == "settings_reset":
+        elif callback_data == f"{CALLBACK_DATA_PREFIX_SETTINGS}reset":
             # Reset settings to defaults
             await handle_reset_settings(update, context)
 
         elif callback_data == "back_to_settings":
-            # Go back to settings
-            await settings_command(update, context)
+            # Use the helper function to display the menu
+            query = update.callback_query  # Get query object again
+            await _display_settings_menu(update, context, query=query)
 
     except Exception as e:
         logger.error(
@@ -241,6 +228,8 @@ async def handle_looking_for(update: Update, context: ContextTypes.DEFAULT_TYPE,
     user_id = str(update.effective_user.id)
 
     try:
+        env = context.bot_data["env"]
+
         # Map selection to Gender enum
         looking_for_map = {
             "male": Gender.MALE.value,
@@ -249,7 +238,8 @@ async def handle_looking_for(update: Update, context: ContextTypes.DEFAULT_TYPE,
         }
 
         # Update user preferences
-        update_user(user_id, {"looking_for": looking_for_map.get(looking_for)})
+        update_data = {"preferences": {"gender_preference": looking_for_map.get(looking_for)}}
+        await update_user(env, user_id, update_data)
 
         # Show confirmation
         await query.edit_message_text(
@@ -258,6 +248,7 @@ async def handle_looking_for(update: Update, context: ContextTypes.DEFAULT_TYPE,
                 [[InlineKeyboardButton("« Back to Settings", callback_data="back_to_settings")]]
             ),
         )
+        await _display_settings_menu(update, context, query=query)
 
     except Exception as e:
         logger.error(
@@ -283,21 +274,19 @@ async def handle_age_range(update: Update, context: ContextTypes.DEFAULT_TYPE, a
     user_id = str(update.effective_user.id)
 
     try:
+        env = context.bot_data["env"]
         # Update user preferences
-        if age_type == "min":
-            update_user(user_id, {"preference_min_age": age_value})
-            age_type_display = "minimum"
-        else:
-            update_user(user_id, {"preference_max_age": age_value})
-            age_type_display = "maximum"
+        update_data = {"preferences": {f"{age_type}_age": age_value}}
+        await update_user(env, user_id, update_data)
 
         # Show confirmation
         await query.edit_message_text(
-            f"✅ {age_type_display.capitalize()} age preference updated to: {age_value}",
+            f"✅ {age_type.capitalize()} age preference updated to: {age_value}",
             reply_markup=InlineKeyboardMarkup(
                 [[InlineKeyboardButton("« Back to Settings", callback_data="back_to_settings")]]
             ),
         )
+        await _display_settings_menu(update, context, query=query)
 
     except Exception as e:
         logger.error(
@@ -323,8 +312,10 @@ async def handle_max_distance(update: Update, context: ContextTypes.DEFAULT_TYPE
     user_id = str(update.effective_user.id)
 
     try:
+        env = context.bot_data["env"]
         # Update user preferences
-        update_user(user_id, {"preference_max_distance": distance})
+        update_data = {"preferences": {"max_distance": distance}}
+        await update_user(env, user_id, update_data)
 
         # Format display text
         display_text = f"{distance} km"
@@ -338,47 +329,13 @@ async def handle_max_distance(update: Update, context: ContextTypes.DEFAULT_TYPE
                 [[InlineKeyboardButton("« Back to Settings", callback_data="back_to_settings")]]
             ),
         )
+        await _display_settings_menu(update, context, query=query)
 
     except Exception as e:
         logger.error(
             "Error updating max distance",
             user_id=user_id,
             distance=distance,
-            error=str(e),
-            exc_info=e,
-        )
-        await query.edit_message_text("Sorry, something went wrong. Please try again.")
-
-
-async def handle_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE, enabled: bool) -> None:
-    """Handle notifications selection.
-
-    Args:
-        update: The update object
-        context: The context object
-        enabled: Whether notifications are enabled
-    """
-    query = update.callback_query
-    user_id = str(update.effective_user.id)
-
-    try:
-        # Update user preferences
-        update_user(user_id, {"notifications_enabled": enabled})
-
-        # Show confirmation
-        status = "enabled" if enabled else "disabled"
-        await query.edit_message_text(
-            f"✅ Notifications {status}",
-            reply_markup=InlineKeyboardMarkup(
-                [[InlineKeyboardButton("« Back to Settings", callback_data="back_to_settings")]]
-            ),
-        )
-
-    except Exception as e:
-        logger.error(
-            "Error updating notifications",
-            user_id=user_id,
-            enabled=enabled,
             error=str(e),
             exc_info=e,
         )
@@ -397,15 +354,17 @@ async def handle_reset_settings(update: Update, context: ContextTypes.DEFAULT_TY
 
     try:
         # Reset user preferences to defaults
-        default_preferences = {
-            "looking_for": None,  # No preference
-            "preference_min_age": 18,
-            "preference_max_age": 100,
-            "preference_max_distance": 50,
-            "notifications_enabled": True,
+        default_preferences_update = {
+            "preferences": {
+                "gender_preference": "any",  # Assuming 'any' is the representation for None/default
+                "min_age": 18,
+                "max_age": 100,  # Or a more sensible upper default?
+                "max_distance": 50,  # Assuming 50km is default
+            }
         }
 
-        update_user(user_id, default_preferences)
+        env = context.bot_data["env"]
+        await update_user(env, user_id, default_preferences_update)
 
         # Show confirmation
         await query.edit_message_text(
@@ -414,6 +373,7 @@ async def handle_reset_settings(update: Update, context: ContextTypes.DEFAULT_TY
                 [[InlineKeyboardButton("« Back to Settings", callback_data="back_to_settings")]]
             ),
         )
+        await _display_settings_menu(update, context, query=query)
 
     except Exception as e:
         logger.error(

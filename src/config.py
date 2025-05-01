@@ -49,6 +49,9 @@ class Settings(BaseSettings):
     API_HOST: str = "0.0.0.0"
     API_PORT: int = 8000
 
+    # Admin Configuration
+    ADMIN_IDS: str | None = None
+
     # Matching Algorithm Configuration
     MATCH_THRESHOLD: float = 0.7
     LOCATION_WEIGHT: float = 0.3

@@ -12,11 +12,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # pytest-dotenv will automatically load .env.test if present
 
-# Add project root to sys.path to allow imports from src
-project_root = Path(__file__).parent.parent.resolve()
-if str(project_root) not in sys.path:
-    sys.path.insert(0, str(project_root))
-    print(f"Added project root to sys.path: {project_root}")  # Debug print
+# Add project root to sys.path to ensure src module is discoverable
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
 
 # Import models and settings after sys.path modification
 from src.models import Preferences, User  # noqa: E402
@@ -154,6 +152,7 @@ def mock_settings(monkeypatch, mock_db: AsyncMock, mock_kv: AsyncMock, mock_r2: 
     from src.config import get_settings
 
     if hasattr(get_settings, "cache_clear"):
+        # noinspection PyUnresolvedReferences
         get_settings.cache_clear()
 
     # Patch the get_settings function in the src.config module
@@ -248,11 +247,16 @@ def mock_bot():
 @pytest.fixture
 def mock_update():
     """Create a mock Telegram update."""
-    from unittest.mock import MagicMock
+    # Use AsyncMock where awaitables are expected
+    from unittest.mock import AsyncMock, MagicMock
 
-    update = MagicMock(name="MockUpdate")
+    update = AsyncMock(name="MockUpdate")
     update.effective_user = MagicMock(id=123, full_name="Test User")
-    update.message = MagicMock(text="/test", chat_id=456)
+    update.message = AsyncMock(text="/test", chat_id=456)
+    # Configure callback_query with AsyncMock methods
+    update.callback_query = AsyncMock(name="MockCallbackQuery")
+    update.callback_query.answer = AsyncMock(name="answer")
+    update.callback_query.edit_message_text = AsyncMock(name="edit_message_text")
     # Configure other attributes as needed
     return update
 
@@ -269,3 +273,23 @@ def mock_context(mock_bot):
     context.chat_data = {}
     # Configure other attributes as needed
     return context
+
+
+# --- Mock User Fixture --- #
+@pytest.fixture
+def mock_user() -> User:
+    """Provides a default mock User object (USER_1) for tests."""
+    # Return a copy to prevent tests from modifying the original constant
+    return USER_1.model_copy(deep=True)
+
+
+# --- Mock Environment Fixture --- #
+@pytest.fixture
+def mock_env(mock_db: AsyncMock, mock_kv: AsyncMock, mock_r2: MagicMock) -> MagicMock:
+    """Provides a mock environment object with mocked bindings."""
+    env = MagicMock(name="MockEnv")
+    env.DB = mock_db
+    env.KV = mock_kv
+    env.R2 = mock_r2
+    # Add other potential env attributes if needed by tests
+    return env

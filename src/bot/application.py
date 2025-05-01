@@ -20,11 +20,10 @@ from src.bot.handlers import (
     chat_callback,
     chat_command,
     gender_command,
-    gender_selection,
+    handle_location,
     help_command,
     interests_command,
     location_command,
-    location_handler,
     match_callback,
     match_command,
     matches_command,
@@ -63,12 +62,11 @@ class BotApplication:
         # Create application with defaults
         defaults = Defaults(
             parse_mode="HTML",
-            disable_web_page_preview=True,
             allow_sending_without_reply=True,
         )
 
         # Initialize application
-        self.application = Application.builder().token(get_settings().TELEGRAM_BOT_TOKEN).defaults(defaults).build()
+        self.application = Application.builder().token(get_settings().TELEGRAM_TOKEN).defaults(defaults).build()
 
         # Register handlers
         self._register_handlers()
@@ -121,13 +119,7 @@ class BotApplication:
         )
 
         # Special handlers
-        self.application.add_handler(MessageHandler(filters.LOCATION & filters.ChatType.PRIVATE, location_handler))
-        self.application.add_handler(
-            MessageHandler(
-                filters.Regex(r"^(Male|Female|Other|Cancel)$") & filters.ChatType.PRIVATE,
-                gender_selection,
-            )
-        )
+        self.application.add_handler(MessageHandler(filters.LOCATION & filters.ChatType.PRIVATE, handle_location))
 
         # Message handler (for chat)
         self.application.add_handler(
