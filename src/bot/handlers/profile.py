@@ -8,11 +8,13 @@ Refactoring Notes:
 4. Ensure photo handling logic aligns with R2 implementation in user_service.
 """
 
+from typing import TYPE_CHECKING
+
 from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove, Update
 from telegram.ext import ContextTypes
 
-from ...models.user import Gender
-from ...services.user_service import get_user, update_user
+from ...models.user import Gender, User
+from ...services.user_service import update_user
 from ...utils.errors import ExternalServiceError, NotFoundError, ValidationError
 from ...utils.location import geocode_location, reverse_geocode_coordinates
 from ...utils.logging import get_logger
@@ -40,6 +42,7 @@ from .messages import (
     INVALID_LOCATION_FORMAT_MESSAGE,
     LOCATION_UPDATE_MESSAGE,
     LOCATION_UPDATED_SUCCESS_MESSAGE,
+    NAME_UPDATE_MESSAGE,
 )
 
 logger = get_logger(__name__)
@@ -60,10 +63,6 @@ PROFILE_MESSAGE_TEMPLATE = """
 *Gender:* {gender}
 *Bio:* {bio}
 
-*Preferences:*
-  Looking for: {gender_preference}
-  Age Range: {min_age} - {max_age}
-  Max Distance: {max_distance} km
 """
 
 
@@ -79,21 +78,21 @@ async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     # await user_command_limiter()(update, context)
 
     user_id = str(update.effective_user.id)
-    env = context.bot_data["env"]  # Retrieve env from context
 
     try:
-        user = await get_user(env, user_id)  # Use await and pass env
-        prefs = user.preferences  # Get preferences
+        # Get user from context (populated by @authenticated)
+        user = context.user_data.get("user")
+        if not user:
+            # This should ideally not happen if @authenticated works correctly
+            logger.error("User not found in context despite @authenticated", user_id=user_id)
+            await update.message.reply_text("Could not retrieve your profile information.")
+            return
 
         profile_text = PROFILE_MESSAGE_TEMPLATE.format(
             full_name=user.full_name or "Not set",
             age=user.age or "Not set",
-            gender=user.gender.value.capitalize() if user.gender else "Not specified",
+            gender=user.gender.capitalize() if user.gender else "Not specified",
             bio=user.bio or "Not set",
-            gender_preference=prefs.gender_preference.capitalize() if prefs.gender_preference else "Any",
-            min_age=prefs.min_age or "Not set",
-            max_age=prefs.max_age or "Not set",
-            max_distance=f"{prefs.max_distance} km" if prefs.max_distance is not None else "Any",
         )
 
         await update.message.reply_text(profile_text, parse_mode="Markdown")
@@ -111,9 +110,7 @@ async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 @user_command_limiter(scope="profile_update")
 async def name_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handles the /name command to update the user's first name."""
-    env = context.bot_data["env"]
     user_id = str(update.effective_user.id)
-    logger = get_logger(__name__)
     logger.info("/name command received", user_id=user_id)
 
     # Ensure message and text exist
@@ -127,22 +124,31 @@ async def name_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     parts = update.message.text.split(maxsplit=1)
 
     if len(parts) < 2:
-        await update.effective_message.reply_text("Please provide your name after the command, e.g., /name John")
+        await update.effective_message.reply_text(NAME_UPDATE_MESSAGE)
         return
 
     name = parts[1].strip()
+    if TYPE_CHECKING:
+        from tests.conftest import MockEnv
+    env: MockEnv = context.bot_data["env"]
+    user: User | None = context.user_data.get("user")
+
+    if not user:
+        logger.error("User object not found in context after authentication.")
+        await update.effective_message.reply_text("An unexpected error occurred. Please try again.")
+        return
 
     try:
         # Validate the name (re-use the validator)
         if not is_valid_name(name):
-            # is_valid_name should raise ValidationError, but handle direct False just in case
-            await update.effective_message.reply_text("Invalid name format. Please use only letters and spaces.")
+            await update.effective_message.reply_text(
+                f"{name} is not a valid name. Please use only letters and spaces."
+            )
             return
 
-        await update_user(env, user_id, {"first_name": name})
-        await update.effective_message.reply_text(f"Name updated successfully to {name}!")
-        logger.info("User name updated successfully", user_id=user_id, name=name)
-
+        await update_user(env, user.id, {"full_name": name})
+        logger.info("User name updated successfully", name=name, user_id=user.id)
+        await update.effective_message.reply_text(f"Name updated to: {name}")
     except ValidationError as e:
         logger.warning("Validation error updating name", user_id=user_id, error=str(e))
         await update.effective_message.reply_text(str(e))
@@ -160,8 +166,13 @@ async def name_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 @user_command_limiter(scope="profile_update")
 async def age_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle the /age command."""
-    user_id = str(update.effective_user.id)
-    env = context.bot_data["env"]  # Retrieve env from context
+    env = context.bot_data["env"]
+    user: User | None = context.user_data.get("user")
+
+    if not user:
+        logger.error("User object not found in context after authentication.")
+        await update.effective_message.reply_text("An unexpected error occurred. Please try again.")
+        return
 
     if not context.args or len(context.args) != 1:
         await update.effective_message.reply_text(AGE_UPDATE_MESSAGE)
@@ -184,27 +195,32 @@ async def age_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         return
 
     try:
-        # Update user's age
-        # Note: Ideally, age should be calculated from birth_date.
-        # If storing age directly, ensure birth_date is also updated or handled.
-        # For now, just updating the age field if it exists.
-        # Consider adding birth_date update logic here or in user_service.
-        await update_user(env, user_id, {"age": age})
+        await update_user(env, user.id, {"age": age})
         await update.effective_message.reply_text(AGE_UPDATED_MESSAGE.format(age=age))
     except ValidationError as e:
-        logger.warning("Validation error updating age", user_id=user_id, age=age, error=str(e))
+        logger.warning("Validation error updating age", user_id=user.id, age=age, error=str(e))
         await update.effective_message.reply_text(f"Validation error: {e}")
+    except NotFoundError:
+        logger.error("User not found during age update", user_id=user.id)
+        await update.effective_message.reply_text("Could not find your profile. Please try /start again.")
     except Exception as e:
-        logger.error("Error updating age", user_id=user_id, age=age, error=str(e), exc_info=True)
-        await update.effective_message.reply_text("Sorry, an error occurred while updating your age.")
+        logger.error("Error updating age", user_id=user.id, age=age, error=str(e), exc_info=True)
+        await update.effective_message.reply_text(
+            "Sorry, something went wrong while updating your age. Please try again later."
+        )
 
 
 @authenticated
 @user_command_limiter(scope="profile_update")
 async def gender_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle the /gender command."""
-    user_id = str(update.effective_user.id)
-    env = context.bot_data["env"]  # Retrieve env from context
+    env = context.bot_data["env"]
+    user: User | None = context.user_data.get("user")
+
+    if not user:
+        logger.error("User object not found in context after authentication.")
+        await update.effective_message.reply_text("An unexpected error occurred. Please try again.")
+        return
 
     if not context.args or len(context.args) != 1:
         await update.effective_message.reply_text(GENDER_UPDATE_MESSAGE)
@@ -222,14 +238,19 @@ async def gender_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     try:
         gender_enum = Gender(gender_str)
-        await update_user(env, user_id, {"gender": gender_enum})
+        await update_user(env, user.id, {"gender": gender_enum})
         await update.effective_message.reply_text(GENDER_UPDATED_MESSAGE.format(gender=gender_enum.value))
     except ValidationError as e:
-        logger.warning("Validation error updating gender", user_id=user_id, gender=gender_str, error=str(e))
+        logger.warning("Validation error updating gender", user_id=user.id, gender=gender_str, error=str(e))
         await update.effective_message.reply_text(f"Validation error: {e}")
+    except NotFoundError:
+        logger.error("User not found during gender update", user_id=user.id)
+        await update.effective_message.reply_text("Could not find your profile. Please try /start again.")
     except Exception as e:
-        logger.error("Error updating gender", user_id=user_id, gender=gender_str, error=str(e), exc_info=True)
-        await update.effective_message.reply_text("Sorry, an error occurred while updating your gender.")
+        logger.error("Error updating gender", user_id=user.id, gender=gender_str, error=str(e), exc_info=True)
+        await update.effective_message.reply_text(
+            "Sorry, something went wrong while updating your gender. Please try again later."
+        )
 
 
 @authenticated
@@ -237,7 +258,6 @@ async def gender_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 async def process_gender_selection(update: Update, context: ContextTypes.DEFAULT_TYPE, gender_str: str) -> None:
     """Process gender selection from keyboard or text input."""
     user_id = str(update.effective_user.id)
-    env = context.bot_data["env"]  # Retrieve env from context
 
     if gender_str.lower() == "cancel":
         await update.message.reply_text(
@@ -267,7 +287,7 @@ async def process_gender_selection(update: Update, context: ContextTypes.DEFAULT
 
         gender = gender_map[gender_key]
 
-        await update_user(env, user_id, {"gender": gender.value})
+        await update_user(user_id, {"gender": gender.value})
         await update.message.reply_text(
             GENDER_UPDATED_MESSAGE.format(gender=gender.value),
             reply_markup=ReplyKeyboardMarkup(
@@ -293,8 +313,13 @@ async def process_gender_selection(update: Update, context: ContextTypes.DEFAULT
 @user_command_limiter(scope="profile_update")
 async def bio_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle the /bio command."""
-    user_id = str(update.effective_user.id)
-    env = context.bot_data["env"]  # Retrieve env from context
+    env = context.bot_data["env"]
+    user: User | None = context.user_data.get("user")
+
+    if not user:
+        logger.error("User object not found in context after authentication.")
+        await update.effective_message.reply_text("An unexpected error occurred. Please try again.")
+        return
 
     if not context.args:
         await update.effective_message.reply_text(BIO_UPDATE_MESSAGE)
@@ -315,14 +340,19 @@ async def bio_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         return
 
     try:
-        await update_user(env, user_id, {"bio": bio})
+        await update_user(env, user.id, {"bio": bio})
         await update.effective_message.reply_text(BIO_UPDATED_MESSAGE)
     except ValidationError as e:
-        logger.warning("Validation error updating bio", user_id=user_id, error=str(e))
+        logger.warning("Validation error updating bio", user_id=user.id, error=str(e))
         await update.effective_message.reply_text(f"Validation error: {e}")
+    except NotFoundError:
+        logger.error("User not found during bio update", user_id=user.id)
+        await update.effective_message.reply_text("Could not find your profile. Please try /start again.")
     except Exception as e:
-        logger.error("Error updating bio", user_id=user_id, error=str(e), exc_info=True)
-        await update.effective_message.reply_text("Sorry, an error occurred while updating your bio.")
+        logger.error("Error updating bio", user_id=user.id, error=str(e), exc_info=True)
+        await update.effective_message.reply_text(
+            "Sorry, something went wrong while updating your bio. Please try again later."
+        )
 
 
 @authenticated
@@ -330,7 +360,6 @@ async def bio_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 async def interests_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle the /interests command."""
     user_id = str(update.effective_user.id)
-    env = context.bot_data["env"]  # Retrieve env from context
 
     if not context.args:
         await update.effective_message.reply_text(INTERESTS_UPDATE_MESSAGE)
@@ -354,7 +383,7 @@ async def interests_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         return
 
     try:
-        await update_user(env, user_id, {"interests": interests_list})
+        await update_user(user_id, {"interests": interests_list})
         await update.effective_message.reply_text(INTERESTS_UPDATED_MESSAGE)
     except ValidationError as e:
         logger.warning("Validation error updating interests", user_id=user_id, error=str(e))
@@ -467,8 +496,8 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 async def process_manual_location(update: Update, context: ContextTypes.DEFAULT_TYPE, location_text: str) -> None:
     """Process manual location entry."""
-    user_id = str(update.effective_user.id)
     env = context.bot_data["env"]
+    user_id = str(update.effective_user.id)
     message = update.effective_message
 
     try:

@@ -42,13 +42,15 @@ class TestMatchingService:
         mock_datetime.now.return_value = mock_now_instance
 
         # Mocks for the chained calls: prepare -> bind -> run/first
+        mock_run = AsyncMock()
         mock_like_binding = MagicMock()
-        mock_like_binding.run = AsyncMock()
+        mock_like_binding.run = mock_run
         mock_like_stmt = MagicMock()
         mock_like_stmt.bind.return_value = mock_like_binding
 
+        mock_first = AsyncMock(return_value=None)
         mock_check_binding = MagicMock()
-        mock_check_binding.first = AsyncMock(return_value=None)
+        mock_check_binding.first = mock_first
         mock_check_stmt = MagicMock()
         mock_check_stmt.bind.return_value = mock_check_binding
 
@@ -61,10 +63,12 @@ class TestMatchingService:
             else:
                 return MagicMock()  # Default mock for other queries
 
+        mock_kv_delete = AsyncMock()
+
         # Patch using the pre-configured MagicMock
         with (
             patch.object(mock_settings.DB, "prepare") as mock_prepare_patch,
-            patch.object(mock_settings.KV, "delete", new_callable=AsyncMock) as _,
+            patch.object(mock_settings.KV, "delete", new=mock_kv_delete),
         ):
             # Set the side_effect of the synchronous prepare mock
             mock_prepare_patch.side_effect = prepare_side_effect_like
@@ -85,12 +89,12 @@ class TestMatchingService:
 
             # Assert specific statement methods were called
             mock_like_stmt.bind.assert_called_once_with(actor_id, target_id, expected_iso_timestamp)
-            mock_like_binding.run.assert_called_once()  # Check run called on binding
+            mock_run.assert_awaited_once()  # Check run awaited on binding
             mock_check_stmt.bind.assert_called_once_with(target_id, actor_id)
-            mock_check_binding.first.assert_called_once()  # Check first called on binding
+            mock_first.assert_awaited_once()  # Check first awaited on binding
 
             # Assert KV cache was cleared for the actor
-            mock_settings.KV.delete.assert_any_call(f"potential_matches:{actor_id}")  # Check delete was called
+            mock_kv_delete.assert_any_await(f"potential_matches:{actor_id}")  # Check delete was awaited
 
     @patch("src.services.matching_service.datetime")
     async def test_record_dislike_success(self, mock_datetime, mock_settings):
@@ -108,15 +112,18 @@ class TestMatchingService:
         mock_datetime.now.return_value = mock_now_instance
 
         # Mocks for the chained calls: prepare -> bind -> run
+        mock_dislike_run = AsyncMock()
         mock_dislike_binding = MagicMock()
-        mock_dislike_binding.run = AsyncMock()
+        mock_dislike_binding.run = mock_dislike_run
         mock_dislike_stmt = MagicMock()
         mock_dislike_stmt.bind.return_value = mock_dislike_binding
+
+        mock_kv_delete = AsyncMock()
 
         # Patch using the pre-configured MagicMock
         with (
             patch.object(mock_settings.DB, "prepare") as mock_prepare_patch,
-            patch.object(mock_settings.KV, "delete", new_callable=AsyncMock) as _,
+            patch.object(mock_settings.KV, "delete", new=mock_kv_delete),
         ):
             # Setup the mock DB prepare call
             # Patch the prepare method to return the mock statement
@@ -134,12 +141,12 @@ class TestMatchingService:
             # Assert bind was called on the statement mock
             mock_dislike_stmt.bind.assert_called_once_with(actor_id, target_id, expected_iso_timestamp)
             # Assert run was called on the binding mock
-            mock_dislike_binding.run.assert_called_once()  # Check run called on binding
+            mock_dislike_run.assert_awaited_once()  # Check run awaited on binding
 
             # Assert KV cache was cleared
             expected_kv_calls = [call(f"potential_matches:{actor_id}"), call(f"potential_matches:{target_id}")]
-            mock_settings.KV.delete.assert_has_calls(expected_kv_calls, any_order=True)
-            assert mock_settings.KV.delete.call_count == 2
+            mock_kv_delete.assert_has_awaits(expected_kv_calls, any_order=True)
+            assert mock_kv_delete.await_count == 2
 
     @patch("src.services.matching_service.datetime")
     async def test_record_like_mutual_match(self, mock_datetime, mock_settings):
@@ -156,20 +163,22 @@ class TestMatchingService:
         mock_datetime.now.return_value = mock_now_instance
 
         # Mocks for the chained calls: prepare -> bind -> run/first
+        mock_like_run = AsyncMock()
         mock_like_binding = MagicMock()
-        mock_like_binding.run = AsyncMock()
+        mock_like_binding.run = mock_like_run
         mock_like_stmt = MagicMock()
         mock_like_stmt.bind.return_value = mock_like_binding
 
-        # Mock for the check statement (target likes actor?)
+        mock_check_first = AsyncMock(return_value=True)  # Simulate target liked actor
         mock_check_binding = MagicMock()
-        mock_check_binding.first = AsyncMock(return_value={"result": 1})  # Simulate target liked actor
+        mock_check_binding.first = mock_check_first
         mock_check_stmt = MagicMock()
         mock_check_stmt.bind.return_value = mock_check_binding
 
         # Mock for the match insert statement
+        mock_insert_match_run = AsyncMock()
         mock_insert_match_binding = MagicMock()
-        mock_insert_match_binding.run = AsyncMock()
+        mock_insert_match_binding.run = mock_insert_match_run
         mock_insert_match_stmt = MagicMock()
         mock_insert_match_stmt.bind.return_value = mock_insert_match_binding
 
@@ -187,13 +196,15 @@ class TestMatchingService:
 
         prepare_side_effect_mutual.call_count = 0  # Initialize call counter
 
-        # Patch using the pre-configured MagicMock
+        mock_kv_delete = AsyncMock()
+
+        # Patch DB.prepare and KV.delete
         with (
-            patch.object(mock_settings.DB, "prepare") as mock_prepare_sync_patch,  # Mock the sync call
-            patch.object(mock_settings.KV, "delete", new_callable=AsyncMock) as _,
+            patch.object(mock_settings.DB, "prepare") as mock_prepare_patch,
+            patch.object(mock_settings.KV, "delete", new=mock_kv_delete),
         ):
             # Set the side_effect of the synchronous prepare mock
-            mock_prepare_sync_patch.side_effect = prepare_side_effect_mutual
+            mock_prepare_patch.side_effect = prepare_side_effect_mutual
 
             # --- Execute --- #
             # The await here is on the result of prepare(...).bind(...).run/first()
@@ -201,10 +212,10 @@ class TestMatchingService:
 
             # --- Assert --- #
             # Assert the sync prepare mock was called 3 times
-            assert mock_prepare_sync_patch.call_count == 3
+            assert mock_prepare_patch.call_count == 3
             # Check the specific SQL queries passed to the sync prepare call
             # Use mock.call for proper comparison of *awaited* arguments
-            mock_prepare_sync_patch.assert_has_calls(
+            mock_prepare_patch.assert_has_calls(
                 [
                     call(SQL_INSERT_LIKE),
                     call(SQL_CHECK_LIKE),
@@ -215,19 +226,19 @@ class TestMatchingService:
 
             # Assert bind/run/first calls on the *statement* mocks
             mock_like_stmt.bind.assert_called_once_with(actor_id, target_id, expected_iso_timestamp)
-            mock_like_binding.run.assert_called_once()
+            mock_like_run.assert_awaited_once()
             mock_check_stmt.bind.assert_called_once_with(target_id, actor_id)
-            mock_check_binding.first.assert_called_once()  # Check first called on binding
+            mock_check_first.assert_awaited_once()  # Check first awaited on binding
 
             # Ensure consistent order for user1_id, user2_id in match insert
             user1, user2 = sorted([actor_id, target_id])
             mock_insert_match_stmt.bind.assert_called_once_with(user1, user2, expected_iso_timestamp)
-            mock_insert_match_binding.run.assert_called_once()
+            mock_insert_match_run.assert_awaited_once()
 
             # Assert KV delete calls
-            mock_settings.KV.delete.assert_any_call(f"potential_matches:{actor_id}")
-            mock_settings.KV.delete.assert_any_call(f"potential_matches:{target_id}")
-            assert mock_settings.KV.delete.call_count == 2  # Explicitly check count
+            mock_kv_delete.assert_any_await(f"potential_matches:{actor_id}")
+            mock_kv_delete.assert_any_await(f"potential_matches:{target_id}")
+            assert mock_kv_delete.await_count == 2  # Explicitly check count
 
             # Assert mutual match result
             assert result is True

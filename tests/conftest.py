@@ -1,7 +1,9 @@
 """pytest configuration and fixtures."""
 
+import asyncio
 import sys
-from datetime import datetime, timezone
+from dataclasses import dataclass
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
@@ -10,6 +12,9 @@ import pytest
 from dateutil import parser
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from src.config import Settings
+from src.models import Preferences, User
+
 # pytest-dotenv will automatically load .env.test if present
 
 # Add project root to sys.path to ensure src module is discoverable
@@ -17,7 +22,10 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 # Import models and settings after sys.path modification
-from src.models import Preferences, User  # noqa: E402
+
+# Define dummy types or use MagicMock for Worker-specific bindings if not installed locally
+KVNamespace = MagicMock
+D1Database = MagicMock
 
 # Add pytest configuration for asyncio
 pytest_plugins = ["pytest_asyncio"]
@@ -42,7 +50,6 @@ USER_1 = User(  # Add coordinates to make profile complete for matching tests
     created_at=TEST_DATE,
     last_login_at=TEST_DATE,
     is_active=True,
-    age=30,  # Calculated for 2025-04-30 based on birthdate
 )
 
 USER_2 = User(
@@ -59,7 +66,6 @@ USER_2 = User(
     is_active=True,
     latitude=1.0,  # Add coordinate
     longitude=1.0,  # Add coordinate
-    age=32,  # Calculated for 2025-04-30 based on birthdate
 )
 
 USER_3 = User(
@@ -76,7 +82,6 @@ USER_3 = User(
     is_active=True,
     latitude=2.0,  # Add coordinate
     longitude=2.0,  # Add coordinate
-    age=27,  # Calculated for 2025-04-30 based on birthdate
 )
 
 USER_4 = User(
@@ -93,7 +98,6 @@ USER_4 = User(
     is_active=True,
     latitude=0.0,
     longitude=0.0,
-    age=34,  # Calculated for 2025-04-30 based on birthdate
 )
 
 USER_5 = User(
@@ -108,7 +112,6 @@ USER_5 = User(
     created_at=TEST_DATE,
     last_login_at=TEST_DATE,
     is_active=True,
-    age=31,
     latitude=0.0,
     longitude=0.0,
 )
@@ -137,7 +140,9 @@ class MockSettings(BaseSettings):
 
 # --- Fixture to Mock Settings --- #
 @pytest.fixture()
-def mock_settings(monkeypatch, mock_db: AsyncMock, mock_kv: AsyncMock, mock_r2: MagicMock):
+def mock_settings(
+    monkeypatch: pytest.MonkeyPatch, mock_db: MagicMock, mock_kv: AsyncMock, mock_r2: MagicMock
+) -> MockSettings:
     """Provides a MockSettings instance, replacing src.config.get_settings.
     Populates the DB, KV, R2 attributes with mocks.
     """
@@ -163,39 +168,60 @@ def mock_settings(monkeypatch, mock_db: AsyncMock, mock_kv: AsyncMock, mock_r2: 
 
 
 # --- Mock Cloudflare Bindings --- #
-@pytest.fixture
-def mock_db() -> AsyncMock:
-    """Provides a mock D1 binding with necessary methods mocked."""
-    db_mock = AsyncMock(name="MockD1Binding")
-    # Add expected D1 methods/attributes needed by the service or tests
-    # Use MagicMock for sync methods like prepare, AsyncMock for async methods like exec
-    db_mock.prepare = MagicMock(name="prepare")
-    db_mock.batch = AsyncMock(name="batch")
-    db_mock.dump = AsyncMock(name="dump")
-    db_mock.exec = AsyncMock(name="exec")
-    # Add common methods chained from prepare().bind().run/first/all
-    # Tests often mock these chains directly, but having basic mocks can help
-    binding_mock = MagicMock(name="binding")
-    binding_mock.run = AsyncMock(name="run")
-    binding_mock.first = AsyncMock(name="first")
-    binding_mock.all = AsyncMock(name="all")
-    statement_mock = MagicMock(name="statement")
-    statement_mock.bind.return_value = binding_mock
-    db_mock.prepare.return_value = statement_mock
+@pytest.fixture(scope="function")
+def mock_db() -> MagicMock:
+    """Provides a mock D1 binding configured for async operations."""
+    # Base mock for the DB binding itself
+    db_mock = MagicMock(name="MockD1Database")
+
+    # Mock the prepare method to return another mock
+    stmt_mock = MagicMock(name="MockD1PreparedStatement")
+    db_mock.prepare.return_value = stmt_mock
+
+    # Mock the bind method on the statement mock to return the statement mock (for chaining)
+    stmt_mock.bind.return_value = stmt_mock
+
+    # Mock the first method to return an AsyncMock initially
+    result_mock = AsyncMock(name="MockD1Result")
+    stmt_mock.first.return_value = result_mock
+
+    # Configure the AsyncMock returned by first() to resolve to user data
+    # Convert USER_1 Pydantic model to a dictionary suitable for DB row simulation
+    # Ensure date/datetime objects are handled correctly if needed (e.g., isoformat)
+    user_dict = USER_1.model_dump(mode="json")  # Use model_dump for Pydantic v2
+    # Convert dates back to date objects if model_dump converts them to strings
+    if "birth_date" in user_dict and isinstance(user_dict["birth_date"], str):
+        user_dict["birth_date"] = date.fromisoformat(user_dict["birth_date"])
+    if "created_at" in user_dict and isinstance(user_dict["created_at"], str):
+        user_dict["created_at"] = datetime.fromisoformat(user_dict["created_at"].replace("Z", "+00:00"))
+    if "last_login_at" in user_dict and isinstance(user_dict["last_login_at"], str):
+        user_dict["last_login_at"] = datetime.fromisoformat(user_dict["last_login_at"].replace("Z", "+00:00"))
+
+    # Set the result_mock to resolve to the user dictionary when awaited
+    # We wrap it in another AsyncMock to simulate the `await stmt.bind(...).first()`
+    async def mock_first_result(*args, **kwargs):
+        # Add basic query check if needed (e.g., check args[0] == USER_1.id)
+        # For now, just return the default user dict
+        return user_dict
+
+    stmt_mock.first = AsyncMock(side_effect=mock_first_result)
+
+    # Mock other methods like 'run', 'all' if needed by other tests
+    stmt_mock.run = AsyncMock(name="run")
+    stmt_mock.all = AsyncMock(name="all", return_value=AsyncMock(results=[]))  # Example for 'all'
+
     return db_mock
 
 
-@pytest.fixture
-def mock_kv() -> MagicMock:
-    """Provides a mock KV Namespace binding with necessary methods mocked."""
-    kv_mock = MagicMock(name="MockKVNamespace")
-    # Add expected KV methods (get, put, delete, list)
-    # Use AsyncMock as these operations are typically asynchronous
-    kv_mock.get = AsyncMock(name="get")
-    kv_mock.put = AsyncMock(name="put")
-    kv_mock.delete = AsyncMock(name="delete")
-    kv_mock.list = AsyncMock(name="list")
-    return kv_mock
+@pytest.fixture(scope="function")
+def mock_kv() -> AsyncMock:  # Return AsyncMock
+    """Provides a mock KV Namespace binding using AsyncMock."""
+    mock_kv_namespace = AsyncMock(name="MockKVNamespace")
+    # Configure common methods
+    mock_kv_namespace.get.return_value = None  # Simulate cache miss by default
+    mock_kv_namespace.put = AsyncMock(name="put")
+    mock_kv_namespace.delete = AsyncMock(name="delete")
+    return mock_kv_namespace
 
 
 @pytest.fixture
@@ -213,46 +239,53 @@ def mock_r2() -> MagicMock:
     return r2_mock
 
 
-# --- End Test Data --- #
+# --- Mock Environment Bundler --- #
+@dataclass
+class MockEnv:
+    """Bundles mock environment bindings."""
+
+    db: MagicMock
+    kv: AsyncMock
+    r2: MagicMock
 
 
-# Configure asyncio for pytest
-@pytest.fixture(scope="session")
-def event_loop_policy():
-    """Configure event loop policy for pytest-asyncio."""
-    import asyncio
-
-    return asyncio.get_event_loop_policy()
-
-
-# Mock Telegram application
 @pytest.fixture
-def mock_application():
-    """Create a mock Telegram application."""
-    from unittest.mock import MagicMock  # Use standard mock
-
-    return MagicMock(name="MockApplication")
+def mock_env_fixture(mock_db: MagicMock, mock_kv: AsyncMock, mock_r2: MagicMock) -> MockEnv:
+    """Provides a MockEnv instance containing mock bindings."""
+    return MockEnv(db=mock_db, kv=mock_kv, r2=mock_r2)
 
 
-# Mock Telegram bot
+# --- Mock Location Services --- #
 @pytest.fixture
-def mock_bot():
-    """Create a mock Telegram bot."""
-    from unittest.mock import MagicMock
+def mock_geocoder() -> MagicMock:
+    """Provides a mock geocoder instance."""
+    geocoder = MagicMock()
+    # Configure the mock geocoder as needed for tests
+    # e.g., geocoder.geocode.return_value = MockLocation(...)
+    return geocoder
 
-    return MagicMock(name="MockBot")
 
-
-# Mock Telegram update
 @pytest.fixture
-def mock_update():
-    """Create a mock Telegram update."""
+def mock_geocoding_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Mocks geopy Nominatim environment variables."""
+    # Ensure Nominatim uses a test user agent if needed
+    monkeypatch.setenv("GEOPY_USER_AGENT", "meetsmatch_test_suite")
+
+
+# --- Mock Telegram Objects --- #
+@pytest.fixture
+def mock_update() -> AsyncMock:
+    """Provides a mock telegram.Update object."""
     # Use AsyncMock where awaitables are expected
     from unittest.mock import AsyncMock, MagicMock
 
     update = AsyncMock(name="MockUpdate")
     update.effective_user = MagicMock(id=123, full_name="Test User")
     update.message = AsyncMock(text="/test", chat_id=456)
+    update.message.reply_text = AsyncMock(name="reply_text")
+    # Explicitly define effective_message and its awaited methods
+    update.effective_message = AsyncMock(name="MockEffectiveMessage")
+    update.effective_message.reply_text = AsyncMock(name="reply_text")  # Keep this too, might be used elsewhere
     # Configure callback_query with AsyncMock methods
     update.callback_query = AsyncMock(name="MockCallbackQuery")
     update.callback_query.answer = AsyncMock(name="answer")
@@ -261,35 +294,92 @@ def mock_update():
     return update
 
 
-# Mock Telegram context
+# --- Mock Telegram Context --- #
 @pytest.fixture
-def mock_context(mock_bot):
+def mock_context() -> MagicMock:
     """Create a mock Telegram context."""
     from unittest.mock import MagicMock
 
-    context = MagicMock(name="MockContext")
-    context.bot = mock_bot
+    from telegram.ext import ContextTypes
+
+    context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
     context.user_data = {}
-    context.chat_data = {}
-    # Configure other attributes as needed
+    context.bot_data = {
+        # Add a mock environment
+        "env": MagicMock()
+    }
+    context.args = []
+    context.application = MagicMock()
     return context
 
 
 # --- Mock User Fixture --- #
-@pytest.fixture
+@pytest.fixture(scope="function")
 def mock_user() -> User:
-    """Provides a default mock User object (USER_1) for tests."""
+    """Provides a default mock User object for tests."""
     # Return a copy to prevent tests from modifying the original constant
-    return USER_1.model_copy(deep=True)
+    return User(
+        id="user1",
+        telegram_id=101,
+        full_name="Alice Smith",
+        birth_date=date(1995, 5, 10),
+        # Use string literal to match the User model's Literal type hint
+        gender="female",
+        preferences=Preferences(
+            min_age=18,
+            max_age=100,
+            gender_preference="male",
+            max_distance=50,
+        ),
+        interests=["hiking", "reading"],
+        photos=["photo1_alice.jpg"],
+        created_at=TEST_DATE,
+        last_login_at=TEST_DATE,
+        is_active=True,
+        latitude=0.0,
+        longitude=0.0,
+    )
 
 
 # --- Mock Environment Fixture --- #
 @pytest.fixture
 def mock_env(mock_db: AsyncMock, mock_kv: AsyncMock, mock_r2: MagicMock) -> MagicMock:
-    """Provides a mock environment object with mocked bindings."""
-    env = MagicMock(name="MockEnv")
-    env.DB = mock_db
+    """Provides a mocked environment object."""
+    env = MagicMock(spec=MockEnv)  # Keep spec for structure hinting if useful
+    env.settings = MagicMock(spec=Settings)
+    env.settings.kv_namespace_id = "test_kv_id"
+    env.settings.d1_database_id = "test_d1_id"
+
+    # Assign KV and DB directly as expected by middleware/services
     env.KV = mock_kv
-    env.R2 = mock_r2
-    # Add other potential env attributes if needed by tests
+    env.DB = mock_db
+    env.R2 = mock_r2  # Assuming R2 might be accessed directly too
+
     return env
+
+
+# Configure asyncio for pytest
+@pytest.fixture(scope="session")
+def event_loop_policy() -> asyncio.AbstractEventLoopPolicy:
+    """Configure event loop policy for pytest-asyncio."""
+    import asyncio
+
+    return asyncio.get_event_loop_policy()
+
+
+# Mock Telegram application
+@pytest.fixture
+def mock_application() -> MagicMock:
+    """Create a mock Telegram application."""
+    from unittest.mock import MagicMock
+
+    return MagicMock(name="MockApplication")
+
+
+# Mock Telegram bot
+@pytest.fixture
+def mock_bot() -> MagicMock:
+    """Create a mock Telegram bot."""
+    from unittest.mock import MagicMock
+
+    return MagicMock(name="MockBot")

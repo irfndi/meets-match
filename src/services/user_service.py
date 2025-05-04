@@ -99,54 +99,37 @@ async def create_user(env: Settings, user: User) -> User:
     """
     # Check if user already exists using the refactored async get_user
     try:
-        existing_user = await get_user(env, user.id)
-        if existing_user:
-            logger.warning("User already exists", user_id=user.id)
-            # No need for 'from e' here as we're not re-raising from an exception
-            raise ValidationError(
-                f"User already exists: {user.id}",
-                details={"user_id": user.id},
-            )
+        await get_user(env, user.id)
+        # If get_user succeeds, the user ALREADY exists.
+        logger.warning("Attempted to create user that already exists", user_id=user.id)  # Log before raising
+        raise ValidationError(f"User already exists: {user.id}")
     except NotFoundError:
-        # User doesn't exist, continue with creation
-        pass
-    except Exception as e:
-        # Handle potential errors from get_user itself (like DB connection issues)
-        logger.error("Error checking existing user during creation", user_id=user.id, error=str(e), exc_info=True)
-        raise ValidationError(f"Error checking user existence: {user.id}") from e
+        # This is the expected case for a new user. Proceed.
+        logger.debug("User does not exist, proceeding with creation", user_id=user.id)  # Explicitly log proceeding
 
-    # Set timestamps
+    # Proceed with insertion into D1
     now = datetime.now()
     user.created_at = now
-    user.updated_at = now
-    user.last_active = now
 
-    # Insert into D1 database
-    try:
-        # TODO: Verify 'users' table name and columns match D1 schema & user model
-        # Assuming User model fields match D1 columns
-        # Use model_dump to get dict, convert datetime to ISO format string if needed by D1
-        user_data = user.model_dump(mode="json")  # mode='json' helps serialize datetime etc.
+    # Convert user model to dictionary suitable for D1 insert
+    # TODO: Ensure this conversion handles all required D1 columns correctly
+    user_data = user.model_dump(mode="json", exclude={"age"})  # Exclude computed fields like age
 
-        # Validate keys against the User model's fields before using in f-string
-        allowed_columns = set(User.model_fields.keys())
-        if not set(user_data.keys()).issubset(allowed_columns):
-            invalid_keys = set(user_data.keys()) - allowed_columns
-            logger.error("Invalid keys detected for create_user", invalid_keys=invalid_keys, user_id=user.id)
-            raise ValidationError(f"Attempted to insert invalid columns: {invalid_keys}")
+    # Validate keys against the User model's fields before using in f-string
+    allowed_columns = set(User.model_fields.keys())
+    if not set(user_data.keys()).issubset(allowed_columns):
+        invalid_keys = set(user_data.keys()) - allowed_columns
+        logger.error("Invalid keys detected for create_user", invalid_keys=invalid_keys, user_id=user.id)
+        raise ValidationError(f"Attempted to insert invalid columns: {invalid_keys}")
 
-        # Dynamically build column names and placeholders for insert
-        columns = ", ".join(user_data.keys())
-        placeholders = ", ".join(["?" for _ in user_data])
-        values = list(user_data.values())
+    # Dynamically build column names and placeholders for insert
+    columns = ", ".join(user_data.keys())
+    placeholders = ", ".join(["?" for _ in user_data])
+    values = list(user_data.values())
 
-        stmt = env.DB.prepare(f"INSERT INTO users ({columns}) VALUES ({placeholders})")
-        # D1 expects parameters in the order matching placeholders
-        await stmt.bind(*values).run()
-
-    except Exception as e:
-        logger.error("D1 database insert error for create_user", user_id=user.id, error=str(e), exc_info=True)
-        raise ValidationError(f"Database error creating user: {user.id}") from e
+    stmt = env.DB.prepare(f"INSERT INTO users ({columns}) VALUES ({placeholders})")
+    # D1 expects parameters in the order matching placeholders
+    await stmt.bind(*values).run()
 
     # Cache user in KV
     cache_key = USER_CACHE_KEY.format(user_id=user.id)
@@ -195,62 +178,73 @@ async def update_user(
     # Or ensure your D1 schema allows NULLs where appropriate.
     update_fields = {k: v for k, v in data.items() if v is not None}  # Example: ignore None values
 
-    # Validate keys against the User model's fields before using in f-string
+    # Filter out keys not in the Pydantic model *before* dynamic SQL generation
     allowed_columns = set(User.model_fields.keys())
-    if not set(update_fields.keys()).issubset(allowed_columns):
-        invalid_keys = set(update_fields.keys()) - allowed_columns
-        logger.error("Invalid keys detected for update_user", invalid_keys=invalid_keys, user_id=user_id)
-        raise ValidationError(f"Attempted to update invalid columns: {invalid_keys}")
+    model_update_fields = {k: v for k, v in update_fields.items() if k in allowed_columns}
 
-    set_clause = ", ".join([f"{key} = ?" for key in update_fields.keys()])
-    values = list(update_fields.values())
+    # Explicitly check for fields provided in the input data that are NOT in the model
+    invalid_fields = set(data.keys()) - allowed_columns - {"updated_at"}  # Exclude manually handled updated_at
+    if invalid_fields:
+        logger.error("Invalid fields provided for user update", user_id=user_id, invalid_fields=list(invalid_fields))
+        raise ValidationError(f"Invalid update fields: {list(invalid_fields)}")
 
-    if not values:  # Nothing to update
-        logger.warning("Update user called with no valid data", user_id=user_id, data=data)
-        # Return current user data without DB call
+    # Construct the SET part of the SQL query dynamically using only valid model fields
+    set_clause = ", ".join([f"{key} = ?" for key in model_update_fields])
+    values = list(model_update_fields.values())
+
+    # Add the manually set updated_at for the DB query, if the column exists in DB
+    # This assumes 'updated_at' exists in the 'users' table in D1.
+    # If not, this part needs adjustment based on actual DB schema.
+    if "updated_at" in data:
+        # Ensure 'updated_at' column exists in DB schema
+        # We add it separately as it's not in the Pydantic model's allowed_columns for validation purposes
+        if set_clause:
+            set_clause += ", "
+        set_clause += "updated_at = ?"
+        values.append(data["updated_at"])
+
+    if not set_clause:
+        logger.warning("No valid fields provided for user update", user_id=user_id)
+        # Return the current user state without attempting DB update if no fields are changing
+        # Or raise an error, depending on desired behavior
         return await get_user(env, user_id)
 
-    # Update user in D1 database
+    # Log the prepared statement and values for debugging
+    logger.debug(
+        "Preparing D1 update statement",
+        user_id=user_id,
+        set_clause=set_clause,
+        values_count=len(values),
+        keys=list(model_update_fields.keys()) + (["updated_at"] if "updated_at" in data else []),
+    )
+
+    # Execute D1 update
     try:
-        # TODO: Verify 'users' table name
         stmt = env.DB.prepare(f"UPDATE users SET {set_clause} WHERE id = ?")
-        # Bind values for SET clause first, then the user_id for WHERE clause
         await stmt.bind(*values, user_id).run()
+        logger.info("User updated successfully in D1", user_id=user_id, updated_keys=list(model_update_fields.keys()))
     except Exception as e:
-        logger.error(
-            "D1 database update error for update_user", user_id=user_id, data=update_fields, error=str(e), exc_info=True
-        )
+        logger.error("D1 update error", user_id=user_id, error=str(e), exc_info=True)
         raise ValidationError(f"Database error updating user: {user_id}") from e
 
-    # Invalidate or update cache after successful DB update
+    # Invalidate KV cache
     cache_key = USER_CACHE_KEY.format(user_id=user_id)
-    location_cache_key = USER_LOCATION_CACHE_KEY.format(user_id=user_id)
     try:
-        # Simple approach: Delete cache entries to force refresh on next get
         await env.KV.delete(cache_key)
-        if "location" in update_fields:
-            await env.KV.delete(location_cache_key)
-        # Alternative: Put the updated data (requires fetching it again or careful construction)
-        # updated_user = await get_user(env, user_id) # Fetch fresh data
-        # await env.KV.put(cache_key, updated_user.model_dump_json(), expiration_ttl=3600)
-        # if "location" in update_fields and updated_user.location:
-        #     await env.KV.put(location_cache_key, updated_user.location.model_dump_json(), expiration_ttl=86400)
-
+        logger.info("KV cache invalidated for user", user_id=user_id)
     except Exception as e:
-        # Log cache errors but don't fail the request
-        logger.error("KV cache delete/put error after updating user", user_id=user_id, error=str(e), exc_info=True)
+        logger.error("KV cache delete error after update", user_id=user_id, error=str(e), exc_info=True)
 
-    logger.info("User updated in D1", user_id=user_id)
-
-    # Return the updated user data by fetching it again
-    # This ensures we return the actual state from the DB/cache
+    # Refetch the user to return the updated state (also warms the cache)
     try:
-        return await get_user(env, user_id)
+        updated_user = await get_user(env, user_id)
+        return updated_user
+    except NotFoundError:
+        logger.error("User not found immediately after update", user_id=user_id)
+        raise ValidationError(f"Failed to refetch user after update: {user_id}") from None
     except Exception as e:
-        logger.error("Failed to fetch user after update", user_id=user_id, error=str(e), exc_info=True)
-        # This is problematic, the update succeeded but we can't return the user
-        # Raise a specific error or handle appropriately
-        raise ValidationError(f"Update succeeded but failed to retrieve updated user: {user_id}") from e
+        logger.error("Error refetching user after update", user_id=user_id, error=str(e), exc_info=True)
+        raise ValidationError(f"Error refetching user after update: {user_id}") from e
 
 
 async def update_user_location(env: Settings, user_id: str, location: Location) -> User:
@@ -445,7 +439,7 @@ async def update_last_active(env: Settings, user_id: str) -> None:
     now = datetime.now()
     try:
         # Call update_user to handle DB update and cache invalidation
-        await update_user(env, user_id, {"last_active": now.isoformat()})
+        await update_user(env, user_id, {"last_login_at": now.isoformat()})
     except Exception as e:
         logger.error("D1 database error updating user last_active", user_id=user_id, error=str(e), exc_info=True)
         # Propagate error consistent with update_user (NotFoundError, ValidationError)
@@ -455,6 +449,55 @@ async def update_last_active(env: Settings, user_id: str) -> None:
     logger.debug("User last active updated via update_user call", user_id=user_id, timestamp=now)
 
 
-# TODO: Review remaining functions in this file (if any) for Cloudflare D1/KV/R2 usage.
-# E.g., functions related to profile photos (R2), matching logic, etc.
-# Also remove the old execute_query and cache util imports once fully refactored.
+# --- Profile Photo URL ---
+async def get_user_profile_photo_url(env: Settings, user_id: str) -> str | None:
+    """Get the public URL for a user's profile photo.
+
+    Args:
+        env: Cloudflare environment object with bindings (DB, KV, R2, R2_PUBLIC_URL).
+        user_id: User ID.
+
+    Returns:
+        The public URL of the profile photo, or None if the user has no photo
+        or the public URL is not configured.
+
+    Raises:
+        NotFoundError: If the user is not found.
+        ValidationError: If R2_PUBLIC_URL is not set in the environment.
+    """
+    logger.debug("Attempting to get profile photo URL", user_id=user_id)
+    try:
+        user = await get_user(env, user_id)  # Reuse get_user to handle cache/DB fetch and NotFoundError
+
+        if not user.profile_photo_key:
+            logger.debug("User has no profile photo key", user_id=user_id)
+            return None
+
+        if not env.R2_PUBLIC_URL:
+            logger.error("R2_PUBLIC_URL environment variable is not set.", user_id=user_id)
+            # Or raise a specific configuration error
+            raise ValidationError("R2 public URL is not configured.")
+
+        # Construct the full public URL
+        # Ensure no double slashes between base URL and key
+        base_url = env.R2_PUBLIC_URL.rstrip("/")
+        photo_key = user.profile_photo_key.lstrip("/")
+        photo_url = f"{base_url}/{photo_key}"
+
+        logger.info("Profile photo URL retrieved", user_id=user_id, url=photo_url)
+        return photo_url
+
+    except NotFoundError:
+        # Let NotFoundError from get_user propagate
+        logger.warning("User not found when getting profile photo URL", user_id=user_id)
+        raise
+    except ValidationError:
+        # Let ValidationError from missing R2_PUBLIC_URL propagate
+        raise
+    except Exception as e:
+        logger.error("Unexpected error getting profile photo URL", user_id=user_id, error=str(e), exc_info=True)
+        # Wrap unexpected errors
+        raise ValidationError(f"Failed to get profile photo URL for user {user_id}") from e
+
+
+# --- User Location ---

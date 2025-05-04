@@ -5,7 +5,7 @@
 import gettext
 from functools import lru_cache
 
-from src.config import settings
+from src.config import get_settings
 
 # Global dictionary to hold translations, loaded once.
 _translations = {}
@@ -14,6 +14,7 @@ _translations = {}
 def load_translations(locale_dir: str | None = None) -> None:
     """Loads translations for supported languages."""
     global _translations
+    settings = get_settings()
     locale_dir = locale_dir or settings.LOCALE_DIR
     supported_langs = settings.SUPPORTED_LANGUAGES
 
@@ -38,8 +39,10 @@ def load_translations(locale_dir: str | None = None) -> None:
                 _translations[lang] = gettext.NullTranslations()
 
 
-# Load translations when the module is imported
-load_translations()
+# Load translations when the module is imported (will now call get_settings)
+# Need to ensure settings are available or mocked appropriately at import time if this runs globally.
+# Consider moving this call to application startup if it causes issues.
+# load_translations()
 
 
 @lru_cache(maxsize=1024)  # Cache at the module level

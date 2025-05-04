@@ -1,6 +1,5 @@
 """Handlers package for the MeetMatch bot."""
 
-from src.bot.handlers.chat import chat_callback, chat_command, message_handler
 from src.bot.handlers.help import about_command, help_command
 from src.bot.handlers.match import match_callback, match_command, matches_command
 from src.bot.handlers.profile import (
@@ -21,8 +20,6 @@ __all__ = [
     "about_command",
     "age_command",
     "bio_command",
-    "chat_callback",
-    "chat_command",
     "gender_command",
     "handle_location",
     "help_command",
@@ -31,7 +28,6 @@ __all__ = [
     "match_callback",
     "match_command",
     "matches_command",
-    "message_handler",
     "name_command",
     "profile_command",
     "settings_callback",

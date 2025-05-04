@@ -17,7 +17,7 @@ from ..config import Settings
 from ..models.report import ALLOWED_REPORT_REASONS, Report
 from ..models.user import User
 from ..utils.errors import DatabaseError, NotFoundError, ValidationError
-from .user_service import get_user
+from .user_service import get_user, update_user
 
 # Constants moved outside the class
 REPORT_THRESHOLD = 3  # Number of reports before auto-ban
@@ -47,120 +47,153 @@ async def report_user(env: Settings, reporter_id: str, reported_id: str, reason:
 
     if reason not in ALLOWED_REPORT_REASONS:
         logger.warning("Invalid report reason attempt", reporter=reporter_id, reported=reported_id, reason=reason)
-        raise ValidationError(f"Invalid report reason. Must be one of: {ALLOWED_REPORT_REASONS}")
+        return False, f"Invalid report reason. Must be one of: {ALLOWED_REPORT_REASONS}"
 
-    # 1. Validate users exist (raises NotFoundError if not)
     try:
-        await get_user(env, reporter_id)
-        reported_user = await get_user(env, reported_id)
-        # Check if reported user is already inactive (banned)
-        if not reported_user.is_active:
-            return False, "This user is already inactive."
-    except NotFoundError as e:
-        logger.error("User not found during report process", reporter=reporter_id, reported=reported_id, error=str(e))
-        raise  # Re-raise NotFoundError
-
-    # 2. Check if this reporter already reported this user within the window
-    window_start = datetime.now() - timedelta(days=REPORT_WINDOW_DAYS)
-    try:
-        # TODO: Verify 'reports' table name and columns
-        check_stmt = env.DB.prepare(
-            "SELECT id FROM reports WHERE reporter_id = ? AND reported_id = ? AND created_at >= ? LIMIT 1"
-        )
-        existing = await check_stmt.bind(reporter_id, reported_id, window_start.isoformat()).first()
-        if existing:
-            logger.info("Duplicate report attempt within window", reporter=reporter_id, reported=reported_id)
-            return False, "You have already reported this user recently."
-
-    except Exception as e:
-        logger.error(
-            "D1 error checking existing report",
-            reporter=reporter_id,
-            reported=reported_id,
-            error=str(e),
-            exc_info=True,
-        )
-        raise DatabaseError("Failed to check for existing reports") from e
-
-    # 3. Create and insert the new report
-    new_report = Report(reporter_id=reporter_id, reported_id=reported_id, reason=reason)
-    try:
-        # TODO: Verify 'reports' table name and columns
-        insert_stmt = env.DB.prepare(
-            "INSERT INTO reports (id, reporter_id, reported_id, reason, created_at) VALUES (?, ?, ?, ?, ?)"
-        )
-        await insert_stmt.bind(
-            new_report.id,
-            new_report.reporter_id,
-            new_report.reported_id,
-            new_report.reason,
-            new_report.created_at.isoformat(),
-        ).run()
-        logger.info(
-            "Report submitted successfully",
-            report_id=new_report.id,
-            reporter=reporter_id,
-            reported=reported_id,
-            reason=reason,
-        )
-
-    except Exception as e:
-        logger.error(
-            "D1 error inserting report",
-            reporter=reporter_id,
-            reported=reported_id,
-            reason=reason,
-            error=str(e),
-            exc_info=True,
-        )
-        raise DatabaseError("Failed to submit report") from e
-
-    # 4. Count total reports against the reported user within the window
-    try:
-        # TODO: Verify 'reports' table name and columns
-        count_stmt = env.DB.prepare(
-            "SELECT COUNT(id) as report_count FROM reports WHERE reported_id = ? AND created_at >= ?"
-        )
-        count_result = await count_stmt.bind(reported_id, window_start.isoformat()).first()
-        report_count = count_result["report_count"] if count_result else 0
-
-    except Exception as e:
-        logger.error(
-            "D1 error counting reports for user",
-            reported=reported_id,
-            error=str(e),
-            exc_info=True,
-        )
-        # Continue without banning if count fails, but log it
-        return True, "Report submitted, but failed to check report count."
-
-    # 5. Check threshold and potentially ban user
-    message = "Report submitted successfully."
-    if report_count >= REPORT_THRESHOLD:
-        logger.warning("Report threshold reached, banning user", reported=reported_id, count=report_count)
+        # 1. Validate users exist and are active
         try:
-            # TODO: Verify 'users' table and 'is_active' column
-            ban_stmt = env.DB.prepare("UPDATE users SET is_active = 0 WHERE id = ?")  # Use 0 for False in D1
-            await ban_stmt.bind(reported_id).run()
-            message = "Report submitted. User has been automatically deactivated due to multiple reports."
+            reporter_user = await get_user(env, reporter_id)
+            if not reporter_user.is_active:
+                return False, "Reporter account is inactive."
+        except NotFoundError:
+            logger.error("Reporter not found during report process", reporter=reporter_id)
+            return False, "Reporter not found."
 
-            # Clear cache for the banned user
-            try:
-                # await clear_user_cache(env, reported_id)
-                pass
-            except Exception as e_cache:
-                logger.error("Failed to clear cache for banned user", user_id=reported_id, error=str(e_cache))
+        # 2. Validate reported user exists (allow reporting inactive users for now)
+        try:
+            _ = await get_user(env, reported_id)  # Assign to _ as we only check existence
+            # Optional: Check if reported_user.is_active and decide behavior
+        except NotFoundError:
+            logger.error("Reported user not found during report process", reported=reported_id)
+            return False, "Reported user not found."
+
+        # 3. Check if already reported recently
+        window_start = datetime.now() - timedelta(days=env.settings.report_ban_window_days)
+        try:
+            # TODO: Verify 'reports' table name and columns
+            check_stmt = env.DB.prepare(
+                "SELECT id FROM reports WHERE reporter_id = ? AND reported_id = ? AND created_at >= ? LIMIT 1"
+            )
+            existing = await check_stmt.bind(reporter_id, reported_id, window_start.isoformat()).first()
+            if existing:
+                logger.info("Duplicate report attempt within window", reporter=reporter_id, reported=reported_id)
+                return False, "You have already reported this user recently."
 
         except Exception as e:
             logger.error(
-                "D1 error banning user after report threshold",
+                "D1 error checking existing report",
+                reporter=reporter_id,
                 reported=reported_id,
                 error=str(e),
                 exc_info=True,
             )
-            message = "Report submitted, but failed to deactivate user."
+            raise DatabaseError("Failed to check for existing reports") from e
 
-    return True, message
+        # 4. Create and insert the new report
+        new_report = Report(reporter_id=reporter_id, reported_id=reported_id, reason=reason)
+        try:
+            # TODO: Verify 'reports' table name and columns
+            insert_stmt = env.DB.prepare(
+                "INSERT INTO reports (id, reporter_id, reported_id, reason, created_at) VALUES (?, ?, ?, ?, ?)"
+            )
+            await insert_stmt.bind(
+                new_report.id,
+                new_report.reporter_id,
+                new_report.reported_id,
+                new_report.reason,
+                new_report.created_at.isoformat(),
+            ).run()
+            logger.info(
+                "Report submitted successfully",
+                report_id=new_report.id,
+                reporter=reporter_id,
+                reported=reported_id,
+                reason=reason,
+            )
+
+        except Exception as e:
+            logger.error(
+                "D1 error inserting report",
+                reporter=reporter_id,
+                reported=reported_id,
+                reason=reason,
+                error=str(e),
+                exc_info=True,
+            )
+            raise DatabaseError("Failed to submit report") from e
+
+        # 5. Count total reports against the reported user within the window
+        try:
+            # TODO: Verify 'reports' table name and columns
+            count_stmt = env.DB.prepare(
+                "SELECT COUNT(id) as report_count FROM reports WHERE reported_id = ? AND created_at >= ?"
+            )
+            count_result = await count_stmt.bind(reported_id, window_start.isoformat()).first()
+            report_count = count_result["report_count"] if count_result else 0
+
+        except Exception as e:
+            logger.error(
+                "D1 error counting reports for user",
+                reported=reported_id,
+                error=str(e),
+                exc_info=True,
+            )
+            # Continue without banning if count fails, but log it
+            return True, "Report submitted, but failed to check report count."
+
+        # 6. Check threshold and potentially ban user
+        message = "Report submitted successfully."
+        if report_count >= REPORT_THRESHOLD:
+            logger.warning("Report threshold reached, banning user", reported=reported_id, count=report_count)
+            try:
+                await update_user(env, reported_id, {"is_active": False})  # Deactivate user
+                message = "Report submitted successfully. User has been banned due to multiple reports."
+
+                # Clear cache for the banned user
+                try:
+                    # await clear_user_cache(env, reported_id)
+                    pass
+                except Exception as e_cache:
+                    logger.error("Failed to clear cache for banned user", user_id=reported_id, error=str(e_cache))
+
+            except Exception as e:
+                logger.error(
+                    "D1 error banning user after report threshold",
+                    reported=reported_id,
+                    error=str(e),
+                    exc_info=True,
+                )
+                message = "Report submitted, but failed to deactivate user."
+
+        return True, message
+
+    except NotFoundError as e:
+        # This top-level NotFoundError should not be reached if individual checks work,
+        # but acts as a fallback.
+        logger.error("Unexpected NotFoundError during report operation", error=str(e), exc_info=True)
+        return False, "An error occurred while verifying users."
+
+    except DatabaseError as e:
+        # Errors from D1 operations (prepare, bind, run, first) caught here
+        logger.error(
+            "D1 database error during report operation",
+            reporter=reporter_id,
+            reported=reported_id,
+            error=str(e),
+            exc_info=True,
+        )
+        return False, "A database error occurred while processing the report."
+
+    except Exception as e:  # Catch-all for other unexpected errors
+        # Catch other potential D1 errors or unexpected issues
+        logger.error(
+            "Unexpected error during report operation",
+            reporter=reporter_id,
+            reported=reported_id,
+            error=str(e),
+            exc_info=True,
+        )
+        return False, "An unexpected error occurred."
 
 
 async def get_user_reports(env: Settings, user_id: str) -> List[Report]:

@@ -9,7 +9,7 @@ from telegram.ext import (
     CommandHandler,
     ContextTypes,
     Defaults,
-    MessageHandler,
+    MessageHandler,  # Re-add this import
     filters,
 )
 
@@ -17,8 +17,6 @@ from src.bot.handlers import (
     about_command,
     age_command,
     bio_command,
-    chat_callback,
-    chat_command,
     gender_command,
     handle_location,
     help_command,
@@ -27,7 +25,6 @@ from src.bot.handlers import (
     match_callback,
     match_command,
     matches_command,
-    message_handler,
     name_command,
     profile_command,
     settings_callback,
@@ -98,9 +95,6 @@ class BotApplication:
         self.application.add_handler(CommandHandler("match", match_command))
         self.application.add_handler(CommandHandler("matches", matches_command))
 
-        # Chat commands
-        self.application.add_handler(CommandHandler("chat", chat_command))
-
         # Settings commands
         self.application.add_handler(CommandHandler("settings", settings_command))
 
@@ -110,7 +104,6 @@ class BotApplication:
 
         # Callback handlers
         self.application.add_handler(CallbackQueryHandler(match_callback, pattern=r"^(like_|dislike_|next_match)"))
-        self.application.add_handler(CallbackQueryHandler(chat_callback, pattern=r"^(chat_|back_to_matches)"))
         self.application.add_handler(
             CallbackQueryHandler(
                 settings_callback,
@@ -120,11 +113,6 @@ class BotApplication:
 
         # Special handlers
         self.application.add_handler(MessageHandler(filters.LOCATION & filters.ChatType.PRIVATE, handle_location))
-
-        # Message handler (for chat)
-        self.application.add_handler(
-            MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, message_handler)
-        )
 
         # Error handler
         self.application.add_error_handler(self._error_handler)

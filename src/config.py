@@ -1,9 +1,8 @@
 """Configuration management for the MeetMatch bot."""
 
 from functools import lru_cache
-from typing import Any
+from typing import Any, List
 
-from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -24,26 +23,10 @@ class Settings(BaseSettings):
     SENTRY_DSN: str | None = None
     ENABLE_SENTRY: bool = False
 
-    @field_validator("ENABLE_SENTRY", mode="before")
-    @classmethod
-    def validate_enable_sentry(cls, v: Any) -> bool:
-        """Enable Sentry if DSN is provided and explicitly enabled."""
-        if isinstance(v, bool):
-            return v and cls.__fields__["SENTRY_DSN"].get_default() is not None
-        return cls.__fields__["SENTRY_DSN"].get_default() is not None and str(v).lower() == "true"
-
     # Application Configuration
     LOG_LEVEL: str = "INFO"
     ENVIRONMENT: str = "development"
     DEBUG: bool = False
-
-    @field_validator("DEBUG", mode="before")
-    @classmethod
-    def validate_debug(cls, v: Any) -> bool:
-        """Set debug mode based on environment."""
-        if isinstance(v, bool):
-            return v
-        return cls.__fields__["ENVIRONMENT"].get_default().lower() == "development"
 
     # API Configuration
     API_HOST: str = "0.0.0.0"
@@ -57,6 +40,10 @@ class Settings(BaseSettings):
     LOCATION_WEIGHT: float = 0.3
     INTERESTS_WEIGHT: float = 0.5
     PREFERENCES_WEIGHT: float = 0.2
+
+    # Internationalization (i18n)
+    LOCALE_DIR: str = "./locales"  # Default path
+    SUPPORTED_LANGUAGES: List[str] = ["en"]  # Default languages
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
