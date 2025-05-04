@@ -6,9 +6,9 @@
   "type": "module",
   "scripts": {
     "test": "bun test",
-    "lint": "eslint . --ext .ts,.tsx --report-unused-disable-directives --max-warnings 0",
-    "lint:fix": "eslint . --ext .ts,.tsx --fix",
-    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "lint": "biome check .",
+    "lint:fix": "biome check --apply .",
+    "format": "biome format --write .",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "dev": "wrangler dev",
@@ -23,14 +23,9 @@
     "typescript": "^5.8.3"
   },
   "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
     "@types/jest": "^29.5.14",
     "@types/node": "^22.15.3",
-    "@typescript-eslint/eslint-plugin": "^8.31.1",
-    "@typescript-eslint/parser": "^8.31.1",
-    "eslint": "^9.26.0",
-    "eslint-config-prettier": "^10.1.2",
-    "eslint-plugin-prettier": "^5.3.1",
-    "prettier": "^3.5.3",
     "vitest": "^3.1.2",
     "wrangler": "^4.14.1"
   }
