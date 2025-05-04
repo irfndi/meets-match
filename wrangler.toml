@@ -1,11 +1,12 @@
 # TODO: Configure Cloudflare Worker Deployment
-# This file is essential for deploying the Python Worker.
+# This file is essential for deploying the TypeScript Grammy bot on Cloudflare Workers.
 # Fill in the details based on your Cloudflare account and project requirements.
 # Refer to Cloudflare Wrangler documentation: https://developers.cloudflare.com/workers/wrangler/configuration/
 
-name = "meetsmatch-py-worker" # Replace with your desired worker name
-main = "src.bot.main:app" # FIXME: Update with the correct path to your ASGI app entry point (e.g., where FastAPI/Starlette app is defined)
-compatibility_date = "2024-04-28" # Updated to today's date
+name = "meetsmatch-bot" # Replace with your desired worker name if different
+main = "src/index.ts" # Entry point for the Worker
+compatibility_date = "2024-04-01" # Use a recent compatibility date
+compatibility_flags = [ "nodejs_compat" ]
 
 account_id = "4d12ccdb69bc57519b6aac269a04c9af"
 
@@ -31,15 +32,28 @@ bucket_name = "prod-tele-meetsmatch" # User-provided R2 bucket name
 
 # TODO: Configure environments (e.g., staging, production) if necessary
 # [env.production]
-# name = "meetsmatch-py-worker-prod"
+# name = "meetsmatch-bot-prod"
 # account_id = "YOUR_PROD_ACCOUNT_ID"
 # Routes, different bindings, etc.
 
 # [env.staging]
-# name = "meetsmatch-py-worker-staging"
+# name = "meetsmatch-bot-staging"
 # account_id = "YOUR_STAGING_ACCOUNT_ID"
 
-# Python Worker specific configuration
-[python]
-# Specifies the module and function/object for the worker entry point
-module = "src.bot.main:app" # FIXME: Ensure this matches the 'main' field above and points to your ASGI app
+[vars]
+# Example: SOME_VARIABLE = "some_value"
+
+[secrets]
+BOT_TOKEN = "" # Placeholder, will be replaced by wrangler
+
+# Optional: Define bindings to other Cloudflare services like KV, D1, R2
+# [kv_namespaces]
+# { binding = "MY_KV_NAMESPACE", id = "your_kv_namespace_id" }
+
+# [d1_databases]
+# { binding = "MY_DB", database_name = "my-database", database_id = "your_database_id" }
+
+# Development server configuration (optional)
+# [dev]
+# port = 8787
+# local_protocol = "http"

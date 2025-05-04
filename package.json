@@ -1,0 +1,37 @@
+{
+  "name": "meetsmatch-py",
+  "version": "1.0.0",
+  "description": "[![CI](https://github.com/irfndi/meetsmatch-py/actions/workflows/ci.yml/badge.svg)](https://github.com/irfndi/meetsmatch-py/actions/workflows/ci.yml) [![codecov](https://codecov.io/gh/irfndi/meetsmatch-py/branch/main/graph/badge.svg)](https://codecov.io/gh/irfndi/meetsmatch-py)",
+  "module": "src/index.ts",
+  "type": "module",
+  "scripts": {
+    "test": "bun test",
+    "lint": "eslint . --ext .ts,.tsx --report-unused-disable-directives --max-warnings 0",
+    "lint:fix": "eslint . --ext .ts,.tsx --fix",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@cloudflare/workers-types": "^4.20250504.0",
+    "grammy": "^1.36.1",
+    "typescript": "^5.8.3"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.15.3",
+    "@typescript-eslint/eslint-plugin": "^8.31.1",
+    "@typescript-eslint/parser": "^8.31.1",
+    "eslint": "^9.26.0",
+    "eslint-config-prettier": "^10.1.2",
+    "eslint-plugin-prettier": "^5.3.1",
+    "prettier": "^3.5.3",
+    "vitest": "^3.1.2",
+    "wrangler": "^4.14.1"
+  }
+}
