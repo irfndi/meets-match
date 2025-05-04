@@ -1,5 +1,6 @@
-// biome-ignore lint/style/useImportType: <explanation>
-import { Bot, webhookCallback, Context as BaseContext } from "grammy";
+import { Bot, webhookCallback } from "grammy";
+import type { Context } from "./bot/context"; // Import custom context
+import { registerStartCommand } from "./bot/handlers/start"; // Import start handler
 
 // Define the environment variables expected by the Worker
 export interface Env {
@@ -7,14 +8,6 @@ export interface Env {
   // Add other secrets or bindings from wrangler.toml here
   // Example: MY_KV_NAMESPACE: KVNamespace;
 }
-
-// Define a custom context type if needed later
-// interface CustomContext extends BaseContext {
-//   // Add custom properties here
-//   // e.g., sessionData: SessionData;
-// }
-// type Context = CustomContext;
-type Context = BaseContext; // Using BaseContext for now
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -25,16 +18,12 @@ export default {
         return new Response("Internal Server Error: Bot token missing", { status: 500 });
       }
 
-      // Create a new bot instance
+      // Create a new bot instance using the custom context
       const bot = new Bot<Context>(env.BOT_TOKEN);
 
-      // --- Bot Logic Start ---
-      // Register a simple command handler
-      bot.command("start", (ctx) => ctx.reply("Hello from the Cloudflare Worker!"));
-
-      // Register a basic message handler
-      bot.on("message:text", (ctx) => ctx.reply("Got your message!"));
-      // --- Bot Logic End ---
+      // --- Register Bot Handlers ---
+      registerStartCommand(bot); // Register the /start command
+      // TODO: Register other handlers (profile, match, etc.) here
 
       // Create a webhook handler for Cloudflare Workers
       // Grammy recommends 'cloudflare-mod' for Module Workers
