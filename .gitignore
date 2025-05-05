@@ -41,4 +41,8 @@ coverage/
 .uv/
 
 # Misc
+.wrangler/
+htmlcov/
+log/
+sqlite.db
 .DS_Store
