@@ -4,7 +4,8 @@ This document outlines the core technologies, libraries, and tools used in the d
 
 ## Core Technologies
 
-* **Python (3.10+):** The primary programming language for the bot's logic and functionality, running within the Cloudflare Workers environment via Pyodide/WASI.
+* **TypeScript:** The primary programming language for the bot's logic and functionality.
+* **Bun:** JavaScript runtime, package manager, and test runner used for local development and testing.
 * **Telegram Bot API:** The interface provided by Telegram for creating and interacting with bots.
 * **Cloudflare Workers:** Serverless execution environment for running the bot logic globally.
 * **Cloudflare D1:** Serverless SQL database (SQLite compatible) for persistent relational data.
@@ -13,37 +14,36 @@ This document outlines the core technologies, libraries, and tools used in the d
 
 ## Key Libraries and Tools
 
-* **`python-telegram-bot` (20.0+):** A comprehensive Python wrapper for the Telegram Bot API. Adapts well to the Workers environment. [GitHub Repository](https://github.com/python-telegram-bot/python-telegram-bot)
-* **`uv` (Latest Version):** Used locally for managing the development virtual environment and dependencies. Dependencies are bundled for the Worker deployment.
-* **`ruff` (Latest Version):** Linter and formatter for maintaining code quality locally.
+* **`GrammyJS` (Latest Version):** A comprehensive TypeScript framework for the Telegram Bot API. [Website](https://grammy.dev/)
+* **`Bun` (Latest Version):** Used locally for package management, running scripts, and testing.
+* **`Biome` (Latest Version):** Linter and formatter for maintaining code quality locally.
 * **`wrangler` (Latest Version):** CLI tool for developing, testing, and deploying Cloudflare Workers, D1, KV, and R2 resources.
-* **Database Client:** A lightweight SQLite-compatible client or ORM suitable for D1 within the Worker environment (e.g., direct SQL execution, a minimal ORM).
-* **`geopy` (Latest Version):** For location-based matching logic. Ensure compatibility within the Worker environment.
-* **`coverage` (Latest Version):** Tool for measuring code coverage locally during tests.
+* **Cloudflare D1 Client:** Interaction with D1 is typically done via Wrangler bindings provided in the Worker environment (`env.DB`). No separate client library is necessarily needed within the Worker code, though ORMs compatible with D1 might be used locally or for migrations.
+* **Geolocation Library (TBD):** A suitable TypeScript/JavaScript library if complex geolocation logic is needed (e.g., `geolib`).
+* **Bun Test Runner:** Built-in test runner includes coverage reporting.
 * **Codecov:** Service for tracking code coverage reports, integrated with CI.
 
 ## Development Environment
 
-* **Virtual Environment:** Isolated Python environment locally managed by `uv`.
-* **Code Editor/IDE:** Supporting Python, TOML (`wrangler.toml`), and potentially JavaScript (for Worker specifics).
+* **Node.js/Bun:** Required for running Bun commands and Wrangler.
+* **Code Editor/IDE:** Supporting TypeScript, TOML (`wrangler.toml`), `.env`/`.dev.vars`.
 * **Git:** Version control.
 * **`wrangler` CLI:** For local development (`wrangler dev`) and deployment.
 
 ## CI/CD Tools
 
-* **GitHub Actions:** Automating testing (using `pytest` and `coverage`) and deployment (using `wrangler deploy`).
+* **GitHub Actions:** Automating testing (using `bun test --coverage`) and deployment (using `wrangler deploy`).
 * **Codecov Integration:** Uploading coverage reports from GitHub Actions.
 
 ## Testing Framework
 
-* **pytest:** Python testing framework for unit and integration tests run locally and in CI.
-* **coverage.py:** Measuring code coverage during test execution. Goal: >95% coverage.
+* **Bun Test:** Built-in test runner for unit and integration tests run locally and in CI. Includes coverage support (`bun test --coverage`). Goal: >95% coverage.
 * **Codecov:** Tracking coverage and providing reports.
 
 ## Code Quality Tools
 
-* **ruff:** Linter and formatter.
-* **pylyzer:** Static type checker.
+* **Biome:** Integrated linter and formatter (`bun run lint`, `bun run format`). Configured via `biome.json`.
+* **TypeScript Compiler (`tsc`):** Used via `bun build` or `bun check` for static type checking during development and CI.
 * **Codecov Quality Gates:** Enforcing minimum code coverage (>95%) for pull requests.
 
 ## Monitoring and Analytics
@@ -62,10 +62,10 @@ This document outlines the core technologies, libraries, and tools used in the d
 
 ## Key Concepts
 
-* **Asynchronous Programming:** Handling Telegram events asynchronously within the Worker runtime.
-* **Update Handling:** Processing Telegram updates via webhook configured to the Worker URL.
-* **Command Handlers:** Logic for specific user commands.
-* **Conversation Handlers:** Managing multi-step interactions.
+* **Asynchronous Programming (`async`/`await`):** Handling Telegram events and I/O operations asynchronously within the Worker runtime using TypeScript's async/await syntax.
+* **Update Handling:** Processing Telegram updates via webhook configured to the Worker URL, typically managed by the GrammyJS framework.
+* **Command Handlers:** Logic for specific user commands (`/start`, `/match`, etc.) using GrammyJS listeners (`bot.command`).
+* **Conversation Handlers:** Managing multi-step interactions (e.g., profile setup) potentially using GrammyJS conversations plugin or custom state management.
 * **Cloudflare Bindings:** Securely accessing D1, KV, and R2 resources from within the Worker code via predefined bindings.
 * **Worker Environment Variables:** Managing secrets like the Telegram Bot Token.
 

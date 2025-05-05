@@ -19,6 +19,11 @@ coverage.xml
 .pytest_cache/
 .mypy_cache/
 
+# Node.js / Bun
+node_modules/
+bun.lockb
+coverage/
+
 # IDE
 .idea/
 .vscode/

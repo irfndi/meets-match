@@ -1,0 +1,7 @@
+{
+  "welcome_new": "Welcome to MeetMatch, {{username}}! 🎉 Let's get your profile set up. Use /profile to get started.",
+  "welcome_existing": "Welcome back, {{username}}! 👋 Use /match to find potential matches or /profile to update your info.",
+  "error_generic": "An error occurred. Please try again later.",
+  "error_user_fetch": "Sorry, I could not retrieve or create your user profile. Please try /start again.",
+  "error_id_missing": "Sorry, I could not identify you. Please ensure your Telegram client provides your user ID."
+}

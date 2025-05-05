@@ -36,6 +36,14 @@ def validate_profile(user: User) -> dict:
 | `AGE_RANGE`     | ±4      | Allowed age difference          |
 | `RETRY_DELAY`   | 72h     | Profile re-match cooldown       |
 
+- this is global parameter for all users & individual users cant change this
+
+individual parameter
+| Parameter       | Default | Description                     |
+|-----------------|---------|---------------------------------|
+| `GENDER`  | Bolean    | Gender preference (male/female)   |
+
+
 ### Profile Updates
 - Users can update their profile after registration via `/profile` command.
 - Changes are saved and reflected immediately.

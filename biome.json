@@ -3,6 +3,15 @@
   "organizeImports": {
     "enabled": true
   },
+  "files": {
+    "ignore": [
+      ".mypy_cache/**",
+      ".venv/**",
+      "htmlcov/**",
+      "node_modules/**",
+      "dist/**"
+    ]
+  },
   "linter": {
     "enabled": true,
     "rules": {

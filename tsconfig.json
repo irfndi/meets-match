@@ -13,14 +13,24 @@
     "strict": true, // Enable all strict type-checking options
     "noUncheckedIndexedAccess": true, // More rigorous checks for array/object access
     "noImplicitAny": true, // Require explicit types
+    "noImplicitOverride": true,
 
     /* Modules */
     "module": "ESNext", // Use ES module system
     "moduleResolution": "Bundler", // How modules get resolved (recommended for modern TS/bundlers)
 
+    /* Path Aliases */
+    "baseUrl": ".", // Base directory for resolving non-relative module names
+    "paths": {
+      "@/*": ["src/*"] // Map '@/' to 'src/'
+    },
+
     /* Cloudflare Workers */
     "lib": ["ESNext"], // Include latest ES library features
-    "types": ["@cloudflare/workers-types"], // Include Cloudflare Worker types globally
+    "types": [
+      "@cloudflare/workers-types",
+      "bun-types" // Adding bun types for test runner
+    ], // Include Cloudflare Worker types globally
 
     /* Output */
     "outDir": "dist", // Output directory for compiled files (though wrangler often handles bundling)

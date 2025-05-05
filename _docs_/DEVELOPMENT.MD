@@ -11,76 +11,61 @@
 
 ## Project Overview
 Our Telegram bot helps users find and schedule meetups using AI-powered matching. Built with:
-- Python 3.10+
-- python-telegram-bot v20.3+
-- Cloudflare KV for caching and session data
+- TypeScript
+- Bun runtime environment (for local development/testing)
+- GrammyJS framework for Telegram bots
 - Cloudflare D1 for persistent relational data
+- Cloudflare KV for caching/session data (optional)
 - Deployed as a Cloudflare Worker
 
 ## Development Environment Setup
 
-### Python Installation
-- **Recommended**: Use [pyenv](https://github.com/pyenv/pyenv) for version management
-- Verify installation:
-  ```bash
-  python --version  # Should show 3.10+
-  ```
+### Prerequisites
+- [Bun](https://bun.sh/) (includes runtime, package manager, test runner)
+- Node.js & npm (needed for Wrangler)
+- Git
+- [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/install/)
 
-### UV Package Manager
-Why UV?
-- Faster dependency resolution
-- Unified interface for virtualenv/pip/poetry workflows
-- Install system-wide:
-  ```bash
-  pip install --user uv
-  ```
-
-### Virtual Environment Setup
+### Installation
 ```bash
-# Create and activate environment
-uv venv .venv
-source .venv/bin/activate  # Linux/macOS
-.venv\Scripts\activate     # Windows
+# Clone the repository
+git clone <repository_url>
+cd meetsmatch
 
-# Install project dependencies
-# This installs the project in editable mode and includes dev dependencies from pyproject.toml
-uv pip install -e ".[dev]"
-```
+# Install dependencies using Bun
+bun install
 
-### Development Tools
-```bash
-# Development tools (like ruff, pytest, pylyzer) are installed via pyproject.toml's [dev] extra
-
-# Setup pre-commit hooks (if using pre-commit)
-pre-commit install
-```
-
-### Local Cloudflare Worker Setup (Using Wrangler)
-
-1. Install Wrangler CLI (if not already installed):
-```bash
+# Install Wrangler CLI globally (if not already installed)
 npm install -g wrangler
-```
 
-2. Authenticate Wrangler (if not already done):
-```bash
+# Authenticate Wrangler (if first time)
 wrangler login
 ```
 
-3. Create `.dev.vars` file in the project root for local secrets (this file is gitignored):
-```ini
+### Environment Variables
+For local development with `wrangler dev`, create a `.dev.vars` file in the project root. This file is gitignored.
+```env
 # .dev.vars (DO NOT COMMIT)
 TELEGRAM_TOKEN="your_local_test_bot_token"
-# Add other secrets or environment variables needed for local testing
+# Add other secrets/vars needed locally, matching wrangler.toml bindings
+# Example D1 Binding (matches wrangler.toml):
+# DB = "YOUR_LOCAL_D1_DB_BINDING_ID"
 ```
+Production secrets are managed via the Cloudflare dashboard.
 
-4. Run the worker locally (this will also pick up D1/KV bindings from wrangler.toml):
+### Running Locally
 ```bash
-# Make sure you are in the project root directory where wrangler.toml is located
-wrangler dev --env test --vars .dev.vars
+# Use Wrangler to run the Worker locally, simulating the Cloudflare environment
+# This command reads wrangler.toml and uses .dev.vars
+wrangler dev
+
+# To run against a specific environment defined in wrangler.toml:
+# wrangler dev --env <environment_name>
 ```
 
-This command starts a local server simulating the Cloudflare environment.
+### Development Tools
+- **Linting & Formatting**: [Biome](https://biomejs.dev/) (configured via `biome.json`). Use `bun run lint` and `bun run format`.
+- **Testing**: Bun's built-in test runner. Use `bun test`.
 
 ## Project Structure
 ```
@@ -97,62 +82,60 @@ scripts/               # Deployment/maintenance scripts
 
 ## Coding Conventions
 1. **Type Annotations**:
-   - Use Python 3.10+ syntax
-   - Strict mypy validation
+   - Use TypeScript syntax
+   - Strict type validation
 
 2. **Error Handling**:
-   - Use custom exceptions from `errors.py`
-   - Log errors with context using structlog
+   - Use custom exceptions from `errors.ts`
+   - Log errors with context using a logging library
 
 3. **Telegram Bot Specific**:
-   - Use PTB's ContextTypes
+   - Use GrammyJS's ContextTypes
    - Isolate handler logic in `/bot/handlers`
 
 ## Testing & Quality Assurance
 - Goal: Achieve >95% test coverage, tracked via Codecov.
 ```bash
 # Run all tests with coverage report
-pytest --cov=src --cov-report=term-missing --cov-fail-under=95
+bun test --coverage
 
 # Linting & formatting
-ruff check .
-ruff format .
-
-# Type checking
-pylyzer src/
+bun run lint
+bun run format
 ```
 
 ## Deployment
 The bot is deployed as a Cloudflare Worker.
 
 ### Environment Configuration
-- Use `.dev.vars` for local development secrets and Cloudflare dashboard for production secrets.
-- Configuration includes Telegram Bot Token, D1 Database bindings, and KV Namespace bindings.
+- Use `.dev.vars` for local development secrets.
+- Production secrets and bindings (D1, KV) are configured in `wrangler.toml` and the Cloudflare dashboard.
 
 ### Deployment Steps
+Ensure wrangler.toml is configured correctly for the target environment.
 ```bash
-# Install wrangler CLI (if not already installed)
-# npm install -g wrangler
-
-# Authenticate wrangler
-# wrangler login
-
-# Deploy to Cloudflare
+# Deploy the worker to Cloudflare
 wrangler deploy
+
+# To deploy a specific environment:
+# wrangler deploy --env <environment_name>
 ```
 
 ### CI/CD
-- GitHub Actions are configured to automatically test and deploy the worker on pushes to the main branch.
+- GitHub Actions are configured to automatically:
+  - Run tests (`bun test --coverage`)
+  - Run linters (`bun run lint`)
+  - Deploy the Worker (`wrangler deploy`) on pushes to the main branch.
 - Codecov reports are generated and uploaded during the CI process.
 
 ## Contributing
-We use [GitHub Issues](https://github.com/irfndi/meetsmatch-py/issues) to track tasks, bugs, and features.
+We use [GitHub Issues](https://github.com/irfndi/match-bot/issues) to track tasks, bugs, and features.
 
 1. **Check for an existing Issue:** Before starting work, check if an issue already exists for the task. If not, consider creating one to discuss the proposed changes.
 2. **Create feature branch:**
-   ```bash
-   git checkout -b feat/your-feature-name
-   ```
+```bash
+git checkout -b feat/your-feature-name
+```
 3. **Commit messages** follow [Conventional Commits](https://www.conventionalcommits.org).
 4. **Open PR** against the `main` branch with:
    - A clear description of the changes.
