@@ -19,7 +19,8 @@ jobs:
       run: bunx biome check .
 
     - name: Check Formatting with Biome
-      run: bunx biome format --check .
+      run: bunx biome check .
+      # run: bunx biome format --check .
 
     - name: Configure environment for tests
       run: |
