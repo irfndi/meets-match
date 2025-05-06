@@ -3,7 +3,10 @@ import { fileURLToPath } from "node:url";
 import { createClient, type Client } from "@libsql/client";
 import { Database } from "bun:sqlite";
 import { drizzle } from "drizzle-orm/libsql";
-import { type BunSQLiteDatabase, drizzle as drizzleBun } from "drizzle-orm/bun-sqlite";
+import {
+  type BunSQLiteDatabase,
+  drizzle as drizzleBun,
+} from "drizzle-orm/bun-sqlite";
 import * as schema from "./schema";
 
 // Determine the path to the database file relative to this script
@@ -15,8 +18,10 @@ const dbUrl = `file:${dbPath}`;
 let db: BunSQLiteDatabase<typeof schema> | ReturnType<typeof drizzle>;
 let client: Client | Database;
 
-if (process.env.VITEST === 'true') {
-  console.log("[DB] VITEST environment detected. Initializing in-memory SQLite...");
+if (process.env.VITEST === "true") {
+  console.log(
+    "[DB] VITEST environment detected. Initializing in-memory SQLite..."
+  );
   const sqlite = new Database(":memory:");
   client = sqlite; // Keep reference for closing
   db = drizzleBun(sqlite, { schema });
@@ -39,11 +44,13 @@ export async function closeDbConnection() {
   console.log("[DB] Closing database connection...");
   try {
     // client might be LibSQL Client or Bun SQLite Database
-    if (client && typeof client.close === 'function') {
+    if (client && typeof client.close === "function") {
       client.close();
       console.log("[DB] Database connection closed.");
     } else {
-      console.warn("[DB] Client instance not found or doesn't have a close method.");
+      console.warn(
+        "[DB] Client instance not found or doesn't have a close method."
+      );
     }
   } catch (error) {
     console.error("[DB] Error closing database connection:", error);
