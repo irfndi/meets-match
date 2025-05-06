@@ -22,7 +22,8 @@
     /* Path Aliases */
     "baseUrl": ".", // Base directory for resolving non-relative module names
     "paths": {
-      "@/*": ["src/*"] // Map '@/' to 'src/'
+      "@/*": ["src/*"], // Map '@/' to 'src/'
+      "@tests/*": ["tests/*"] // Map '@tests/' to 'tests/'
     },
 
     /* Cloudflare Workers */

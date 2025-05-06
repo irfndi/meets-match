@@ -1,7 +1,5 @@
-import { migrate } from "drizzle-orm/bun-sqlite/migrator";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { Database } from "bun:sqlite"; // Use bun:sqlite
 import * as schema from "@/db/schema";
 import type {
   Interaction,
@@ -10,7 +8,7 @@ import type {
   Profile,
   User,
 } from "@/db/schema";
-import { type BunSQLiteDatabase, drizzle } from "drizzle-orm/bun-sqlite"; // Use bun-sqlite adapter
+import type { BunSQLiteDatabase } from "drizzle-orm/bun-sqlite"; // Use bun-sqlite adapter
 
 import type { DrizzleDatabase } from "../utils/test_db_utils"; // Type alias from utils
 import {
@@ -22,48 +20,25 @@ import {
   seedUser,
 } from "../utils/test_db_utils"; // Utility functions
 
-let db: BunSQLiteDatabase<typeof schema>; // Update type hint
-let sqlite: Database;
+import { testDbInstance } from "@tests/setup/globalTestSetup.ts"; // Use alias for shared test DB instance
+
+let db: BunSQLiteDatabase<typeof schema>; // Keep db variable for convenience within tests
 let findMatches: typeof import("@/services/matching_service").findMatches;
 
 describe("Matching Service Integration Tests", () => {
   beforeEach(async () => {
-    console.log("[DB] Initializing in-memory SQLite for test...");
-    try {
-      // Create a new in-memory SQLite database instance for each test
-      sqlite = new Database(":memory:");
-      // Explicitly type db on assignment
-      const typedDb: BunSQLiteDatabase<typeof schema> = drizzle(sqlite, {
-        schema,
-      });
-      db = typedDb;
-
-      console.log("[DB] Running migrations on in-memory DB...");
-      await migrate(db, { migrationsFolder: "migrations" }); // Use bun-sqlite migrator
-    } catch (error) {
-      console.error("Failed setup for in-memory SQLite:", error);
-      throw new Error(
-        `Test DB setup failed. Error: ${error instanceof Error ? error.message : String(error)}`
-      );
-    }
+    // Assign the globally initialized DB instance to the local 'db' variable for use in tests
+    db = testDbInstance;
 
     // Dynamically import findMatches AFTER mocking dependencies if needed
     const { findMatches: fm } = await import("@/services/matching_service");
     findMatches = fm;
 
-    // Clearing is not strictly necessary as :memory: DB is fresh each time,
-    // but keep for structure/potential future file-based test DBs.
+    // Clearing tables before each test is still necessary for isolation
     console.log("[MatchingService Test] Clearing tables...");
     await clearInteractions(db);
     await clearProfiles(db);
     await clearUsers(db);
-  });
-
-  afterEach(async () => {
-    // Close the in-memory database connection after each test
-    if (sqlite) {
-      sqlite.close();
-    }
   });
 
   it("should return an empty array if seeker has no profile", async () => {
@@ -83,15 +58,14 @@ describe("Matching Service Integration Tests", () => {
 
   it("should return an empty array if the seeker status is not active", async () => {
     const seekerId = 1;
-    // Seed user with inactive status
-    const seekerUserData: NewUser = {
+    await seedUser(db, {
       id: seekerId,
       telegramId: 456,
       status: "inactive",
       createdAt: new Date(),
       updatedAt: new Date(),
-    };
-    // Seed a *complete* profile for this inactive user
+    });
+
     const completeProfileData: NewProfile = {
       userId: seekerId,
       name: "Seeker",
@@ -105,7 +79,6 @@ describe("Matching Service Integration Tests", () => {
       updatedAt: new Date(),
     };
 
-    await seedUser(db, seekerUserData);
     await seedProfile(db, completeProfileData);
 
     const matches = await findMatches(db, seekerId);

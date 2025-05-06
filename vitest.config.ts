@@ -7,9 +7,11 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      // Rely on vite-tsconfig-paths to handle aliases from tsconfig.json
     },
   },
   test: {
+    globalSetup: "./tests/setup/globalTestSetup.ts", // Add global setup
     globals: false, // Revert to false: Use explicit imports
     environment: "node", // Or 'miniflare' if testing Cloudflare specifics
     coverage: {

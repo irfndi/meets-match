@@ -247,18 +247,7 @@ export class InteractionService {
   async __test__resetInteractions(): Promise<void> {
     console.warn("[InteractionService Test Helper] Deleting all interactions.");
     await db.delete(interactions);
-    // Reset auto-increment counter if needed (SQLite specific)
-    try {
-      await db.run(sql`DELETE FROM sqlite_sequence WHERE name='interactions';`);
-    } catch (e) {
-      // Ignore error if the sequence table doesn't exist yet
-      if (!(e instanceof Error && e.message.includes("no such table"))) {
-        console.error(
-          "[InteractionService Test Helper] Error resetting sequence:",
-          e
-        );
-      }
-    }
+    // Removed problematic attempt to reset sqlite_sequence
   }
 
   /**
