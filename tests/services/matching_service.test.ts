@@ -20,15 +20,15 @@ import {
   seedUser,
 } from "../utils/test_db_utils"; // Utility functions
 
-import { testDbInstance } from "@tests/setup/globalTestSetup.ts"; // Use alias for shared test DB instance
+import { db as standardDb } from "@/db";
 
 let db: BunSQLiteDatabase<typeof schema>; // Keep db variable for convenience within tests
 let findMatches: typeof import("@/services/matching_service").findMatches;
 
 describe("Matching Service Integration Tests", () => {
   beforeEach(async () => {
-    // Assign the globally initialized DB instance to the local 'db' variable for use in tests
-    db = testDbInstance;
+    // Assign the standard test-aware DB instance to the local 'db' variable for use in tests
+    db = standardDb;
 
     // Dynamically import findMatches AFTER mocking dependencies if needed
     const { findMatches: fm } = await import("@/services/matching_service");

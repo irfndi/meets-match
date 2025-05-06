@@ -9,7 +9,7 @@ import {
   users,
 } from "@/db/schema";
 import { InteractionService } from "@/services/interaction_service";
-import { afterAll, beforeEach, describe, expect, test } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vitest";
 
 // Helper function to quickly create users and profiles for testing
 // Note: In a real app, this would likely be part of a UserService/ProfileService
@@ -50,23 +50,42 @@ describe("Interaction Service (Integration)", () => {
   let user2: User;
   let user3: User;
 
-  beforeEach(async () => {
-    interactionService = new InteractionService();
-    // Reset interactions before each test
-    await interactionService.__test__resetInteractions();
-    // Optionally reset users/profiles if needed, but interactions are the focus
-    // Be careful with cascading deletes or manage dependencies
-    await db.delete(users); // Clear users (and profiles via cascade)
+  // Setup users once before all tests in this describe block
+  beforeAll(async () => {
+    // Ensure a clean slate before starting tests in this file
+    // Note: Depending on test runner order, other tests might have left data.
+    // A more robust global setup might be needed for full isolation if tests interfere.
+    await db.delete(users); // Clear users (and profiles via cascade) just once
 
-    // Create some test users for convenience
+    // Create test users needed for the suite
     user1 = (await createTestUser({ telegramId: 101 })).user;
     user2 = (await createTestUser({ telegramId: 102 })).user;
     user3 = (await createTestUser({ telegramId: 103 })).user;
+
+    interactionService = new InteractionService(); // Initialize service once if stateless
+  });
+
+  beforeEach(async () => {
+    // interactionService = new InteractionService(); // Initialize here if service has state
+    // Reset interactions before each test for isolation
+    await interactionService.__test__resetInteractions();
+    // DO NOT delete users here anymore
+    // await db.delete(users);
+
+    // Users are already created in beforeAll
+    // user1 = (await createTestUser({ telegramId: 101 })).user;
+    // user2 = (await createTestUser({ telegramId: 102 })).user;
+    // user3 = (await createTestUser({ telegramId: 103 })).user;
   });
 
   afterAll(async () => {
+    // Optional: Clean up users created by this test suite
+    // await db.delete(users).where(inArray(users.id, [user1.id, user2.id, user3.id]));
+
     // Close the database connection after all tests in this file run
-    await closeDbConnection();
+    // Ensure this doesn't conflict if other test files need the connection
+    // Consider moving connection closing to a global teardown
+    // await closeDbConnection(); // Commenting out for now, let global handle it if needed
   });
 
   test("should add a new interaction", async () => {

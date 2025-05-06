@@ -5,7 +5,8 @@ import {
   interactions,
   users,
 } from "@/db/schema";
-import { and, desc, eq, or, sql } from "drizzle-orm";
+import { and, count, desc, eq, or, sql } from "drizzle-orm";
+import { logger } from "@/utils/logger";
 
 /**
  * Manages user interactions like likes, dislikes, and reports.
@@ -168,34 +169,39 @@ export class InteractionService {
   }
 
   /**
-   * Checks if user A has interacted with (liked or disliked) user B.
-   * Does not check for reports.
+   * Checks if the actor user has actively liked or disliked the target user.
+   * It specifically checks for 'like' or 'dislike' interaction types initiated by the actor.
+   * Does NOT consider interactions initiated by the target or 'report' types.
    *
-   * @param actorUserId - The ID of the user performing the action (User A).
-   * @param targetUserId - The ID of the user being acted upon (User B).
-   * @returns True if a 'like' or 'dislike' interaction exists from A to B, false otherwise.
+   * @param actorUserId The ID of the user performing the check (the potential interactor).
+   * @param targetUserId The ID of the user being checked against.
+   * @returns Promise<boolean> True if the actor has liked or disliked the target, false otherwise.
    */
   async hasInteracted(
     actorUserId: number,
     targetUserId: number
   ): Promise<boolean> {
+    // Select the count of interactions matching the criteria
     const result = await db
-      .select({ id: interactions.id, type: interactions.type })
+      .select({ value: count() }) // Use count() to get the number of matching rows
       .from(interactions)
       .where(
         and(
           eq(interactions.actorUserId, actorUserId),
           eq(interactions.targetUserId, targetUserId),
           or(
-            // Check for like OR dislike
+            // Check specifically for like OR dislike initiated by the actor
             eq(interactions.type, "like"),
             eq(interactions.type, "dislike")
           )
         )
-      )
-      .limit(1); // We only need to know if *any* such interaction exists
+      );
 
-    return !!result[0];
+    // count() returns an array with one object like [{ value: 1 }] or [{ value: 0 }]
+    const interactionCount = result[0]?.value ?? 0;
+
+    // Check if count is greater than 0
+    return interactionCount > 0;
   }
 
   /**
