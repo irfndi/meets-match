@@ -29,7 +29,8 @@
     "lib": ["ESNext"], // Include latest ES library features
     "types": [
       "@cloudflare/workers-types",
-      "bun-types" // Adding bun types for test runner
+      "bun-types", // Adding bun types for test runner
+      "vitest/globals"
     ], // Include Cloudflare Worker types globally
 
     /* Output */

@@ -12,12 +12,12 @@ import {
   or,
   sql,
 } from "drizzle-orm";
+import type { BunSQLiteDatabase } from "drizzle-orm/bun-sqlite"; // Use bun-sqlite type
 import { alias } from "drizzle-orm/sqlite-core"; // Use sqlite-core for alias
-import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'; // Use better-sqlite3 type
 import type { InteractionService } from "./interaction_service";
 
 // Define the type for the database instance using the specific driver type
-type DrizzleDatabase = BetterSQLite3Database<typeof schema>;
+type DrizzleDatabase = BunSQLiteDatabase<typeof schema>; // Update type alias
 
 // --- Location Helper Functions ---
 
@@ -165,16 +165,14 @@ export function doesPreferenceMatchGender(
  * Scores matches based on proximity (distance, age) - lower score is better.
  *
  * @param db The Drizzle database instance.
- * @param interactionService The interaction service instance.
- * @param seekerId The ID of the user for whom to find matches.
+ * @param seekerId The ID of the user seeking matches.
  * @returns A promise that resolves to an array of potential match Profiles.
  */
 export async function findMatches(
   db: DrizzleDatabase, // Use the updated type alias
-  interactionService: InteractionService,
   seekerId: number
 ): Promise<MatchResult[]> {
-  console.log(`[MatchingService] Finding matches for user ${seekerId}`);
+  console.log(`[MatchingService] Finding matches for seeker ID: ${seekerId}`);
 
   // 1. Fetch the seeker's user and profile data
   const seekerData = await db
@@ -219,8 +217,10 @@ export async function findMatches(
   }
 
   // 2. Fetch IDs of users the seeker has interacted with (liked/disliked only)
-  const seekerInteractions =
-    await interactionService.getInteractionsByActor(seekerId);
+  const seekerInteractions = await db
+    .select()
+    .from(schema.interactions)
+    .where(eq(schema.interactions.actorUserId, seekerId));
   const interactedUserIds = new Set<number>(
     seekerInteractions
       .filter(
@@ -240,12 +240,18 @@ export async function findMatches(
   );
 
   // Ensure we use the schema-defined string values for filtering
-  const seekerPref: "male" | "female" | "both" = currentProfile.preferenceGender as "male" | "female" | "both";
-  const seekerGender: "male" | "female" | null = currentProfile.gender as "male" | "female" | null;
+  const seekerPref: "male" | "female" | "both" =
+    currentProfile.preferenceGender as "male" | "female" | "both";
+  const seekerGender: "male" | "female" | null = currentProfile.gender as
+    | "male"
+    | "female"
+    | null;
 
   // Handle case where seeker gender is somehow null - they cannot match
   if (seekerGender === null) {
-    console.warn(`[MatchingService] Seeker ${seekerId} has null gender, cannot find matches.`);
+    console.warn(
+      `[MatchingService] Seeker ${seekerId} has null gender, cannot find matches.`
+    );
     return [];
   }
 
@@ -295,9 +301,9 @@ export async function findMatches(
   );
 
   // Filter out profiles that might be null due to left join issues (shouldn't happen with isNotNull checks, but safety first)
-  const validPotentialMatches = potentialMatchData.filter(
-    (data) => data.profile !== null
-  ).map(data => data.profile as Profile); // Extract valid profiles
+  const validPotentialMatches = potentialMatchData
+    .filter((data) => data.profile !== null)
+    .map((data) => data.profile as Profile); // Extract valid profiles
 
   if (validPotentialMatches.length === 0) {
     console.log(
@@ -310,10 +316,12 @@ export async function findMatches(
   console.log(
     `[MatchingService] Scoring ${validPotentialMatches.length} valid potential matches.`
   );
-  const scoredMatches: MatchResult[] = validPotentialMatches.map((matchProfile) => ({
-    profile: matchProfile,
-    score: calculateScore(currentProfile, matchProfile),
-  }));
+  const scoredMatches: MatchResult[] = validPotentialMatches.map(
+    (matchProfile) => ({
+      profile: matchProfile,
+      score: calculateScore(currentProfile, matchProfile),
+    })
+  );
 
   // Sort by score ascending (lower is better)
   scoredMatches.sort((a, b) => a.score - b.score);

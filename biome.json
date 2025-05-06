@@ -9,7 +9,8 @@
       ".venv/**",
       "htmlcov/**",
       "node_modules/**",
-      "dist/**"
+      "dist/**",
+      "coverage/**"
     ]
   },
   "linter": {

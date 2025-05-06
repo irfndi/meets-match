@@ -1,4 +1,3 @@
-import { afterAll, beforeEach, describe, expect, test } from "vitest";
 import { closeDbConnection, db } from "@/db";
 import {
   type Interaction,
@@ -10,6 +9,7 @@ import {
   users,
 } from "@/db/schema";
 import { InteractionService } from "@/services/interaction_service";
+import { afterAll, beforeEach, describe, expect, test } from "vitest";
 
 // Helper function to quickly create users and profiles for testing
 // Note: In a real app, this would likely be part of a UserService/ProfileService
@@ -190,9 +190,9 @@ describe("Interaction Service (Integration)", () => {
 
   test("should get the latest interaction between two users", async () => {
     await interactionService.recordLike(user1.id, user2.id); // Earlier
-    await new Promise(resolve => setTimeout(resolve, 10)); // Ensure timestamp difference
+    await new Promise((resolve) => setTimeout(resolve, 10)); // Ensure timestamp difference
     await interactionService.recordDislike(user2.id, user1.id); // Later
-    await new Promise(resolve => setTimeout(resolve, 10));
+    await new Promise((resolve) => setTimeout(resolve, 10));
     const latest = await interactionService.recordLike(user1.id, user2.id); // Latest
 
     const found = await interactionService.getLatestInteractionBetween(
@@ -238,7 +238,7 @@ describe("Interaction Service (Integration)", () => {
 
   test("hasLiked should consider the latest interaction", async () => {
     await interactionService.recordLike(user1.id, user2.id);
-    await new Promise(resolve => setTimeout(resolve, 10)); // Wait briefly to ensure timestamp difference
+    await new Promise((resolve) => setTimeout(resolve, 10)); // Wait briefly to ensure timestamp difference
     await interactionService.recordDislike(user1.id, user2.id); // A dislikes B later
     expect(await interactionService.hasLiked(user1.id, user2.id)).toBeFalsy();
   });
@@ -268,7 +268,7 @@ describe("Interaction Service (Integration)", () => {
 
   test("hasDisliked should consider the latest interaction", async () => {
     await interactionService.recordDislike(user1.id, user2.id);
-    await new Promise(resolve => setTimeout(resolve, 10)); // Wait briefly to ensure timestamp difference
+    await new Promise((resolve) => setTimeout(resolve, 10)); // Wait briefly to ensure timestamp difference
     await interactionService.recordLike(user1.id, user2.id); // A likes B later
     expect(
       await interactionService.hasDisliked(user1.id, user2.id)

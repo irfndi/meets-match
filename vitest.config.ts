@@ -1,14 +1,16 @@
-import { defineConfig } from "vitest/config";
 import path from "node:path";
+import tsconfigPaths from "vite-tsconfig-paths"; // Import the plugin
+import { defineConfig } from "vitest/config";
 
 export default defineConfig({
+  plugins: [tsconfigPaths()], // Add the plugin
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
+      "@": path.resolve(__dirname, "./src"),
     },
   },
   test: {
-    globals: true, // Use Vitest global APIs (describe, it, expect)
+    globals: false, // Revert to false: Use explicit imports
     environment: "node", // Or 'miniflare' if testing Cloudflare specifics
     coverage: {
       provider: "v8", // Use v8 for coverage

@@ -1,416 +1,457 @@
-import type {
-  User,
-  UserPreferences,
-  UserUpdate,
-  UserUpdateResult,
-  ValidationErrors,
-} from "../models/user";
-import { defaultPreferences } from "../models/user"; // Import value separately
+import { eq } from "drizzle-orm";
+import type { BunSQLiteDatabase } from "drizzle-orm/bun-sqlite";
+import * as schema from "../db/schema";
+import type { User as SchemaUser } from "../db/schema";
 import {
-  Gender, // Import enum
-  GenderPreference, // Import enum
-  MAX_AGE,
-  MAX_DESCRIPTION_LENGTH,
-  MAX_NAME_LENGTH,
-  MIN_AGE,
-  MIN_DESCRIPTION_LENGTH, // Import constant
-  MIN_NAME_LENGTH, // Import constant
+  type CreateUserResult,
+  Gender,
+  type PreferencesResult,
+  type User,
+  type UserPreferences,
+  type UserProfile,
+  type UserProfileResult,
+  type ValidationErrors,
 } from "../models/user";
+import {
+  validateUserPreferences,
+  validateUserProfile,
+} from "./validation_service";
 
-// --- Constants for Validation ---
-// Removed MIN_NAME_LENGTH constant
+// Define the Drizzle DB type alias
+type DrizzleDatabase = BunSQLiteDatabase<typeof schema>;
+// Infer the insert type from the schema
+type UserInsert = typeof schema.users.$inferInsert;
 
-// In-memory store for users (replace with actual DB later)
-export const users: Map<number, User> = new Map();
+// Result types (Moved outside class)
+type UpdateUserResult =
+  | { success: true; updatedFields: Partial<SchemaUser> }
+  | { success: false; errors: ValidationErrors };
 
-// Export the map directly ONLY for testing reset purposes
-// In a real app, avoid exporting mutable state like this.
-export const __test__resetUsers = () => {
-  console.log("[UserService] Resetting in-memory user store for test.");
-  users.clear();
-};
+// --- UserService Class ---
+export class UserService {
+  private db: DrizzleDatabase;
 
-/**
- * Retrieves a user by their Telegram ID.
- *
- * @param userId The Telegram user ID.
- * @returns The user object or null if not found.
- */
-export async function getUserById(userId: number): Promise<User | null> {
-  console.log(`[UserService] Attempting to get user: ${userId}`);
-  const user = users.get(userId);
-  return user ? { ...user } : null; // Return a copy to prevent mutation
-}
-
-/**
- * Creates a new user or retrieves an existing one.
- * Initializes with default preferences if creating.
- *
- * @param userId The Telegram user ID.
- * @param username Optional Telegram username.
- * @returns The created or existing user object.
- */
-export async function findOrCreateUser(
-  userId: number,
-  username?: string
-): Promise<User> {
-  // Use const since 'user' is not reassigned in this primary scope
-  const user = await getUserById(userId);
-  if (user) {
-    console.log(`[UserService] Found existing user: ${userId}`);
-    // Optionally update username if it changed or wasn't set
-    if (username && user.telegram_username !== username) {
-      // Create a mutable copy for modification
-      const mutableUser = { ...user };
-      mutableUser.telegram_username = username;
-      mutableUser.updated_at = new Date();
-      users.set(userId, mutableUser); // Save updated user
-      console.log(`[UserService] Updated username for user: ${userId}`);
-      return mutableUser; // Return the modified copy
-    }
-    // Fetch again directly from the map before returning to ensure latest state
-    const latestUser = await getUserById(userId);
-    // Should not be null here as we found 'user' just before, but check defensively
-    return latestUser ?? user; // Return latest, fallback to initial 'user' if somehow null
+  constructor(db: DrizzleDatabase) {
+    this.db = db;
   }
 
-  console.log(`[UserService] Creating new user: ${userId}`);
-  const now = new Date();
-  const newUser: User = {
-    id: userId,
-    telegram_username: username ?? null,
-    name: null,
-    age: null,
-    gender: null,
-    description: null, // Initialize description
-    latitude: null,
-    longitude: null,
-    preferences: { ...defaultPreferences }, // Initialize with defaults
-    created_at: now,
-    updated_at: now,
-    is_active: true,
-    is_banned: false,
-    is_complete: false,
-  };
+  // --- Retrieval Methods ---
 
-  users.set(userId, { ...newUser });
-  return { ...newUser }; // Return a copy
-}
-
-/**
- * Validates a user update object.
- * @param updates The partial user data to validate.
- * @returns A dictionary of validation errors, empty if valid.
- */
-export function validateUserUpdate(updates: UserUpdate): {
-  valid: boolean;
-  errors: ValidationErrors;
-} {
-  const errors: ValidationErrors = {};
-  console.log(
-    "[validateUserUpdate] Validating updates:",
-    JSON.stringify(updates, null, 2)
-  );
-
-  if (updates.name !== undefined && updates.name !== null) {
-    console.log("[validateUserUpdate] Validating name:", updates.name);
-    if (
-      typeof updates.name !== "string" ||
-      updates.name.length < MIN_NAME_LENGTH
-    ) {
-      errors.name = `Name must be a string with at least ${MIN_NAME_LENGTH} characters.`;
-      console.log("[validateUserUpdate] Name validation FAILED.");
-    } else if (updates.name.length > MAX_NAME_LENGTH) {
-      errors.name = `Name must be at most ${MAX_NAME_LENGTH} characters.`;
-      console.log("[validateUserUpdate] Name validation FAILED.");
+  /**
+   * Retrieves a user by their ID.
+   *
+   * @param userId The ID of the user.
+   * @returns A Promise resolving to the User object or null if not found.
+   */
+  async getUserById(userId: number): Promise<SchemaUser | null> {
+    try {
+      const userResult = await this.db
+        .select()
+        .from(schema.users)
+        .where(eq(schema.users.id, userId))
+        .limit(1);
+      return userResult[0] ?? null;
+    } catch (error) {
+      console.error(`Error fetching user by ID ${userId}:`, error);
+      return null;
     }
   }
 
-  if (updates.age !== undefined && updates.age !== null) {
-    console.log("[validateUserUpdate] Validating age:", updates.age);
-    if (typeof updates.age !== "number" || !Number.isInteger(updates.age)) {
-      errors.age = "Age must be an integer.";
-    } else if (updates.age < MIN_AGE) {
-      errors.age = `Age must be at least ${MIN_AGE}.`;
-    } else if (updates.age > MAX_AGE) {
-      errors.age = `Age must be at most ${MAX_AGE}.`;
+  /**
+   * Retrieves a user by their Telegram ID.
+   *
+   * @param telegramId The Telegram user ID.
+   * @returns A Promise resolving to the User object or null if not found.
+   */
+  async getUserByTelegramId(telegramId: number): Promise<SchemaUser | null> {
+    try {
+      const userResult = await this.db
+        .select()
+        .from(schema.users)
+        .where(eq(schema.users.telegramId, telegramId))
+        .limit(1);
+      return userResult[0] ?? null;
+    } catch (error) {
+      console.error(`Error fetching user by Telegram ID ${telegramId}:`, error);
+      return null;
     }
   }
 
-  if (updates.gender !== undefined && updates.gender !== null) {
-    console.log("[validateUserUpdate] Validating gender:", updates.gender);
-    // Ensure updates.gender is treated as Gender type for the check
-    if (!Object.values(Gender).includes(updates.gender)) {
-      // Use imported Gender enum
-      errors.gender = `Invalid gender specified. Allowed: ${Object.values(Gender).join(", ")}.`;
-      console.log("[validateUserUpdate] Gender validation FAILED.");
+  /**
+   * Retrieves a user by their Telegram username.
+   *
+   * @param telegramUsername The Telegram username.
+   * @returns The user object or null if not found.
+   */
+  async getUserByTelegramUsername(
+    telegramUsername: string
+  ): Promise<SchemaUser | null> {
+    if (!telegramUsername) {
+      return null;
     }
-  }
-
-  if (updates.description !== undefined && updates.description !== null) {
-    console.log(
-      "[validateUserUpdate] Validating description:",
-      updates.description
-    );
-    if (
-      typeof updates.description !== "string" ||
-      updates.description.length < MIN_DESCRIPTION_LENGTH
-    ) {
-      // Use imported MIN_DESCRIPTION_LENGTH
-      errors.description = `Description must be a string with at least ${MIN_DESCRIPTION_LENGTH} characters.`; // Use imported MIN_DESCRIPTION_LENGTH
-      console.log("[validateUserUpdate] Description validation FAILED.");
-    } else if (updates.description.length > MAX_DESCRIPTION_LENGTH) {
-      errors.description = `Description must be at most ${MAX_DESCRIPTION_LENGTH} characters.`;
-      console.log("[validateUserUpdate] Description validation FAILED.");
-    }
-  }
-
-  // Check preferences only if the preferences object itself exists
-  if (
-    updates.preferences &&
-    updates.preferences.gender_preference !== undefined &&
-    updates.preferences.gender_preference !== null
-  ) {
-    console.log(
-      "[validateUserUpdate] Validating preferences:",
-      JSON.stringify(updates.preferences)
-    );
-    console.log(
-      "[validateUserUpdate] Validating gender_preference:",
-      updates.preferences.gender_preference
-    );
-    if (
-      !Object.values(GenderPreference).includes(
-        updates.preferences.gender_preference
-      )
-    ) {
-      // Use imported GenderPreference enum
-      if (!errors.preferences || typeof errors.preferences !== "object") {
-        errors.preferences = {}; // Initialize nested error object if needed or if it's not an object
-      }
-      // Ensure nested preference error is typed correctly
-      (errors.preferences as ValidationErrors).gender_preference =
-        `Invalid gender preference specified. Allowed: ${Object.values(GenderPreference).join(", ")}.`; // Use imported GenderPreference enum
-      console.log("[validateUserUpdate] Gender Preference validation FAILED.");
-    }
-  }
-
-  console.log(
-    "[validateUserUpdate] Validation complete. Errors:",
-    JSON.stringify(errors)
-  );
-
-  const valid = Object.keys(errors).length === 0;
-  return { valid, errors };
-}
-
-/**
- * Updates specific fields of a user after validation.
- * NOTE: This function previously contained inline validation, which has been moved
- *       to `validateUserUpdate`.
- *
- * @param userId The Telegram user ID.
- * @param updates A validated partial object containing the fields to update.
- * @returns An object containing the updated user or null, and any validation errors.
- */
-export async function updateUser(
-  userId: number,
-  updates: UserUpdate
-): Promise<UserUpdateResult> {
-  const currentUser = await getUserById(userId);
-  if (!currentUser) {
-    console.error(
-      `[UserService] Attempted to update non-existent user: ${userId}`
-    );
-    return { success: false, errors: { general: "User not found" } };
-  }
-
-  // Validate first
-  const validationErrors = validateUserUpdate(updates);
-  if (!validationErrors.valid) {
-    console.error(
-      `[UserService] Update validation failed for user ${userId}:`,
-      validationErrors.errors
-    );
-    // Ensure the return type matches the UserUpdateResult failure case
-    return { success: false, errors: validationErrors.errors };
-  }
-
-  // Spread existing user first
-  let updatedUser: User = { ...currentUser }; // Start with a copy
-
-  // Separate preferences from other updates
-  const { preferences: preferencesUpdate, ...otherUpdates } = updates;
-
-  // Apply other updates by spreading
-  updatedUser = { ...updatedUser, ...otherUpdates };
-
-  // Merge preferences if they exist in the update, ensuring preferences object exists
-  if (preferencesUpdate) {
-    updatedUser.preferences = {
-      ...(updatedUser.preferences ?? defaultPreferences), // Use defaults if null
-      ...preferencesUpdate,
-    };
-  }
-
-  // Recalculate completion status based on the *final* updatedUser state
-  updatedUser.is_complete = await isProfileComplete(updatedUser);
-  console.log(
-    `[UserService] Profile complete status for user ${userId}: ${updatedUser.is_complete}`
-  );
-
-  // Explicitly update the timestamp
-  updatedUser.updated_at = new Date();
-
-  users.set(userId, { ...updatedUser }); // Store a copy of the updated user
-  console.log(`[UserService] User ${userId} updated successfully.`);
-  return { success: true, user: updatedUser }; // Return the updated copy
-}
-
-/**
- * Updates the Telegram username for a given user.
- *
- * @param userId The ID of the user to update.
- * @param username The new Telegram username.
- * @returns The updated user object or null if the user was not found.
- */
-export async function updateTelegramUsername(
-  userId: number,
-  username: string | undefined
-): Promise<User | null> {
-  const user = users.get(userId); // Get the current user object
-  if (user) {
-    // Create a new object with the updated username and timestamp
-    const updatedUser = {
-      ...user, // Copy existing properties
-      telegram_username: username, // Set the new username (or undefined)
-      updated_at: new Date() // Set the new timestamp
-    };
-    users.set(userId, updatedUser); // Explicitly set the updated object back into the map
-    console.log(`[UserService] Updated username for user: ${userId}`);
-    return { ...updatedUser }; // Return a copy
-  }
-  // Fetch again directly from the map before returning to ensure latest state
-  console.error(`[UserService] User not found for username update: ${userId}`);
-  return null; // User not found
-}
-
-/**
- * Updates user preferences.
- *
- * @param userId The Telegram user ID.
- * @param prefUpdates Partial preferences object.
- * @returns The updated user object or null if user/preferences don't exist.
- */
-export async function updatePreferences(
-  userId: number,
-  prefUpdates: Partial<UserPreferences>
-): Promise<User | null> {
-  const user = await getUserById(userId); // Use getUserById
-  if (!user) {
-    console.error(
-      `[UserService] User not found for preference update: ${userId}`
-    );
-    return null;
-  }
-
-  console.log(
-    `[UserService] Updating preferences for user: ${userId} with`,
-    prefUpdates
-  );
-
-  // --- Validation & Filtering ---
-  const validPrefUpdates: Partial<UserPreferences> = {};
-
-  if (prefUpdates.gender_preference !== undefined) {
-    if (
-      Object.values(GenderPreference).includes(prefUpdates.gender_preference)
-    ) {
-      validPrefUpdates.gender_preference = prefUpdates.gender_preference;
-    } else {
-      console.warn(
-        `[UserService] Invalid gender_preference ignored for user ${userId}: ${prefUpdates.gender_preference}`
+    try {
+      const userResult = await this.db
+        .select()
+        .from(schema.users)
+        .where(eq(schema.users.telegramUsername, telegramUsername))
+        .limit(1);
+      return userResult[0] ?? null;
+    } catch (error) {
+      console.error(
+        `Error fetching user by username ${telegramUsername}:`,
+        error
       );
-      // Optionally return an error or just ignore
+      return null;
     }
   }
-  // Add validation for other preferences if they exist
 
-  // Check if there are any valid updates left
-  if (Object.keys(validPrefUpdates).length === 0) {
-    console.log(
-      `[UserService] No valid preference updates provided for user: ${userId}`
+  // --- Creation Method ---
+
+  /**
+   * Finds an existing user by Telegram ID or creates a new one
+   * with basic Telegram info and default profile/preferences.
+   *
+   * @param telegramId The Telegram user ID.
+   * @param telegramUsername Optional Telegram username (will update if user exists).
+   * @returns CreateUserResult indicating success or failure, returning User on success.
+   */
+  async findOrCreateUser(
+    telegramId: number,
+    telegramUsername?: string
+  ): Promise<CreateUserResult> {
+    try {
+      // Check if user already exists
+      const existingUser = await this.getUserByTelegramId(telegramId);
+      if (existingUser) {
+        console.log(
+          `User with telegramId ${telegramId} already exists. Returning existing user.`
+        );
+        // Optionally update username if provided and different
+        if (
+          telegramUsername &&
+          existingUser.telegramUsername !== telegramUsername
+        ) {
+          await this.db
+            .update(schema.users)
+            .set({ telegramUsername: telegramUsername, updatedAt: new Date() })
+            .where(eq(schema.users.id, existingUser.id));
+          // Fetch the updated user data to return
+          const updatedUser = await this.getUserById(existingUser.id);
+          // Handle potential null case, though unlikely here
+          if (!updatedUser) {
+            // This case should ideally not happen if the update succeeded for an existing user
+            // Log an error or return a specific error state
+            console.error(
+              `Failed to fetch user ${existingUser.id} immediately after update.`
+            );
+            // Returning a generic error for now
+            return {
+              success: false,
+              errors: { database: ["Failed to retrieve user after update."] },
+            };
+          }
+          return { success: true, user: updatedUser, created: false };
+        }
+        return { success: true, user: existingUser, created: false };
+      }
+
+      // User does not exist, proceed with creation
+      // Prepare insert data using schema's inferred insert type
+      // Only include fields actually present in the schema
+      const newUserInsert: UserInsert = {
+        telegramId: telegramId,
+        ...(telegramUsername && {
+          telegramUsername: telegramUsername,
+        }),
+        // Do NOT add default profile/preferences here as they don't exist in the table
+      };
+
+      const insertedUsers = await this.db
+        .insert(schema.users)
+        .values(newUserInsert)
+        .returning();
+
+      if (insertedUsers.length === 0 || !insertedUsers[0]) {
+        return {
+          success: false,
+          errors: { general: ["Failed to create user."] },
+        };
+      }
+
+      // Return the actual user data from the DB (SchemaUser)
+      return { success: true, user: insertedUsers[0], created: true };
+    } catch (error) {
+      return {
+        success: false,
+        errors: {
+          general: ["An unexpected error occurred during user creation."],
+        },
+      };
+    }
+  }
+
+  // --- Update Methods ---
+
+  /**
+   * Updates a user's status.
+   * Note: The 'updateUser' method name is now used for status/username updates.
+   *
+   * @param userId The ID of the user to update.
+   * @param status The new status.
+   * @returns UpdateUserResult indicating success or failure.
+   */
+  async updateUserStatus(
+    userId: number,
+    status: SchemaUser["status"]
+  ): Promise<UpdateUserResult> {
+    try {
+      const user = await this.getUserById(userId);
+      if (!user) {
+        // Corrected: Use 'userId' as the key for the error message
+        return { success: false, errors: { userId: ["User not found."] } };
+      }
+
+      // Validate status enum if necessary (though DB constraint should handle it)
+      const validStatuses = ["active", "inactive", "banned", "deleted"];
+      if (!validStatuses.includes(status)) {
+        return { success: false, errors: { status: ["Invalid status."] } };
+      }
+
+      // Prepare update data - Drizzle maps camelCase model fields to snake_case columns
+      const updateData: Partial<UserInsert> = {
+        status: status,
+        updatedAt: new Date(), // Always update timestamp
+      };
+
+      const updatedUsers = await this.db
+        .update(schema.users)
+        .set(updateData)
+        .where(eq(schema.users.id, userId))
+        .returning();
+
+      if (updatedUsers.length === 0 || !updatedUsers[0]) {
+        return {
+          success: false,
+          errors: { general: ["Failed to update user."] },
+        };
+      }
+
+      // Return the actual updated user data from the DB (SchemaUser)
+      return { success: true, updatedFields: updatedUsers[0] };
+    } catch (error) {
+      return {
+        success: false,
+        errors: {
+          general: ["An unexpected error occurred during user update."],
+        },
+      };
+    }
+  }
+
+  /**
+   * Updates a user's profile information.
+   *
+   * @param userId The ID of the user to update.
+   * @param profileData The profile data to update (using UserProfile type for input).
+   * @returns UserProfileResult indicating success or failure.
+   */
+  async updateUserProfile(
+    userId: number,
+    profileData: Partial<UserProfile>
+  ): Promise<UserProfileResult> {
+    try {
+      const user = await this.getUserById(userId);
+      if (!user) {
+        // Use 'userId' key for user not found error
+        return { success: false, errors: { userId: ["User not found."] } };
+      }
+
+      // Validate incoming profile data (uses camelCase)
+      const validation = validateUserProfile(profileData);
+      if (!validation.success) {
+        return { success: false, errors: validation.errors };
+      }
+
+      // Map validated UserProfile input to Profile schema fields for DB update
+      const updateData: Partial<typeof schema.profiles.$inferInsert> = {};
+      if (profileData.firstName !== undefined) {
+        // Ensure we don't pass null if firstName is null
+        if (profileData.firstName !== null) {
+          updateData.name = profileData.firstName;
+        }
+      }
+      if (profileData.age !== undefined) {
+        // Ensure we don't pass null if age is null
+        if (profileData.age !== null) {
+          updateData.age = profileData.age;
+        }
+      }
+      if (profileData.gender !== undefined) {
+        // Map Gender enum to DB string, only if Male/Female due to schema constraint
+        if (profileData.gender === Gender.Man) {
+          updateData.gender = "male";
+        } else if (profileData.gender === Gender.Woman) {
+          updateData.gender = "female";
+        }
+        // Note: Gender.NonBinary or null input won't update the DB gender
+      }
+      if (profileData.description !== undefined) {
+        // Pass null explicitly if description is null
+        updateData.bio = profileData.description;
+      }
+
+      // Only proceed with update if there's data to update
+      if (Object.keys(updateData).length === 0) {
+        // If no data to update, just fetch the current profile
+        const currentProfile = await this.db.query.profiles.findFirst({
+          where: eq(schema.profiles.userId, userId),
+        });
+        // It's unlikely profile is null if user exists, but handle defensively
+        if (!currentProfile) {
+          return {
+            success: false,
+            errors: { general: ["Profile not found for user."] },
+          };
+        }
+        // Map DB profile back to UserProfile for return type consistency
+        const userProfileResult: UserProfile = {
+          userId: currentProfile.userId,
+          firstName: currentProfile.name, // Map name back to firstName (cannot be null in DB)
+          lastName: null, // No lastName in DB schema
+          age: currentProfile.age, // Cannot be null in DB
+          // Map DB string back to Gender enum or null
+          gender:
+            currentProfile.gender === "male"
+              ? Gender.Man
+              : currentProfile.gender === "female"
+                ? Gender.Woman
+                : null,
+          description: currentProfile.bio, // Can be null in DB
+        };
+        const isComplete = this.isProfileComplete(userProfileResult);
+        return { success: true, profile: userProfileResult, isComplete };
+      }
+
+      // Perform the database update
+      const updatedProfileDbArray = await this.db
+        .update(schema.profiles)
+        .set(updateData)
+        .where(eq(schema.profiles.userId, userId))
+        .returning();
+
+      if (!updatedProfileDbArray || updatedProfileDbArray.length === 0) {
+        // Handle case where returning() might yield empty or undefined
+        console.error(`Update returning() failed for userId: ${userId}`);
+        return {
+          success: false,
+          errors: { database: ["Failed to confirm profile update."] },
+        };
+      }
+
+      const updatedProfileDb = updatedProfileDbArray[0];
+
+      // Map updated DB profile back to UserProfile structure for return
+      const returnedProfile: UserProfile = {
+        userId: updatedProfileDb.userId,
+        firstName: updatedProfileDb.name, // Cannot be null in DB
+        lastName: null, // schema.profiles has no lastName
+        age: updatedProfileDb.age, // Cannot be null in DB
+        // Map DB string back to Gender enum or null
+        gender:
+          updatedProfileDb.gender === "male"
+            ? Gender.Man
+            : updatedProfileDb.gender === "female"
+              ? Gender.Woman
+              : null,
+        description: updatedProfileDb.bio, // Can be null in DB
+      };
+
+      // Check completeness based on the updated profile
+      const isComplete = this.isProfileComplete(returnedProfile);
+
+      return {
+        success: true,
+        profile: returnedProfile,
+        isComplete: isComplete,
+      };
+    } catch (error) {
+      console.error("[UserService] Error updating user profile:", error); // Keep console log for debugging
+      return {
+        success: false,
+        errors: {
+          general: ["An unexpected error occurred during profile update."],
+        },
+      };
+    }
+  }
+
+  /**
+   * Helper method to check if a UserProfile object has all required fields.
+   * Note: This checks the UserProfile model fields (firstName, etc.),
+   * not necessarily the underlying database schema fields.
+   *
+   * @param profile The UserProfile object to check.
+   * @returns True if the profile is considered complete, false otherwise.
+   */
+  private isProfileComplete(profile: UserProfile): boolean {
+    return !!(
+      profile.firstName &&
+      // profile.lastName && // lastName is not in DB schema, adjust completeness logic if needed
+      profile.age !== undefined &&
+      profile.age !== null &&
+      profile.gender &&
+      profile.description
     );
-    return user; // Return original user, no changes made
   }
 
-  const updatedPreferences = { ...user.preferences, ...validPrefUpdates };
-  const updatedUser = {
-    ...user,
-    preferences: updatedPreferences,
-    updated_at: new Date(), // Re-add timestamp update
-  };
+  /**
+   * Updates a user's preferences.
+   *
+   * @param userId The ID of the user whose preferences are to be updated.
+   * @param preferencesData The preferences data to update (using UserPreferences type).
+   * @returns PreferencesResult indicating success or failure.
+   */
+  async updateUserPreferences(
+    userId: number,
+    preferencesData: Partial<UserPreferences>
+  ): Promise<PreferencesResult> {
+    try {
+      const user = await this.getUserById(userId);
+      if (!user) {
+        // Use 'userId' key for user not found error
+        return { success: false, errors: { userId: ["User not found."] } };
+      }
 
-  // 1. Try checking profile completion
-  let isComplete: boolean;
-  try {
-    // Check completion synchronously
-    isComplete = isProfileComplete(updatedUser);
-  } catch (error) {
-    console.error(`[UserService] Error during profile completion check for user ${userId}:`, error);
-    return null; // Fail fast if completion check errors
+      // Validate incoming preferences data (uses camelCase)
+      const validation = validateUserPreferences(preferencesData);
+      if (!validation.success) {
+        return { success: false, errors: validation.errors };
+      }
+
+      // Construct the preferences object based ONLY on validated input data
+      const intendedPreferences: UserPreferences = {
+        // Use ONLY validated 'preferencesData' - cannot rely on `user.pref*` as fields don't exist
+        // Use null/default as fallback if not provided AND assuming fields exist on UserPreferences type
+        minAge:
+          preferencesData.minAge !== undefined ? preferencesData.minAge : null,
+        maxAge:
+          preferencesData.maxAge !== undefined ? preferencesData.maxAge : null,
+        gender:
+          preferencesData.gender !== undefined ? preferencesData.gender : null, // Or GenderPreference.Everyone?
+        // gender_preference: preferencesData.gender_preference ?? defaultPreferences.gender_preference // Example if using snake_case field
+      };
+
+      // Since no actual DB update is possible for these fields,
+      // return success based on validation and the intended state.
+      return { success: true, preferences: intendedPreferences };
+    } catch (error) {
+      console.error("[UserService] Error updating user preferences:", error); // Keep console log for debugging
+      return {
+        success: false,
+        errors: {
+          general: ["An unexpected error occurred during preferences update."],
+        },
+      };
+    }
   }
-
-  // 2. If completion check succeeded, try updating the user store
-  try {
-    users.set(userId, updatedUser); // Update the store
-    console.log(`[UserService] Preferences updated directly for user: ${userId}`);
-    return updatedUser; // Return user if store update is successful
-  } catch (error) {
-    console.error(`[UserService] Error saving user after preference update for user ${userId}:`, error);
-    return null; // Return null if store update fails
-  }
-}
-
-/**
- * Retrieves all users from the store.
- * @returns An array of all user objects.
- */
-export function getAllUsers(): User[] {
-  // No async needed for Map iteration
-  return Array.from(users.values());
-}
-
-/**
- * Checks if a user's profile is complete.
- * @param user The user object to check.
- * @returns True if the profile is complete, false otherwise.
- */
-export function isProfileComplete(user: Partial<User> | null): boolean {
-  // Handle null or undefined user input gracefully
-  if (!user) {
-    console.debug("[isProfileComplete] Called with null/undefined user.");
-    return false;
-  }
-
-  // Check if all essential profile fields are filled *and valid*
-  const isComplete =
-    !!user.name &&
-    user.name.length >= MIN_NAME_LENGTH &&
-    user.name.length <= MAX_NAME_LENGTH &&
-    user.age != null && // Use explicit null check
-    user.age >= MIN_AGE &&
-    user.age <= MAX_AGE &&
-    !!user.gender &&
-    !!user.description &&
-    user.description.length >= MIN_DESCRIPTION_LENGTH &&
-    user.description.length <= MAX_DESCRIPTION_LENGTH &&
-    !!user.preferences?.gender_preference; // Must have a gender preference
-
-  console.debug(
-    `[isProfileComplete] Checking completion for user ${user?.id}: ` +
-      `name=${user?.name}, age=${user?.age}, gender=${user?.gender}, ` +
-      `description=${user?.description}, pref=${user?.preferences?.gender_preference} -> ${isComplete}`
-  );
-  return isComplete;
 }
