@@ -1,12 +1,12 @@
+import { Database } from "bun:sqlite";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { createClient, type Client } from "@libsql/client";
-import { Database } from "bun:sqlite";
-import { drizzle } from "drizzle-orm/libsql";
+import { type Client, createClient } from "@libsql/client";
 import {
   type BunSQLiteDatabase,
   drizzle as drizzleBun,
 } from "drizzle-orm/bun-sqlite";
+import { drizzle } from "drizzle-orm/libsql";
 import * as schema from "./schema";
 
 // Determine the path to the database file relative to this script
