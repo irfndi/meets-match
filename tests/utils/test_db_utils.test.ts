@@ -1,4 +1,4 @@
-import { Database } from "bun:sqlite";
+import BetterSqlite3 from "better-sqlite3";
 import {
   afterAll,
   beforeAll,
@@ -6,13 +6,13 @@ import {
   describe,
   expect,
   it,
-} from "bun:test";
+} from "vitest";
 import * as schema from "@/db/schema";
 import { Gender, GenderPreference } from "@/models/user"; // Import necessary enums from models
 import { eq } from "drizzle-orm"; // Import eq separately
-import { drizzle } from "drizzle-orm/bun-sqlite";
-import { migrate } from "drizzle-orm/bun-sqlite/migrator";
-import type { DrizzleDatabase } from "./test_db_utils"; // Import the type alias
+import { drizzle as drizzleBetterSqlite3, type BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
+import { migrate as migrateBetterSqlite3 } from "drizzle-orm/better-sqlite3/migrator";
+import type { DrizzleDatabase } from "./test_db_utils"; // This type in test_db_utils.ts will also need update
 import {
   clearInteractions,
   clearProfiles,
@@ -24,15 +24,15 @@ import {
 } from "./test_db_utils";
 
 // --- Test Suite Setup ---
-let sqlite: Database;
-let db: DrizzleDatabase;
+let sqlite: BetterSqlite3;
+let db: BetterSQLite3Database<typeof schema>;
 
 // Use an in-memory database for testing utils
 beforeAll(async () => {
-  sqlite = new Database(":memory:");
-  db = drizzle(sqlite, { schema });
+  sqlite = new BetterSqlite3(":memory:");
+  db = drizzleBetterSqlite3(sqlite, { schema });
   // Apply migrations to set up the schema in the in-memory database
-  await migrate(db, { migrationsFolder: "migrations" });
+  await migrateBetterSqlite3(db, { migrationsFolder: "migrations" });
   console.log("[Test DB Utils Test] In-memory DB initialized.");
 });
 

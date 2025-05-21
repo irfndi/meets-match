@@ -8,13 +8,13 @@ import type {
   User,
 } from "@/db/schema";
 import { type SQL, eq } from "drizzle-orm";
-import type { BunSQLiteDatabase } from "drizzle-orm/bun-sqlite";
+import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 
 /**
  * Clears all entries from the users table.
  */
 export async function clearUsers(
-  db: BunSQLiteDatabase<typeof schema>
+  db: BetterSQLite3Database<typeof schema>
 ): Promise<void> {
   console.log("[Test DB Util] Clearing users table...");
   await db.delete(schema.users);
@@ -24,7 +24,7 @@ export async function clearUsers(
  * Clears all entries from the profiles table.
  */
 export async function clearProfiles(
-  db: BunSQLiteDatabase<typeof schema>
+  db: BetterSQLite3Database<typeof schema>
 ): Promise<void> {
   console.log("[Test DB Util] Clearing profiles table...");
   await db.delete(schema.profiles);
@@ -34,7 +34,7 @@ export async function clearProfiles(
  * Clears all entries from the interactions table.
  */
 export async function clearInteractions(
-  db: BunSQLiteDatabase<typeof schema>
+  db: BetterSQLite3Database<typeof schema>
 ): Promise<void> {
   console.log("[Test DB Util] Clearing interactions table...");
   await db.delete(schema.interactions);
@@ -47,7 +47,7 @@ export async function clearInteractions(
  * @returns The inserted user.
  */
 export async function seedUser(
-  db: BunSQLiteDatabase<typeof schema>,
+  db: BetterSQLite3Database<typeof schema>,
   userData: NewUser
 ): Promise<schema.User> {
   console.log(
@@ -67,7 +67,7 @@ export async function seedUser(
  * @returns The inserted profile.
  */
 export async function seedProfile(
-  db: BunSQLiteDatabase<typeof schema>,
+  db: BetterSQLite3Database<typeof schema>,
   profileData: NewProfile
 ): Promise<schema.Profile> {
   console.log(
@@ -90,7 +90,7 @@ export async function seedProfile(
  * @returns The inserted interaction.
  */
 export async function seedInteraction(
-  db: BunSQLiteDatabase<typeof schema>,
+  db: BetterSQLite3Database<typeof schema>,
   interactionData: NewInteraction
 ): Promise<schema.Interaction> {
   console.log(
@@ -113,7 +113,7 @@ export async function seedInteraction(
  * Assumes users and profiles arrays are ordered correctly or IDs are pre-set.
  */
 export async function seedTestData(
-  db: BunSQLiteDatabase<typeof schema>,
+  db: BetterSQLite3Database<typeof schema>,
   count: number
 ) {
   const seededUsers: schema.User[] = [];
@@ -176,4 +176,4 @@ export async function seedTestData(
   // return { users: seededUsers, profiles: seededProfiles, interactions: seededInteractions };
 }
 
-export type DrizzleDatabase = BunSQLiteDatabase<typeof schema>;
+export type DrizzleDatabase = BetterSQLite3Database<typeof schema>;

@@ -11,7 +11,7 @@ export default defineConfig({
     },
   },
   test: {
-    globalSetup: "./tests/setup/globalTestSetup.ts", // Add global setup
+    // globalSetup: "./tests/setup/globalTestSetup.ts", // Add global setup
     globals: false, // Revert to false: Use explicit imports
     environment: "node", // Or 'miniflare' if testing Cloudflare specifics
     coverage: {
@@ -28,6 +28,12 @@ export default defineConfig({
         "**/__mocks__/**/*", // Exclude mocks
       ],
       all: true, // Ensure all included files are measured, even if untested
+      thresholds: {
+        lines: 95,
+        functions: 95,
+        branches: 95,
+        statements: 95,
+      },
     },
   },
 });

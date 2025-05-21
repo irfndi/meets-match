@@ -1,7 +1,7 @@
 // Re-add imports now that globals are disabled
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { Database } from "bun:sqlite"; // Use bun's SQLite driver
+import BetterSqlite3 from "better-sqlite3";
 import * as schema from "@/db/schema"; // Import schema
 import type { Profile } from "@/db/schema"; // Import Profile type from schema
 import { profiles, users } from "@/db/schema";
@@ -17,10 +17,9 @@ import {
   type UserProfile,
 } from "@/models/user"; // Import Gender, GenderPreference and User
 import { DrizzleError, eq } from "drizzle-orm";
-// Import types and functions for bun:sqlite
-import type { BunSQLiteDatabase } from "drizzle-orm/bun-sqlite"; // Use 'import type'
-import { drizzle } from "drizzle-orm/bun-sqlite"; // Use drizzle's bun adapter
-import { migrate } from "drizzle-orm/bun-sqlite/migrator"; // Use bun migrator
+import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
+import { drizzle as drizzleBetterSqlite3 } from "drizzle-orm/better-sqlite3";
+import { migrate as migrateBetterSqlite3 } from "drizzle-orm/better-sqlite3/migrator";
 // Import functions directly from user_service using actual exported names
 import { UserService } from "../../src/services/user_service";
 import {
@@ -41,29 +40,17 @@ const UserStatus = {
 type UserStatus = (typeof UserStatus)[keyof typeof UserStatus];
 
 describe("User Service Functions (Integration)", () => {
-  // Type testDb correctly for bun:sqlite
-  let testDb: BunSQLiteDatabase<typeof schema>;
-  let sqlite: Database;
+  let testDb: BetterSQLite3Database<typeof schema>;
+  let sqlite: BetterSqlite3;
   let userService: UserService;
 
   beforeEach(async () => {
-    // Remove failing mock
-    // await vi.doMock('@/utils/logger', () => ({
-    // 	logger: {
-    // 		info: vi.fn(),
-    // 		warn: vi.fn(),
-    // 		error: vi.fn(),
-    // 		debug: vi.fn(),
-    // 	},
-    // }));
-
-    // Use bun's in-memory SQLite
-    sqlite = new Database(":memory:");
-    testDb = drizzle(sqlite, { schema });
+    // Use better-sqlite3 in-memory
+    sqlite = new BetterSqlite3(":memory:");
+    testDb = drizzleBetterSqlite3(sqlite, { schema });
 
     // Apply migrations to the in-memory database
-    // Ensure the migrations folder path matches drizzle.config.ts
-    await migrate(testDb, { migrationsFolder: "./migrations" });
+    await migrateBetterSqlite3(testDb, { migrationsFolder: "./migrations" });
 
     await clearUsers(testDb);
     await clearProfiles(testDb);
