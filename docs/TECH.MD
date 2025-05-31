@@ -1,6 +1,24 @@
 # Technical Documentation for MeetsMatch Telegram Bot (Rust Edition)
 
-This document outlines the core technologies, libraries, and tools used in the development of this Telegram bot, now built with Rust and deployed on Cloudflare Workers.
+This document outlines the core technologies, architecture, libraries, and tools used in the development of this Telegram bot, built with Rust and deployed on Cloudflare Workers.
+
+## Architecture Overview
+The bot operates as a single Cloudflare Worker written in Rust and compiled to WebAssembly (Wasm).
+- **Request Handling:** Incoming Telegram webhook requests are processed by the main `fetch` handler in `src/lib.rs`. This handler now also distinguishes between text, location, and media (photo/video/document) messages for initial routing.
+- **Command Dispatching:** A dispatcher pattern (`dispatch_command` function) routes recognized text commands (e.g., `/profile`, `/help`, `/profile edit`, `/profile add_media`, `/profile delete_media`) to specific handler functions. The `/start` command has dedicated pre-dispatcher handling.
+- **Session Management (for multi-step interactions):** Cloudflare KV (via `SESSIONS_KV` binding) stores temporary session state for profile editing and media management flows. This uses `ProfileEditingSession` with `CurrentEditingStep` (now including `AwaitingMediaFile`, `AwaitingMediaDeletionChoice`) and `EditingField` enums. Sessions have a TTL (e.g., 15 minutes).
+- **Service Layer:**
+    - `UserService`: Manages user data in D1, including profile fields (name, age, gender, bio, location, `media_keys` list), state, roles, and interaction timestamps. Provides CRUD operations for users and specific field/media key updates.
+    - `ConfigService`: Handles feature flags (from KV) and environment variables.
+    - `RBACService`: Manages command authorization based on user roles.
+    - `MediaService`: Interfaces with Cloudflare R2 (via `MEDIA_BUCKET` binding) for media file storage (upload, delete) and key generation.
+    - Other placeholder services.
+- **Data Persistence & Storage:**
+    - Cloudflare D1: For the `users` table (including new profile fields and `media_keys` as JSON text).
+    - Cloudflare KV: For feature flags and `ProfileEditingSession` data.
+    - Cloudflare R2: For storing actual media files (photos, videos) uploaded by users, referenced by keys in `User.media_keys`.
+- **External API Interaction:**
+    - Telegram Bot API: Used for receiving messages (text, location, photo, video, document) and sending responses. The `getFile` method and file download URLs are used to retrieve user-uploaded media. Requires `TELEGRAM_TOKEN` secret.
 
 ## Core Technologies
 
@@ -13,18 +31,18 @@ This document outlines the core technologies, libraries, and tools used in the d
 
 ## Key Libraries and Tools (Rust Ecosystem)
 
-*   **`workers-rs` (Cloudflare Workers Rust SDK):** Essential crate for writing Cloudflare Workers in Rust. Provides types, macros (`#[event(fetch)]`), and bindings to interact with the Workers runtime environment (e.g., `Request`, `Response`, `Env`).
-*   **`wasm-pack`:** Tool for building Rust-generated WebAssembly and JavaScript bindings, packaging it for use in environments like Cloudflare Workers.
-*   **`cargo`:** The Rust package manager and build tool, used for managing dependencies, building the project, running tests, etc.
-*   **`serde` (`serde_json`):** Framework for serializing and deserializing Rust data structures efficiently, commonly used for JSON.
-*   **`console_error_panic_hook`:** Utility to forward Rust panics to the browser console or Cloudflare Worker logs, improving debuggability of Wasm modules.
-*   **`chrono`:** Crate for date and time manipulation.
-*   **`url`:** Crate for URL parsing and manipulation.
-*   **`http`:** Crate providing HTTP types (Request, Response, Headers, etc.).
-*   **`cargo-llvm-cov`:** Tool for collecting code coverage information for Rust projects.
-*   **`rustfmt`:** Code formatter for Rust, ensuring consistent style.
-*   **`clippy`:** Rust linter to catch common mistakes and improve code quality.
-*   **`reqwest` (Optional):** A popular HTTP client for making outbound requests from the worker, if needed.
+*   **`workers-rs` (Cloudflare Workers Rust SDK):** Essential crate for writing Cloudflare Workers in Rust. Provides types, macros (e.g., `#[event(fetch)]`), and bindings to interact with the Workers runtime.
+*   **`wasm-pack`:** Tool for building Rust-generated WebAssembly and JavaScript bindings.
+*   **`cargo`:** Rust's package manager and build system.
+*   **`serde` & `serde_json`:** For efficient serialization and deserialization of Rust data structures, particularly for JSON interactions with Telegram API and D1 (for JSON-formatted fields like `roles`).
+*   **`console_error_panic_hook`:** Forwards Rust panics to browser/worker console for better debugging.
+*   **`chrono`:** Date and time manipulation, used for `created_at`, `updated_at`, `last_interaction_at`.
+*   **Core Internal Components:**
+    - `UserService`: Manages user lifecycle, profile data (including `media_keys`), state, and persistence.
+    *   `ConfigService`: Manages dynamic configuration and feature flags.
+    *   `RBACService`: Handles role-based command authorization.
+    - `MediaService`: Manages R2 bucket interactions for media.
+    - Command Dispatcher & specific command handlers (in `src/lib.rs`).
 
 ## Development Environment
 
@@ -46,21 +64,34 @@ This document outlines the core technologies, libraries, and tools used in the d
 
 ## Testing Framework
 
-*   **Rust's Built-in Test Framework:** Used for writing unit and integration tests (`#[test]` attribute). `cargo test` is the command to run these.
-*   **`cargo-llvm-cov`:** Used in CI (and locally) to generate code coverage reports from test runs.
+*   **Rust's Built-in Test Framework (`#[test]`):** Used for unit tests within modules.
+*   **`cargo test`:** Command to run these tests.
+*   **`cargo-llvm-cov`:** Used in CI (and locally) for code coverage reports.
+*   **Integration Testing (Future):** Requires a test harness like `mf-test` for full environment simulation with D1/KV.
 
 ## Code Quality Tools
 
-*   **`rustfmt`:** Enforces consistent code style. Run via `cargo fmt`.
-*   **`clippy`:** Provides extensive linting to catch errors and improve code. Run via `cargo clippy`.
-    Both are typically executed via `make check` or `make ci`.
+*   **`rustfmt`:** Enforces consistent code style (`make check` or `cargo fmt`).
+*   **`clippy`:** Rust linter for catching common errors and improving code (`make check` or `cargo clippy -- -D warnings`).
+    Both are part of the local `make ci` checks and the GitHub Actions CI pipeline.
 
 ## Monitoring and Analytics
 
-*   **Cloudflare Workers Analytics:** Provides metrics for requests, CPU time, errors, etc., accessible via the Cloudflare dashboard.
-*   **Cloudflare Logs:** Access to worker logs (from `console_log!`, `console_error!`, etc.) via the Cloudflare dashboard or `wrangler tail`.
-*   **`console_log!`, `console_warn!`, `console_error!` (from `workers-rs`):** Used within the Rust code for logging.
-*   **Codecov:** Tracks code coverage trends, which is an indirect measure of code quality and testing thoroughness.
+*   **Cloudflare Workers Analytics:** Built-in metrics (requests, CPU, errors) via Cloudflare dashboard.
+*   **Cloudflare Logs:** Access to worker logs (`console_log!`, etc.) via `wrangler tail` or Cloudflare dashboard.
+*   **Codecov:** Tracks code coverage trends.
+
+## Security
+- **Role-Based Access Control (RBAC):**
+    - Implemented via `RBACService` in `src/rbac_service/mod.rs`.
+    - User roles (e.g., `User`, `Admin`) are defined in the `Role` enum and stored as part of the `User` data in D1 (as a JSON string array).
+    - `RBACService::check_permission` is called by the command dispatcher.
+    - New users default to the `User` role.
+- **Secrets Management:** API keys (e.g., `TELEGRAM_TOKEN`) are managed via `wrangler secret put` and accessed as environment secrets.
+- **Input Validation:**
+    - Synchronous validation functions (e.g., `validate_name`, `validate_age`) are defined in `src/lib.rs` (or a dedicated `validation.rs`).
+    - These functions use a `ValidationError` enum to return specific error types.
+    - They are employed during profile editing (in `handle_text_message`) to validate user-provided values before updating the database.
 
 ## Deployment
 
@@ -70,22 +101,35 @@ This document outlines the core technologies, libraries, and tools used in the d
 
 ## Key Concepts (Rust on Cloudflare Workers)
 
-*   **Compilation to Wasm:** Rust code is compiled to WebAssembly, allowing it to run in the Cloudflare Workers environment.
-*   **`workers-rs` SDK:** Provides the necessary abstractions to interact with the Worker runtime (handling requests, accessing bindings, etc.).
-*   **Event Handlers (`#[event(fetch)]`):** The primary way to define the worker's entry point for handling HTTP requests.
-*   **Bindings:** Securely configured access to Cloudflare resources like D1 databases, KV namespaces, R2 buckets, and secrets. These are defined in `wrangler.toml` and accessed via the `Env` object in Rust.
-*   **`Cargo.toml` & Crates:** Dependencies (crates) are managed in `Cargo.toml`. The Rust ecosystem provides a rich set of libraries.
-*   **Error Handling:** Rust's `Result<T, E>` enum is heavily used for robust error handling.
-*   **Ownership and Borrowing:** Core Rust concepts ensuring memory safety without a garbage collector.
+*   **Compilation to Wasm & `workers-rs` SDK:** As previously described.
+*   **Command Dispatcher:** The `dispatch_command` function in `src/lib.rs` acts as a central router for incoming text commands (excluding `/start`, which has pre-dispatcher handling). It parses commands, fetches user data, checks permissions via `RBACService`, and then calls the appropriate command-specific handler function.
+*   **Event-Driven (`#[event(fetch)]`):** The main entry point for HTTP requests.
+*   **Bindings & `Env`:** Access to D1, KV, R2, Vars, Secrets via `wrangler.toml` configuration and the `Env` object.
+*   **State Management:** User state (`UserState::New`, `Onboarding`, `Active`, `Blocked`) is managed in the `User` struct and persisted in D1, guiding user flow and command availability.
+*   **Error Handling (`Result<T, E>`):** Standard Rust error handling.
+*   **Ownership & Borrowing:** Core Rust principles.
 
-## Data Persistence & Storage
+## Data Management / State
 
-*   **Cloudflare D1:** Primary storage for structured, relational data (e.g., user information, application state).
+*   **Cloudflare D1:** Primary storage for:
+    *   `User` data: Includes `id` (UUID), `telegram_id`, `telegram_username`, `name`, `age`, `gender`, `bio`, `location_text`, `latitude`, `longitude`, `media_keys` (JSON string array of R2 object keys), `state` (enum as string), `roles` (JSON string array of role strings), and timestamps (`created_at`, `updated_at`, `last_interaction_at`).
 *   **Cloudflare KV:** Used for:
-    *   **Feature Flags:** Dynamically enabling/disabling features.
-    *   **Caching:** Storing frequently accessed data to reduce D1 load.
-    *   **Session Management:** Storing temporary user session data.
-*   **Cloudflare R2 (Potentially):** For storing larger binary objects like user-uploaded files, if required by the application.
+    *   **Feature Flags:** Loaded by `ConfigService`.
+    *   **Session Management:** Temporary session data for multi-step interactions like profile editing and media management (add/delete flows) is stored in the `SESSIONS_KV` namespace. The `ProfileEditingSession` struct (with `CurrentEditingStep` states like `AwaitingMediaFile`, `AwaitingMediaDeletionChoice`) defines the session state. Sessions have a TTL.
+    *   The `last_interaction_at` field in the D1 `User` table, combined with `session_timeout_minutes` from `EnvironmentConfig`, provides a basis for longer-term session/activity tracking (placeholder logic currently).
+*   **Cloudflare R2:** Primary storage for user-uploaded media files (photos, videos), using the `MEDIA_BUCKET` binding. Files are referenced by keys stored in the user's `media_keys` list in D1.
+
+## External API Interactions
+- **Telegram Bot API:**
+    - Receiving messages: Text, Location, Photo (array of sizes), Video, Document.
+    - Sending messages: Using `sendMessage` method with JSON payloads, including MarkdownV2 formatting.
+    - File Download: For media uploads, the bot uses the `getFile` method (requires `TELEGRAM_TOKEN`) to get a `file_path`, then constructs a download URL (`https://api.telegram.org/file/bot<TOKEN>/<file_path>`) to fetch the file bytes.
+
+## Error Handling & Resilience (Conceptual)
+- **Service Errors:** Methods in `UserService`, `MediaService`, etc., return `Result<T, E>` to propagate errors.
+- **Telegram API Errors:** Failures in `download_telegram_file` or sending messages are logged.
+- **R2/D1 Errors:** Errors from Cloudflare services are propagated and logged. For media uploads, if an R2 upload succeeds but a subsequent D1 update (adding `media_key`) fails, an attempt is made to delete the orphaned R2 object to maintain consistency.
+- **Session Management:** Corrupt session data in KV is detected (on deserialization error) and automatically deleted to allow users to restart flows.
 
 ## Architectural Diagrams
 

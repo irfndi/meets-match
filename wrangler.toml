@@ -34,9 +34,14 @@ binding = "SESSIONS_KV"
 id = "prod-session-kv-namespace-id" # PRODUCTION Session KV ID
 
 # Default (Production) R2 Buckets
+# IMPORTANT: User must create these R2 buckets in their Cloudflare dashboard and update bucket_name.
 [[r2_buckets]]
-binding = "R2"
-bucket_name = "prod-tele-meetsmatch" # PRODUCTION R2 Bucket
+binding = "R2" # Existing generic R2 binding (if any)
+bucket_name = "prod-meetsmatch-generic-r2" # EXAMPLE: Replace with your actual generic prod R2 bucket name
+
+[[r2_buckets]]
+binding = "MEDIA_BUCKET" # Dedicated binding for user media
+bucket_name = "prod-meetsmatch-user-media" # EXAMPLE: Replace with your actual user media prod R2 bucket name
 
 
 # -------------------- Development Environment (`dev`) --------------------
@@ -73,6 +78,18 @@ preview_id = "dev-sessions-kv-preview-id" # For 'wrangler dev' local preview KV
 # id = "dev-generic-kv-id" # IMPORTANT: Replace with actual DEV Generic KV ID
 # preview_id = "dev-generic-kv-preview-id"
 
+# Dev R2 Buckets
+# IMPORTANT: User must create these R2 buckets and update bucket_name & preview_bucket_name.
+[[env.dev.r2_buckets]]
+binding = "R2" # If generic R2 is used in dev
+bucket_name = "dev-meetsmatch-generic-r2" # EXAMPLE: Replace
+preview_bucket_name = "dev-meetsmatch-generic-r2-preview" # EXAMPLE: Replace. For local simulation.
+
+[[env.dev.r2_buckets]]
+binding = "MEDIA_BUCKET" # Dedicated media bucket for dev
+bucket_name = "dev-meetsmatch-user-media"     # EXAMPLE: Replace
+preview_bucket_name = "dev-meetsmatch-user-media-preview" # EXAMPLE: Replace. For local simulation.
+
 
 # -------------------- Staging Environment (`staging`) --------------------
 # This section provides an example for a staging environment.
@@ -97,6 +114,13 @@ id = "staging-feature-flags-kv-id" # IMPORTANT: Replace with actual STAGING Feat
 [[env.staging.kv_namespaces]]
 binding = "SESSIONS_KV"
 id = "staging-sessions-kv-id" # IMPORTANT: Replace with actual STAGING Sessions KV ID
+
+# Staging R2 Buckets
+# IMPORTANT: User must create these R2 buckets and update bucket_name.
+[[env.staging.r2_buckets]]
+binding = "MEDIA_BUCKET"
+bucket_name = "staging-meetsmatch-user-media" # EXAMPLE: Replace with your actual staging user media R2 bucket name
+# preview_bucket_name is less common for staging but can be added if needed for local testing against staging config.
 
 
 # -------------------- Production Environment (`production`) Explicit Definition --------------------
@@ -124,6 +148,12 @@ LOG_LEVEL = "INFO"
 # [[env.production.kv_namespaces]]
 # binding = "FEATURE_FLAGS_KV"
 # id = "prod-feature-flags-kv-id" # Ensure this matches your actual production KV
+
+# Explicit Production R2 Buckets (if they differ from top-level, or for clarity)
+# IMPORTANT: User must create these R2 buckets in their Cloudflare dashboard and update bucket_name.
+# [[env.production.r2_buckets]]
+# binding = "MEDIA_BUCKET"
+# bucket_name = "prod-meetsmatch-user-media" # This should match the top-level MEDIA_BUCKET name if defined there.
 
 
 # Secrets are managed outside wrangler.toml using `wrangler secret put`
