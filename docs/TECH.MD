@@ -1,134 +1,120 @@
-# Technical Documentation for Telegram Bot Project
+# Technical Documentation for MeetsMatch Telegram Bot (Rust Edition)
 
-This document outlines the core technologies, libraries, and tools used in the development of this Telegram bot.
+This document outlines the core technologies, libraries, and tools used in the development of this Telegram bot, now built with Rust and deployed on Cloudflare Workers.
 
 ## Core Technologies
 
-* **TypeScript:** The primary programming language for the bot's logic and functionality.
-* **Bun:** JavaScript runtime, package manager, and test runner used for local development and testing.
-* **Telegram Bot API:** The interface provided by Telegram for creating and interacting with bots.
-* **Cloudflare Workers:** Serverless execution environment for running the bot logic globally.
-* **Cloudflare D1:** Serverless SQL database (SQLite compatible) for persistent relational data.
-* **Cloudflare KV:** Global, low-latency key-value store for caching, session data, or configuration.
-* **Cloudflare R2 (Optional):** S3-compatible object storage, potentially for media files if KV is insufficient.
+*   **Rust (Latest Stable Edition):** The primary programming language, offering performance, safety, and modern tooling. Compiled to WebAssembly (Wasm).
+*   **WebAssembly (Wasm):** The compilation target for the Rust code, enabling it to run in serverless environments like Cloudflare Workers.
+*   **Cloudflare Workers:** Serverless execution environment for running the Wasm-compiled Rust code globally.
+*   **Cloudflare D1:** Serverless SQL database (SQLite compatible) for persistent relational data (e.g., user profiles, matches).
+*   **Cloudflare KV:** Global, low-latency key-value store used for caching, session data, and dynamic configuration like feature flags.
+*   **Cloudflare R2 (Optional):** S3-compatible object storage, available for storing larger files or media if needed.
 
-## Key Libraries and Tools
+## Key Libraries and Tools (Rust Ecosystem)
 
-* **`GrammyJS` (Latest Version):** A comprehensive TypeScript framework for the Telegram Bot API. [Website](https://grammy.dev/)
-* **`Bun` (Latest Version):** Used locally for package management, running scripts, and testing.
-* **`Biome` (Latest Version):** Linter and formatter for maintaining code quality locally.
-* **`wrangler` (Latest Version):** CLI tool for developing, testing, and deploying Cloudflare Workers, D1, KV, and R2 resources.
-* **Cloudflare D1 Client:** Interaction with D1 is typically done via Wrangler bindings provided in the Worker environment (`env.DB`). No separate client library is necessarily needed within the Worker code, though ORMs compatible with D1 might be used locally or for migrations.
-* **Geolocation Library (TBD):** A suitable TypeScript/JavaScript library if complex geolocation logic is needed (e.g., `geolib`).
-* **Bun Test Runner:** Built-in test runner includes coverage reporting.
-* **Codecov:** Service for tracking code coverage reports, integrated with CI.
+*   **`workers-rs` (Cloudflare Workers Rust SDK):** Essential crate for writing Cloudflare Workers in Rust. Provides types, macros (`#[event(fetch)]`), and bindings to interact with the Workers runtime environment (e.g., `Request`, `Response`, `Env`).
+*   **`wasm-pack`:** Tool for building Rust-generated WebAssembly and JavaScript bindings, packaging it for use in environments like Cloudflare Workers.
+*   **`cargo`:** The Rust package manager and build tool, used for managing dependencies, building the project, running tests, etc.
+*   **`serde` (`serde_json`):** Framework for serializing and deserializing Rust data structures efficiently, commonly used for JSON.
+*   **`console_error_panic_hook`:** Utility to forward Rust panics to the browser console or Cloudflare Worker logs, improving debuggability of Wasm modules.
+*   **`chrono`:** Crate for date and time manipulation.
+*   **`url`:** Crate for URL parsing and manipulation.
+*   **`http`:** Crate providing HTTP types (Request, Response, Headers, etc.).
+*   **`cargo-llvm-cov`:** Tool for collecting code coverage information for Rust projects.
+*   **`rustfmt`:** Code formatter for Rust, ensuring consistent style.
+*   **`clippy`:** Rust linter to catch common mistakes and improve code quality.
+*   **`reqwest` (Optional):** A popular HTTP client for making outbound requests from the worker, if needed.
 
 ## Development Environment
 
-* **Node.js/Bun:** Required for running Bun commands and Wrangler.
-* **Code Editor/IDE:** Supporting TypeScript, TOML (`wrangler.toml`), `.env`/`.dev.vars`.
-* **Git:** Version control.
-* **`wrangler` CLI:** For local development (`wrangler dev`) and deployment.
+*   **Rust Toolchain (via `rustup`):** Manages Rust versions and components (compiler, `cargo`, `rustfmt`, `clippy`).
+*   **`wasm-pack`:** For building the Wasm worker.
+*   **Node.js & npm:** Required for `wrangler`.
+*   **`wrangler` CLI:** The primary tool for local development (`wrangler dev`), managing Cloudflare resources (D1, KV, R2), and deploying the worker.
+*   **Code Editor/IDE:** With Rust support (e.g., VS Code with `rust-analyzer` extension).
+*   **Git:** For version control.
+*   **Makefile:** Provides convenient shortcuts for common development tasks.
 
 ## CI/CD Tools
 
-* **GitHub Actions:** Automating testing (using `bun test --coverage`) and deployment (using `wrangler deploy`).
-* **Codecov Integration:** Uploading coverage reports from GitHub Actions.
+*   **GitHub Actions:** Automates the build, test, and deployment pipeline defined in `.github/workflows/ci.yml`.
+    *   Checks include: `cargo fmt -- --check`, `cargo clippy -- -D warnings`.
+    *   Testing: `cargo llvm-cov` for running tests and generating coverage reports.
+    *   Deployment: `wrangler deploy` for publishing the worker to Cloudflare.
+*   **Codecov:** Integrated with GitHub Actions to track code coverage over time and provide reports.
 
 ## Testing Framework
 
-* **Bun Test:** Built-in test runner for unit and integration tests run locally and in CI. Includes coverage support (`bun test --coverage`). Goal: >95% coverage.
-* **Codecov:** Tracking coverage and providing reports.
+*   **Rust's Built-in Test Framework:** Used for writing unit and integration tests (`#[test]` attribute). `cargo test` is the command to run these.
+*   **`cargo-llvm-cov`:** Used in CI (and locally) to generate code coverage reports from test runs.
 
 ## Code Quality Tools
 
-* **Biome:** Integrated linter and formatter (`bun run lint`, `bun run format`). Configured via `biome.json`.
-* **TypeScript Compiler (`tsc`):** Used via `bun build` or `bun check` for static type checking during development and CI.
-* **Codecov Quality Gates:** Enforcing minimum code coverage (>95%) for pull requests.
+*   **`rustfmt`:** Enforces consistent code style. Run via `cargo fmt`.
+*   **`clippy`:** Provides extensive linting to catch errors and improve code. Run via `cargo clippy`.
+    Both are typically executed via `make check` or `make ci`.
 
 ## Monitoring and Analytics
 
-* **Cloudflare Workers Analytics:** Built-in metrics for requests, CPU time, errors within the Cloudflare dashboard.
-* **Cloudflare Logs:** Access to Worker logs for debugging.
-* **Custom Logging:** Implementing logging within the Worker to send data to external observability platforms if needed.
-* **Codecov Trends:** Tracks code coverage trends.
+*   **Cloudflare Workers Analytics:** Provides metrics for requests, CPU time, errors, etc., accessible via the Cloudflare dashboard.
+*   **Cloudflare Logs:** Access to worker logs (from `console_log!`, `console_error!`, etc.) via the Cloudflare dashboard or `wrangler tail`.
+*   **`console_log!`, `console_warn!`, `console_error!` (from `workers-rs`):** Used within the Rust code for logging.
+*   **Codecov:** Tracks code coverage trends, which is an indirect measure of code quality and testing thoroughness.
 
 ## Deployment
 
-* **Cloudflare Worker:** The bot logic is deployed as a Worker script.
-* **`wrangler.toml`:** Configuration file defining Worker settings, bindings to D1, KV, R2, and environment variables.
-* **Cloudflare D1:** Database migrations managed via `wrangler d1 execute` or integrated migration tools.
-* **Cloudflare KV/R2:** Provisioned and managed via the Cloudflare dashboard or `wrangler`.
+*   **Cloudflare Worker:** The application is deployed as a Wasm module with a JS shim.
+*   **`wrangler.toml`:** Central configuration file for `wrangler`. Defines the worker name, entry point, compatibility settings, environments (`dev`, `staging`, `production`), and bindings to Cloudflare services (D1, KV, R2).
+*   **`wrangler deploy`:** The command used to publish the worker. The `Makefile` and `scripts/deploy.sh` provide helpers (`make deploy-dev`, etc.) to deploy specific environments.
 
-## Key Concepts
+## Key Concepts (Rust on Cloudflare Workers)
 
-* **Asynchronous Programming (`async`/`await`):** Handling Telegram events and I/O operations asynchronously within the Worker runtime using TypeScript's async/await syntax.
-* **Update Handling:** Processing Telegram updates via webhook configured to the Worker URL, typically managed by the GrammyJS framework.
-* **Command Handlers:** Logic for specific user commands (`/start`, `/match`, etc.) using GrammyJS listeners (`bot.command`).
-* **Conversation Handlers:** Managing multi-step interactions (e.g., profile setup) potentially using GrammyJS conversations plugin or custom state management.
-* **Cloudflare Bindings:** Securely accessing D1, KV, and R2 resources from within the Worker code via predefined bindings.
-* **Worker Environment Variables:** Managing secrets like the Telegram Bot Token.
+*   **Compilation to Wasm:** Rust code is compiled to WebAssembly, allowing it to run in the Cloudflare Workers environment.
+*   **`workers-rs` SDK:** Provides the necessary abstractions to interact with the Worker runtime (handling requests, accessing bindings, etc.).
+*   **Event Handlers (`#[event(fetch)]`):** The primary way to define the worker's entry point for handling HTTP requests.
+*   **Bindings:** Securely configured access to Cloudflare resources like D1 databases, KV namespaces, R2 buckets, and secrets. These are defined in `wrangler.toml` and accessed via the `Env` object in Rust.
+*   **`Cargo.toml` & Crates:** Dependencies (crates) are managed in `Cargo.toml`. The Rust ecosystem provides a rich set of libraries.
+*   **Error Handling:** Rust's `Result<T, E>` enum is heavily used for robust error handling.
+*   **Ownership and Borrowing:** Core Rust concepts ensuring memory safety without a garbage collector.
 
-## Data Persistence
+## Data Persistence & Storage
 
-* **Cloudflare D1:** Storing structured data (users, profiles, matches).
-* **Cloudflare KV:** Storing ephemeral data (session state, rate limits, cache).
-* **Cloudflare R2 (Potentially):** Storing media file blobs.
-* **Data Backup and Recovery:** Utilizing Cloudflare's built-in D1 backup features.
+*   **Cloudflare D1:** Primary storage for structured, relational data (e.g., user information, application state).
+*   **Cloudflare KV:** Used for:
+    *   **Feature Flags:** Dynamically enabling/disabling features.
+    *   **Caching:** Storing frequently accessed data to reduce D1 load.
+    *   **Session Management:** Storing temporary user session data.
+*   **Cloudflare R2 (Potentially):** For storing larger binary objects like user-uploaded files, if required by the application.
 
-## Database Architecture
+## Architectural Diagrams
 
-```mermaid
-graph TD
-    A[Bot Worker] --> B[(D1: SQL DB)]
-    A --> C[(KV: Key-Value)]
-    A --> D[(R2: Object Storage)]
-```
+(The existing Mermaid diagrams for System Components and Service Interactions are likely still relevant at a high level, but the implementation details within the "Worker" component are now Rust-based.)
 
-### Cloudflare Features Used:
-1. **Workers:** Serverless compute
-2. **D1:** Relational Database
-3. **KV:** Key-Value Store
-4. **R2:** Object Storage (Optional)
-5. **Wrangler:** CLI for development & deployment
-
-# Technical Architecture Deep Dive
-
-## System Components
+### System Components
 ```mermaid
 graph LR
-    A[Telegram API] <--> B(Cloudflare Worker)
+    A[Telegram API] <--> B(Cloudflare Worker [Rust/Wasm])
     B <--> C[(D1 Database)]
     B <--> D[(KV Store)]
-    B <--> E[(R2 Storage)]
+    B <--> E[(R2 Storage - Optional)]
 ```
 
-## Service Interactions (Example: Match Request)
+### Service Interactions (Example: User Registration)
 ```mermaid
 sequenceDiagram
-    User->>+Telegram: /match command
-    Telegram->>+Worker: Webhook POST
-    Worker->>+KV: Check rate limits/cache
-    KV-->>-Worker: Cache miss/OK
-    Worker->>+D1: Query potential matches
-    D1-->>-Worker: Candidate Profiles
-    Worker->>Telegram: Send match results
-    Telegram-->>-User: Display match
+    User->>+Telegram: /start command
+    Telegram->>+Worker: Webhook POST (User Info)
+    Worker->>+D1: Check if user exists
+    D1-->>-Worker: User record or not found
+    alt User Not Found
+        Worker->>D1: Create new user record
+        D1-->>-Worker: New user created
+    end
+    Worker->>+ConfigService: Get Feature Flags (from KV)
+    ConfigService-->>-Worker: Flags
+    Worker->>Telegram: Send welcome message (potentially varied by flags)
+    Telegram-->>-User: Display welcome message
 ```
 
-## Performance Metrics (Targets)
-| Component         | Target Latency | Error Budget |
-|-------------------|----------------|--------------|
-| Worker Response   | <500ms         | 99.9% Success|
-| D1 Query (P95)    | <100ms         | -            |
-| KV Read/Write     | <10ms          | 99.99% Success|
-
-## Monitoring Stack
-1. **Cloudflare Dashboard:**
-   - Worker Analytics (requests, CPU, errors)
-   - D1 Query Stats
-   - KV Operations
-2. **Codecov:**
-   - Coverage reports & trends
-3. **Custom Logging (Optional):**
-   - Worker logs pushed to external system (e.g., Datadog, Sentry)
+This document provides a snapshot of the current technology stack. As the project evolves, specific libraries or tools might be added or changed. Always refer to `Cargo.toml` for the definitive list of Rust dependencies.

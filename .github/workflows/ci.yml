@@ -1,77 +1,123 @@
+# .github/workflows/ci.yml
 name: CI
 
 on: [push, pull_request]
 
 jobs:
-  test:
+  test-and-build: # Renamed job for clarity
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up Bun
-      uses: oven-sh/setup-bun@v1
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-    - name: Install dependencies
-      run: bun install --frozen-lockfile
+    - name: Setup Rust toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        components: clippy, rustfmt # Ensure clippy and rustfmt components are included
 
-    - name: Lint with Biome
-      run: bunx biome check .
+    - name: Install wasm-pack
+      run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 
-    - name: Check Formatting with Biome
-      run: bunx biome check .
-      # run: bunx biome format --check .
+    - name: Install cargo-llvm-cov
+      run: cargo install cargo-llvm-cov
 
-    - name: Configure environment for tests
+    - name: Check Formatting (rustfmt)
+      run: cargo fmt -- --check
+
+    - name: Lint (clippy)
+      run: cargo clippy -- -D warnings --all-targets --all-features # Ensure all code is checked
+
+    - name: Configure Test Environment Variables
       run: |
-        echo "# Test environment for CI" > .env.test
-        echo "ENVIRONMENT=test" >> .env.test
-        echo "LOG_LEVEL=DEBUG" >> .env.test
-        echo "MATCH_THRESHOLD=0.75" >> .env.test
+        echo "ENVIRONMENT=test_ci" >> $GITHUB_ENV
+        echo "LOG_LEVEL=DEBUG" >> $GITHUB_ENV
+        echo "MATCH_THRESHOLD=0.75" >> $GITHUB_ENV # Example, if used by Rust code
+        echo "TELEGRAM_TOKEN=mock_token_for_ci_tests" >> $GITHUB_ENV # If needed by tests directly
+        # Note: For wrangler.toml bindings like KV/D1, tests would need mocks or live test instances.
+        # Secrets for KV/D1 in tests are complex; typically mock these services in unit tests.
+        # Ensure these variables are actually used by your Rust tests if needed.
+        # For ConfigService, ENVIRONMENT and LOG_LEVEL are read.
 
-        echo "TELEGRAM_TOKEN=mock_token_for_ci_tests" >> .env.test
-
-        echo "Test environment configuration:"
-        cat .env.test | grep -v TOKEN
-
-        cp .env.test .env
-
-    - name: Run tests with coverage
-      env:
-        TELEGRAM_TOKEN: ${{ secrets.BOT_TOKEN || 'mock_token_for_ci_tests' }}
+    - name: Run tests with coverage (cargo-llvm-cov)
+      # Environment variables from GITHUB_ENV are automatically available to cargo commands
       run: |
         echo "Running tests with coverage..."
-        bun test --coverage
+        # Create directory for coverage output if it doesn't exist
+        mkdir -p coverage
+        cargo llvm-cov --all-features --workspace --lcov --output-path coverage/lcov.info
+        # You can also generate an HTML report for viewing:
+        # cargo llvm-cov --all-features --workspace --html --output-dir coverage/html
         echo "Test run finished."
 
+    # Optional: Upload HTML coverage report as an artifact (uncomment if you generate html report)
+    # - name: Upload HTML coverage report
+    #   uses: actions/upload-artifact@v4 # Updated to v4
+    #   if: always() # Run even if previous steps fail, to upload any partial report
+    #   with:
+    #     name: coverage-html-report
+    #     path: coverage/html/
+
     - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
+      uses: codecov/codecov-action@v4
+      # if: github.ref == 'refs/heads/main' || github.event_name == 'pull_request' # Optional: Condition for upload
       with:
-        token: ${{ secrets.CODECOV_TOKEN }}
-        files: ./coverage/lcov.info
-        flags: unittests
+        token: ${{ secrets.CODECOV_TOKEN }} # Ensure CODECOV_TOKEN is set in GitHub secrets
+        files: ./coverage/lcov.info # Path to the lcov file
+        # flags: unittests # Optional flags
+        name: codecov-umbrella # Optional: Name for the report in Codecov UI
+        fail_ci_if_error: true # Recommended: Fail CI if Codecov upload fails
         verbose: true
-        name: codecov-umbrella
-        fail_ci_if_error: true
+
+    - name: Build Wasm worker (validation)
+      # This step ensures the worker builds successfully as part of CI.
+      # The 'deploy' job will perform its own release build.
+      run: |
+        echo "Building Wasm worker (debug mode for speed)..."
+        wasm-pack build --target bundler -d worker
+        echo "Wasm worker built to /worker directory."
 
   deploy:
     runs-on: ubuntu-latest
-    needs: test # Depends on the test job matrix completing successfully
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push' # Only run on push to main branch
+    needs: test-and-build # Depends on the test & build job completing successfully
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' # Only run on push to main
 
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-    - name: Set up Node.js
-      uses: actions/setup-node@v3
+    # The deploy job builds independently to ensure it uses release configuration
+    # and doesn't rely on potentially debug-built artifacts from the test job.
+    - name: Setup Rust toolchain
+      uses: actions-rs/toolchain@v1
       with:
-        node-version: '18' # Use a compatible Node.js version for wrangler
+        toolchain: stable
+        # No need for clippy/rustfmt components here if only building
+
+    - name: Install wasm-pack
+      run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+    - name: Build Wasm worker (release mode for deployment)
+      run: |
+        echo "Building Wasm worker for deployment (release mode)..."
+        wasm-pack build --target bundler -d worker --release # Crucially, build in release mode
+        echo "Wasm worker built to /worker directory."
+
+    - name: Set up Node.js for Wrangler
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
 
     - name: Install Wrangler
+      # Consider caching npm dependencies if install time is long
       run: npm install -g wrangler
 
-    - name: Deploy to Cloudflare Workers
+    - name: Deploy to Cloudflare Workers (Production)
       env:
-        CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
-        CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
-      run: wrangler deploy
+        CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }} # Ensure CF_API_TOKEN is set
+        CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }} # Ensure CF_ACCOUNT_ID is set
+      run: |
+        echo "Deploying to production environment..."
+        # Assuming [env.production] is defined in wrangler.toml or top-level is production
+        wrangler deploy --env production
