@@ -7,9 +7,9 @@ on:
     branches: ['*']
 
 env:
-  GO_VERSION: '1.23'
-  BUN_VERSION: '1.1.42'
-  NODE_VERSION: '20'
+  GO_VERSION: '1.25.0'
+  BUN_VERSION: '1.2.20'
+  NODE_VERSION: '24'
 
 jobs:
   # Go Bot Service
@@ -172,7 +172,7 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Run Gemini CLI
         uses: google-github-actions/run-gemini-cli@v0.1.11
