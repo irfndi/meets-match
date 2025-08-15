@@ -1,0 +1,102 @@
+# Gemini Code Assist Configuration for MeetsMatch
+# Multi-language project: Go Bot Service, TypeScript API, React Frontend
+
+# General settings
+version: "1.0"
+project_name: "meetsmatch"
+project_type: "multi-language"
+
+# Language-specific configurations
+languages:
+  go:
+    enabled: true
+    version: "1.25"
+    linting:
+      - "go vet"
+      - "gofmt"
+      - "staticcheck"
+    testing:
+      framework: "testing"
+      coverage_threshold: 80
+    patterns:
+      - "cmd/**/*.go"
+      - "internal/**/*.go"
+      - "pkg/**/*.go"
+    
+  typescript:
+    enabled: true
+    version: "5.x"
+    linting:
+      - "oxlint"
+    testing:
+      framework: "vitest"
+      coverage_threshold: 85
+    patterns:
+      - "web/api/**/*.ts"
+      - "web/frontend/**/*.ts"
+      - "web/frontend/**/*.tsx"
+    
+  javascript:
+    enabled: true
+    runtime: "bun"
+    linting:
+      - "oxlint"
+    patterns:
+      - "web/**/*.js"
+      - "web/**/*.jsx"
+
+# Code review focus areas
+review_focus:
+  - "security"
+  - "performance"
+  - "maintainability"
+  - "correctness"
+  - "testing"
+  - "documentation"
+
+# Project-specific settings
+project_settings:
+  architecture: "microservices"
+  deployment: "docker"
+  database: "postgresql"
+  cache: "redis"
+  messaging: "telegram-bot"
+  
+# File exclusions
+exclude_patterns:
+  - "node_modules/**"
+  - "vendor/**"
+  - "dist/**"
+  - "build/**"
+  - ".git/**"
+  - "*.log"
+  - "*.tmp"
+  - "coverage/**"
+  - ".temporary-code/**"
+  - "docs/old-docs/**"
+
+# Security considerations
+security:
+  sensitive_patterns:
+    - "password"
+    - "secret"
+    - "token"
+    - "api_key"
+    - "private_key"
+  check_dependencies: true
+  check_vulnerabilities: true
+
+# Performance monitoring
+performance:
+  check_complexity: true
+  max_function_length: 50
+  max_file_length: 500
+  check_memory_usage: true
+  check_database_queries: true
+
+# Documentation requirements
+documentation:
+  require_function_docs: true
+  require_type_docs: true
+  require_api_docs: true
+  check_readme_updates: true
