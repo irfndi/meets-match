@@ -165,6 +165,20 @@ jobs:
           path: web/frontend/dist
           retention-days: 7
 
+  # Gemini CLI
+  gemini-cli:
+    name: Gemini CLI
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Gemini CLI
+        uses: google-github-actions/run-gemini-cli@v0.1.11
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+
   # Integration Tests
   integration:
     name: Integration Tests
