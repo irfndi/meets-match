@@ -1,164 +1,305 @@
-# Technical Documentation for MeetsMatch Telegram Bot (Rust Edition)
+# Technical Documentation for MeetsMatch Telegram Bot
 
-This document outlines the core technologies, architecture, libraries, and tools used in the development of this Telegram bot, built with Rust and deployed on Cloudflare Workers.
+This document outlines the core technologies, architecture, libraries, and tools used in the development of this Telegram bot, built with Go and TypeScript and deployed using Docker on DigitalOcean VPS.
 
 ## Architecture Overview
-The bot operates as a single Cloudflare Worker written in Rust and compiled to WebAssembly (Wasm).
-- **Request Handling:** Incoming Telegram webhook requests are processed by the main `fetch` handler in `src/lib.rs`. This handler now also distinguishes between text, location, and media (photo/video/document) messages for initial routing.
-- **Command Dispatching:** A dispatcher pattern (`dispatch_command` function) routes recognized text commands (e.g., `/profile`, `/help`, `/profile edit`, `/profile add_media`, `/profile delete_media`) to specific handler functions. The `/start` command has dedicated pre-dispatcher handling.
-- **Session Management (for multi-step interactions):** Cloudflare KV (via `SESSIONS_KV` binding) stores temporary session state for profile editing and media management flows. This uses `ProfileEditingSession` with `CurrentEditingStep` (now including `AwaitingMediaFile`, `AwaitingMediaDeletionChoice`) and `EditingField` enums. Sessions have a TTL (e.g., 15 minutes).
-- **Service Layer:**
-    - `UserService`: Manages user data in D1, including profile fields (name, age, gender, bio, location, `media_keys` list), state, roles, and interaction timestamps. Provides CRUD operations for users and specific field/media key updates.
-    - `ConfigService`: Handles feature flags (from KV) and environment variables.
-    - `RBACService`: Manages command authorization based on user roles.
-    - `MediaService`: Interfaces with Cloudflare R2 (via `MEDIA_BUCKET` binding) for media file storage (upload, delete) and key generation.
-    - Other placeholder services.
-- **Data Persistence & Storage:**
-    - Cloudflare D1: For the `users` table (including new profile fields and `media_keys` as JSON text).
-    - Cloudflare KV: For feature flags and `ProfileEditingSession` data.
-    - Cloudflare R2: For storing actual media files (photos, videos) uploaded by users, referenced by keys in `User.media_keys`.
-- **External API Interaction:**
-    - Telegram Bot API: Used for receiving messages (text, location, photo, video, document) and sending responses. The `getFile` method and file download URLs are used to retrieve user-uploaded media. Requires `TELEGRAM_TOKEN` secret.
+
+The application operates as a multi-service architecture with the following components:
+
+- **Go Telegram Bot Service**: Handles Telegram webhook requests and bot interactions
+- **TypeScript Web API Service**: Provides REST API endpoints for web interface
+- **React Frontend**: Web-based user interface
+- **PostgreSQL Database**: Primary data storage
+- **Redis Cache**: Session management and caching
+- **Nginx**: Reverse proxy and load balancer
+- **Docker**: Containerization and orchestration
+
+### System Architecture
+```mermaid
+graph TD
+    A[User/Telegram Client] --> B[Nginx Load Balancer]
+    C[Web Browser] --> B
+    B --> D[Go Telegram Bot Service]
+    B --> E[TypeScript Web API Service]
+    B --> F[React Frontend]
+    D --> G[PostgreSQL Database]
+    D --> H[Redis Cache]
+    E --> G
+    E --> H
+    
+    subgraph "Docker Container Layer"
+        D
+        E
+        F
+        G
+        H
+        B
+    end
+    
+    subgraph "Digital Ocean VPS"
+        I[Docker Compose Orchestration]
+    end
+```
+
+### Request Flow
+1. **Telegram Requests**: Incoming Telegram webhook requests are processed by the Go bot service
+2. **Web Requests**: Web interface requests are handled by the TypeScript API service
+3. **Load Balancing**: Nginx distributes requests and serves static frontend assets
+4. **Data Layer**: Both services interact with PostgreSQL for persistence and Redis for caching
+5. **Session Management**: User sessions and temporary data stored in Redis
 
 ## Core Technologies
 
-*   **Rust (Latest Stable Edition):** The primary programming language, offering performance, safety, and modern tooling. Compiled to WebAssembly (Wasm).
-*   **WebAssembly (Wasm):** The compilation target for the Rust code, enabling it to run in serverless environments like Cloudflare Workers.
-*   **Cloudflare Workers:** Serverless execution environment for running the Wasm-compiled Rust code globally.
-*   **Cloudflare D1:** Serverless SQL database (SQLite compatible) for persistent relational data (e.g., user profiles, matches).
-*   **Cloudflare KV:** Global, low-latency key-value store used for caching, session data, and dynamic configuration like feature flags.
-*   **Cloudflare R2 (Optional):** S3-compatible object storage, available for storing larger files or media if needed.
+### Backend Services
+- **Go (1.21+)**: Primary language for Telegram bot service
+  - High performance and concurrency
+  - Excellent for webhook handling and real-time processing
+  - Strong typing and memory safety
+- **TypeScript (5+) with Node.js (20+)**: Web API service
+  - Type-safe JavaScript for web APIs
+  - Rich ecosystem for web development
+  - Easy integration with frontend
 
-## Key Libraries and Tools (Rust Ecosystem)
+### Frontend
+- **React (18+)**: Modern UI framework
+- **TypeScript (5+)**: Type-safe frontend development
+- **Vite (5+)**: Fast build tool and development server
+- **Bun**: Package manager and runtime (replacing npm/pnpm)
 
-*   **`workers-rs` (Cloudflare Workers Rust SDK):** Essential crate for writing Cloudflare Workers in Rust. Provides types, macros (e.g., `#[event(fetch)]`), and bindings to interact with the Workers runtime.
-*   **`wasm-pack`:** Tool for building Rust-generated WebAssembly and JavaScript bindings.
-*   **`cargo`:** Rust's package manager and build system.
-*   **`serde` & `serde_json`:** For efficient serialization and deserialization of Rust data structures, particularly for JSON interactions with Telegram API and D1 (for JSON-formatted fields like `roles`).
-*   **`console_error_panic_hook`:** Forwards Rust panics to browser/worker console for better debugging.
-*   **`chrono`:** Date and time manipulation, used for `created_at`, `updated_at`, `last_interaction_at`.
-*   **Core Internal Components:**
-    - `UserService`: Manages user lifecycle, profile data (including `media_keys`), state, and persistence.
-    *   `ConfigService`: Manages dynamic configuration and feature flags.
-    *   `RBACService`: Handles role-based command authorization.
-    - `MediaService`: Manages R2 bucket interactions for media.
-    - Command Dispatcher & specific command handlers (in `src/lib.rs`).
+### Data Layer
+- **PostgreSQL (16+)**: Primary relational database
+  - ACID compliance and strong consistency
+  - Advanced features like JSONB and full-text search
+  - Excellent performance for complex queries
+- **Redis (7+)**: In-memory cache and session store
+  - High-performance caching
+  - Session management
+  - Real-time features support
+
+### Infrastructure
+- **Docker (24+)**: Containerization platform
+- **Docker Compose (2.20+)**: Multi-container orchestration
+- **Nginx (1.25+)**: Reverse proxy and web server
+- **DigitalOcean VPS**: Cloud hosting platform
+- **Ubuntu 22.04 LTS**: Operating system
+
+## Key Libraries and Tools
+
+### Go Service Dependencies
+- **github.com/gin-gonic/gin**: HTTP web framework
+- **github.com/go-telegram/bot**: Telegram bot API client
+- **github.com/lib/pq**: PostgreSQL driver
+- **github.com/google/uuid**: UUID generation
+- **github.com/redis/go-redis**: Redis client
+
+### TypeScript Service Dependencies
+- **express**: Web application framework
+- **cors**: Cross-origin resource sharing
+- **jsonwebtoken**: JWT token handling
+- **pg**: PostgreSQL client
+- **redis**: Redis client
+- **bcrypt**: Password hashing
+
+### Frontend Dependencies
+- **react**: UI framework
+- **react-router-dom**: Client-side routing
+- **zustand**: State management
+- **tailwindcss**: Utility-first CSS framework
+- **axios**: HTTP client
+
+### Development Tools
+- **Bun**: Package manager and runtime
+- **Oxlint**: Fast linting (replacing ESLint/Prettier)
+- **Vitest**: Testing framework
+- **TypeScript**: Type checking
+- **Docker Compose**: Local development environment
 
 ## Development Environment
 
-*   **Rust Toolchain (via `rustup`):** Manages Rust versions and components (compiler, `cargo`, `rustfmt`, `clippy`).
-*   **`wasm-pack`:** For building the Wasm worker.
-*   **Node.js & npm:** Required for `wrangler`.
-*   **`wrangler` CLI:** The primary tool for local development (`wrangler dev`), managing Cloudflare resources (D1, KV, R2), and deploying the worker.
-*   **Code Editor/IDE:** With Rust support (e.g., VS Code with `rust-analyzer` extension).
-*   **Git:** For version control.
-*   **Makefile:** Provides convenient shortcuts for common development tasks.
+### Prerequisites
+1. **Docker & Docker Compose**: For containerized development
+2. **Go (1.21+)**: For Go service development
+3. **Bun**: For TypeScript/React development
+4. **Git**: Version control
 
-## CI/CD Tools
+### Local Setup
+```bash
+# Clone repository
+git clone <repository-url>
+cd meetsmatch
 
-*   **GitHub Actions:** Automates the build, test, and deployment pipeline defined in `.github/workflows/ci.yml`.
-    *   Checks include: `cargo fmt -- --check`, `cargo clippy -- -D warnings`.
-    *   Testing: `cargo llvm-cov` for running tests and generating coverage reports.
-    *   Deployment: `wrangler deploy` for publishing the worker to Cloudflare.
-*   **Codecov:** Integrated with GitHub Actions to track code coverage over time and provide reports.
+# Start development environment
+docker-compose up -d
 
-## Testing Framework
+# Install frontend dependencies
+cd web/frontend
+bun install
 
-*   **Rust's Built-in Test Framework (`#[test]`):** Used for unit tests within modules.
-*   **`cargo test`:** Command to run these tests.
-*   **`cargo-llvm-cov`:** Used in CI (and locally) for code coverage reports.
-*   **Integration Testing (Future):** Requires a test harness like `mf-test` for full environment simulation with D1/KV.
+# Install API dependencies
+cd ../api
+bun install
 
-## Code Quality Tools
+# Install Go dependencies
+cd ../../services/bot
+go mod download
+```
 
-*   **`rustfmt`:** Enforces consistent code style (`make check` or `cargo fmt`).
-*   **`clippy`:** Rust linter for catching common errors and improving code (`make check` or `cargo clippy -- -D warnings`).
-    Both are part of the local `make ci` checks and the GitHub Actions CI pipeline.
+### Development Workflow
+- **Go Service**: Direct development with hot reload
+- **TypeScript Services**: Bun for package management and development
+- **Database**: PostgreSQL in Docker container
+- **Cache**: Redis in Docker container
+- **Frontend**: Vite development server with hot reload
 
-## Monitoring and Analytics
+## Service Architecture
 
-*   **Cloudflare Workers Analytics:** Built-in metrics (requests, CPU, errors) via Cloudflare dashboard.
-*   **Cloudflare Logs:** Access to worker logs (`console_log!`, etc.) via `wrangler tail` or Cloudflare dashboard.
-*   **Codecov:** Tracks code coverage trends.
+### Go Telegram Bot Service
+```mermaid
+graph TD
+    A[Webhook Handler] --> B[Command Router]
+    B --> C[User Service]
+    B --> D[Matching Service]
+    B --> E[Message Service]
+    C --> F[Database Layer]
+    D --> F
+    E --> F
+    C --> G[Cache Layer]
+    D --> G
+    E --> G
+```
 
-## Security
-- **Role-Based Access Control (RBAC):**
-    - Implemented via `RBACService` in `src/rbac_service/mod.rs`.
-    - User roles (e.g., `User`, `Admin`) are defined in the `Role` enum and stored as part of the `User` data in D1 (as a JSON string array).
-    - `RBACService::check_permission` is called by the command dispatcher.
-    - New users default to the `User` role.
-- **Secrets Management:** API keys (e.g., `TELEGRAM_TOKEN`) are managed via `wrangler secret put` and accessed as environment secrets.
-- **Input Validation:**
-    - Synchronous validation functions (e.g., `validate_name`, `validate_age`) are defined in `src/lib.rs` (or a dedicated `validation.rs`).
-    - These functions use a `ValidationError` enum to return specific error types.
-    - They are employed during profile editing (in `handle_text_message`) to validate user-provided values before updating the database.
+**Key Components:**
+- **Handler Layer**: Processes incoming Telegram updates
+- **Service Layer**: Business logic for users, matching, messaging
+- **Repository Layer**: Data access abstraction
+- **Middleware**: Authentication, rate limiting, logging
+
+### TypeScript Web API Service
+```mermaid
+graph TD
+    A[Express Router] --> B[Middleware Layer]
+    B --> C[Controller Layer]
+    C --> D[Service Layer]
+    D --> E[Repository Layer]
+    E --> F[Database]
+    E --> G[Cache]
+```
+
+**Key Components:**
+- **Router**: API endpoint definitions
+- **Middleware**: CORS, authentication, validation
+- **Controllers**: Request/response handling
+- **Services**: Business logic implementation
+- **Repositories**: Data access layer
+
+## Data Management
+
+### Database Schema
+- **users**: User profiles and metadata
+- **matches**: Match relationships and compatibility scores
+- **conversations**: Chat conversations between users
+- **messages**: Individual messages in conversations
+- **user_preferences**: Matching preferences and filters
+- **media_files**: User uploaded media references
+
+### Caching Strategy
+- **L1 Cache**: Application-level caching (in-memory)
+- **L2 Cache**: Redis for shared cache across services
+- **Session Storage**: Redis for user sessions and temporary data
+- **Database**: PostgreSQL for persistent data
+
+### Data Flow
+1. **Read Path**: Check cache → Database if miss → Update cache
+2. **Write Path**: Update database → Invalidate/update cache
+3. **Session Management**: Redis for temporary session data
+4. **Media Storage**: File system with database metadata
+
+## Security & Privacy
+
+### Authentication & Authorization
+- **Telegram Authentication**: OAuth-like flow with Telegram
+- **JWT Tokens**: Stateless authentication for web API
+- **Role-Based Access Control**: User roles and permissions
+- **Rate Limiting**: API and user action rate limits
+
+### Data Protection
+- **Input Validation**: Comprehensive sanitization
+- **SQL Injection Prevention**: Parameterized queries
+- **XSS Protection**: Content Security Policy
+- **HTTPS**: TLS encryption for all communications
+- **GDPR Compliance**: Data deletion and export capabilities
+
+## Monitoring & Observability
+
+### Health Checks
+- Service health endpoints (`/health`)
+- Database connectivity checks
+- Cache availability monitoring
+- Dependency health verification
+
+### Logging
+- Structured logging with JSON format
+- Centralized log aggregation
+- Error tracking and alerting
+- Performance metrics collection
+
+### Metrics
+- Application performance metrics
+- Business metrics (matches, conversations)
+- Infrastructure metrics (CPU, memory, disk)
+- Custom metrics for feature usage
 
 ## Deployment
 
-*   **Cloudflare Worker:** The application is deployed as a Wasm module with a JS shim.
-*   **`wrangler.toml`:** Central configuration file for `wrangler`. Defines the worker name, entry point, compatibility settings, environments (`dev`, `staging`, `production`), and bindings to Cloudflare services (D1, KV, R2).
-*   **`wrangler deploy`:** The command used to publish the worker. The `Makefile` and `scripts/deploy.sh` provide helpers (`make deploy-dev`, etc.) to deploy specific environments.
+### Container Strategy
+- **Multi-stage builds**: Optimized container images
+- **Health checks**: Container health monitoring
+- **Resource limits**: CPU and memory constraints
+- **Restart policies**: Automatic recovery from failures
 
-## Key Concepts (Rust on Cloudflare Workers)
+### Environment Management
+- **Development**: Local Docker Compose setup
+- **Staging**: Production-like environment for testing
+- **Production**: DigitalOcean VPS with Docker Compose
 
-*   **Compilation to Wasm & `workers-rs` SDK:** As previously described.
-*   **Command Dispatcher:** The `dispatch_command` function in `src/lib.rs` acts as a central router for incoming text commands (excluding `/start`, which has pre-dispatcher handling). It parses commands, fetches user data, checks permissions via `RBACService`, and then calls the appropriate command-specific handler function.
-*   **Event-Driven (`#[event(fetch)]`):** The main entry point for HTTP requests.
-*   **Bindings & `Env`:** Access to D1, KV, R2, Vars, Secrets via `wrangler.toml` configuration and the `Env` object.
-*   **State Management:** User state (`UserState::New`, `Onboarding`, `Active`, `Blocked`) is managed in the `User` struct and persisted in D1, guiding user flow and command availability.
-*   **Error Handling (`Result<T, E>`):** Standard Rust error handling.
-*   **Ownership & Borrowing:** Core Rust principles.
+### CI/CD Pipeline
+- **Build**: Docker image creation
+- **Test**: Automated testing with coverage
+- **Deploy**: Rolling deployment with health checks
+- **Rollback**: Quick rollback capabilities
 
-## Data Management / State
+## Performance Considerations
 
-*   **Cloudflare D1:** Primary storage for:
-    *   `User` data: Includes `id` (UUID), `telegram_id`, `telegram_username`, `name`, `age`, `gender`, `bio`, `location_text`, `latitude`, `longitude`, `media_keys` (JSON string array of R2 object keys), `state` (enum as string), `roles` (JSON string array of role strings), and timestamps (`created_at`, `updated_at`, `last_interaction_at`).
-*   **Cloudflare KV:** Used for:
-    *   **Feature Flags:** Loaded by `ConfigService`.
-    *   **Session Management:** Temporary session data for multi-step interactions like profile editing and media management (add/delete flows) is stored in the `SESSIONS_KV` namespace. The `ProfileEditingSession` struct (with `CurrentEditingStep` states like `AwaitingMediaFile`, `AwaitingMediaDeletionChoice`) defines the session state. Sessions have a TTL.
-    *   The `last_interaction_at` field in the D1 `User` table, combined with `session_timeout_minutes` from `EnvironmentConfig`, provides a basis for longer-term session/activity tracking (placeholder logic currently).
-*   **Cloudflare R2:** Primary storage for user-uploaded media files (photos, videos), using the `MEDIA_BUCKET` binding. Files are referenced by keys stored in the user's `media_keys` list in D1.
+### Optimization Strategies
+- **Connection Pooling**: Database connection management
+- **Caching**: Multi-layer caching strategy
+- **Async Processing**: Non-blocking operations
+- **Load Balancing**: Request distribution
 
-## External API Interactions
-- **Telegram Bot API:**
-    - Receiving messages: Text, Location, Photo (array of sizes), Video, Document.
-    - Sending messages: Using `sendMessage` method with JSON payloads, including MarkdownV2 formatting.
-    - File Download: For media uploads, the bot uses the `getFile` method (requires `TELEGRAM_TOKEN`) to get a `file_path`, then constructs a download URL (`https://api.telegram.org/file/bot<TOKEN>/<file_path>`) to fetch the file bytes.
+### Scalability
+- **Horizontal Scaling**: Multiple service instances
+- **Database Optimization**: Indexing and query optimization
+- **Cache Warming**: Proactive cache population
+- **Resource Monitoring**: Capacity planning
 
-## Error Handling & Resilience (Conceptual)
-- **Service Errors:** Methods in `UserService`, `MediaService`, etc., return `Result<T, E>` to propagate errors.
-- **Telegram API Errors:** Failures in `download_telegram_file` or sending messages are logged.
-- **R2/D1 Errors:** Errors from Cloudflare services are propagated and logged. For media uploads, if an R2 upload succeeds but a subsequent D1 update (adding `media_key`) fails, an attempt is made to delete the orphaned R2 object to maintain consistency.
-- **Session Management:** Corrupt session data in KV is detected (on deserialization error) and automatically deleted to allow users to restart flows.
+## Testing Strategy
 
-## Architectural Diagrams
+### Testing Framework
+- **Go**: Built-in testing with testify
+- **TypeScript**: Vitest for unit and integration tests
+- **Frontend**: Vitest with React Testing Library
+- **E2E**: Playwright for end-to-end testing
 
-(The existing Mermaid diagrams for System Components and Service Interactions are likely still relevant at a high level, but the implementation details within the "Worker" component are now Rust-based.)
+### Test Coverage
+- **Unit Tests**: Individual function testing
+- **Integration Tests**: Service interaction testing
+- **API Tests**: Endpoint testing
+- **Coverage Target**: >95% code coverage
 
-### System Components
-```mermaid
-graph LR
-    A[Telegram API] <--> B(Cloudflare Worker [Rust/Wasm])
-    B <--> C[(D1 Database)]
-    B <--> D[(KV Store)]
-    B <--> E[(R2 Storage - Optional)]
-```
+### Quality Assurance
+- **Linting**: Oxlint for code quality
+- **Type Checking**: TypeScript and Go type safety
+- **Code Review**: Pull request reviews
+- **Automated Testing**: CI/CD pipeline integration
 
-### Service Interactions (Example: User Registration)
-```mermaid
-sequenceDiagram
-    User->>+Telegram: /start command
-    Telegram->>+Worker: Webhook POST (User Info)
-    Worker->>+D1: Check if user exists
-    D1-->>-Worker: User record or not found
-    alt User Not Found
-        Worker->>D1: Create new user record
-        D1-->>-Worker: New user created
-    end
-    Worker->>+ConfigService: Get Feature Flags (from KV)
-    ConfigService-->>-Worker: Flags
-    Worker->>Telegram: Send welcome message (potentially varied by flags)
-    Telegram-->>-User: Display welcome message
-```
-
-This document provides a snapshot of the current technology stack. As the project evolves, specific libraries or tools might be added or changed. Always refer to `Cargo.toml` for the definitive list of Rust dependencies.
+This document provides a comprehensive overview of the current technology stack. As the project evolves, specific libraries or tools might be added or changed. Always refer to `go.mod`, `package.json`, and `docker-compose.yml` for the definitive list of dependencies and configurations.

@@ -1,348 +1,777 @@
 # Product Requirements Document (PRD)
-# MeetsMatch Telegram Bot - Rust Rewrite
+# MeetsMatch Telegram Bot - Go/TypeScript Edition
 
-## 1. Executive Summary
+## Table of Contents
+- [Executive Summary](#executive-summary)
+- [Product Overview](#product-overview)
+- [Technical Architecture](#technical-architecture)
+- [Core Features](#core-features)
+- [Service Architecture](#service-architecture)
+- [Data Architecture](#data-architecture)
+- [Security and Privacy](#security-and-privacy)
+- [Performance Requirements](#performance-requirements)
+- [Deployment and Operations](#deployment-and-operations)
+- [Success Metrics](#success-metrics)
+- [Timeline and Milestones](#timeline-and-milestones)
 
-### 1.1 Project Overview
-MeetsMatch is a Telegram bot designed to facilitate meaningful connections between users through intelligent matching algorithms. This document outlines the complete rewrite of the existing TypeScript implementation to Rust, leveraging Cloudflare's edge computing platform for maximum performance, reliability, and global reach.
+## Executive Summary
 
-### 1.2 Objectives
-- **Performance**: Achieve sub-100ms response times globally
-- **Scalability**: Handle 1M+ concurrent users
-- **Reliability**: 99.99% uptime with fault tolerance
-- **Cost Efficiency**: Leverage Cloudflare's edge computing for optimal pricing
-- **Developer Experience**: Modular architecture with comprehensive testing
+MeetsMatch is a sophisticated Telegram bot designed to facilitate meaningful connections between users through intelligent matching algorithms and seamless communication features. This document outlines the complete rewrite of the MeetsMatch platform using a modern, scalable architecture built with Go, TypeScript, and Docker.
 
-## 2. Technical Architecture
+### Key Objectives
+- **Scalability**: Support thousands of concurrent users with horizontal scaling capabilities
+- **Performance**: Sub-second response times for all user interactions
+- **Reliability**: 99.9% uptime with robust error handling and recovery
+- **Security**: End-to-end encryption and comprehensive data protection
+- **User Experience**: Intuitive interface with rich media support and real-time features
 
-### 2.1 Technology Stack
+### Technology Stack Migration
+The platform has been completely rewritten from the previous Rust/Cloudflare Workers implementation to a more traditional but robust microservices architecture:
 
-#### Core Platform
-- **Runtime**: Cloudflare Workers (Rust/WASM)
-- **Database**: Cloudflare D1 (SQLite-based)
-- **Storage**: Cloudflare R2 (S3-compatible)
-- **Cache**: Cloudflare KV Store
-- **Analytics**: Cloudflare Analytics
-- **CDN**: Cloudflare CDN
-- **Security**: Cloudflare WAF & DDoS Protection
+- **Previous**: Rust + Cloudflare Workers + D1 + KV + R2
+- **Current**: Go + TypeScript + PostgreSQL + Redis + Docker + Nginx
 
-#### Development Stack
-- **Language**: Rust (latest stable)
-- **Framework**: worker-rs (Cloudflare Workers Rust SDK)
-- **Database ORM**: sqlx or sea-orm
-- **Serialization**: serde
-- **HTTP Client**: reqwest
-- **Testing**: tokio-test, mockall
-- **Monitoring**: tracing, opentelemetry
+## Product Overview
 
-### 2.2 Architecture Principles
+### Vision
+To create the most intelligent and user-friendly dating platform within the Telegram ecosystem, leveraging advanced matching algorithms and seamless communication tools.
 
-#### Modularization
-- **Service-Oriented Architecture**: Each feature as independent service
-- **Domain-Driven Design**: Clear bounded contexts
-- **Dependency Injection**: Configurable service dependencies
-- **Interface Segregation**: Minimal, focused interfaces
+### Target Audience
+- **Primary**: Adults aged 18-35 seeking meaningful relationships
+- **Secondary**: Professionals looking for networking opportunities
+- **Geographic**: Global reach with initial focus on English-speaking markets
 
-#### High Efficiency & Concurrency
-- **Async/Await**: Full async runtime with tokio
-- **Connection Pooling**: Efficient database connections
-- **Caching Strategy**: Multi-layer caching (KV, memory, CDN)
-- **Resource Optimization**: Zero-copy operations where possible
+### Core Value Propositions
+1. **Intelligent Matching**: ML-powered algorithm considering compatibility factors
+2. **Privacy-First**: All interactions within Telegram's secure ecosystem
+3. **Rich Media Support**: Photos, videos, voice messages, and location sharing
+4. **Real-Time Communication**: Instant messaging with read receipts and typing indicators
+5. **Advanced Filtering**: Comprehensive preference settings and search capabilities
 
-#### High Reliability & Fault Tolerance
-- **Circuit Breakers**: Prevent cascade failures
-- **Retry Logic**: Exponential backoff with jitter
-- **Health Checks**: Comprehensive service monitoring
-- **Graceful Degradation**: Fallback mechanisms
-- **Chaos Engineering**: Built-in fault injection for testing
+## Technical Architecture
 
-#### Feature Flags
-- **Runtime Configuration**: Toggle features without deployment
-- **A/B Testing**: Gradual rollout capabilities
-- **Emergency Switches**: Quick disable of problematic features
-- **User Segmentation**: Feature access based on user groups
+### High-Level Architecture
 
-## 3. Core Features
+```mermaid
+graph TB
+    subgraph "External Services"
+        TG[Telegram Bot API]
+        CDN[Content Delivery Network]
+    end
+    
+    subgraph "Load Balancer"
+        LB[Nginx Load Balancer]
+    end
+    
+    subgraph "Application Layer"
+        BOT[Go Telegram Bot Service]
+        API[TypeScript Web API]
+        WEB[React Frontend]
+    end
+    
+    subgraph "Data Layer"
+        PG[(PostgreSQL Database)]
+        RD[(Redis Cache)]
+        FS[File Storage]
+    end
+    
+    subgraph "Infrastructure"
+        DC[Docker Containers]
+        MON[Monitoring & Logging]
+    end
+    
+    TG --> LB
+    LB --> BOT
+    LB --> API
+    LB --> WEB
+    
+    BOT --> PG
+    BOT --> RD
+    API --> PG
+    API --> RD
+    
+    BOT --> FS
+    API --> FS
+    
+    BOT --> CDN
+    API --> CDN
+    
+    DC --> MON
+```
 
-### 3.1 User Management
-- **Registration**: Telegram-based user onboarding
-- **Profile Management**: User preferences and settings
-- **Privacy Controls**: Data visibility and sharing preferences
-- **Account Deletion**: GDPR-compliant data removal
+### Core Technologies
 
-### 3.2 Matching System
-- **Algorithm Engine**: Configurable matching algorithms
-- **Preference Matching**: Interest, location, age-based matching
-- **Machine Learning**: Behavioral pattern analysis
-- **Real-time Matching**: Live matching with WebSocket support
+#### Backend Services
+- **Go 1.21+**: High-performance Telegram bot service
+- **TypeScript/Node.js**: RESTful API service with Express.js
+- **PostgreSQL 15+**: Primary relational database
+- **Redis 7+**: Caching, session management, and real-time features
+- **Docker**: Containerization and orchestration
+- **Nginx**: Load balancing and reverse proxy
 
-### 3.3 Communication
-- **Chat Interface**: In-bot messaging system
-- **Media Sharing**: Image, video, document support
-- **Translation**: Multi-language support
-- **Moderation**: Automated content filtering
+#### Frontend
+- **React 18+**: Modern web interface for administration
+- **TypeScript**: Type-safe frontend development
+- **Vite**: Fast build tool and development server
+- **Tailwind CSS**: Utility-first styling framework
 
-### 3.4 Analytics & Insights
-- **User Analytics**: Engagement and behavior tracking
-- **Matching Analytics**: Success rate and optimization metrics
-- **Performance Metrics**: System performance monitoring
-- **Business Intelligence**: Revenue and growth analytics
+#### Infrastructure
+- **Docker Compose**: Local development environment
+- **GitHub Actions**: CI/CD pipeline
+- **Prometheus**: Metrics collection
+- **Grafana**: Monitoring dashboards
+- **ELK Stack**: Centralized logging
 
-## 4. Service Architecture
+## Core Features
 
-### 4.1 Core Services
+### 1. User Management
 
-#### User Service
-- User registration and authentication
-- Profile management
-- Privacy settings
-- Account lifecycle management
+#### User Registration and Onboarding
+- **Telegram Integration**: Seamless registration via Telegram account
+- **Profile Creation**: Step-by-step guided profile setup
+- **Photo Upload**: Multiple profile photos with automatic optimization
+- **Verification System**: Optional identity verification for enhanced trust
+- **Privacy Controls**: Granular privacy settings and visibility options
 
-#### Matching Service
-- Algorithm execution
-- Preference processing
-- Match scoring and ranking
-- Real-time match notifications
+#### Profile Management
+- **Rich Profiles**: Comprehensive user information including:
+  - Basic demographics (age, location, occupation)
+  - Interests and hobbies
+  - Relationship preferences
+  - Lifestyle choices
+  - Personal description and bio
+- **Media Gallery**: Photo and video management
+- **Profile Visibility**: Control who can see profile information
+- **Activity Status**: Online/offline indicators and last seen
 
-#### Communication Service
-- Message routing and delivery
-- Media processing and storage
-- Translation services
-- Content moderation
+### 2. Intelligent Matching System
 
-#### Analytics Service
-- Event collection and processing
-- Metrics aggregation
-- Report generation
-- Data export capabilities
+#### Matching Algorithm
+- **Multi-Factor Analysis**: Considers multiple compatibility dimensions:
+  - Geographic proximity
+  - Age preferences
+  - Shared interests
+  - Lifestyle compatibility
+  - Communication patterns
+  - Activity levels
+- **Machine Learning**: Continuously improving algorithm based on user feedback
+- **Preference Weighting**: User-defined importance for different matching criteria
+- **Compatibility Scoring**: Numerical compatibility ratings with explanations
 
-#### Notification Service
-- Push notification delivery
-- Email notifications
-- In-app notifications
-- Notification preferences
+#### Matching Features
+- **Daily Matches**: Curated daily match suggestions
+- **Discovery Mode**: Browse potential matches with advanced filters
+- **Mutual Matching**: Both users must express interest to enable communication
+- **Match Expiration**: Time-limited matches to encourage engagement
+- **Rematch System**: Ability to reconnect with previous matches
 
-### 4.2 Infrastructure Services
+### 3. Communication System
 
-#### Configuration Service
-- Feature flag management
-- Environment configuration
-- Service discovery
-- Runtime parameter updates
+#### Messaging Features
+- **Text Messages**: Rich text formatting and emoji support
+- **Media Sharing**: Photos, videos, voice messages, and documents
+- **Location Sharing**: Share current location or custom locations
+- **Message Reactions**: React to messages with emojis
+- **Message Threading**: Reply to specific messages
+- **Message Encryption**: End-to-end encryption for sensitive communications
 
-#### Monitoring Service
-- Health check endpoints
-- Performance metrics collection
-- Error tracking and alerting
-- Distributed tracing
+#### Real-Time Features
+- **Typing Indicators**: Show when someone is typing
+- **Read Receipts**: Message delivery and read confirmations
+- **Online Status**: Real-time presence indicators
+- **Push Notifications**: Instant notifications for new messages
+- **Message Sync**: Seamless synchronization across devices
 
-#### Security Service
-- Authentication and authorization
-- Rate limiting
-- Input validation and sanitization
-- Audit logging
+#### Conversation Management
+- **Chat History**: Persistent message history
+- **Message Search**: Find specific messages within conversations
+- **Conversation Archiving**: Archive inactive conversations
+- **Block and Report**: Safety features for unwanted interactions
+- **Conversation Analytics**: Insights into communication patterns
 
-## 5. Data Architecture
+### 4. Advanced Features
 
-### 5.1 Database Design (Cloudflare D1)
+#### Social Features
+- **Icebreakers**: AI-generated conversation starters
+- **Common Interests**: Highlight shared interests and activities
+- **Mutual Connections**: Show mutual friends or connections
+- **Social Proof**: Display verified information and achievements
+- **Group Events**: Organize and participate in group activities
+
+#### Gamification
+- **Profile Completeness**: Encourage complete profiles with progress indicators
+- **Activity Streaks**: Reward consistent app usage
+- **Achievement Badges**: Unlock badges for various milestones
+- **Compatibility Challenges**: Fun quizzes to improve matching
+- **Leaderboards**: Optional social rankings and competitions
+
+#### Premium Features
+- **Unlimited Likes**: Remove daily like limits
+- **Advanced Filters**: Additional search and filter options
+- **Priority Matching**: Higher visibility in match queues
+- **Read Receipts**: See when messages are read
+- **Incognito Mode**: Browse profiles without being seen
+- **Boost Feature**: Temporarily increase profile visibility
+
+### 5. Safety and Moderation
+
+#### Content Moderation
+- **Automated Screening**: AI-powered content filtering
+- **Human Review**: Manual review for flagged content
+- **Community Guidelines**: Clear rules and enforcement
+- **Appeal Process**: Fair review process for moderation decisions
+- **Proactive Monitoring**: Continuous monitoring for inappropriate behavior
+
+#### User Safety
+- **Verification System**: Identity verification options
+- **Report and Block**: Easy reporting of inappropriate behavior
+- **Safety Tips**: Educational content about online dating safety
+- **Emergency Features**: Quick access to safety resources
+- **Data Protection**: Comprehensive privacy controls
+
+## Service Architecture
+
+### Go Telegram Bot Service
+
+#### Core Responsibilities
+- **Telegram API Integration**: Handle all Telegram bot interactions
+- **Command Processing**: Process user commands and callbacks
+- **Message Handling**: Manage incoming and outgoing messages
+- **Media Processing**: Handle photo, video, and document uploads
+- **Real-Time Features**: WebSocket connections for live updates
+- **Background Jobs**: Scheduled tasks and batch processing
+
+#### Key Components
+```go
+// Core service structure
+type BotService struct {
+    bot           *bot.Bot
+    db            *sql.DB
+    redis         *redis.Client
+    userService   *UserService
+    matchService  *MatchService
+    messageService *MessageService
+    mediaService  *MediaService
+}
+
+// Main handlers
+- CommandHandler: Process bot commands (/start, /profile, /matches)
+- CallbackHandler: Handle inline keyboard callbacks
+- MessageHandler: Process text and media messages
+- WebhookHandler: Receive Telegram webhook updates
+```
+
+#### Performance Features
+- **Connection Pooling**: Efficient database connection management
+- **Caching Strategy**: Redis-based caching for frequent operations
+- **Rate Limiting**: Protect against API abuse
+- **Graceful Shutdown**: Clean service termination
+- **Health Checks**: Service health monitoring endpoints
+
+### TypeScript Web API Service
+
+#### Core Responsibilities
+- **RESTful API**: Provide HTTP API for web interface
+- **Authentication**: JWT-based authentication system
+- **Data Validation**: Request/response validation and sanitization
+- **Business Logic**: Core application logic and workflows
+- **External Integrations**: Third-party service integrations
+- **Admin Interface**: Administrative functions and analytics
+
+#### API Endpoints
+```typescript
+// Authentication
+POST /api/auth/login
+POST /api/auth/logout
+POST /api/auth/refresh
+
+// User Management
+GET /api/users/profile
+PUT /api/users/profile
+POST /api/users/photos
+DELETE /api/users/photos/:id
+
+// Matching
+GET /api/matches
+POST /api/matches/:id/like
+POST /api/matches/:id/pass
+GET /api/matches/suggestions
+
+// Messaging
+GET /api/conversations
+GET /api/conversations/:id/messages
+POST /api/conversations/:id/messages
+PUT /api/conversations/:id/read
+
+// Admin
+GET /api/admin/users
+GET /api/admin/analytics
+PUT /api/admin/feature-flags
+```
+
+#### Security Features
+- **JWT Authentication**: Secure token-based authentication
+- **Rate Limiting**: API endpoint protection
+- **Input Validation**: Comprehensive request validation
+- **CORS Configuration**: Cross-origin request handling
+- **Security Headers**: HTTP security headers implementation
+
+### React Frontend Service
+
+#### Core Features
+- **Admin Dashboard**: Comprehensive administrative interface
+- **User Management**: User account management and moderation
+- **Analytics Dashboard**: Real-time metrics and insights
+- **Content Moderation**: Review and moderate user content
+- **Feature Flag Management**: Dynamic feature control
+- **System Monitoring**: Service health and performance monitoring
+
+#### Key Components
+```typescript
+// Main application structure
+- Dashboard: Overview metrics and quick actions
+- UserManagement: User profiles, verification, and moderation
+- Analytics: Detailed usage statistics and trends
+- ContentModeration: Review flagged content and user reports
+- FeatureFlags: Manage feature toggles and configurations
+- SystemHealth: Monitor service status and performance
+```
+
+## Data Architecture
+
+### PostgreSQL Database Schema
 
 #### Core Tables
-- `users`: User profiles and metadata
-- `matches`: Match relationships and status
-- `conversations`: Chat conversations
-- `messages`: Individual messages
-- `preferences`: User matching preferences
-- `analytics_events`: Event tracking data
 
-#### Indexing Strategy
-- Primary keys: UUID v4
-- Secondary indexes: User lookup, match queries
-- Composite indexes: Multi-column queries
-- Partial indexes: Filtered data access
+**Users Table**
+```sql
+CREATE TABLE users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    telegram_id BIGINT UNIQUE NOT NULL,
+    username VARCHAR(255),
+    first_name VARCHAR(255) NOT NULL,
+    last_name VARCHAR(255),
+    email VARCHAR(255),
+    phone VARCHAR(20),
+    date_of_birth DATE,
+    gender VARCHAR(20),
+    location_lat DECIMAL(10, 8),
+    location_lng DECIMAL(11, 8),
+    location_name VARCHAR(255),
+    bio TEXT,
+    occupation VARCHAR(255),
+    education VARCHAR(255),
+    height INTEGER,
+    relationship_status VARCHAR(50),
+    looking_for VARCHAR(50),
+    interests TEXT[],
+    languages TEXT[],
+    is_verified BOOLEAN DEFAULT FALSE,
+    is_premium BOOLEAN DEFAULT FALSE,
+    is_active BOOLEAN DEFAULT TRUE,
+    last_active TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+```
 
-### 5.2 Storage Strategy (Cloudflare R2)
+**Matches Table**
+```sql
+CREATE TABLE matches (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user1_id UUID NOT NULL REFERENCES users(id),
+    user2_id UUID NOT NULL REFERENCES users(id),
+    user1_liked BOOLEAN DEFAULT FALSE,
+    user2_liked BOOLEAN DEFAULT FALSE,
+    is_mutual BOOLEAN DEFAULT FALSE,
+    compatibility_score DECIMAL(3, 2),
+    matched_at TIMESTAMP WITH TIME ZONE,
+    expires_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(user1_id, user2_id)
+);
+```
 
-#### Media Storage
-- User profile images
-- Shared media files
-- System assets and resources
-- Backup and archive data
+**Conversations Table**
+```sql
+CREATE TABLE conversations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    match_id UUID NOT NULL REFERENCES matches(id),
+    last_message_id UUID,
+    last_message_at TIMESTAMP WITH TIME ZONE,
+    is_archived BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+```
 
-#### Organization
-- Bucket per environment (dev, staging, prod)
-- Hierarchical folder structure
-- Lifecycle policies for cost optimization
-- CDN integration for global delivery
+**Messages Table**
+```sql
+CREATE TABLE messages (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    conversation_id UUID NOT NULL REFERENCES conversations(id),
+    sender_id UUID NOT NULL REFERENCES users(id),
+    message_type VARCHAR(50) NOT NULL DEFAULT 'text',
+    content TEXT,
+    media_url VARCHAR(500),
+    media_type VARCHAR(50),
+    reply_to_id UUID REFERENCES messages(id),
+    is_read BOOLEAN DEFAULT FALSE,
+    read_at TIMESTAMP WITH TIME ZONE,
+    is_deleted BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+```
 
-### 5.3 Caching Strategy (Cloudflare KV)
+**User Preferences Table**
+```sql
+CREATE TABLE user_preferences (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id),
+    min_age INTEGER DEFAULT 18,
+    max_age INTEGER DEFAULT 99,
+    max_distance INTEGER DEFAULT 50,
+    preferred_genders TEXT[],
+    relationship_types TEXT[],
+    deal_breakers TEXT[],
+    must_haves TEXT[],
+    notification_settings JSONB DEFAULT '{}',
+    privacy_settings JSONB DEFAULT '{}',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(user_id)
+);
+```
 
-#### Cache Layers
-- **L1**: In-memory worker cache (short-lived)
-- **L2**: Cloudflare KV (medium-term)
-- **L3**: Database (persistent)
+**Media Files Table**
+```sql
+CREATE TABLE media_files (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id),
+    file_type VARCHAR(50) NOT NULL,
+    file_size INTEGER,
+    file_url VARCHAR(500) NOT NULL,
+    thumbnail_url VARCHAR(500),
+    is_profile_photo BOOLEAN DEFAULT FALSE,
+    display_order INTEGER DEFAULT 0,
+    is_verified BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+```
 
-#### Cache Patterns
-- User sessions and authentication tokens
-- Frequently accessed user profiles
-- Matching algorithm results
-- Configuration and feature flags
+#### Database Optimization
+- **Indexing Strategy**: Optimized indexes for common queries
+- **Partitioning**: Table partitioning for large datasets
+- **Connection Pooling**: Efficient connection management
+- **Query Optimization**: Optimized queries and stored procedures
+- **Backup Strategy**: Automated backups and point-in-time recovery
 
-## 6. Security & Privacy
+### Redis Cache Architecture
 
-### 6.1 Data Protection
-- **Encryption**: End-to-end encryption for sensitive data
-- **GDPR Compliance**: Right to deletion and data portability
+#### Caching Strategy
+```redis
+# User sessions
+user:session:{user_id} -> {session_data}
+
+# User profiles (frequently accessed)
+user:profile:{user_id} -> {profile_json}
+
+# Match suggestions cache
+user:matches:{user_id} -> {match_ids_array}
+
+# Feature flags
+feature:{flag_name} -> {flag_value}
+
+# Rate limiting
+rate_limit:{user_id}:{endpoint} -> {request_count}
+
+# Real-time presence
+user:online:{user_id} -> {timestamp}
+
+# Message queues
+queue:notifications -> {notification_jobs}
+queue:matching -> {matching_jobs}
+```
+
+#### Performance Features
+- **TTL Management**: Automatic cache expiration
+- **Cache Warming**: Preload frequently accessed data
+- **Cache Invalidation**: Smart cache invalidation strategies
+- **Memory Optimization**: Efficient memory usage patterns
+- **Clustering**: Redis cluster for high availability
+
+## Security and Privacy
+
+### Data Protection
+
+#### Encryption
+- **Data at Rest**: AES-256 encryption for sensitive data
+- **Data in Transit**: TLS 1.3 for all communications
+- **Message Encryption**: End-to-end encryption for private messages
+- **Key Management**: Secure key rotation and management
+- **Database Encryption**: Transparent database encryption
+
+#### Privacy Controls
 - **Data Minimization**: Collect only necessary information
-- **Anonymization**: Remove PII from analytics data
+- **User Consent**: Explicit consent for data collection
+- **Data Retention**: Automatic data deletion policies
+- **Right to Deletion**: User-initiated data deletion
+- **Data Portability**: Export user data on request
 
-### 6.2 Security Measures
-- **Input Validation**: Comprehensive input sanitization
-- **Rate Limiting**: API and user action rate limits
-- **Authentication**: Secure token-based authentication
-- **Authorization**: Role-based access control
+### Authentication and Authorization
 
-## 7. Performance Requirements
+#### Multi-Factor Authentication
+- **Telegram Integration**: Leverage Telegram's security
+- **JWT Tokens**: Secure token-based authentication
+- **Session Management**: Secure session handling
+- **Device Tracking**: Monitor and manage device access
+- **Suspicious Activity**: Detect and prevent unauthorized access
 
-### 7.1 Response Times
-- **API Endpoints**: < 100ms (95th percentile)
-- **Database Queries**: < 50ms (95th percentile)
-- **Matching Algorithm**: < 200ms (95th percentile)
-- **Media Upload**: < 2s for 10MB files
+#### Access Control
+- **Role-Based Access**: Different permission levels
+- **API Rate Limiting**: Prevent abuse and attacks
+- **IP Whitelisting**: Restrict access by IP address
+- **Audit Logging**: Comprehensive access logging
+- **Security Monitoring**: Real-time security monitoring
 
-### 7.2 Throughput
-- **Concurrent Users**: 1M+ active users
-- **Messages per Second**: 10K+ messages/second
-- **API Requests**: 100K+ requests/second
-- **Database Operations**: 50K+ ops/second
+### Content Safety
 
-### 7.3 Availability
-- **Uptime**: 99.99% (52.6 minutes downtime/year)
-- **Recovery Time**: < 5 minutes for critical failures
-- **Data Durability**: 99.999999999% (11 9's)
+#### Automated Moderation
+- **AI Content Filtering**: Automatic inappropriate content detection
+- **Image Recognition**: Detect inappropriate images
+- **Text Analysis**: Analyze text for harmful content
+- **Behavioral Analysis**: Detect suspicious user behavior
+- **Real-Time Monitoring**: Continuous content monitoring
 
-## 8. Monitoring & Observability
+#### Human Moderation
+- **Review Queue**: Flagged content review system
+- **Moderator Tools**: Comprehensive moderation interface
+- **Appeal Process**: Fair review and appeal system
+- **Community Guidelines**: Clear rules and enforcement
+- **Training Programs**: Moderator training and certification
 
-### 8.1 Metrics
-- **System Metrics**: CPU, memory, network usage
-- **Application Metrics**: Request rates, error rates, latency
-- **Business Metrics**: User engagement, match success rates
-- **Custom Metrics**: Feature-specific KPIs
+## Performance Requirements
 
-### 8.2 Logging
-- **Structured Logging**: JSON format with consistent schema
-- **Log Levels**: Debug, info, warn, error, critical
-- **Correlation IDs**: Request tracing across services
-- **Log Retention**: 30 days for debug, 1 year for audit
+### Response Time Targets
+- **Bot Commands**: < 500ms response time
+- **Message Delivery**: < 200ms for text messages
+- **Match Suggestions**: < 1s for personalized matches
+- **Profile Loading**: < 800ms for complete profiles
+- **Search Results**: < 1.5s for filtered searches
+- **Media Upload**: < 5s for image processing
 
-### 8.3 Alerting
-- **Error Rate Alerts**: > 1% error rate
-- **Latency Alerts**: > 500ms response time
-- **Availability Alerts**: Service downtime
-- **Business Alerts**: Significant metric changes
+### Scalability Targets
+- **Concurrent Users**: Support 10,000+ concurrent users
+- **Daily Active Users**: Handle 100,000+ daily active users
+- **Messages per Second**: Process 1,000+ messages per second
+- **Database Queries**: Handle 10,000+ queries per second
+- **File Storage**: Support petabyte-scale media storage
+- **Geographic Distribution**: Multi-region deployment capability
 
-## 9. Development & Deployment
+### Availability Requirements
+- **Uptime**: 99.9% availability (8.76 hours downtime per year)
+- **Recovery Time**: < 5 minutes for service recovery
+- **Data Backup**: Real-time data replication
+- **Disaster Recovery**: < 1 hour recovery time objective
+- **Monitoring**: 24/7 system monitoring and alerting
 
-### 9.1 Development Workflow
-- **Git Flow**: Feature branches with PR reviews
-- **Testing**: Unit, integration, and end-to-end tests
-- **Code Quality**: Clippy, rustfmt, and custom lints
-- **Documentation**: Inline docs and API documentation
+## Deployment and Operations
 
-### 9.2 CI/CD Pipeline
-- **Build**: Automated Rust compilation and optimization
-- **Test**: Comprehensive test suite execution
-- **Security**: Dependency vulnerability scanning
-- **Deploy**: Automated deployment to Cloudflare Workers
+### Infrastructure
 
-### 9.3 Environment Strategy
-- **Development**: Local development with mocked services
-- **Staging**: Production-like environment for testing
-- **Production**: Live environment with full monitoring
+#### Containerization
+```yaml
+# docker-compose.yml structure
+services:
+  bot:
+    build: ./services/bot
+    environment:
+      - DATABASE_URL
+      - REDIS_URL
+      - TELEGRAM_BOT_TOKEN
+    depends_on:
+      - postgres
+      - redis
+  
+  api:
+    build: ./services/api
+    environment:
+      - DATABASE_URL
+      - REDIS_URL
+      - JWT_SECRET
+    depends_on:
+      - postgres
+      - redis
+  
+  frontend:
+    build: ./web/frontend
+    environment:
+      - VITE_API_URL
+    depends_on:
+      - api
+  
+  postgres:
+    image: postgres:15
+    environment:
+      - POSTGRES_DB
+      - POSTGRES_USER
+      - POSTGRES_PASSWORD
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+  
+  redis:
+    image: redis:7
+    volumes:
+      - redis_data:/data
+  
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - bot
+      - api
+      - frontend
+```
 
-## 10. Feature Flags Implementation
+#### CI/CD Pipeline
+```yaml
+# GitHub Actions workflow
+name: Deploy MeetsMatch
+on:
+  push:
+    branches: [main]
 
-### 10.1 Flag Types
-- **Boolean Flags**: Simple on/off toggles
-- **Percentage Flags**: Gradual rollout percentages
-- **User Segment Flags**: Target specific user groups
-- **Configuration Flags**: Runtime parameter changes
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Run Tests
+        run: |
+          make test-all
+          make lint-all
+  
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build Docker Images
+        run: |
+          docker build -t meetsmatch/bot ./services/bot
+          docker build -t meetsmatch/api ./services/api
+          docker build -t meetsmatch/frontend ./web/frontend
+  
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to Production
+        run: |
+          docker-compose -f docker-compose.prod.yml up -d
+```
 
-### 10.2 Flag Management
-- **Runtime Updates**: Change flags without deployment
-- **Audit Trail**: Track all flag changes
-- **Rollback Capability**: Quick revert to previous state
-- **Testing Integration**: Flag-aware test scenarios
+### Monitoring and Observability
 
-## 11. Chaos Engineering
+#### Metrics Collection
+- **Application Metrics**: Custom business metrics
+- **System Metrics**: CPU, memory, disk, network usage
+- **Database Metrics**: Query performance and connection pools
+- **Cache Metrics**: Redis performance and hit rates
+- **User Metrics**: Active users, engagement, and retention
 
-### 11.1 Fault Injection
-- **Network Failures**: Simulate connection timeouts
-- **Database Errors**: Inject query failures
-- **Service Unavailability**: Simulate downstream failures
-- **Resource Exhaustion**: Memory and CPU stress tests
+#### Logging Strategy
+```json
+{
+  "timestamp": "2024-01-15T10:30:00Z",
+  "level": "INFO",
+  "service": "bot",
+  "user_id": "123e4567-e89b-12d3-a456-426614174000",
+  "action": "match_suggestion",
+  "duration_ms": 245,
+  "metadata": {
+    "matches_found": 5,
+    "algorithm_version": "v2.1"
+  }
+}
+```
 
-### 11.2 Resilience Testing
-- **Circuit Breaker Testing**: Verify failure isolation
-- **Retry Logic Testing**: Confirm exponential backoff
-- **Graceful Degradation**: Test fallback mechanisms
-- **Recovery Testing**: Validate system recovery
+#### Alerting Rules
+- **High Error Rate**: > 5% error rate for 5 minutes
+- **Slow Response Time**: > 2s average response time
+- **Database Issues**: Connection pool exhaustion
+- **Memory Usage**: > 85% memory utilization
+- **Disk Space**: < 10% free disk space
+- **User Experience**: Significant drop in user engagement
 
-## 12. Success Metrics
+## Success Metrics
 
-### 12.1 Technical KPIs
-- **Performance**: Sub-100ms response times
-- **Reliability**: 99.99% uptime
-- **Scalability**: Handle 10x traffic spikes
-- **Cost**: 50% reduction in infrastructure costs
+### User Engagement
+- **Daily Active Users (DAU)**: Target 10,000+ daily active users
+- **Monthly Active Users (MAU)**: Target 50,000+ monthly active users
+- **Session Duration**: Average session > 15 minutes
+- **Messages per User**: Average 20+ messages per day
+- **Profile Completion**: > 80% complete profiles
+- **Return Rate**: > 60% 7-day return rate
 
-### 12.2 Business KPIs
-- **User Engagement**: 20% increase in daily active users
-- **Match Success**: 15% improvement in successful matches
-- **User Satisfaction**: 4.5+ app store rating
-- **Revenue**: 25% increase in premium subscriptions
+### Matching Success
+- **Match Rate**: > 15% mutual match rate
+- **Conversation Rate**: > 70% of matches start conversations
+- **Response Rate**: > 50% message response rate
+- **Meeting Rate**: > 10% of matches meet in person
+- **Relationship Success**: > 5% long-term relationships
 
-## 13. Timeline & Milestones
+### Technical Performance
+- **Uptime**: > 99.9% service availability
+- **Response Time**: < 500ms average API response
+- **Error Rate**: < 1% application error rate
+- **User Satisfaction**: > 4.5/5 user rating
+- **Support Tickets**: < 2% users requiring support
 
-### Phase 1: Foundation (Weeks 1-4)
-- Project setup and infrastructure
-- Core service architecture
-- Database schema and migrations
-- Basic CI/CD pipeline
+### Business Metrics
+- **User Acquisition Cost**: < $10 per user
+- **Lifetime Value**: > $50 per user
+- **Premium Conversion**: > 5% premium subscription rate
+- **Churn Rate**: < 10% monthly churn
+- **Revenue Growth**: > 20% month-over-month growth
 
-### Phase 2: Core Features (Weeks 5-8)
-- User management service
-- Basic matching algorithm
-- Telegram bot integration
-- Authentication and security
+## Timeline and Milestones
 
-### Phase 3: Advanced Features (Weeks 9-12)
-- Enhanced matching algorithms
-- Communication features
-- Analytics and monitoring
-- Performance optimization
+### Phase 1: Core Platform (Months 1-3)
+- ✅ **Infrastructure Setup**: Docker, CI/CD, monitoring
+- ✅ **User Management**: Registration, profiles, authentication
+- ✅ **Basic Matching**: Simple algorithm and mutual matching
+- ✅ **Messaging System**: Text messages and basic media
+- ✅ **Admin Interface**: Basic user management and analytics
 
-### Phase 4: Production Ready (Weeks 13-16)
-- Comprehensive testing
-- Security audit
-- Performance tuning
-- Production deployment
+### Phase 2: Enhanced Features (Months 4-6)
+- 🔄 **Advanced Matching**: ML-powered algorithm improvements
+- 🔄 **Rich Media**: Video, voice messages, location sharing
+- 🔄 **Real-Time Features**: Live chat, typing indicators, presence
+- 🔄 **Safety Features**: Content moderation, reporting system
+- 🔄 **Performance Optimization**: Caching, database optimization
 
-## 14. Risk Assessment
+### Phase 3: Premium Features (Months 7-9)
+- 📋 **Premium Subscriptions**: Advanced features and monetization
+- 📋 **Advanced Analytics**: Detailed user insights and metrics
+- 📋 **Social Features**: Group events, mutual connections
+- 📋 **Gamification**: Achievements, streaks, leaderboards
+- 📋 **Mobile App**: Native mobile application development
 
-### 14.1 Technical Risks
-- **Cloudflare Limitations**: Worker execution time limits
-- **Database Constraints**: D1 query complexity limitations
-- **Migration Complexity**: Data migration from existing system
-- **Performance Bottlenecks**: Unexpected scaling issues
+### Phase 4: Scale and Growth (Months 10-12)
+- 📋 **Multi-Language Support**: Internationalization and localization
+- 📋 **Geographic Expansion**: Multi-region deployment
+- 📋 **API Platform**: Third-party integrations and partnerships
+- 📋 **Advanced AI**: Conversation starters, compatibility insights
+- 📋 **Enterprise Features**: White-label solutions and B2B offerings
 
-### 14.2 Mitigation Strategies
-- **Prototype Early**: Validate Cloudflare capabilities
-- **Incremental Migration**: Gradual system transition
-- **Performance Testing**: Load testing throughout development
-- **Fallback Plans**: Alternative architecture options
+### Legend
+- ✅ Completed
+- 🔄 In Progress
+- 📋 Planned
 
-## 15. Conclusion
+---
 
-This PRD outlines a comprehensive approach to rewriting MeetsMatch in Rust using Cloudflare's edge computing platform. The focus on modularity, performance, reliability, and feature flags ensures a robust, scalable, and maintainable system that can grow with user demands while providing exceptional user experience.
-
-The combination of Rust's performance characteristics and Cloudflare's global infrastructure positions MeetsMatch for significant improvements in speed, reliability, and cost-effectiveness while maintaining the flexibility to evolve and adapt to changing requirements.
+*This PRD serves as the comprehensive guide for the MeetsMatch platform development. It will be updated regularly to reflect changes in requirements, technology decisions, and market feedback.*

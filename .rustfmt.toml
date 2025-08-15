@@ -1,4 +1,0 @@
-# .rustfmt.toml
-edition = "2021"
-# Add any specific formatting preferences here
-# e.g., max_width = 100

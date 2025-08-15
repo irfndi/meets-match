@@ -1,123 +1,262 @@
-# .github/workflows/ci.yml
 name: CI
 
-on: [push, pull_request]
+on:
+  push:
+    branches: ['*']
+  pull_request:
+    branches: ['*']
+
+env:
+  GO_VERSION: '1.23'
+  BUN_VERSION: '1.1.42'
+  NODE_VERSION: '20'
 
 jobs:
-  test-and-build: # Renamed job for clarity
+  # Go Bot Service
+  go-bot:
+    name: Go Bot Service
     runs-on: ubuntu-latest
-
+    defaults:
+      run:
+        working-directory: .
+    
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Setup Rust toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
-        components: clippy, rustfmt # Ensure clippy and rustfmt components are included
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: go.sum
 
-    - name: Install wasm-pack
-      run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+      - name: Verify Go modules
+        run: go mod verify
 
-    - name: Install cargo-llvm-cov
-      run: cargo install cargo-llvm-cov
+      - name: Run Go vet
+        run: go vet ./...
 
-    - name: Check Formatting (rustfmt)
-      run: cargo fmt -- --check
+      - name: Run Go fmt check
+        run: |
+          if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
+            echo "Go code is not formatted properly:"
+            gofmt -s -l .
+            exit 1
+          fi
 
-    - name: Lint (clippy)
-      run: cargo clippy -- -D warnings --all-targets --all-features # Ensure all code is checked
+      - name: Install staticcheck
+        run: go install honnef.co/go/tools/cmd/staticcheck@latest
 
-    - name: Configure Test Environment Variables
-      run: |
-        echo "ENVIRONMENT=test_ci" >> $GITHUB_ENV
-        echo "LOG_LEVEL=DEBUG" >> $GITHUB_ENV
-        echo "MATCH_THRESHOLD=0.75" >> $GITHUB_ENV # Example, if used by Rust code
-        echo "TELEGRAM_TOKEN=mock_token_for_ci_tests" >> $GITHUB_ENV # If needed by tests directly
-        # Note: For wrangler.toml bindings like KV/D1, tests would need mocks or live test instances.
-        # Secrets for KV/D1 in tests are complex; typically mock these services in unit tests.
-        # Ensure these variables are actually used by your Rust tests if needed.
-        # For ConfigService, ENVIRONMENT and LOG_LEVEL are read.
+      - name: Run staticcheck
+        run: staticcheck ./...
 
-    - name: Run tests with coverage (cargo-llvm-cov)
-      # Environment variables from GITHUB_ENV are automatically available to cargo commands
-      run: |
-        echo "Running tests with coverage..."
-        # Create directory for coverage output if it doesn't exist
-        mkdir -p coverage
-        cargo llvm-cov --all-features --workspace --lcov --output-path coverage/lcov.info
-        # You can also generate an HTML report for viewing:
-        # cargo llvm-cov --all-features --workspace --html --output-dir coverage/html
-        echo "Test run finished."
+      - name: Run Go tests
+        run: go test -v -race -coverprofile=coverage.out ./...
 
-    # Optional: Upload HTML coverage report as an artifact (uncomment if you generate html report)
-    # - name: Upload HTML coverage report
-    #   uses: actions/upload-artifact@v4 # Updated to v4
-    #   if: always() # Run even if previous steps fail, to upload any partial report
-    #   with:
-    #     name: coverage-html-report
-    #     path: coverage/html/
+      - name: Upload Go coverage
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.out
+          flags: go
+          name: go-coverage
 
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v4
-      # if: github.ref == 'refs/heads/main' || github.event_name == 'pull_request' # Optional: Condition for upload
-      with:
-        token: ${{ secrets.CODECOV_TOKEN }} # Ensure CODECOV_TOKEN is set in GitHub secrets
-        files: ./coverage/lcov.info # Path to the lcov file
-        # flags: unittests # Optional flags
-        name: codecov-umbrella # Optional: Name for the report in Codecov UI
-        fail_ci_if_error: true # Recommended: Fail CI if Codecov upload fails
-        verbose: true
+      - name: Build Go bot
+        run: go build -o bin/bot ./cmd/bot
 
-    - name: Build Wasm worker (validation)
-      # This step ensures the worker builds successfully as part of CI.
-      # The 'deploy' job will perform its own release build.
-      run: |
-        echo "Building Wasm worker (debug mode for speed)..."
-        wasm-pack build --target bundler -d worker
-        echo "Wasm worker built to /worker directory."
+  # TypeScript API Service
+  typescript-api:
+    name: TypeScript API
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web/api
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-api-${{ hashFiles('web/api/bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-api-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Type check
+        run: bun run type-check
+
+      - name: Lint with Oxlint
+        run: bun run lint
+
+      - name: Run tests
+        run: bun run test
+
+      - name: Upload API coverage
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./web/api/coverage/lcov.info
+          flags: typescript-api
+          name: api-coverage
+
+      - name: Build API
+        run: bun run build
+
+  # React Frontend
+  react-frontend:
+    name: React Frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web/frontend
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-frontend-${{ hashFiles('web/frontend/bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-frontend-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Type check
+        run: bun run type-check
+
+      - name: Lint with Oxlint
+        run: bun run lint
+
+      - name: Run tests
+        run: bun run test
+
+      - name: Upload Frontend coverage
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./web/frontend/coverage/lcov.info
+          flags: react-frontend
+          name: frontend-coverage
+
+      - name: Build Frontend
+        run: bun run build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: web/frontend/dist
+          retention-days: 7
+
+  # Integration Tests
+  integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: [go-bot, typescript-api, react-frontend]
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: meetsmatch_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Run database migrations
+        run: |
+          # Add migration runner here when available
+          echo "Database migrations would run here"
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/meetsmatch_test
+
+      - name: Run integration tests
+        run: |
+          # Add integration test runner here when available
+          echo "Integration tests would run here"
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/meetsmatch_test
+          REDIS_URL: redis://localhost:6379
+
+  # Deployment (only on main branch)
   deploy:
+    name: Deploy
     runs-on: ubuntu-latest
-    needs: test-and-build # Depends on the test & build job completing successfully
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push' # Only run on push to main
-
+    needs: [go-bot, typescript-api, react-frontend]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: production
+    
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    # The deploy job builds independently to ensure it uses release configuration
-    # and doesn't rely on potentially debug-built artifacts from the test job.
-    - name: Setup Rust toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
-        # No need for clippy/rustfmt components here if only building
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-    - name: Install wasm-pack
-      run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+      - name: Login to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Build Wasm worker (release mode for deployment)
-      run: |
-        echo "Building Wasm worker for deployment (release mode)..."
-        wasm-pack build --target bundler -d worker --release # Crucially, build in release mode
-        echo "Wasm worker built to /worker directory."
+      - name: Build and push Docker images
+        run: |
+          echo "Docker build and push would happen here"
+          # docker build -t ghcr.io/${{ github.repository }}/bot:${{ github.sha }} -f deployments/docker/Dockerfile.bot .
+          # docker build -t ghcr.io/${{ github.repository }}/api:${{ github.sha }} -f deployments/docker/Dockerfile.api .
+          # docker push ghcr.io/${{ github.repository }}/bot:${{ github.sha }}
+          # docker push ghcr.io/${{ github.repository }}/api:${{ github.sha }}
 
-    - name: Set up Node.js for Wrangler
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20'
-
-    - name: Install Wrangler
-      # Consider caching npm dependencies if install time is long
-      run: npm install -g wrangler
-
-    - name: Deploy to Cloudflare Workers (Production)
-      env:
-        CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }} # Ensure CF_API_TOKEN is set
-        CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }} # Ensure CF_ACCOUNT_ID is set
-      run: |
-        echo "Deploying to production environment..."
-        # Assuming [env.production] is defined in wrangler.toml or top-level is production
-        wrangler deploy --env production
+      - name: Deploy to production
+        run: |
+          echo "Production deployment would happen here"
+          # Add deployment scripts/commands here

@@ -1,0 +1,28 @@
+{
+  "$schema": "https://raw.githubusercontent.com/oxc-project/oxc/main/crates/oxc_linter/src/config/schema.json",
+  "rules": {
+    "react": "error",
+    "react-hooks": "error",
+    "typescript": "error",
+    "import": "error",
+    "jsx-a11y": "warn",
+    "unicorn": "warn"
+  },
+  "env": {
+    "browser": true,
+    "es2021": true,
+    "node": true
+  },
+  "globals": {
+    "React": "readonly",
+    "JSX": "readonly"
+  },
+  "ignore_patterns": [
+    "dist/**",
+    "build/**",
+    "node_modules/**",
+    "*.config.js",
+    "*.config.ts",
+    "coverage/**"
+  ]
+}
