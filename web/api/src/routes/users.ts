@@ -185,8 +185,8 @@ router.put('/me', authenticate, requireActiveUser, profileUpdateRateLimit, async
   const updateData: UpdateUserRequest = value;
   
   // Validate age preferences
-  if (updateData.preferences?.min_age && updateData.preferences?.max_age) {
-      if (updateData.preferences.min_age > updateData.preferences.max_age) {
+  if (updateData.preferences?.ageMin && updateData.preferences?.ageMax) {
+      if (updateData.preferences.ageMin > updateData.preferences.ageMax) {
       throw new ValidationError('Minimum age cannot be greater than maximum age');
     }
   }

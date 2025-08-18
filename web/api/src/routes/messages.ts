@@ -274,7 +274,7 @@ router.post('/send', authenticate, requireActiveUser, messagingRateLimit, asyncH
   }
 
   const userId = req.user!.id;
-  const { conversationId, content, message_type }: SendMessageRequest = value;
+  const { conversation_id: conversationId, content, message_type }: SendMessageRequest = value;
 
   // Verify user is part of the conversation
   const conversationResult = await DatabaseService.query(

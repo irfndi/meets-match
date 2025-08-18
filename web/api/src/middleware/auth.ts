@@ -1,5 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
+import * as jwt from 'jsonwebtoken';
+import { SignOptions } from 'jsonwebtoken';
+import { StringValue } from 'ms';
 import { DatabaseService } from '../services/database';
 import { RedisService } from '../services/redis';
 import { AuthenticationError, AuthorizationError } from './errorHandler';
@@ -20,10 +22,10 @@ interface TokenPayload extends JwtPayload {
 }
 
 export class AuthService {
-  private static readonly JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
-  private static readonly JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'your-refresh-secret-key';
-  private static readonly JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '1h';
-  private static readonly JWT_REFRESH_EXPIRES_IN = process.env.JWT_REFRESH_EXPIRES_IN || '7d';
+  private static readonly JWT_SECRET: string = process.env.JWT_SECRET || 'your-secret-key';
+  private static readonly JWT_REFRESH_SECRET: string = process.env.JWT_REFRESH_SECRET || 'your-refresh-secret-key';
+  private static readonly JWT_EXPIRES_IN: string = process.env.JWT_EXPIRES_IN || '1h';
+  private static readonly JWT_REFRESH_EXPIRES_IN: string = process.env.JWT_REFRESH_EXPIRES_IN || '7d';
 
   static generateTokens(user: User): { accessToken: string; refreshToken: string } {
     const payload = {
@@ -32,16 +34,19 @@ export class AuthService {
       username: user.username,
     };
 
+    const accessOptions: SignOptions = { expiresIn: this.JWT_EXPIRES_IN as StringValue };
+    const refreshOptions: SignOptions = { expiresIn: this.JWT_REFRESH_EXPIRES_IN as StringValue };
+
     const accessToken = jwt.sign(
       { ...payload, type: 'access' },
       this.JWT_SECRET,
-      { expiresIn: this.JWT_EXPIRES_IN }
+      accessOptions
     );
 
     const refreshToken = jwt.sign(
       { ...payload, type: 'refresh' },
       this.JWT_REFRESH_SECRET,
-      { expiresIn: this.JWT_REFRESH_EXPIRES_IN }
+      refreshOptions
     );
 
     return { accessToken, refreshToken };

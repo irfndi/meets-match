@@ -172,10 +172,10 @@ export interface UpdateUserRequest {
     country?: string;
   };
   preferences?: {
-    min_age?: number;
-    max_age?: number;
+    ageMin?: number;
+    ageMax?: number;
     gender?: 'male' | 'female' | 'other' | 'any';
-    max_distance?: number;
+    maxDistance?: number;
   };
 }
 
