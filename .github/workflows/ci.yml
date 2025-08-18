@@ -190,7 +190,7 @@ jobs:
       postgres:
         image: postgres:16
         env:
-          POSTGRES_PASSWORD: postgres
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_TEST_PASSWORD }}
           POSTGRES_DB: meetsmatch_test
         options: >-
           --health-cmd pg_isready
@@ -230,14 +230,14 @@ jobs:
           # Add migration runner here when available
           echo "Database migrations would run here"
         env:
-          DATABASE_URL: postgres://postgres:postgres@localhost:5432/meetsmatch_test
+          DATABASE_URL: postgres://postgres:${{ secrets.POSTGRES_TEST_PASSWORD }}@localhost:5432/meetsmatch_test
 
       - name: Run integration tests
         run: |
           # Add integration test runner here when available
           echo "Integration tests would run here"
         env:
-          DATABASE_URL: postgres://postgres:postgres@localhost:5432/meetsmatch_test
+          DATABASE_URL: postgres://postgres:${{ secrets.POSTGRES_TEST_PASSWORD }}@localhost:5432/meetsmatch_test
           REDIS_URL: redis://localhost:6379
 
   # Deployment (only on main branch)

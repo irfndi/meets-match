@@ -22,8 +22,22 @@ interface TokenPayload extends JwtPayload {
 }
 
 export class AuthService {
-  private static readonly JWT_SECRET: string = process.env.JWT_SECRET || 'your-secret-key';
-  private static readonly JWT_REFRESH_SECRET: string = process.env.JWT_REFRESH_SECRET || 'your-refresh-secret-key';
+  private static readonly JWT_SECRET: string = (() => {
+    const secret = process.env.JWT_SECRET;
+    if (!secret) {
+      throw new Error('JWT_SECRET environment variable is required');
+    }
+    return secret;
+  })();
+  
+  private static readonly JWT_REFRESH_SECRET: string = (() => {
+    const secret = process.env.JWT_REFRESH_SECRET;
+    if (!secret) {
+      throw new Error('JWT_REFRESH_SECRET environment variable is required');
+    }
+    return secret;
+  })();
+  
   private static readonly JWT_EXPIRES_IN: string = process.env.JWT_EXPIRES_IN || '1h';
   private static readonly JWT_REFRESH_EXPIRES_IN: string = process.env.JWT_REFRESH_EXPIRES_IN || '7d';
 

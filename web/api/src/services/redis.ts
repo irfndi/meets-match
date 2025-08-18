@@ -18,8 +18,23 @@ export class RedisService {
   private static config: RedisConfig;
 
   static async initialize(customConfig?: RedisConfig): Promise<void> {
+    if (!customConfig) {
+      // Validate required environment variables
+      const requiredEnvVars = ['REDIS_HOST'];
+      const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+      
+      if (missingVars.length > 0) {
+        throw new Error(`Missing required environment variables: ${missingVars.join(', ')}`);
+      }
+      
+      // Warn if Redis password is not set (security concern)
+      if (!process.env.REDIS_PASSWORD) {
+        console.warn('WARNING: REDIS_PASSWORD not set. Redis connection will be unprotected.');
+      }
+    }
+    
     this.config = customConfig || {
-      host: process.env.REDIS_HOST || 'localhost',
+      host: process.env.REDIS_HOST!,
       port: parseInt(process.env.REDIS_PORT || '6379'),
       password: process.env.REDIS_PASSWORD,
       db: parseInt(process.env.REDIS_DB || '0'),
