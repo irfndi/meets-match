@@ -9,42 +9,42 @@ import (
 
 // User represents a user in the system
 type User struct {
-	ID           string    `json:"id" db:"id"`
-	TelegramID   int64     `json:"telegram_id" db:"telegram_id"`
-	Username     string    `json:"username" db:"username"`
-	Name         string    `json:"name" db:"name"`
-	Age          int       `json:"age" db:"age"`
-	Gender       string    `json:"gender" db:"gender"`
-	Bio          string    `json:"bio" db:"bio"`
-	LocationText string    `json:"location_text" db:"location_text"`
-	Latitude     *float64  `json:"latitude" db:"latitude"`
-	Longitude    *float64  `json:"longitude" db:"longitude"`
-	Photos       Photos    `json:"photos" db:"photos"`
+	ID           string      `json:"id" db:"id"`
+	TelegramID   int64       `json:"telegram_id" db:"telegram_id"`
+	Username     string      `json:"username" db:"username"`
+	Name         string      `json:"name" db:"name"`
+	Age          int         `json:"age" db:"age"`
+	Gender       string      `json:"gender" db:"gender"`
+	Bio          string      `json:"bio" db:"bio"`
+	LocationText string      `json:"location_text" db:"location_text"`
+	Latitude     *float64    `json:"latitude" db:"latitude"`
+	Longitude    *float64    `json:"longitude" db:"longitude"`
+	Photos       Photos      `json:"photos" db:"photos"`
 	Preferences  Preferences `json:"preferences" db:"preferences"`
-	State        string    `json:"state" db:"state"`
-	IsActive     bool      `json:"is_active" db:"is_active"`
-	CreatedAt    time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at" db:"updated_at"`
+	State        string      `json:"state" db:"state"`
+	IsActive     bool        `json:"is_active" db:"is_active"`
+	CreatedAt    time.Time   `json:"created_at" db:"created_at"`
+	UpdatedAt    time.Time   `json:"updated_at" db:"updated_at"`
 }
 
 // Photos represents user photos as JSON
 type Photos []Photo
 
 type Photo struct {
-	ID       string `json:"id"`
-	URL      string `json:"url"`
-	IsPrimary bool  `json:"is_primary"`
-	Order    int    `json:"order"`
+	ID        string `json:"id"`
+	URL       string `json:"url"`
+	IsPrimary bool   `json:"is_primary"`
+	Order     int    `json:"order"`
 }
 
 // Preferences represents user matching preferences
 type Preferences struct {
-	MinAge        int      `json:"min_age"`
-	MaxAge        int      `json:"max_age"`
-	Genders       []string `json:"genders"`
-	MaxDistance   int      `json:"max_distance"`
-	ShowOnline    bool     `json:"show_online"`
-	ShowDistance  bool     `json:"show_distance"`
+	MinAge       int      `json:"min_age"`
+	MaxAge       int      `json:"max_age"`
+	Genders      []string `json:"genders"`
+	MaxDistance  int      `json:"max_distance"`
+	ShowOnline   bool     `json:"show_online"`
+	ShowDistance bool     `json:"show_distance"`
 }
 
 // Implement driver.Valuer and sql.Scanner for Photos
@@ -103,15 +103,15 @@ type Match struct {
 
 // Message represents a message between matched users
 type Message struct {
-	ID         string    `json:"id" db:"id"`
-	MatchID    string    `json:"match_id" db:"match_id"`
-	SenderID   string    `json:"sender_id" db:"sender_id"`
-	ReceiverID string    `json:"receiver_id" db:"receiver_id"`
-	Content    string    `json:"content" db:"content"`
-	MessageType string   `json:"message_type" db:"message_type"` // text, image, gif
-	IsRead     bool      `json:"is_read" db:"is_read"`
-	CreatedAt  time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt  time.Time `json:"updated_at" db:"updated_at"`
+	ID          string    `json:"id" db:"id"`
+	MatchID     string    `json:"match_id" db:"match_id"`
+	SenderID    string    `json:"sender_id" db:"sender_id"`
+	ReceiverID  string    `json:"receiver_id" db:"receiver_id"`
+	Content     string    `json:"content" db:"content"`
+	MessageType string    `json:"message_type" db:"message_type"` // text, image, gif
+	IsRead      bool      `json:"is_read" db:"is_read"`
+	CreatedAt   time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at" db:"updated_at"`
 }
 
 // Conversation represents a conversation between matched users
@@ -137,11 +137,11 @@ type UserSession struct {
 
 // Analytics represents user analytics data
 type Analytics struct {
-	ID        string                 `json:"id" db:"id"`
-	UserID    string                 `json:"user_id" db:"user_id"`
-	EventType string                 `json:"event_type" db:"event_type"`
+	ID        string    `json:"id" db:"id"`
+	UserID    string    `json:"user_id" db:"user_id"`
+	EventType string    `json:"event_type" db:"event_type"`
 	EventData EventData `json:"event_data" db:"event_data"`
-	CreatedAt time.Time              `json:"created_at" db:"created_at"`
+	CreatedAt time.Time `json:"created_at" db:"created_at"`
 }
 
 // EventData represents event data as a custom type

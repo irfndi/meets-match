@@ -121,7 +121,8 @@ export class RedisService {
 
   static async hGet(key: string, field: string): Promise<string | undefined> {
     const client = this.getClient();
-    return await client.hGet(key, field);
+    const result = await client.hGet(key, field);
+    return result || undefined;
   }
 
   static async hGetAll(key: string): Promise<Record<string, string>> {
@@ -205,6 +206,18 @@ export class RedisService {
 
   static async deleteCache(key: string): Promise<number> {
     return await this.del(`cache:${key}`);
+  }
+
+  // Delete keys by pattern
+  static async deletePattern(pattern: string): Promise<number> {
+    try {
+      const keys = await this.client.keys(pattern);
+      if (keys.length === 0) return 0;
+      return await this.client.del(keys);
+    } catch (error) {
+      console.error('Redis deletePattern failed:', error);
+      throw error;
+    }
   }
 
   // Health check

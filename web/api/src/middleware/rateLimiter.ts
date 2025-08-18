@@ -121,7 +121,7 @@ const setRateLimitHeaders = (res: Response, rateLimitInfo: RateLimitInfo): void 
   }
 };
 
-const createRateLimitMiddleware = (limitName: keyof typeof RATE_LIMITS) => {
+export const createRateLimitMiddleware = (limitName: keyof typeof RATE_LIMITS) => {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
       const config = RATE_LIMITS[limitName];

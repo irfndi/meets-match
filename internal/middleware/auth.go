@@ -48,7 +48,7 @@ func (m *AuthMiddleware) Middleware(next bot.HandlerFunc) bot.HandlerFunc {
 
 		// Add user to context for downstream handlers
 		ctx = context.WithValue(ctx, "user", user)
-		log.Printf("User %d (%s) authenticated successfully", user.ID, user.Name)
+		log.Printf("User %s (%s) authenticated successfully", user.ID, user.Name)
 
 		// Continue to next handler
 		next(ctx, b, update)

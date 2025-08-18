@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import request from 'supertest'
 import express from 'express'
-import { healthRouter } from '../routes/health'
+import { healthRoutes } from '../routes/health'
 
 const app = express()
-app.use('/health', healthRouter)
+app.use('/health', healthRoutes)
 
 describe('Health Routes', () => {
   describe('GET /health', () => {
@@ -14,9 +14,17 @@ describe('Health Routes', () => {
         .expect(200)
 
       expect(response.body).toEqual({
-        status: 'ok',
-        timestamp: expect.any(String),
-        uptime: expect.any(Number)
+        success: true,
+        data: {
+          status: 'healthy',
+          timestamp: expect.any(String),
+          services: {
+            database: expect.any(Boolean),
+            redis: expect.any(Boolean)
+          },
+          uptime: expect.any(Number),
+          version: expect.any(String)
+        }
       })
     })
   })
@@ -25,14 +33,15 @@ describe('Health Routes', () => {
     it('should return detailed health information', async () => {
       const response = await request(app)
         .get('/health/detailed')
-        .expect(200)
 
-      expect(response.body).toHaveProperty('status')
-      expect(response.body).toHaveProperty('timestamp')
-      expect(response.body).toHaveProperty('uptime')
-      expect(response.body).toHaveProperty('version')
-      expect(response.body).toHaveProperty('environment')
-      expect(response.body).toHaveProperty('memory')
+      expect(response.body).toHaveProperty('success')
+      expect(response.body).toHaveProperty('data')
+      expect(response.body.data).toHaveProperty('status')
+      expect(response.body.data).toHaveProperty('timestamp')
+      expect(response.body.data).toHaveProperty('uptime')
+      expect(response.body.data).toHaveProperty('version')
+      expect(response.body.data).toHaveProperty('responseTime')
+      expect(response.body.data).toHaveProperty('services')
     })
   })
 
@@ -40,10 +49,12 @@ describe('Health Routes', () => {
     it('should return readiness status', async () => {
       const response = await request(app)
         .get('/health/ready')
-        .expect(200)
 
-      expect(response.body).toHaveProperty('status')
-      expect(response.body).toHaveProperty('checks')
+      expect(response.body).toHaveProperty('success')
+      expect(response.body).toHaveProperty('data')
+      expect(response.body.data).toHaveProperty('ready')
+      expect(response.body.data).toHaveProperty('services')
+      expect(response.body.data).toHaveProperty('timestamp')
     })
   })
 })

@@ -4,6 +4,7 @@ export interface User {
   username?: string;
   first_name: string;
   last_name?: string;
+  email?: string;
   age?: number;
   gender?: 'male' | 'female' | 'other';
   bio?: string;
@@ -35,15 +36,27 @@ export interface Match {
   is_mutual: boolean;
   created_at: Date;
   updated_at: Date;
+  status?: string;
+  matchedAt?: Date;
+  user?: User;
 }
 
 export interface Conversation {
   id: string;
-  match_id: string;
+  user1_id: string;
+  user2_id: string;
   created_at: Date;
   updated_at: Date;
+  last_message?: string;
   last_message_at?: Date;
-  is_active: boolean;
+  unread_count?: number;
+  otherUser?: {
+    id: string;
+    first_name: string;
+    last_name: string;
+    photos: string[];
+    last_login?: Date;
+  };
 }
 
 export interface Message {
@@ -51,10 +64,13 @@ export interface Message {
   conversation_id: string;
   sender_id: string;
   content: string;
-  message_type: 'text' | 'photo' | 'video' | 'audio' | 'document';
-  media_url?: string;
-  is_read: boolean;
+  message_type?: 'text' | 'photo' | 'video' | 'audio' | 'document';
   created_at: Date;
+  updated_at: Date;
+  is_read: boolean;
+  senderName?: string;
+  isFromCurrentUser?: boolean;
+  readAt?: Date | null;
 }
 
 export interface UserSession {
@@ -102,9 +118,44 @@ export interface AuthRequest {
   last_name?: string;
 }
 
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface RegisterRequest {
+  email: string;
+  password: string;
+  first_name: string;
+  last_name?: string;
+  telegram_id?: number;
+}
+
+export interface RefreshTokenRequest {
+  refreshToken: string;
+}
+
+export interface TelegramAuthRequest {
+  telegram_id: number;
+  first_name: string;
+  last_name?: string;
+  username?: string;
+  auth_date: number;
+  hash: string;
+}
+
+export interface AnalyticsEventRequest {
+  eventType: string;
+  event_type?: string;
+  eventData?: Record<string, any>;
+  metadata?: Record<string, any>;
+  targetUserId?: string;
+}
+
 export interface AuthResponse {
   user: User;
   token: string;
+  access_token?: string;
   refreshToken: string;
 }
 
@@ -131,6 +182,22 @@ export interface UpdateUserRequest {
 export interface MatchRequest {
   target_user_id: string;
   liked: boolean;
+}
+
+export interface MatchActionRequest {
+  target_user_id: string;
+  targetUserId: string;
+  action: 'like' | 'pass';
+}
+
+export interface PotentialMatchesQuery extends PaginationQuery {
+  min_age?: number;
+  max_age?: number;
+  ageMin?: number;
+  ageMax?: number;
+  gender?: 'male' | 'female' | 'other';
+  max_distance?: number;
+  maxDistance?: number;
 }
 
 export interface SendMessageRequest {
@@ -206,6 +273,7 @@ export interface PhotoUploadResponse {
   filename: string;
   size: number;
   mimetype: string;
+  photos?: string[];
 }
 
 // Health check types
@@ -226,4 +294,19 @@ export interface RateLimitInfo {
   remaining: number;
   reset: Date;
   retryAfter?: number;
+}
+
+// Additional user types
+export interface UserPreferences {
+  min_age?: number;
+  max_age?: number;
+  gender?: 'male' | 'female' | 'other' | 'any';
+  max_distance?: number;
+}
+
+export interface UserStats {
+  total_matches: number;
+  total_messages: number;
+  profile_views: number;
+  last_active: Date;
 }

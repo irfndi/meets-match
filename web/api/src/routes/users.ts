@@ -24,8 +24,8 @@ import {
 const router = Router();
 
 // Rate limiting
-const profileUpdateRateLimit = createRateLimitMiddleware('profileUpdate');
-const photoUploadRateLimit = createRateLimitMiddleware('photoUpload');
+const profileUpdateRateLimit = createRateLimitMiddleware('profile');
+const photoUploadRateLimit = createRateLimitMiddleware('uploads');
 
 // Multer configuration for photo uploads
 const storage = multer.memoryStorage();
@@ -105,7 +105,7 @@ router.get('/me', authenticate, requireActiveUser, asyncHandler(async (req: Requ
   
   const result = await DatabaseService.query(
     `SELECT id, email, first_name, last_name, bio, age, gender, location, photos, 
-            preferences, is_active, telegram_id, username, created_at, updated_at, last_login
+            preferences, is_active, state, telegram_id, username, created_at, updated_at
      FROM users WHERE id = $1`,
     [userId]
   );
@@ -121,20 +121,20 @@ router.get('/me', authenticate, requireActiveUser, asyncHandler(async (req: Requ
     data: {
       id: user.id,
       email: user.email,
-      firstName: user.first_name,
-      lastName: user.last_name,
+      first_name: user.first_name,
+      last_name: user.last_name,
       bio: user.bio,
       age: user.age,
       gender: user.gender,
       location: user.location,
       photos: user.photos || [],
       preferences: user.preferences,
-      isActive: user.is_active,
-      telegramId: user.telegram_id,
+      is_active: user.is_active,
+      state: user.state || 'idle',
+      telegram_id: user.telegram_id,
       username: user.username,
-      createdAt: user.created_at,
-      updatedAt: user.updated_at,
-      lastLogin: user.last_login
+      created_at: user.created_at,
+      updated_at: user.updated_at
     }
   };
   
@@ -146,7 +146,7 @@ router.get('/:id', authenticate, requireActiveUser, asyncHandler(async (req: Req
   const { id } = req.params;
   
   const result = await DatabaseService.query(
-    `SELECT id, first_name, last_name, bio, age, gender, photos, created_at
+    `SELECT id, first_name, last_name, bio, age, gender, photos, state, created_at
      FROM users WHERE id = $1 AND is_active = true`,
     [id]
   );
@@ -161,13 +161,13 @@ router.get('/:id', authenticate, requireActiveUser, asyncHandler(async (req: Req
     success: true,
     data: {
       id: user.id,
-      firstName: user.first_name,
-      lastName: user.last_name,
+      first_name: user.first_name,
+      last_name: user.last_name,
       bio: user.bio,
       age: user.age,
       gender: user.gender,
       photos: user.photos || [],
-      createdAt: user.created_at
+      created_at: user.created_at
     }
   };
   
@@ -185,8 +185,8 @@ router.put('/me', authenticate, requireActiveUser, profileUpdateRateLimit, async
   const updateData: UpdateUserRequest = value;
   
   // Validate age preferences
-  if (updateData.preferences?.ageMin && updateData.preferences?.ageMax) {
-    if (updateData.preferences.ageMin > updateData.preferences.ageMax) {
+  if (updateData.preferences?.min_age && updateData.preferences?.max_age) {
+      if (updateData.preferences.min_age > updateData.preferences.max_age) {
       throw new ValidationError('Minimum age cannot be greater than maximum age');
     }
   }
@@ -196,14 +196,14 @@ router.put('/me', authenticate, requireActiveUser, profileUpdateRateLimit, async
   const updateValues: any[] = [];
   let paramIndex = 1;
   
-  if (updateData.firstName !== undefined) {
+  if (updateData.first_name !== undefined) {
     updateFields.push(`first_name = $${paramIndex++}`);
-    updateValues.push(updateData.firstName);
+    updateValues.push(updateData.first_name);
   }
   
-  if (updateData.lastName !== undefined) {
+  if (updateData.last_name !== undefined) {
     updateFields.push(`last_name = $${paramIndex++}`);
-    updateValues.push(updateData.lastName);
+    updateValues.push(updateData.last_name);
   }
   
   if (updateData.bio !== undefined) {
@@ -242,7 +242,7 @@ router.put('/me', authenticate, requireActiveUser, profileUpdateRateLimit, async
     UPDATE users SET ${updateFields.join(', ')}
     WHERE id = $${paramIndex}
     RETURNING id, email, first_name, last_name, bio, age, gender, location, photos, 
-              preferences, is_active, telegram_id, username, created_at, updated_at, last_login
+              preferences, is_active, state, telegram_id, username, created_at, updated_at
   `;
   
   const result = await DatabaseService.query(query, updateValues);
@@ -253,20 +253,20 @@ router.put('/me', authenticate, requireActiveUser, profileUpdateRateLimit, async
     data: {
       id: user.id,
       email: user.email,
-      firstName: user.first_name,
-      lastName: user.last_name,
+      first_name: user.first_name,
+      last_name: user.last_name,
       bio: user.bio,
       age: user.age,
       gender: user.gender,
       location: user.location,
       photos: user.photos || [],
       preferences: user.preferences,
-      isActive: user.is_active,
-      telegramId: user.telegram_id,
+      is_active: user.is_active,
+      state: user.state || 'idle',
+      telegram_id: user.telegram_id,
       username: user.username,
-      createdAt: user.created_at,
-      updatedAt: user.updated_at,
-      lastLogin: user.last_login
+      created_at: user.created_at,
+      updated_at: user.updated_at
     }
   };
   
@@ -313,8 +313,11 @@ router.post('/me/photos', authenticate, requireActiveUser, photoUploadRateLimit,
     const response: ApiResponse<PhotoUploadResponse> = {
       success: true,
       data: {
-        photos: updatedPhotos,
-        uploaded: newPhotos
+        url: newPhotos[0] || '',
+        filename: files[0]?.originalname || '',
+        size: files[0]?.size || 0,
+        mimetype: files[0]?.mimetype || '',
+        photos: newPhotos
       }
     };
     
@@ -369,7 +372,7 @@ router.get('/me/stats', authenticate, requireActiveUser, asyncHandler(async (req
   const userId = req.user!.id;
   
   // Get various statistics
-  const [matchesResult, messagesResult, profileViewsResult] = await Promise.all([
+  const [matchesResult, messagesResult, profileViewsResult, lastActiveResult] = await Promise.all([
     DatabaseService.query(
       'SELECT COUNT(*) as total_matches FROM matches WHERE (user1_id = $1 OR user2_id = $1) AND status = $2',
       [userId, 'matched']
@@ -381,13 +384,18 @@ router.get('/me/stats', authenticate, requireActiveUser, asyncHandler(async (req
     DatabaseService.query(
       'SELECT COUNT(*) as profile_views FROM analytics WHERE user_id = $1 AND event_type = $2',
       [userId, 'profile_view']
+    ),
+    DatabaseService.query(
+      'SELECT last_login as last_active FROM users WHERE id = $1',
+      [userId]
     )
   ]);
   
   const stats: UserStats = {
-    totalMatches: parseInt(matchesResult.rows[0].total_matches),
-    totalMessages: parseInt(messagesResult.rows[0].total_messages),
-    profileViews: parseInt(profileViewsResult.rows[0].profile_views)
+    total_matches: parseInt(matchesResult.rows[0].total_matches),
+    total_messages: parseInt(messagesResult.rows[0].total_messages),
+    profile_views: parseInt(profileViewsResult.rows[0].profile_views),
+    last_active: new Date(lastActiveResult.rows[0].last_active)
   };
   
   const response: ApiResponse<UserStats> = {

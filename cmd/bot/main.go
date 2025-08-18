@@ -44,7 +44,7 @@ func main() {
 		DBName:   os.Getenv("DB_NAME"),
 		SSLMode:  os.Getenv("DB_SSLMODE"),
 	}
-	
+
 	// Set defaults if not provided
 	if dbConfig.Host == "" {
 		dbConfig.Host = "localhost"
@@ -86,7 +86,7 @@ func main() {
 
 	// Setup HTTP server for webhook
 	router := gin.Default()
-	
+
 	// Health check endpoint
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "healthy", "service": "telegram-bot"})
@@ -115,7 +115,7 @@ func main() {
 		if err != nil {
 			log.Printf("Failed to remove webhook: %v", err)
 		}
-		
+
 		// Register handlers and start polling for local development
 		botHandler.RegisterHandlers()
 		go func() {

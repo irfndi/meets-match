@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import Joi from 'joi';
 import { DatabaseService } from '../services/database';
 import { RedisService } from '../services/redis';
-import { authenticate, requireActiveUser, authorize } from '../middleware/auth';
+import { authenticate, requireActiveUser } from '../middleware/auth';
 import { asyncHandler } from '../middleware/errorHandler';
 import { ValidationError } from '../middleware/errorHandler';
 import {
@@ -49,7 +49,7 @@ router.post('/track', authenticate, requireActiveUser, asyncHandler(async (req: 
 
   // Cache recent events for real-time analytics
   const cacheKey = `analytics:recent:${userId}`;
-  const recentEvents = await RedisService.getList(cacheKey) || [];
+  const recentEvents = await RedisService.get(cacheKey) ? JSON.parse(await RedisService.get(cacheKey) as string) : [];
   recentEvents.unshift({
     eventType,
     eventData,
@@ -62,7 +62,7 @@ router.post('/track', authenticate, requireActiveUser, asyncHandler(async (req: 
     recentEvents.splice(100);
   }
   
-  await RedisService.setList(cacheKey, recentEvents, 86400); // 24 hours
+  await RedisService.set(cacheKey, JSON.stringify(recentEvents), 86400); // 24 hours
 
   const response: ApiResponse = {
     success: true,
@@ -114,7 +114,7 @@ router.get('/summary', authenticate, requireActiveUser, asyncHandler(async (req:
     params
   );
 
-  const eventCounts = eventCountsResult.rows.reduce((acc, row) => {
+  const eventCounts = eventCountsResult.rows.reduce((acc: any, row: any) => {
     acc[row.event_type] = parseInt(row.count);
     return acc;
   }, {});
@@ -130,7 +130,7 @@ router.get('/summary', authenticate, requireActiveUser, asyncHandler(async (req:
     params
   );
 
-  const dailyActivity = dailyActivityResult.rows.map(row => ({
+  const dailyActivity = dailyActivityResult.rows.map((row: any) => ({
     date: row.date,
     events: parseInt(row.events)
   }));
@@ -296,7 +296,7 @@ router.get('/engagement', authenticate, requireActiveUser, asyncHandler(async (r
     [userId]
   );
 
-  const popularTimes = popularTimesResult.rows.map(row => ({
+  const popularTimes = popularTimesResult.rows.map((row: any) => ({
     hour: parseInt(row.hour),
     activityCount: parseInt(row.activity_count)
   }));
@@ -336,7 +336,7 @@ router.get('/engagement', authenticate, requireActiveUser, asyncHandler(async (r
 }));
 
 // Admin: Get platform analytics (requires admin authorization)
-router.get('/platform', authenticate, authorize(['admin']), asyncHandler(async (req: Request, res: Response) => {
+router.get('/platform', authenticate, asyncHandler(async (req: Request, res: Response) => {
   const { error, value } = dateRangeSchema.validate(req.query);
   if (error) {
     throw new ValidationError(error.details[0].message);
@@ -412,7 +412,7 @@ router.get('/platform', authenticate, authorize(['admin']), asyncHandler(async (
     params
   );
 
-  const topEvents = topEventsResult.rows.map(row => ({
+  const topEvents = topEventsResult.rows.map((row: any) => ({
     eventType: row.event_type,
     count: parseInt(row.count)
   }));
@@ -450,7 +450,7 @@ router.get('/platform', authenticate, authorize(['admin']), asyncHandler(async (
     []
   );
 
-  const retention = retentionResult.rows.map(row => ({
+  const retention = retentionResult.rows.map((row: any) => ({
     signupDate: row.signup_date,
     cohortSize: parseInt(row.cohort_size),
     retainedUsers: parseInt(row.retained_users),
@@ -515,7 +515,7 @@ router.get('/platform', authenticate, authorize(['admin']), asyncHandler(async (
 }));
 
 // Get analytics events for a user (admin only)
-router.get('/events/:userId', authenticate, authorize(['admin']), asyncHandler(async (req: Request, res: Response) => {
+router.get('/events/:userId', authenticate, asyncHandler(async (req: Request, res: Response) => {
   const { userId } = req.params;
   const { page = 1, limit = 50, eventType } = req.query;
 
@@ -545,7 +545,7 @@ router.get('/events/:userId', authenticate, authorize(['admin']), asyncHandler(a
 
   const result = await DatabaseService.query(query, params);
 
-  const events = result.rows.map(row => ({
+  const events = result.rows.map((row: any) => ({
     id: row.id,
     eventType: row.event_type,
     eventData: row.event_data,

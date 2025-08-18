@@ -3,212 +3,302 @@
 ## 1. Architecture Design
 
 ```mermaid
-graph TD
-    A[User/Telegram Client] --> B[Nginx Load Balancer]
-    C[Web Browser] --> B
-    B --> D[Go Telegram Bot Service]
-    B --> E[TypeScript Web API Service]
-    D --> F[PostgreSQL Database]
-    D --> G[Redis Cache]
-    E --> F
-    E --> G
-    
-    subgraph "Docker Container Layer"
-        D
-        E
-        F
-        G
-        B
+graph TB
+    subgraph "Client Layer"
+        A[Telegram Bot Client]
+        B[Web Browser - React App]
     end
     
-    subgraph "Digital Ocean VPS"
-        H[Docker Compose Orchestration]
+    subgraph "Application Services"
+        C[Go Bot Service :8080]
+        D[TypeScript Web API :3000]
+        E[React Frontend :5173]
     end
+    
+    subgraph "Infrastructure Layer"
+        F[Nginx Load Balancer :80/443]
+        G[PostgreSQL Database :5432]
+        H[Redis Cache :6379]
+    end
+    
+    subgraph "External Services"
+        I[Telegram Bot API]
+        J[File Storage Service]
+    end
+    
+    A --> I
+    I --> C
+    B --> F
+    F --> D
+    F --> E
+    C --> G
+    D --> G
+    C --> H
+    D --> H
+    C --> J
+    D --> J
 ```
 
 ## 2. Technology Description
 
-- **Backend Services**: Go@1.21+ (Telegram bot), Node.js@20+ with TypeScript@5+ (Web API)
-- **Frontend**: React@18+ with TypeScript@5+, Vite@5+ build tool
-- **Database**: PostgreSQL@16+ (primary), Redis@7+ (cache/sessions)
-- **Infrastructure**: Docker@24+, Docker Compose@2.20+, Nginx@1.25+
-- **Deployment**: Digital Ocean VPS (Ubuntu 22.04 LTS)
+### Current Implementation Status
+- **Go Bot Service**: Go 1.25.0 + Gin framework + go-telegram/bot - **PARTIALLY IMPLEMENTED**
+- **Web API**: TypeScript + Node.js + Express + PostgreSQL client - **CONFIGURED ONLY**
+- **Frontend**: React 19+ + TypeScript + Vite + Tailwind CSS - **CONFIGURED ONLY**
+- **Database**: PostgreSQL 16+ with JSONB support - **FULLY IMPLEMENTED**
+- **Cache**: Redis 7+ for sessions and real-time data - **CONFIGURED**
+- **Package Management**: Bun 1.2.20 for TypeScript services
+- **Containerization**: Docker + Docker Compose - **CONFIGURED**
+- **CI/CD**: GitHub Actions with multi-service pipeline - **IMPLEMENTED**
+
+### Core Dependencies
+
+#### Go Bot Service
+```go
+// Key dependencies from go.mod
+require (
+    github.com/gin-gonic/gin v1.10.0
+    github.com/go-telegram/bot v1.11.1
+    github.com/google/uuid v1.6.0
+    github.com/lib/pq v1.10.9
+)
+```
+
+#### TypeScript Web API
+```json
+{
+  "dependencies": {
+    "express": "^4.21.2",
+    "pg": "^8.13.1",
+    "redis": "^4.7.0",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2"
+  }
+}
+```
+
+#### React Frontend
+```json
+{
+  "dependencies": {
+    "react": "^19.0.0",
+    "@tanstack/react-query": "^5.62.7",
+    "react-router-dom": "^7.1.1",
+    "zustand": "^5.0.2"
+  }
+}
+```
 
 ## 3. Route Definitions
 
-### 3.1 Telegram Bot Service (Go)
-| Route | Purpose |
-|-------|----------|
-| `/webhook` | Telegram webhook endpoint for receiving updates |
-| `/health` | Health check endpoint for monitoring |
-| `/metrics` | Prometheus metrics endpoint |
+### Go Bot Service Routes
+| Route | Method | Purpose | Status |
+|-------|--------|---------|--------|
+| `/webhook` | POST | Telegram webhook endpoint | ✅ Implemented |
+| `/health` | GET | Health check endpoint | ✅ Implemented |
+| `/api/users` | GET | User management API | ⚠️ Partial |
+| `/api/matches` | GET/POST | Matching operations | ❌ Not implemented |
+| `/api/messages` | GET/POST | Message handling | ❌ Not implemented |
 
-### 3.2 Web API Service (TypeScript)
-| Route | Purpose |
-|-------|----------|
-| `/api/auth/*` | User authentication and session management |
-| `/api/users/*` | User profile management endpoints |
-| `/api/matches/*` | Matching system endpoints |
-| `/api/conversations/*` | Messaging and conversation endpoints |
-| `/api/admin/*` | Administrative functions |
-| `/health` | Health check endpoint |
-| `/metrics` | Application metrics |
+### TypeScript Web API Routes (Planned)
+| Route | Method | Purpose | Status |
+|-------|--------|---------|--------|
+| `/api/auth/login` | POST | User authentication | ❌ Not implemented |
+| `/api/auth/register` | POST | User registration | ❌ Not implemented |
+| `/api/users/profile` | GET/PUT | Profile management | ❌ Not implemented |
+| `/api/matches` | GET | Browse matches | ❌ Not implemented |
+| `/api/messages` | GET/POST | Messaging system | ❌ Not implemented |
+| `/api/admin/users` | GET | Admin user management | ❌ Not implemented |
 
-### 3.3 Frontend Routes (React)
-| Route | Purpose |
-|-------|----------|
-| `/` | Landing page and user authentication |
-| `/dashboard` | Main user dashboard with matches |
-| `/profile` | User profile management |
-| `/conversations` | Message center and chat interface |
-| `/admin` | Administrative dashboard |
+### React Frontend Routes (Planned)
+| Route | Purpose | Status |
+|-------|---------|--------|
+| `/` | Landing page | ❌ Not implemented |
+| `/login` | User authentication | ❌ Not implemented |
+| `/dashboard` | User dashboard | ❌ Not implemented |
+| `/profile` | Profile management | ❌ Not implemented |
+| `/matches` | Browse matches | ❌ Not implemented |
+| `/messages` | Messaging interface | ❌ Not implemented |
+| `/admin` | Admin panel | ❌ Not implemented |
 
 ## 4. API Definitions
 
-### 4.1 Authentication API
+### 4.1 Go Bot Service API (Implemented)
 
-**User Login**
+#### User Management
+```
+GET /api/users/{id}
+```
+
+Response:
+| Field | Type | Description |
+|-------|------|-------------|
+| id | UUID | User unique identifier |
+| telegram_id | int64 | Telegram user ID |
+| name | string | User display name |
+| age | int | User age |
+| gender | string | User gender |
+| bio | string | User biography |
+| location | object | User location data |
+| photos | array | User photo URLs |
+| preferences | object | Matching preferences |
+| created_at | timestamp | Account creation time |
+
+### 4.2 TypeScript Web API (Planned)
+
+#### Authentication
 ```
 POST /api/auth/login
 ```
 
 Request:
-| Param Name | Param Type | isRequired | Description |
-|------------|------------|------------|-------------|
-| telegram_id | string | true | Telegram user ID |
-| auth_token | string | true | Telegram authentication token |
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| email | string | true | User email address |
+| password | string | true | User password |
 
 Response:
-| Param Name | Param Type | Description |
-|------------|------------|-------------|
-| success | boolean | Authentication status |
-| user_id | string | User UUID |
-| session_token | string | JWT session token |
+| Field | Type | Description |
+|-------|------|-------------|
+| token | string | JWT authentication token |
+| user | object | User profile data |
+| expires_in | number | Token expiration time |
 
-Example:
+Example Request:
 ```json
 {
-  "telegram_id": "123456789",
-  "auth_token": "telegram_auth_token_here"
+  "email": "user@example.com",
+  "password": "securepassword123"
 }
 ```
 
-**Get User Profile**
-```
-GET /api/users/{user_id}
+Example Response:
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "user": {
+    "id": "123e4567-e89b-12d3-a456-426614174000",
+    "email": "user@example.com",
+    "name": "John Doe"
+  },
+  "expires_in": 3600
+}
 ```
 
-Response:
-| Param Name | Param Type | Description |
-|------------|------------|-------------|
-| id | string | User UUID |
-| name | string | User display name |
-| age | number | User age |
-| bio | string | User biography |
-| location | object | User location data |
-| preferences | object | Matching preferences |
-
-### 4.2 Matching API
-
-**Get Potential Matches**
+#### Match Operations
 ```
-GET /api/matches/potential
+GET /api/matches
 ```
 
 Query Parameters:
-| Param Name | Param Type | isRequired | Description |
-|------------|------------|------------|-------------|
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
 | limit | number | false | Number of matches to return (default: 10) |
-| offset | number | false | Pagination offset |
+| offset | number | false | Pagination offset (default: 0) |
+| age_min | number | false | Minimum age filter |
+| age_max | number | false | Maximum age filter |
 
 Response:
-| Param Name | Param Type | Description |
-|------------|------------|-------------|
-| matches | array | Array of potential match objects |
-| total_count | number | Total available matches |
+| Field | Type | Description |
+|-------|------|-------------|
+| matches | array | Array of potential matches |
+| total | number | Total available matches |
 | has_more | boolean | Whether more matches are available |
 
 ## 5. Server Architecture Diagram
 
 ```mermaid
 graph TD
-    A[Nginx Reverse Proxy] --> B[Go Bot Service]
-    A --> C[TypeScript Web API]
-    A --> D[React Frontend]
-    
-    B --> E[Controller Layer]
-    E --> F[Service Layer]
-    F --> G[Repository Layer]
-    G --> H[(PostgreSQL)]
-    G --> I[(Redis)]
-    
-    C --> J[Express Router]
-    J --> K[Middleware Layer]
-    K --> L[Service Layer]
-    L --> M[Data Access Layer]
-    M --> H
-    M --> I
-    
     subgraph "Go Bot Service"
-        E
-        F
-        G
+        A[HTTP Server - Gin]
+        B[Bot Handler Layer]
+        C[User Service Layer]
+        D[Match Service Layer]
+        E[Message Service Layer]
+        F[Database Repository]
     end
     
     subgraph "TypeScript Web API"
-        J
-        K
-        L
-        M
+        G[Express Server]
+        H[Auth Middleware]
+        I[Route Controllers]
+        J[Business Logic Services]
+        K[Database Access Layer]
     end
+    
+    subgraph "Shared Resources"
+        L[(PostgreSQL Database)]
+        M[(Redis Cache)]
+        N[File Storage]
+    end
+    
+    A --> B
+    B --> C
+    B --> D
+    B --> E
+    C --> F
+    D --> F
+    E --> F
+    F --> L
+    
+    G --> H
+    H --> I
+    I --> J
+    J --> K
+    K --> L
+    
+    C --> M
+    J --> M
+    E --> N
+    J --> N
 ```
 
 ## 6. Data Model
 
-### 6.1 Database Schema
+### 6.1 Entity Relationship Diagram
 
 ```mermaid
 erDiagram
     USERS ||--o{ MATCHES : creates
-    USERS ||--o{ CONVERSATIONS : participates
+    USERS ||--o{ MATCHES : receives
+    USERS ||--o{ MESSAGES : sends
+    USERS ||--o{ USER_SESSIONS : has
+    MATCHES ||--o{ CONVERSATIONS : generates
     CONVERSATIONS ||--o{ MESSAGES : contains
-    USERS ||--o{ USER_PREFERENCES : has
-    USERS ||--o{ MEDIA_FILES : uploads
-    
+    USERS ||--o{ ANALYTICS : generates
+
     USERS {
         uuid id PK
         bigint telegram_id UK
-        string telegram_username
-        string name
-        int age
-        string gender
+        varchar name
+        integer age
+        varchar gender
         text bio
-        string location_text
-        decimal latitude
-        decimal longitude
-        string state
-        jsonb roles
+        jsonb location
+        jsonb photos
+        jsonb preferences
+        varchar state
         timestamp created_at
         timestamp updated_at
-        timestamp last_interaction_at
     }
     
     MATCHES {
         uuid id PK
         uuid user_id FK
         uuid target_user_id FK
-        string status
-        decimal compatibility_score
+        varchar status
+        float compatibility_score
         timestamp created_at
         timestamp updated_at
     }
     
     CONVERSATIONS {
         uuid id PK
-        uuid user1_id FK
-        uuid user2_id FK
-        timestamp created_at
+        uuid match_id FK
+        varchar status
         timestamp last_message_at
+        timestamp created_at
+        timestamp updated_at
     }
     
     MESSAGES {
@@ -216,134 +306,213 @@ erDiagram
         uuid conversation_id FK
         uuid sender_id FK
         text content
-        string message_type
+        varchar message_type
         jsonb metadata
         timestamp created_at
     }
     
-    USER_PREFERENCES {
+    USER_SESSIONS {
         uuid id PK
         uuid user_id FK
-        int min_age
-        int max_age
-        string preferred_gender
-        int max_distance_km
-        jsonb interests
-        timestamp updated_at
+        varchar session_token
+        jsonb session_data
+        timestamp expires_at
+        timestamp created_at
     }
     
-    MEDIA_FILES {
+    ANALYTICS {
         uuid id PK
         uuid user_id FK
-        string file_type
-        string file_path
-        string original_name
-        int file_size
-        timestamp uploaded_at
+        varchar event_type
+        jsonb event_data
+        timestamp created_at
     }
 ```
 
-### 6.2 Data Definition Language
+### 6.2 Database Schema (DDL)
 
-**Users Table**
+#### Users Table
 ```sql
--- Create users table
+-- Users table with comprehensive profile data
 CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     telegram_id BIGINT UNIQUE NOT NULL,
-    telegram_username VARCHAR(255),
     name VARCHAR(100) NOT NULL,
     age INTEGER CHECK (age >= 18 AND age <= 100),
     gender VARCHAR(20) CHECK (gender IN ('male', 'female', 'non-binary', 'other')),
     bio TEXT,
-    location_text VARCHAR(255),
-    latitude DECIMAL(10, 8),
-    longitude DECIMAL(11, 8),
-    state VARCHAR(20) DEFAULT 'new' CHECK (state IN ('new', 'onboarding', 'active', 'blocked')),
-    roles JSONB DEFAULT '["user"]',
+    location JSONB,
+    photos JSONB DEFAULT '[]'::jsonb,
+    preferences JSONB DEFAULT '{}'::jsonb,
+    state VARCHAR(50) DEFAULT 'new',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    last_interaction_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Create indexes
+-- Indexes for performance
 CREATE INDEX idx_users_telegram_id ON users(telegram_id);
-CREATE INDEX idx_users_state ON users(state);
-CREATE INDEX idx_users_location ON users(latitude, longitude) WHERE latitude IS NOT NULL AND longitude IS NOT NULL;
 CREATE INDEX idx_users_age_gender ON users(age, gender);
+CREATE INDEX idx_users_location ON users USING GIN(location);
+CREATE INDEX idx_users_state ON users(state);
 ```
 
-**Matches Table**
+#### Matches Table
 ```sql
--- Create matches table
+-- Matches table for user connections
 CREATE TABLE matches (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     target_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'declined', 'expired')),
-    compatibility_score DECIMAL(3, 2) CHECK (compatibility_score >= 0 AND compatibility_score <= 1),
+    status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'rejected', 'expired')),
+    compatibility_score FLOAT CHECK (compatibility_score >= 0 AND compatibility_score <= 1),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     UNIQUE(user_id, target_user_id)
 );
 
--- Create indexes
+-- Indexes for match queries
 CREATE INDEX idx_matches_user_id ON matches(user_id);
 CREATE INDEX idx_matches_target_user_id ON matches(target_user_id);
 CREATE INDEX idx_matches_status ON matches(status);
 CREATE INDEX idx_matches_score ON matches(compatibility_score DESC);
 ```
 
-**Conversations Table**
+#### Conversations Table
 ```sql
--- Create conversations table
+-- Conversations for matched users
 CREATE TABLE conversations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user1_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    user2_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    match_id UUID NOT NULL REFERENCES matches(id) ON DELETE CASCADE,
+    status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'archived', 'blocked')),
+    last_message_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    last_message_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    CHECK (user1_id != user2_id),
-    UNIQUE(LEAST(user1_id, user2_id), GREATEST(user1_id, user2_id))
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Create indexes
-CREATE INDEX idx_conversations_user1 ON conversations(user1_id);
-CREATE INDEX idx_conversations_user2 ON conversations(user2_id);
+-- Indexes for conversation queries
+CREATE INDEX idx_conversations_match_id ON conversations(match_id);
 CREATE INDEX idx_conversations_last_message ON conversations(last_message_at DESC);
 ```
 
-**Initial Data**
+#### Messages Table
 ```sql
--- Insert default admin user
-INSERT INTO users (telegram_id, telegram_username, name, age, gender, state, roles)
-VALUES (999999999, 'admin', 'System Admin', 30, 'other', 'active', '["admin", "user"]');
+-- Messages within conversations
+CREATE TABLE messages (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    sender_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    content TEXT NOT NULL,
+    message_type VARCHAR(20) DEFAULT 'text' CHECK (message_type IN ('text', 'image', 'file', 'location')),
+    metadata JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
 
--- Insert sample preferences
-INSERT INTO user_preferences (user_id, min_age, max_age, preferred_gender, max_distance_km, interests)
-SELECT id, 18, 35, 'any', 50, '["technology", "travel", "music"]'
-FROM users WHERE telegram_username = 'admin';
+-- Indexes for message queries
+CREATE INDEX idx_messages_conversation_id ON messages(conversation_id);
+CREATE INDEX idx_messages_sender_id ON messages(sender_id);
+CREATE INDEX idx_messages_created_at ON messages(created_at DESC);
 ```
 
-## 7. Docker Configuration
+#### User Sessions Table
+```sql
+-- User sessions for web application
+CREATE TABLE user_sessions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    session_token VARCHAR(255) UNIQUE NOT NULL,
+    session_data JSONB DEFAULT '{}'::jsonb,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
 
-### 7.1 Service Containers
-- **go-bot**: Telegram bot service (Go)
-- **web-api**: Web API service (TypeScript/Node.js)
-- **frontend**: React application (served by Nginx)
-- **postgres**: PostgreSQL database
-- **redis**: Redis cache
-- **nginx**: Reverse proxy and load balancer
+-- Indexes for session management
+CREATE INDEX idx_user_sessions_token ON user_sessions(session_token);
+CREATE INDEX idx_user_sessions_user_id ON user_sessions(user_id);
+CREATE INDEX idx_user_sessions_expires ON user_sessions(expires_at);
+```
 
-### 7.2 Container Networking
-- Internal Docker network for service communication
-- External ports: 80 (HTTP), 443 (HTTPS)
-- Health checks for all services
-- Automatic restart policies
+#### Analytics Table
+```sql
+-- Analytics and event tracking
+CREATE TABLE analytics (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    event_type VARCHAR(50) NOT NULL,
+    event_data JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
 
-### 7.3 Volume Management
-- PostgreSQL data persistence
-- Redis data persistence (optional)
-- Application logs
-- SSL certificates
-- Media file storage
+-- Indexes for analytics queries
+CREATE INDEX idx_analytics_user_id ON analytics(user_id);
+CREATE INDEX idx_analytics_event_type ON analytics(event_type);
+CREATE INDEX idx_analytics_created_at ON analytics(created_at DESC);
+```
+
+#### Triggers for Updated Timestamps
+```sql
+-- Function to update updated_at timestamp
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+-- Apply triggers to relevant tables
+CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_matches_updated_at BEFORE UPDATE ON matches
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_conversations_updated_at BEFORE UPDATE ON conversations
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+```
+
+## 7. Implementation Status Summary
+
+### ✅ Fully Implemented
+- Database schema and migrations
+- Go project structure and basic HTTP server
+- User service with CRUD operations
+- Database models and repository pattern
+- CI/CD pipeline configuration
+- Docker containerization setup
+
+### ⚠️ Partially Implemented
+- Go bot service (server setup complete, bot logic incomplete)
+- Basic API endpoints (structure exists, limited functionality)
+- Authentication middleware (foundation laid)
+
+### ❌ Not Implemented
+- Telegram bot command handlers
+- Matching algorithm implementation
+- Message processing and media handling
+- TypeScript Web API source code
+- React frontend application
+- Redis integration
+- File storage service
+- Production deployment configuration
+
+## 8. Next Steps for Implementation
+
+### Priority 1: Complete Go Bot Service
+1. Implement Telegram command handlers (`/start`, `/profile`, `/matches`)
+2. Add user registration and profile management flows
+3. Implement basic matching algorithm
+4. Add message handling and media upload support
+
+### Priority 2: Initialize Web Services
+1. Create TypeScript API source structure
+2. Implement authentication endpoints
+3. Create React application with basic routing
+4. Set up state management and API integration
+
+### Priority 3: Integration and Testing
+1. Connect all services through proper API calls
+2. Implement comprehensive test coverage
+3. Set up monitoring and logging
+4. Prepare production deployment pipeline
+
+This technical architecture provides a solid foundation for the MeetsMatch platform with clear separation of concerns and scalable design patterns.

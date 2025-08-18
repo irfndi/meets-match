@@ -26,9 +26,9 @@ const authRateLimit = createRateLimitMiddleware('auth');
 const registerSchema = Joi.object({
   email: Joi.string().email().required(),
   password: Joi.string().min(8).required(),
-  firstName: Joi.string().min(1).max(50).required(),
-  lastName: Joi.string().min(1).max(50).required(),
-  telegramId: Joi.number().integer().positive().optional()
+  first_name: Joi.string().min(1).max(50).required(),
+  last_name: Joi.string().min(1).max(50).optional(),
+  telegram_id: Joi.number().integer().positive().optional()
 });
 
 const loginSchema = Joi.object({
@@ -57,12 +57,12 @@ router.post('/register', authRateLimit, asyncHandler(async (req: Request, res: R
     throw new ValidationError(error.details[0].message);
   }
 
-  const { email, password, firstName, lastName, telegramId }: RegisterRequest = value;
+  const { email, password, first_name, last_name, telegram_id }: RegisterRequest = value;
 
   // Check if user already exists
   const existingUser = await DatabaseService.query(
     'SELECT id FROM users WHERE email = $1 OR telegram_id = $2',
-    [email, telegramId]
+    [email, telegram_id || null]
   );
 
   if (existingUser.rows.length > 0) {
@@ -78,14 +78,13 @@ router.post('/register', authRateLimit, asyncHandler(async (req: Request, res: R
     `INSERT INTO users (email, password_hash, first_name, last_name, telegram_id, created_at, updated_at)
      VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
      RETURNING id, email, first_name, last_name, telegram_id, created_at`,
-    [email, hashedPassword, firstName, lastName, telegramId]
+    [email, hashedPassword, first_name, last_name, telegram_id || null]
   );
 
   const user = result.rows[0];
 
   // Generate tokens
-  const accessToken = AuthService.generateAccessToken(user.id);
-  const refreshToken = AuthService.generateRefreshToken(user.id);
+  const { accessToken, refreshToken } = AuthService.generateTokens(user);
 
   // Store refresh token in Redis
   await RedisService.setSession(`refresh_token:${user.id}`, refreshToken, 7 * 24 * 60 * 60); // 7 days
@@ -95,13 +94,23 @@ router.post('/register', authRateLimit, asyncHandler(async (req: Request, res: R
     data: {
       user: {
         id: user.id,
+        telegram_id: user.telegram_id,
+        first_name: user.first_name,
+        last_name: user.last_name,
         email: user.email,
-        firstName: user.first_name,
-        lastName: user.last_name,
-        telegramId: user.telegram_id,
-        createdAt: user.created_at
+        age: user.age,
+        gender: user.gender,
+        bio: user.bio,
+        location: user.location,
+        photos: user.photos || [],
+        preferences: user.preferences || {},
+        is_active: user.is_active,
+        state: user.state,
+        created_at: user.created_at,
+        updated_at: user.updated_at
       },
-      accessToken,
+      token: accessToken,
+      access_token: accessToken,
       refreshToken
     }
   };
@@ -149,8 +158,7 @@ router.post('/login', authRateLimit, asyncHandler(async (req: Request, res: Resp
   );
 
   // Generate tokens
-  const accessToken = AuthService.generateAccessToken(user.id);
-  const refreshToken = AuthService.generateRefreshToken(user.id);
+  const { accessToken, refreshToken } = AuthService.generateTokens(user);
 
   // Store refresh token in Redis
   await RedisService.setSession(`refresh_token:${user.id}`, refreshToken, 7 * 24 * 60 * 60); // 7 days
@@ -160,13 +168,23 @@ router.post('/login', authRateLimit, asyncHandler(async (req: Request, res: Resp
     data: {
       user: {
         id: user.id,
+        telegram_id: user.telegram_id,
+        username: user.username,
+        first_name: user.first_name,
+        last_name: user.last_name,
         email: user.email,
-        firstName: user.first_name,
-        lastName: user.last_name,
-        telegramId: user.telegram_id,
-        createdAt: user.created_at
+        age: user.age,
+        gender: user.gender,
+        bio: user.bio,
+        location: user.location,
+        photos: user.photos || [],
+        preferences: user.preferences || {},
+        is_active: user.is_active || true,
+        state: user.state || 'idle',
+        created_at: user.created_at,
+        updated_at: user.updated_at || user.created_at
       },
-      accessToken,
+      token: accessToken,
       refreshToken
     }
   };
@@ -186,7 +204,7 @@ router.post('/telegram', authRateLimit, validateTelegramAuth, asyncHandler(async
   // Check if user exists
   let result = await DatabaseService.query(
     'SELECT id, email, first_name, last_name, telegram_id, is_active, created_at FROM users WHERE telegram_id = $1',
-    [telegramData.id]
+    [telegramData.telegram_id]
   );
 
   let user;
@@ -196,7 +214,7 @@ router.post('/telegram', authRateLimit, validateTelegramAuth, asyncHandler(async
       `INSERT INTO users (telegram_id, first_name, last_name, username, is_active, created_at, updated_at)
        VALUES ($1, $2, $3, $4, true, NOW(), NOW())
        RETURNING id, email, first_name, last_name, telegram_id, created_at`,
-      [telegramData.id, telegramData.first_name, telegramData.last_name || '', telegramData.username]
+      [telegramData.telegram_id, telegramData.first_name, telegramData.last_name || '', telegramData.username]
     );
     user = insertResult.rows[0];
   } else {
@@ -216,13 +234,12 @@ router.post('/telegram', authRateLimit, validateTelegramAuth, asyncHandler(async
          last_login = NOW(), 
          updated_at = NOW()
        WHERE telegram_id = $4`,
-      [telegramData.first_name, telegramData.last_name || '', telegramData.username, telegramData.id]
+      [telegramData.first_name, telegramData.last_name || '', telegramData.username, telegramData.telegram_id]
     );
   }
 
   // Generate tokens
-  const accessToken = AuthService.generateAccessToken(user.id);
-  const refreshToken = AuthService.generateRefreshToken(user.id);
+  const { accessToken, refreshToken } = AuthService.generateTokens(user);
 
   // Store refresh token in Redis
   await RedisService.setSession(`refresh_token:${user.id}`, refreshToken, 7 * 24 * 60 * 60); // 7 days
@@ -232,13 +249,23 @@ router.post('/telegram', authRateLimit, validateTelegramAuth, asyncHandler(async
     data: {
       user: {
         id: user.id,
+        telegram_id: user.telegram_id,
+        username: user.username,
+        first_name: user.first_name,
+        last_name: user.last_name,
         email: user.email,
-        firstName: user.first_name,
-        lastName: user.last_name,
-        telegramId: user.telegram_id,
-        createdAt: user.created_at
+        age: user.age,
+        gender: user.gender,
+        bio: user.bio,
+        location: user.location,
+        photos: user.photos || [],
+        preferences: user.preferences || {},
+        is_active: user.is_active || true,
+        state: user.state || 'idle',
+        created_at: user.created_at,
+        updated_at: user.updated_at || user.created_at
       },
-      accessToken,
+      token: accessToken,
       refreshToken
     }
   };
@@ -280,8 +307,7 @@ router.post('/refresh', authRateLimit, asyncHandler(async (req: Request, res: Re
   const user = result.rows[0];
 
   // Generate new tokens
-  const newAccessToken = AuthService.generateAccessToken(user.id);
-  const newRefreshToken = AuthService.generateRefreshToken(user.id);
+  const { accessToken: newAccessToken, refreshToken: newRefreshToken } = AuthService.generateTokens(user);
 
   // Update refresh token in Redis
   await RedisService.setSession(`refresh_token:${user.id}`, newRefreshToken, 7 * 24 * 60 * 60); // 7 days
@@ -291,13 +317,22 @@ router.post('/refresh', authRateLimit, asyncHandler(async (req: Request, res: Re
     data: {
       user: {
         id: user.id,
+        telegram_id: user.telegram_id,
+        first_name: user.first_name,
+        last_name: user.last_name,
         email: user.email,
-        firstName: user.first_name,
-        lastName: user.last_name,
-        telegramId: user.telegram_id,
-        createdAt: user.created_at
+        age: user.age,
+        gender: user.gender,
+        bio: user.bio,
+        location: user.location,
+        photos: user.photos || [],
+        preferences: user.preferences || {},
+        is_active: user.is_active,
+        state: user.state,
+        created_at: user.created_at,
+        updated_at: user.updated_at
       },
-      accessToken: newAccessToken,
+      token: newAccessToken,
       refreshToken: newRefreshToken
     }
   };
@@ -311,7 +346,7 @@ router.post('/logout', authenticate, asyncHandler(async (req: Request, res: Resp
   const token = req.token!;
 
   // Blacklist access token
-  await AuthService.blacklistToken(token);
+  await AuthService.blacklistToken(token, 3600);
 
   // Remove refresh token from Redis
   await RedisService.deleteSession(`refresh_token:${userId}`);
@@ -332,7 +367,7 @@ router.post('/logout-all', authenticate, asyncHandler(async (req: Request, res: 
   const token = req.token!;
 
   // Blacklist current access token
-  await AuthService.blacklistToken(token);
+  await AuthService.blacklistToken(token, 3600);
 
   // Remove all refresh tokens for this user
   await RedisService.deleteSession(`refresh_token:${userId}`);

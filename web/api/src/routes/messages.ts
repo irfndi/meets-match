@@ -17,7 +17,7 @@ import {
 const router = Router();
 
 // Rate limiting
-const messagingRateLimit = createRateLimitMiddleware('messaging');
+const messagingRateLimit = createRateLimitMiddleware('messages');
 
 // Validation schemas
 const sendMessageSchema = Joi.object({
@@ -52,7 +52,7 @@ router.get('/conversations', authenticate, requireActiveUser, asyncHandler(async
 
   const userId = req.user!.id;
   const { page, limit }: PaginationQuery = value;
-  const offset = (page - 1) * limit;
+  const offset = (page! - 1) * limit!;
 
   const query = `
     SELECT c.id, c.created_at, c.updated_at,
@@ -84,7 +84,7 @@ router.get('/conversations', authenticate, requireActiveUser, asyncHandler(async
 
   const result = await DatabaseService.query(query, [userId, limit, offset]);
 
-  const conversations = result.rows.map(row => ({
+  const conversations = result.rows.map((row: any) => ({
     id: row.id,
     otherUser: {
       id: row.other_user_id,
@@ -127,12 +127,12 @@ router.get('/conversations', authenticate, requireActiveUser, asyncHandler(async
     data: {
       conversations,
       pagination: {
-        page,
-        limit,
+        page: page!,
+        limit: limit!,
         total,
-        totalPages: Math.ceil(total / limit),
-        hasNext: offset + limit < total,
-        hasPrev: page > 1
+        totalPages: Math.ceil(total / limit!),
+        hasNext: offset + limit! < total,
+        hasPrev: page! > 1
       }
     }
   };
@@ -165,14 +165,17 @@ router.get('/conversations/:conversationId', authenticate, requireActiveUser, as
     success: true,
     data: {
       id: conversation.id,
+      user1_id: conversation.user1_id,
+      user2_id: conversation.user2_id,
+      created_at: conversation.created_at,
+      updated_at: conversation.updated_at,
       otherUser: {
         id: conversation.other_user_id,
-        firstName: conversation.first_name,
-        lastName: conversation.last_name,
+        first_name: conversation.first_name,
+        last_name: conversation.last_name,
         photos: conversation.photos || [],
-        lastLogin: conversation.last_login
-      },
-      createdAt: conversation.created_at
+        last_login: conversation.last_login
+      }
     }
   };
 
@@ -222,14 +225,14 @@ router.get('/conversations/:conversationId/messages', authenticate, requireActiv
 
   if (!before) {
     // Only use offset for first page when not using cursor pagination
-    const offset = (page - 1) * limit;
+    const offset = (page! - 1) * limit!;
     query += ` OFFSET $${paramIndex + 1}`;
     params.push(offset);
   }
 
   const result = await DatabaseService.query(query, params);
 
-  const messages = result.rows.map(row => ({
+  const messages = result.rows.map((row: any) => ({
     id: row.id,
     content: row.content,
     messageType: row.message_type,
@@ -271,7 +274,7 @@ router.post('/send', authenticate, requireActiveUser, messagingRateLimit, asyncH
   }
 
   const userId = req.user!.id;
-  const { conversationId, content, messageType }: SendMessageRequest = value;
+  const { conversationId, content, message_type }: SendMessageRequest = value;
 
   // Verify user is part of the conversation
   const conversationResult = await DatabaseService.query(
@@ -302,7 +305,7 @@ router.post('/send', authenticate, requireActiveUser, messagingRateLimit, asyncH
       `INSERT INTO messages (conversation_id, sender_id, content, message_type, created_at)
        VALUES ($1, $2, $3, $4, NOW())
        RETURNING id, content, message_type, sender_id, created_at`,
-      [conversationId, userId, content, messageType]
+      [conversationId, userId, content, message_type]
     );
 
     const message = messageResult.rows[0];
@@ -337,13 +340,16 @@ router.post('/send', authenticate, requireActiveUser, messagingRateLimit, asyncH
       success: true,
       data: {
         id: message.id,
+        conversation_id: message.conversation_id,
+        sender_id: message.sender_id,
         content: message.content,
-        messageType: message.message_type,
-        senderId: message.sender_id,
-        senderName: `${sender.first_name} ${sender.last_name}`,
+        message_type: message.message_type,
+        created_at: message.created_at,
+        updated_at: message.updated_at,
+        is_read: false,
+        senderName: req.user!.first_name,
         isFromCurrentUser: true,
-        readAt: null,
-        createdAt: message.created_at
+        readAt: null
       }
     };
 
@@ -479,7 +485,7 @@ router.get('/search', authenticate, requireActiveUser, asyncHandler(async (req: 
     [userId, `%${query}%`, Number(limit), offset]
   );
 
-  const messages = searchResult.rows.map(row => ({
+  const messages = searchResult.rows.map((row: any) => ({
     id: row.id,
     content: row.content,
     messageType: row.message_type,

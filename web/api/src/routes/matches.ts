@@ -62,7 +62,7 @@ router.get('/potential', authenticate, requireActiveUser, asyncHandler(async (re
 
   const userId = req.user!.id;
   const { page, limit, maxDistance, ageMin, ageMax, gender }: PotentialMatchesQuery = value;
-  const offset = (page - 1) * limit;
+  const offset = (page! - 1) * limit!;
 
   // Get current user's location and preferences
   const userResult = await DatabaseService.query(
@@ -155,12 +155,12 @@ router.get('/potential', authenticate, requireActiveUser, asyncHandler(async (re
 
   // Filter by distance if specified
   const maxDistanceKm = maxDistance || userPreferences.maxDistance || 100;
-  const filteredUsers = result.rows.filter(user => {
+  const filteredUsers = result.rows.filter((user: any) => {
     if (!user.distance) return true;
     return user.distance <= maxDistanceKm;
   });
 
-  const potentialMatches = filteredUsers.map(user => ({
+  const potentialMatches = filteredUsers.map((user: any) => ({
     id: user.id,
     firstName: user.first_name,
     lastName: user.last_name,
@@ -318,7 +318,7 @@ router.get('/', authenticate, requireActiveUser, asyncHandler(async (req: Reques
 
   const userId = req.user!.id;
   const { page, limit, status }: PaginationQuery & { status?: string } = value;
-  const offset = (page - 1) * limit;
+  const offset = (page! - 1) * limit!;
 
   let statusCondition = '';
   const params: any[] = [userId];
@@ -346,20 +346,27 @@ router.get('/', authenticate, requireActiveUser, asyncHandler(async (req: Reques
 
   const result = await DatabaseService.query(query, params);
 
-  const matches = result.rows.map(row => ({
+  const matches = result.rows.map((row: any) => ({
     id: row.id,
     status: row.status,
     matchedAt: row.matched_at,
     createdAt: row.created_at,
     user: {
       id: row.user_id,
-      firstName: row.first_name,
-      lastName: row.last_name,
+      email: '',
+      telegram_id: 0,
+      first_name: row.first_name,
+      last_name: row.last_name,
       bio: row.bio,
       age: row.age,
       gender: row.gender,
       photos: row.photos || [],
-      lastLogin: row.last_login
+      preferences: {},
+      is_active: true,
+      state: 'idle',
+      created_at: new Date(),
+      updated_at: new Date(),
+      last_login: row.last_login
     }
   }));
 
@@ -394,12 +401,12 @@ router.get('/', authenticate, requireActiveUser, asyncHandler(async (req: Reques
     data: {
       matches,
       pagination: {
-        page,
-        limit,
+        page: page!,
+        limit: limit!,
         total,
-        totalPages: Math.ceil(total / limit),
-        hasNext: offset + limit < total,
-        hasPrev: page > 1
+        totalPages: Math.ceil(total / limit!),
+        hasNext: offset + limit! < total,
+        hasPrev: page! > 1
       }
     }
   };
@@ -430,29 +437,49 @@ router.get('/:matchId', authenticate, requireActiveUser, asyncHandler(async (req
   }
 
   const match = result.rows[0];
-  const otherUser = match.user1_id === userId ? {
+  const otherUser: User = match.user1_id === userId ? {
     id: match.user2_id,
-    firstName: match.user2_first_name,
-    lastName: match.user2_last_name,
-    photos: match.user2_photos || [],
+    telegram_id: 0,
+    first_name: match.user2_first_name,
+    last_name: match.user2_last_name,
+    email: '',
     age: match.user2_age,
-    bio: match.user2_bio
+    bio: match.user2_bio,
+    photos: match.user2_photos || [],
+    preferences: {},
+    is_active: true,
+    state: 'idle' as const,
+    created_at: new Date(),
+    updated_at: new Date()
   } : {
     id: match.user1_id,
-    firstName: match.user1_first_name,
-    lastName: match.user1_last_name,
-    photos: match.user1_photos || [],
+    telegram_id: 0,
+    first_name: match.user1_first_name,
+    last_name: match.user1_last_name,
+    email: '',
     age: match.user1_age,
-    bio: match.user1_bio
+    bio: match.user1_bio,
+    photos: match.user1_photos || [],
+    preferences: {},
+    is_active: true,
+    state: 'idle' as const,
+    created_at: new Date(),
+    updated_at: new Date()
   };
 
   const response: ApiResponse<Match> = {
     success: true,
     data: {
       id: match.id,
+      user1_id: match.user1_id,
+      user2_id: match.user2_id,
+      user1_liked: true,
+      user2_liked: true,
+      is_mutual: true,
+      created_at: match.created_at,
+      updated_at: match.created_at,
       status: match.status,
       matchedAt: match.matched_at,
-      createdAt: match.created_at,
       user: otherUser
     }
   };

@@ -290,5 +290,3 @@ export const validateTelegramAuth = (
     next(error);
   }
 };
-
-export { AuthService };

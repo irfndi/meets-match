@@ -1,4 +1,4 @@
-# Makefile for the MeetsMatch Rust Worker Project
+# Makefile for the MeetsMatch Go/TypeScript Project
 
 # Define shell for consistency
 SHELL := /bin/bash
@@ -11,31 +11,31 @@ SCRIPT_DIR := ./scripts
 all: build
 
 help:
-	@echo "MeetsMatch Rust Worker Makefile"
+	@echo "MeetsMatch Go/TypeScript Makefile"
 	@echo "----------------------------------"
 	@echo "Available targets:"
 	@echo "  make all             - Build the project (default)."
 	@echo "  make help            - Show this help message."
-	@echo "  make build           - Build the Rust Wasm worker."
-	@echo "  make check           - Run format check (rustfmt) and linter (clippy)."
-	@echo "  make test            - Run Rust tests."
+	@echo "  make build           - Build the Go bot service and TypeScript/React web services."
+	@echo "  make check           - Run format check and linting for Go and TypeScript."
+	@echo "  make test            - Run Go and TypeScript tests."
 	@echo "  make ci              - Run local CI checks (equivalent to 'make check test')."
 	@echo "  make deploy-dev      - Deploy to the development environment."
 	@echo "  make deploy-staging  - Deploy to the staging environment."
 	@echo "  make deploy-prod     - Deploy to the production environment."
 	@echo "  make setup-dev-env   - Run the development environment setup script."
-	@echo "  make clean           - Remove build artifacts (worker/ and target/ directories)."
+	@echo "  make clean           - Remove build artifacts and dependencies."
 
 build:
-	@echo "Building worker..."
+	@echo "Building Go bot service and TypeScript/React web services..."
 	@$(SCRIPT_DIR)/build.sh
 
 check:
-	@echo "Running checks (format and lint)..."
+	@echo "Running checks (format and lint for Go and TypeScript)..."
 	@$(SCRIPT_DIR)/check.sh
 
 test:
-	@echo "Running tests..."
+	@echo "Running Go and TypeScript tests..."
 	@$(SCRIPT_DIR)/test.sh
 
 # CI target: runs checks and tests, similar to what the GitHub Actions CI would do.
@@ -60,8 +60,11 @@ setup-dev-env:
 
 clean:
 	@echo "Cleaning build artifacts..."
-	rm -rf worker
-	rm -rf target
+	rm -rf cmd/bot/bot
+	rm -rf web/api/dist
+	rm -rf web/frontend/dist
+	rm -rf web/api/node_modules
+	rm -rf web/frontend/node_modules
 	@echo "Clean complete."
 
 # Default target if just 'make' is called

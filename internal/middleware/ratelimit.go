@@ -12,11 +12,11 @@ import (
 
 // RateLimiter represents a simple token bucket rate limiter
 type RateLimiter struct {
-	tokens    int
-	maxTokens int
+	tokens     int
+	maxTokens  int
 	lastRefill time.Time
 	refillRate time.Duration
-	mu        sync.Mutex
+	mu         sync.Mutex
 }
 
 // NewRateLimiter creates a new rate limiter
@@ -55,9 +55,9 @@ func (rl *RateLimiter) Allow() bool {
 
 // RateLimitMiddleware provides rate limiting middleware for bot handlers
 type RateLimitMiddleware struct {
-	limiters map[int64]*RateLimiter
-	mu       sync.RWMutex
-	maxTokens int
+	limiters   map[int64]*RateLimiter
+	mu         sync.RWMutex
+	maxTokens  int
 	refillRate time.Duration
 }
 
