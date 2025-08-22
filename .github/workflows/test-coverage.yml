@@ -1,0 +1,321 @@
+name: Test Coverage
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  GO_VERSION: '1.21'
+  COVERAGE_THRESHOLD: 60
+
+jobs:
+  test-coverage:
+    name: Test Coverage
+    runs-on: ubuntu-latest
+    
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_USER: testuser
+          POSTGRES_DB: testdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        cache: true
+
+    - name: Cache Go modules
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    - name: Download dependencies
+      run: go mod download
+
+    - name: Verify dependencies
+      run: go mod verify
+
+    - name: Create test environment file
+      run: |
+        cat > .env.test << EOF
+        # Test environment variables
+        TELEGRAM_BOT_TOKEN=test_token_123456789
+        DB_HOST=localhost
+        DB_PORT=5432
+        DB_USER=testuser
+        DB_PASSWORD=testpass
+        DB_NAME=testdb
+        DB_SSLMODE=disable
+        REDIS_ADDR=localhost:6379
+        REDIS_PASSWORD=
+        REDIS_DB=0
+        REDIS_POOL_SIZE=10
+        BOT_PORT=8081
+        GIN_MODE=test
+        EOF
+
+    - name: Wait for services
+      run: |
+        echo "Waiting for PostgreSQL..."
+        until pg_isready -h localhost -p 5432 -U testuser; do
+          echo "PostgreSQL is unavailable - sleeping"
+          sleep 1
+        done
+        echo "PostgreSQL is up!"
+        
+        echo "Waiting for Redis..."
+        until redis-cli -h localhost -p 6379 ping; do
+          echo "Redis is unavailable - sleeping"
+          sleep 1
+        done
+        echo "Redis is up!"
+
+    - name: Run database migrations
+      run: |
+        # Add database migration commands here if needed
+        echo "Database migrations completed"
+      env:
+        DATABASE_URL: postgres://testuser:testpass@localhost:5432/testdb?sslmode=disable
+
+    - name: Run linter
+      uses: golangci/golangci-lint-action@v3
+      with:
+        version: latest
+        args: --timeout=5m
+
+    - name: Run go vet
+      run: go vet ./...
+
+    - name: Check code formatting
+      run: |
+        if [ "$(gofmt -s -d . | wc -l)" -gt 0 ]; then
+          echo "❌ Code is not formatted. Please run 'go fmt ./...' or 'make fmt'"
+          gofmt -s -d .
+          exit 1
+        fi
+        echo "✅ Code is properly formatted"
+
+    - name: Run unit tests
+      run: |
+        go test -v -race -short -timeout 10m ./...
+      env:
+        CGO_ENABLED: 1
+
+    - name: Run tests with coverage
+      run: |
+        go test -v -race -coverprofile=coverage.out -covermode=atomic -timeout 30m ./...
+      env:
+        CGO_ENABLED: 1
+
+    - name: Generate coverage report
+      run: |
+        go tool cover -func=coverage.out > coverage_summary.txt
+        go tool cover -html=coverage.out -o coverage.html
+
+    - name: Check coverage threshold
+      run: |
+        COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
+        echo "Total coverage: ${COVERAGE}%"
+        echo "COVERAGE_PERCENTAGE=${COVERAGE}" >> $GITHUB_ENV
+        
+        if (( $(echo "$COVERAGE >= $COVERAGE_THRESHOLD" | bc -l) )); then
+          echo "✅ Coverage threshold met! (${COVERAGE}% >= ${COVERAGE_THRESHOLD}%)"
+          echo "COVERAGE_STATUS=success" >> $GITHUB_ENV
+          echo "COVERAGE_COLOR=brightgreen" >> $GITHUB_ENV
+        else
+          echo "❌ Coverage threshold not met! (${COVERAGE}% < ${COVERAGE_THRESHOLD}%)"
+          echo "COVERAGE_STATUS=failed" >> $GITHUB_ENV
+          echo "COVERAGE_COLOR=red" >> $GITHUB_ENV
+          exit 1
+        fi
+
+    - name: Upload coverage reports to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.out
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+
+    - name: Upload coverage to Coveralls
+      uses: coverallsapp/github-action@v2
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        path-to-lcov: coverage.out
+        format: golang
+
+    - name: Generate coverage badge
+      run: |
+        mkdir -p badges
+        COVERAGE_COLOR="red"
+        if (( $(echo "$COVERAGE_PERCENTAGE >= 80" | bc -l) )); then
+          COVERAGE_COLOR="brightgreen"
+        elif (( $(echo "$COVERAGE_PERCENTAGE >= 60" | bc -l) )); then
+          COVERAGE_COLOR="yellow"
+        fi
+        
+        curl -s "https://img.shields.io/badge/coverage-${COVERAGE_PERCENTAGE}%25-${COVERAGE_COLOR}" > badges/coverage.svg
+
+    - name: Upload coverage artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: coverage-reports
+        path: |
+          coverage.out
+          coverage.html
+          coverage_summary.txt
+          badges/
+        retention-days: 30
+
+    - name: Comment coverage on PR
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const fs = require('fs');
+          const coverage = process.env.COVERAGE_PERCENTAGE;
+          const threshold = process.env.COVERAGE_THRESHOLD;
+          const status = process.env.COVERAGE_STATUS;
+          
+          let coverageSummary = '';
+          try {
+            coverageSummary = fs.readFileSync('coverage_summary.txt', 'utf8');
+          } catch (error) {
+            console.log('Could not read coverage summary file');
+          }
+          
+          const statusIcon = status === 'success' ? '✅' : '❌';
+          const statusText = status === 'success' ? 'PASSED' : 'FAILED';
+          
+          const body = `## ${statusIcon} Test Coverage Report
+          
+          **Status**: ${statusText}
+          **Total Coverage**: ${coverage}%
+          **Threshold**: ${threshold}%
+          
+          <details>
+          <summary>📊 Coverage Details</summary>
+          
+          \`\`\`
+          ${coverageSummary}
+          \`\`\`
+          
+          </details>
+          
+          ${status === 'failed' ? '⚠️ **Coverage is below the required threshold. Please add more tests.**' : '🎉 **Great job! Coverage meets the required threshold.**'}
+          `;
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: body
+          });
+
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: test-coverage
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run-integration-tests'))
+    
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_USER: testuser
+          POSTGRES_DB: testdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        cache: true
+
+    - name: Download dependencies
+      run: go mod download
+
+    - name: Create test environment file
+      run: |
+        cat > .env.test << EOF
+        TELEGRAM_BOT_TOKEN=test_token_123456789
+        DB_HOST=localhost
+        DB_PORT=5432
+        DB_USER=testuser
+        DB_PASSWORD=testpass
+        DB_NAME=testdb
+        DB_SSLMODE=disable
+        REDIS_ADDR=localhost:6379
+        REDIS_PASSWORD=
+        REDIS_DB=0
+        REDIS_POOL_SIZE=10
+        BOT_PORT=8081
+        GIN_MODE=test
+        EOF
+
+    - name: Run integration tests
+      run: |
+        go test -v -race -timeout 30m -tags=integration ./...
+      env:
+        CGO_ENABLED: 1
+
+    - name: Upload integration test results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: integration-test-results
+        path: |
+          test-results/
+        retention-days: 7

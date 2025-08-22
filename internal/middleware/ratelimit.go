@@ -2,12 +2,12 @@ package middleware
 
 import (
 	"context"
-	"log"
 	"sync"
 	"time"
 
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
+	"github.com/meetsmatch/meetsmatch/internal/telemetry"
 )
 
 // RateLimiter represents a simple token bucket rate limiter
@@ -90,7 +90,13 @@ func (m *RateLimitMiddleware) Middleware(next bot.HandlerFunc) bot.HandlerFunc {
 
 		// Check if request is allowed
 		if !limiter.Allow() {
-			log.Printf("Rate limit exceeded for user %d", userID)
+			logger := telemetry.GetContextualLogger(ctx)
+			logger.WithFields(map[string]interface{}{
+				"operation": "rate_limit_check",
+				"user_id":   userID,
+				"service":   "rate_limiter",
+				"result":    "exceeded",
+			}).Warn("Rate limit exceeded for user")
 			m.sendRateLimitMessage(ctx, b, update)
 			return
 		}
@@ -136,7 +142,12 @@ func (m *RateLimitMiddleware) sendRateLimitMessage(ctx context.Context, b *bot.B
 		Text:   message,
 	})
 	if err != nil {
-		log.Printf("Error sending rate limit message: %v", err)
+		logger := telemetry.GetContextualLogger(ctx)
+		logger.WithFields(map[string]interface{}{
+			"operation": "send_rate_limit_message",
+			"chat_id":   chatID,
+			"service":   "rate_limiter",
+		}).WithError(err).Error("Failed to send rate limit message")
 	}
 }
 

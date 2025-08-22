@@ -3,7 +3,6 @@ package bothandler
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -13,27 +12,36 @@ import (
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
 
+	"github.com/meetsmatch/meetsmatch/internal/interfaces"
 	"github.com/meetsmatch/meetsmatch/internal/middleware"
+	"github.com/meetsmatch/meetsmatch/internal/monitoring"
 	"github.com/meetsmatch/meetsmatch/internal/services"
+	"github.com/meetsmatch/meetsmatch/internal/telemetry"
 )
 
 type Handler struct {
 	bot                 *bot.Bot
 	ctx                 context.Context
-	userService         *services.UserService
-	matchingService     *services.MatchingService
-	messagingService    *services.MessagingService
+	userService         interfaces.UserServiceInterface
+	matchingService     interfaces.MatchingServiceInterface
+	messagingService    interfaces.MessagingServiceInterface
 	authMiddleware      *middleware.AuthMiddleware
-	loggingMiddleware   *middleware.LoggingMiddleware
+	loggingMiddleware   *middleware.BotLoggingMiddleware
 	rateLimitMiddleware *middleware.RateLimitMiddleware
+	cacheMiddleware     *middleware.CacheMiddleware
 	stateManager        *StateManager
+	// Monitoring components
+	metricsCollector *monitoring.MetricsCollector
+	tracer           *monitoring.Tracer
+	alertManager     *monitoring.AlertManager
+	botMonitoring    *monitoring.BotMonitoringMiddleware
 }
 
 func NewHandler(
 	bot *bot.Bot,
-	userService *services.UserService,
-	matchingService *services.MatchingService,
-	messagingService *services.MessagingService,
+	userService interfaces.UserServiceInterface,
+	matchingService interfaces.MatchingServiceInterface,
+	messagingService interfaces.MessagingServiceInterface,
 ) *Handler {
 	// Initialize state manager with 24 hour session TTL
 	stateManager := NewStateManager(24 * time.Hour)
@@ -47,25 +55,82 @@ func NewHandler(
 		messagingService:    messagingService,
 		ctx:                 context.Background(),
 		authMiddleware:      middleware.NewAuthMiddleware(userService),
-		loggingMiddleware:   middleware.NewLoggingMiddleware(),
+		loggingMiddleware:   middleware.NewBotLoggingMiddleware(),
 		rateLimitMiddleware: middleware.NewRateLimitMiddleware(10, time.Minute),
 		stateManager:        stateManager,
 	}
 }
 
+// SetCacheMiddleware sets the cache middleware for the handler
+func (h *Handler) SetCacheMiddleware(cacheMiddleware *middleware.CacheMiddleware) {
+	h.cacheMiddleware = cacheMiddleware
+}
+
+// SetMetricsCollector sets the metrics collector for the handler
+func (h *Handler) SetMetricsCollector(metricsCollector *monitoring.MetricsCollector) {
+	h.metricsCollector = metricsCollector
+	h.initializeBotMonitoring()
+}
+
+// SetTracer sets the tracer for the handler
+func (h *Handler) SetTracer(tracer *monitoring.Tracer) {
+	h.tracer = tracer
+	h.initializeBotMonitoring()
+}
+
+// SetAlertManager sets the alert manager for the handler
+func (h *Handler) SetAlertManager(alertManager *monitoring.AlertManager) {
+	h.alertManager = alertManager
+	h.initializeBotMonitoring()
+}
+
+// initializeBotMonitoring initializes the bot monitoring middleware when all components are set
+func (h *Handler) initializeBotMonitoring() {
+	if h.metricsCollector != nil && h.tracer != nil && h.alertManager != nil && h.botMonitoring == nil {
+		config := monitoring.DefaultBotMiddlewareConfig()
+		config.EnableMetrics = true
+		config.EnableTracing = true
+		config.EnableAlerting = true
+
+		h.botMonitoring = monitoring.NewBotMonitoringMiddleware(config)
+	}
+}
+
 func (h *Handler) HandleWebhook(c *gin.Context) {
+	ctx := telemetry.WithCorrelationID(c.Request.Context(), telemetry.NewCorrelationID())
+	logger := telemetry.GetContextualLogger(ctx)
+
 	var update models.Update
 	if err := c.ShouldBindJSON(&update); err != nil {
-		log.Printf("Error parsing webhook: %v", err)
+		logger.WithError(err).Error("Failed to parse webhook JSON")
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON"})
 		return
 	}
 
-	h.HandleUpdate(h.ctx, h.bot, &update)
+	logger.Debug("Processing webhook update")
+	h.HandleUpdate(ctx, h.bot, &update)
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
 
 func (h *Handler) HandleUpdate(ctx context.Context, b *bot.Bot, update *models.Update) {
+	logger := telemetry.GetContextualLogger(ctx)
+
+	// Use bot monitoring middleware if available
+	if h.botMonitoring != nil {
+		err := h.botMonitoring.ProcessUpdate(ctx, update, func(ctx context.Context, update *models.Update) error {
+			h.processUpdate(ctx, update)
+			return nil
+		})
+		if err != nil {
+			logger.WithError(err).Error("Failed to process update with monitoring")
+		}
+	} else {
+		h.processUpdate(ctx, update)
+	}
+}
+
+// processUpdate handles the actual update processing
+func (h *Handler) processUpdate(ctx context.Context, update *models.Update) {
 	if update.Message != nil {
 		h.handleMessage(update.Message)
 	} else if update.CallbackQuery != nil {
@@ -76,11 +141,17 @@ func (h *Handler) HandleUpdate(ctx context.Context, b *bot.Bot, update *models.U
 func (h *Handler) handleMessage(message *models.Message) {
 	userID := message.From.ID
 	chatID := message.Chat.ID
+	ctx := telemetry.WithCorrelationID(context.Background(), telemetry.NewCorrelationID())
+	logger := telemetry.GetContextualLogger(ctx).WithFields(map[string]interface{}{
+		"user_id":      userID,
+		"chat_id":      chatID,
+		"message_type": "text",
+	})
 
 	// Check if user exists
 	user, err := h.userService.GetUserByTelegramID(userID)
 	if err != nil {
-		log.Printf("Error getting user: %v", err)
+		logger.WithError(err).Error("Failed to get user by telegram ID")
 		return
 	}
 
@@ -104,10 +175,17 @@ func (h *Handler) handleMessage(message *models.Message) {
 }
 
 func (h *Handler) handleStartCommand(chatID int64, userID int64) {
+	ctx := telemetry.WithCorrelationID(context.Background(), telemetry.NewCorrelationID())
+	logger := telemetry.GetContextualLogger(ctx).WithFields(map[string]interface{}{
+		"user_id": userID,
+		"chat_id": chatID,
+		"command": "start",
+	})
+
 	// Create new user
 	user, err := h.userService.CreateUser(userID, "", "")
 	if err != nil {
-		log.Printf("Error creating user: %v", err)
+		logger.WithError(err).Error("Failed to create new user")
 		h.sendMessage(chatID, "Sorry, there was an error processing your request.")
 		return
 	}
@@ -140,7 +218,18 @@ func (h *Handler) handleCommand(message *models.Message, user *services.User) {
 }
 
 func (h *Handler) handleProfileCommand(chatID int64, user *services.User) {
+	ctx := telemetry.WithCorrelationID(context.Background(), telemetry.NewCorrelationID())
+	logger := telemetry.GetContextualLogger(ctx).WithFields(map[string]interface{}{
+		"user_id":    user.ID,
+		"chat_id":    chatID,
+		"command":    "profile",
+		"user_state": user.State,
+	})
+
+	logger.Debug("Processing profile command")
+
 	if user.State == "new" || user.State == "onboarding" {
+		logger.Warn("User attempted to access profile without completing setup")
 		h.sendMessage(chatID, "Please complete your profile setup first by using /start")
 		return
 	}
@@ -169,14 +258,22 @@ func (h *Handler) handleProfileCommand(chatID int64, user *services.User) {
 }
 
 func (h *Handler) handleMatchesCommand(chatID int64, user *services.User) {
+	ctx := telemetry.WithCorrelationID(context.Background(), telemetry.NewCorrelationID())
+	logger := telemetry.GetContextualLogger(ctx).WithFields(map[string]interface{}{
+		"user_id": user.ID,
+		"chat_id": chatID,
+		"command": "matches",
+	})
+
 	if user.State != "active" {
+		logger.Warn("User attempted to access matches without completing profile")
 		h.sendMessage(chatID, "Please complete your profile setup first.")
 		return
 	}
 
 	matches, err := h.matchingService.GetPotentialMatches(user.ID, 5)
 	if err != nil {
-		log.Printf("Error getting matches: %v", err)
+		logger.WithError(err).Error("Failed to get potential matches")
 		h.sendMessage(chatID, "Sorry, there was an error getting your matches.")
 		return
 	}
@@ -213,6 +310,15 @@ func (h *Handler) handleMatchesCommand(chatID int64, user *services.User) {
 }
 
 func (h *Handler) handleSettingsCommand(chatID int64, user *services.User) {
+	ctx := telemetry.WithCorrelationID(context.Background(), telemetry.NewCorrelationID())
+	logger := telemetry.GetContextualLogger(ctx).WithFields(map[string]interface{}{
+		"user_id": user.ID,
+		"chat_id": chatID,
+		"command": "settings",
+	})
+
+	logger.Debug("Processing settings command")
+
 	keyboard := models.InlineKeyboardMarkup{
 		InlineKeyboard: [][]models.InlineKeyboardButton{
 			{
@@ -230,6 +336,14 @@ func (h *Handler) handleSettingsCommand(chatID int64, user *services.User) {
 }
 
 func (h *Handler) handleHelpCommand(chatID int64) {
+	ctx := telemetry.WithCorrelationID(context.Background(), telemetry.NewCorrelationID())
+	logger := telemetry.GetContextualLogger(ctx).WithFields(map[string]interface{}{
+		"chat_id": chatID,
+		"command": "help",
+	})
+
+	logger.Debug("Processing help command")
+
 	msg := "🤖 MeetsMatch Bot Help\n\n"
 	msg += "Available commands:\n"
 	msg += "/start - Start or show main menu\n"
@@ -246,24 +360,41 @@ func (h *Handler) handleUserState(message *models.Message, user *services.User) 
 	chatID := message.Chat.ID
 	text := message.Text
 
+	ctx := telemetry.WithCorrelationID(context.Background(), telemetry.NewCorrelationID())
+	logger := telemetry.GetContextualLogger(ctx).WithFields(map[string]interface{}{
+		"user_id":      user.ID,
+		"chat_id":      chatID,
+		"user_state":   user.State,
+		"message_type": "state_handling",
+	})
+
+	logger.Debug("Processing user state message")
+
 	switch user.State {
 	case "onboarding_name":
 		if len(text) < 2 || len(text) > 50 {
+			logger.WithField("name_length", len(text)).Warn("Invalid name length provided")
 			h.sendMessage(chatID, "Please enter a valid name (2-50 characters):")
 			return
 		}
 		h.userService.UpdateUserName(user.ID, text)
 		h.userService.UpdateUserState(user.ID, "onboarding_age")
+		logger.WithField("name", text).Info("User name updated successfully")
 		h.sendMessage(chatID, "Great! Now, how old are you? (18-100)")
 
 	case "onboarding_age":
 		age, err := strconv.Atoi(text)
 		if err != nil || age < 18 || age > 100 {
+			logger.WithFields(map[string]interface{}{
+				"age_text":    text,
+				"parse_error": err,
+			}).Warn("Invalid age provided")
 			h.sendMessage(chatID, "Please enter a valid age (18-100):")
 			return
 		}
 		h.userService.UpdateUserAge(user.ID, age)
 		h.userService.UpdateUserState(user.ID, "onboarding_gender")
+		logger.WithField("age", age).Info("User age updated successfully")
 
 		keyboard := models.InlineKeyboardMarkup{
 			InlineKeyboard: [][]models.InlineKeyboardButton{
@@ -336,9 +467,16 @@ func (h *Handler) handleUserState(message *models.Message, user *services.User) 
 }
 
 func (h *Handler) handleCallbackQuery(callback *models.CallbackQuery) {
+	ctx := telemetry.WithCorrelationID(context.Background(), telemetry.NewCorrelationID())
+	logger := telemetry.GetContextualLogger(ctx).WithFields(map[string]interface{}{
+		"user_id":       callback.From.ID,
+		"callback_data": callback.Data,
+		"message_type":  "callback_query",
+	})
+
 	// Handle MaybeInaccessibleMessage
 	if callback.Message.Message == nil {
-		log.Printf("Callback query message is nil or inaccessible")
+		logger.Warn("Callback query message is nil or inaccessible")
 		return
 	}
 
@@ -351,12 +489,12 @@ func (h *Handler) handleCallbackQuery(callback *models.CallbackQuery) {
 		CallbackQueryID: callback.ID,
 	})
 	if err != nil {
-		log.Printf("Error answering callback query: %v", err)
+		logger.WithError(err).Error("Failed to answer callback query")
 	}
 
 	user, err := h.userService.GetUserByTelegramID(userID)
 	if err != nil {
-		log.Printf("Error getting user: %v", err)
+		logger.WithError(err).Error("Failed to get user by telegram ID")
 		return
 	}
 
@@ -369,9 +507,10 @@ func (h *Handler) handleCallbackQuery(callback *models.CallbackQuery) {
 
 	case strings.HasPrefix(data, "like_"):
 		targetUserID := strings.TrimPrefix(data, "like_")
+		logger.WithField("target_user_id", targetUserID).Info("User liked a potential match")
 		_, err := h.matchingService.CreateMatch(user.ID, targetUserID, "accepted")
 		if err != nil {
-			log.Printf("Error creating match: %v", err)
+			logger.WithError(err).WithField("target_user_id", targetUserID).Error("Failed to create like match")
 			h.sendMessage(chatID, "Sorry, there was an error processing your like.")
 			return
 		}
@@ -380,9 +519,10 @@ func (h *Handler) handleCallbackQuery(callback *models.CallbackQuery) {
 
 	case strings.HasPrefix(data, "pass_"):
 		targetUserID := strings.TrimPrefix(data, "pass_")
+		logger.WithField("target_user_id", targetUserID).Info("User passed on a potential match")
 		_, err := h.matchingService.CreateMatch(user.ID, targetUserID, "declined")
 		if err != nil {
-			log.Printf("Error creating match: %v", err)
+			logger.WithError(err).WithField("target_user_id", targetUserID).Error("Failed to create pass match")
 		}
 		h.sendMessage(chatID, "No worries! There are plenty more matches waiting. 💫")
 		h.showNextMatch(chatID, user)
@@ -461,17 +601,29 @@ func (h *Handler) isCommand(text string) bool {
 }
 
 func (h *Handler) sendMessage(chatID int64, text string) {
+	ctx := telemetry.WithCorrelationID(context.Background(), telemetry.NewCorrelationID())
+	logger := telemetry.GetContextualLogger(ctx).WithFields(map[string]interface{}{
+		"chat_id":   chatID,
+		"operation": "send_message",
+	})
+
 	_, err := h.bot.SendMessage(h.ctx, &bot.SendMessageParams{
 		ChatID:    chatID,
 		Text:      text,
 		ParseMode: models.ParseModeMarkdown,
 	})
 	if err != nil {
-		log.Printf("Error sending message: %v", err)
+		logger.WithError(err).Error("Failed to send message")
 	}
 }
 
 func (h *Handler) sendMessageWithKeyboard(chatID int64, text string, keyboard models.InlineKeyboardMarkup) {
+	ctx := telemetry.WithCorrelationID(context.Background(), telemetry.NewCorrelationID())
+	logger := telemetry.GetContextualLogger(ctx).WithFields(map[string]interface{}{
+		"chat_id":   chatID,
+		"operation": "send_message_with_keyboard",
+	})
+
 	_, err := h.bot.SendMessage(h.ctx, &bot.SendMessageParams{
 		ChatID:      chatID,
 		Text:        text,
@@ -479,7 +631,7 @@ func (h *Handler) sendMessageWithKeyboard(chatID int64, text string, keyboard mo
 		ReplyMarkup: keyboard,
 	})
 	if err != nil {
-		log.Printf("Error sending message with keyboard: %v", err)
+		logger.WithError(err).Error("Failed to send message with keyboard")
 	}
 }
 
@@ -539,10 +691,17 @@ func (h *Handler) showPreferencesSetup(chatID int64, userID string) {
 
 // setUserPreference sets a user preference
 func (h *Handler) setUserPreference(userID string, key string, value interface{}) {
+	ctx := telemetry.WithCorrelationID(context.Background(), telemetry.NewCorrelationID())
+	logger := telemetry.GetContextualLogger(ctx).WithFields(map[string]interface{}{
+		"user_id":        userID,
+		"preference_key": key,
+		"operation":      "set_user_preference",
+	})
+
 	// Get current user to update preferences
 	user, err := h.userService.GetUserByID(userID)
 	if err != nil {
-		log.Printf("Error getting user for preference update: %v", err)
+		logger.WithError(err).Error("Failed to get user for preference update")
 		return
 	}
 
@@ -566,16 +725,25 @@ func (h *Handler) setUserPreference(userID string, key string, value interface{}
 	// Save updated preferences
 	err = h.userService.UpdateUserPreferences(userID, prefs)
 	if err != nil {
-		log.Printf("Error updating user preferences: %v", err)
+		logger.WithError(err).Error("Failed to update user preferences")
+	} else {
+		logger.Info("Successfully updated user preference")
 	}
 }
 
 // addGenderPreference adds a gender preference for the user
 func (h *Handler) addGenderPreference(userID string, gender string) {
+	ctx := telemetry.WithCorrelationID(context.Background(), telemetry.NewCorrelationID())
+	logger := telemetry.GetContextualLogger(ctx).WithFields(map[string]interface{}{
+		"user_id":           userID,
+		"gender_preference": gender,
+		"operation":         "add_gender_preference",
+	})
+
 	// Get current user to update preferences
 	user, err := h.userService.GetUserByID(userID)
 	if err != nil {
-		log.Printf("Error getting user for gender preference update: %v", err)
+		logger.WithError(err).Error("Failed to get user for gender preference update")
 		return
 	}
 
@@ -591,14 +759,26 @@ func (h *Handler) addGenderPreference(userID string, gender string) {
 	case "all":
 		prefs.Genders = []string{"male", "female", "nonbinary"}
 	default:
-		log.Printf("Unknown gender preference: %s", gender)
+		logger := telemetry.GetContextualLogger(context.Background())
+		logger.WithFields(map[string]interface{}{
+			"operation": "update_gender_preferences",
+			"user_id":   userID,
+			"gender":    gender,
+			"service":   "bot_handler",
+		}).Warn("Unknown gender preference received")
 		return
 	}
 
 	// Save updated preferences
 	err = h.userService.UpdateUserPreferences(userID, prefs)
 	if err != nil {
-		log.Printf("Error updating gender preferences: %v", err)
+		logger := telemetry.GetContextualLogger(context.Background())
+		logger.WithFields(map[string]interface{}{
+			"operation": "update_gender_preferences",
+			"user_id":   userID,
+			"gender":    gender,
+			"service":   "bot_handler",
+		}).WithError(err).Error("Error updating gender preferences")
 	}
 }
 
@@ -616,7 +796,13 @@ func (h *Handler) completeOnboarding(chatID int64, userID string) {
 func (h *Handler) showMainMenuForUser(chatID int64, userID string) {
 	user, err := h.userService.GetUserByID(userID)
 	if err != nil {
-		log.Printf("Error getting user: %v", err)
+		logger := telemetry.GetContextualLogger(context.Background())
+		logger.WithFields(map[string]interface{}{
+			"operation": "show_main_menu_for_user",
+			"user_id":   userID,
+			"chat_id":   chatID,
+			"service":   "bot_handler",
+		}).WithError(err).Error("Error getting user for main menu")
 		return
 	}
 	h.showMainMenu(chatID, user)
@@ -624,9 +810,16 @@ func (h *Handler) showMainMenuForUser(chatID int64, userID string) {
 
 // showNextMatch shows the next potential match
 func (h *Handler) showNextMatch(chatID int64, user *services.User) {
+	ctx := telemetry.WithCorrelationID(context.Background(), telemetry.NewCorrelationID())
+	logger := telemetry.GetContextualLogger(ctx).WithFields(map[string]interface{}{
+		"user_id":   user.ID,
+		"chat_id":   chatID,
+		"operation": "show_next_match",
+	})
+
 	matches, err := h.matchingService.GetPotentialMatches(user.ID, 1)
 	if err != nil {
-		log.Printf("Error getting next match: %v", err)
+		logger.WithError(err).Error("Failed to get potential matches")
 		h.sendMessage(chatID, "Sorry, there was an error getting your next match.")
 		return
 	}
@@ -663,7 +856,13 @@ func (h *Handler) showNextMatch(chatID int64, user *services.User) {
 func (h *Handler) handleMessagesCommand(chatID int64, user *services.User) {
 	conversations, err := h.messagingService.GetConversations(user.ID, 10, 0)
 	if err != nil {
-		log.Printf("Error getting conversations: %v", err)
+		logger := telemetry.GetContextualLogger(context.Background())
+		logger.WithFields(map[string]interface{}{
+			"operation": "handle_messages_command",
+			"user_id":   user.ID,
+			"chat_id":   chatID,
+			"service":   "bot_handler",
+		}).WithError(err).Error("Error getting conversations")
 		h.sendMessage(chatID, "Sorry, there was an error getting your messages.")
 		return
 	}
@@ -734,6 +933,12 @@ func (h *Handler) handleConversationMessage(message *models.Message, user *servi
 	chatID := message.Chat.ID
 	text := message.Text
 	userIDStr := fmt.Sprintf("%d", user.ID)
+	ctx := telemetry.WithCorrelationID(context.Background(), telemetry.NewCorrelationID())
+	logger := telemetry.GetContextualLogger(ctx).WithFields(map[string]interface{}{
+		"user_id":   user.ID,
+		"chat_id":   chatID,
+		"operation": "handle_conversation_message",
+	})
 
 	// Initialize session for this user
 	h.stateManager.GetSession(userIDStr, chatID)
@@ -741,10 +946,11 @@ func (h *Handler) handleConversationMessage(message *models.Message, user *servi
 	// Check if user has an active conversation state
 	activeConversation := h.getUserActiveConversation(userIDStr)
 	if activeConversation == "" {
+		logger.Info("User attempted to send message without active conversation")
 		// No active conversation, show available conversations
 		conversations, err := h.messagingService.GetConversations(user.ID, 5, 0)
 		if err != nil {
-			log.Printf("Error getting conversations: %v", err)
+			logger.WithError(err).Error("Failed to get conversations")
 			h.sendMessage(chatID, "Sorry, there was an error getting your conversations.")
 			return
 		}
@@ -758,10 +964,11 @@ func (h *Handler) handleConversationMessage(message *models.Message, user *servi
 		return
 	}
 
+	logger.WithField("conversation_id", activeConversation).Info("Sending message to conversation")
 	// Send message to the active conversation
 	err := h.sendMessageToConversation(user.ID, activeConversation, text)
 	if err != nil {
-		log.Printf("Error sending message to conversation: %v", err)
+		logger.WithError(err).WithField("conversation_id", activeConversation).Error("Failed to send message to conversation")
 		h.sendMessage(chatID, "Sorry, there was an error sending your message. Please try again.")
 		return
 	}
@@ -816,9 +1023,17 @@ func (h *Handler) showConversationSelection(chatID int64, conversations []*servi
 
 // sendMessageToConversation sends a message to a specific conversation
 func (h *Handler) sendMessageToConversation(senderID, conversationID, content string) error {
+	ctx := telemetry.WithCorrelationID(context.Background(), telemetry.NewCorrelationID())
+	logger := telemetry.GetContextualLogger(ctx).WithFields(map[string]interface{}{
+		"sender_id":       senderID,
+		"conversation_id": conversationID,
+		"operation":       "send_message_to_conversation",
+	})
+
 	// Get conversation details
 	conv, err := h.getConversationByID(conversationID)
 	if err != nil {
+		logger.WithError(err).Error("Failed to get conversation")
 		return fmt.Errorf("failed to get conversation: %w", err)
 	}
 
@@ -831,25 +1046,36 @@ func (h *Handler) sendMessageToConversation(senderID, conversationID, content st
 	// Send the message
 	_, err = h.messagingService.SendMessage(senderID, receiverID, content, "text")
 	if err != nil {
+		logger.WithError(err).Error("Failed to send message")
 		return fmt.Errorf("failed to send message: %w", err)
 	}
 
+	logger.Info("Successfully sent message to conversation")
 	return nil
 }
 
 // getConversationByID gets a conversation by its ID
 func (h *Handler) getConversationByID(conversationID string) (*services.Conversation, error) {
+	ctx := telemetry.WithCorrelationID(context.Background(), telemetry.NewCorrelationID())
+	logger := telemetry.GetContextualLogger(ctx).WithFields(map[string]interface{}{
+		"conversation_id": conversationID,
+		"operation":       "get_conversation_by_id",
+	})
+
 	// This is a simplified implementation - you might want to add this method to the messaging service
 	conversations, err := h.messagingService.GetConversations("", 100, 0) // Get all conversations
 	if err != nil {
+		logger.WithError(err).Error("Failed to get conversations")
 		return nil, err
 	}
 
 	for _, conv := range conversations {
 		if conv.ID == conversationID {
+			logger.Info("Successfully retrieved conversation")
 			return conv, nil
 		}
 	}
 
+	logger.Warn("Conversation not found")
 	return nil, fmt.Errorf("conversation not found")
 }

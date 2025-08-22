@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<clickhouse>
+    <remote_servers>
+        <cluster_1S_1R>
+            <shard>
+                <replica>
+                    <host>clickhouse</host>
+                    <port>9000</port>
+                </replica>
+            </shard>
+        </cluster_1S_1R>
+    </remote_servers>
+
+    <zookeeper incl="zookeeper-servers" optional="true" />
+    <macros incl="macros" optional="true" />
+
+    <distributed_ddl>
+        <path>/clickhouse/task_queue/ddl</path>
+    </distributed_ddl>
+
+    <clickhouse_remote_servers>
+        <ip>::1</ip>
+        <ip>127.0.0.1</ip>
+        <ip>0.0.0.0/0</ip>
+    </clickhouse_remote_servers>
+</clickhouse>

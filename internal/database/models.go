@@ -144,6 +144,14 @@ type Analytics struct {
 	CreatedAt time.Time `json:"created_at" db:"created_at"`
 }
 
+// UserStats represents user statistics
+type UserStats struct {
+	TotalMatches     int `json:"total_matches"`
+	MutualMatches    int `json:"mutual_matches"`
+	MessagesSent     int `json:"messages_sent"`
+	MessagesReceived int `json:"messages_received"`
+}
+
 // EventData represents event data as a custom type
 type EventData map[string]interface{}
 

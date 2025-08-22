@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"math"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/meetsmatch/meetsmatch/internal/database"
+	"github.com/meetsmatch/meetsmatch/internal/telemetry"
 )
 
 type Match = database.Match
@@ -21,13 +23,24 @@ func NewMatchingService(db *database.DB) *MatchingService {
 }
 
 func (s *MatchingService) CreateMatch(userID, targetID, status string) (*Match, error) {
+	ctx := telemetry.WithCorrelationID(context.Background(), telemetry.NewCorrelationID())
+	logger := telemetry.GetContextualLogger(ctx).WithFields(map[string]interface{}{
+		"user_id":   userID,
+		"target_id": targetID,
+		"status":    status,
+		"operation": "create_match",
+	})
+
+	logger.Info("Creating match")
 	// Check if match already exists
 	existingMatch, err := s.getExistingMatch(userID, targetID)
 	if err != nil && err.Error() != "match not found" {
-		return nil, fmt.Errorf("failed to check existing match: %w", err)
+		logger.WithError(err).Error("Failed to check existing match")
+		return nil, err
 	}
 
 	if existingMatch != nil {
+		logger.WithField("existing_match_id", existingMatch.ID).Info("Updating existing match")
 		// Update existing match
 		return s.updateMatchStatus(existingMatch.ID, status)
 	}
@@ -55,17 +68,21 @@ func (s *MatchingService) CreateMatch(userID, targetID, status string) (*Match, 
 	).Scan(&match.ID)
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to create match: %w", err)
+		logger.WithError(err).Error("Failed to insert match")
+		return nil, err
 	}
 
 	// Check if this creates a mutual match
 	if status == "accepted" {
+		logger.Debug("Checking for mutual match")
 		err = s.checkAndCreateMutualMatch(userID, targetID)
 		if err != nil {
-			return nil, fmt.Errorf("failed to check mutual match: %w", err)
+			logger.WithError(err).Error("Failed to check mutual match")
+			return nil, err
 		}
 	}
 
+	logger.WithField("match_id", match.ID).Info("Successfully created match")
 	return match, nil
 }
 
@@ -86,7 +103,7 @@ func (s *MatchingService) getExistingMatch(userID, targetID string) (*Match, err
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("match not found")
 		}
-		return nil, fmt.Errorf("failed to get match: %w", err)
+		return nil, err
 	}
 
 	return match, nil
@@ -107,7 +124,7 @@ func (s *MatchingService) updateMatchStatus(matchID, status string) (*Match, err
 	)
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to update match: %w", err)
+		return nil, err
 	}
 
 	return match, nil
@@ -124,7 +141,7 @@ func (s *MatchingService) checkAndCreateMutualMatch(userID, targetID string) err
 
 	err := s.db.QueryRow(query, targetID, userID).Scan(&count)
 	if err != nil {
-		return fmt.Errorf("failed to check reverse match: %w", err)
+		return err
 	}
 
 	if count > 0 {
@@ -138,7 +155,7 @@ func (s *MatchingService) checkAndCreateMutualMatch(userID, targetID string) err
 			`
 			_, err := tx.Exec(updateQuery, time.Now(), userID, targetID)
 			if err != nil {
-				return fmt.Errorf("failed to update mutual matches: %w", err)
+				return err
 			}
 
 			// Create conversation for the mutual match
@@ -150,7 +167,7 @@ func (s *MatchingService) checkAndCreateMutualMatch(userID, targetID string) err
 			now := time.Now()
 			_, err = tx.Exec(convQuery, conversationID, userID, targetID, now, now, now)
 			if err != nil {
-				return fmt.Errorf("failed to create conversation: %w", err)
+				return err
 			}
 
 			return nil
@@ -161,10 +178,19 @@ func (s *MatchingService) checkAndCreateMutualMatch(userID, targetID string) err
 }
 
 func (s *MatchingService) GetPotentialMatches(userID string, limit int) ([]*User, error) {
+	ctx := telemetry.WithCorrelationID(context.Background(), telemetry.NewCorrelationID())
+	logger := telemetry.GetContextualLogger(ctx).WithFields(map[string]interface{}{
+		"user_id":   userID,
+		"limit":     limit,
+		"operation": "get_potential_matches",
+	})
+
+	logger.Debug("Getting potential matches for user")
 	// Get user's preferences
 	user, err := s.getUserWithPreferences(userID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get user preferences: %w", err)
+		logger.WithError(err).Error("Failed to get user preferences")
+		return nil, err
 	}
 
 	// Build query based on preferences
@@ -208,9 +234,16 @@ func (s *MatchingService) GetPotentialMatches(userID string, limit int) ([]*User
 	query += ` ORDER BY RANDOM() LIMIT $` + fmt.Sprintf("%d", len(args)+1)
 	args = append(args, limit)
 
+	logger.WithFields(map[string]interface{}{
+		"min_age": user.Preferences.MinAge,
+		"max_age": user.Preferences.MaxAge,
+		"genders": user.Preferences.Genders,
+	}).Debug("Executing potential matches query")
+
 	rows, err := s.db.Query(query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get potential matches: %w", err)
+		logger.WithError(err).Error("Failed to query potential matches")
+		return nil, err
 	}
 	defer rows.Close()
 
@@ -225,19 +258,29 @@ func (s *MatchingService) GetPotentialMatches(userID string, limit int) ([]*User
 			&match.CreatedAt, &match.UpdatedAt,
 		)
 		if err != nil {
-			return nil, fmt.Errorf("failed to scan match: %w", err)
+			logger.WithError(err).Error("Failed to scan potential match row")
+			return nil, err
 		}
 		matches = append(matches, match)
 	}
 
 	if err = rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating matches: %w", err)
+		logger.WithError(err).Error("Error iterating potential match rows")
+		return nil, err
 	}
 
+	logger.WithField("count", len(matches)).Info("Successfully retrieved potential matches")
 	return matches, nil
 }
 
 func (s *MatchingService) getUserWithPreferences(userID string) (*User, error) {
+	ctx := telemetry.WithCorrelationID(context.Background(), telemetry.NewCorrelationID())
+	logger := telemetry.GetContextualLogger(ctx).WithFields(map[string]interface{}{
+		"user_id":   userID,
+		"operation": "get_user_with_preferences",
+	})
+
+	logger.Debug("Getting user with preferences")
 	user := &User{}
 	query := `
 		SELECT id, preferences, latitude, longitude
@@ -249,13 +292,25 @@ func (s *MatchingService) getUserWithPreferences(userID string) (*User, error) {
 	)
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to get user: %w", err)
+		logger.WithError(err).Error("Failed to get user with preferences")
+		return nil, err
 	}
 
+	logger.Info("Successfully retrieved user with preferences")
 	return user, nil
 }
 
 func (s *MatchingService) GetUserMatches(userID string, status string, limit, offset int) ([]*Match, error) {
+	ctx := telemetry.WithCorrelationID(context.Background(), telemetry.NewCorrelationID())
+	logger := telemetry.GetContextualLogger(ctx).WithFields(map[string]interface{}{
+		"user_id":   userID,
+		"status":    status,
+		"limit":     limit,
+		"offset":    offset,
+		"operation": "get_user_matches",
+	})
+
+	logger.Debug("Getting user matches")
 	query := `
 		SELECT id, user_id, target_id, status, created_at, updated_at
 		FROM matches 
@@ -273,7 +328,8 @@ func (s *MatchingService) GetUserMatches(userID string, status string, limit, of
 
 	rows, err := s.db.Query(query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get user matches: %w", err)
+		logger.WithError(err).Error("Failed to query user matches")
+		return nil, err
 	}
 	defer rows.Close()
 
@@ -285,19 +341,31 @@ func (s *MatchingService) GetUserMatches(userID string, status string, limit, of
 			&match.Status, &match.CreatedAt, &match.UpdatedAt,
 		)
 		if err != nil {
-			return nil, fmt.Errorf("failed to scan match: %w", err)
+			logger.WithError(err).Error("Failed to scan user match row")
+			return nil, err
 		}
 		matches = append(matches, match)
 	}
 
 	if err = rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating matches: %w", err)
+		logger.WithError(err).Error("Error iterating user match rows")
+		return nil, err
 	}
 
+	logger.WithField("count", len(matches)).Info("Successfully retrieved user matches")
 	return matches, nil
 }
 
 func (s *MatchingService) GetMutualMatches(userID string, limit, offset int) ([]*User, error) {
+	ctx := telemetry.WithCorrelationID(context.Background(), telemetry.NewCorrelationID())
+	logger := telemetry.GetContextualLogger(ctx).WithFields(map[string]interface{}{
+		"user_id":   userID,
+		"limit":     limit,
+		"offset":    offset,
+		"operation": "get_mutual_matches",
+	})
+
+	logger.Debug("Getting mutual matches for user")
 	query := `
 		SELECT DISTINCT u.id, u.telegram_id, u.username, u.name, u.age, u.gender,
 		       u.bio, u.location_text, u.latitude, u.longitude, u.photos,
@@ -312,7 +380,8 @@ func (s *MatchingService) GetMutualMatches(userID string, limit, offset int) ([]
 
 	rows, err := s.db.Query(query, userID, limit, offset)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get mutual matches: %w", err)
+		logger.WithError(err).Error("Failed to query mutual matches")
+		return nil, err
 	}
 	defer rows.Close()
 
@@ -327,24 +396,42 @@ func (s *MatchingService) GetMutualMatches(userID string, limit, offset int) ([]
 			&match.CreatedAt, &match.UpdatedAt,
 		)
 		if err != nil {
-			return nil, fmt.Errorf("failed to scan mutual match: %w", err)
+			logger.WithError(err).Error("Failed to scan mutual match row")
+			return nil, err
 		}
 		matches = append(matches, match)
 	}
 
 	if err = rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating mutual matches: %w", err)
+		logger.WithError(err).Error("Error iterating mutual match rows")
+		return nil, err
 	}
 
+	logger.WithField("count", len(matches)).Info("Successfully retrieved mutual matches")
 	return matches, nil
 }
 
+func (s *MatchingService) GetMatches(userID, status string) ([]*Match, error) {
+	// Default limit for interface compatibility
+	return s.GetUserMatches(userID, status, 50, 0)
+}
+
 func (s *MatchingService) DeleteMatch(matchID string) error {
+	ctx := telemetry.WithCorrelationID(context.Background(), telemetry.NewCorrelationID())
+	logger := telemetry.GetContextualLogger(ctx).WithFields(map[string]interface{}{
+		"match_id":  matchID,
+		"operation": "delete_match",
+	})
+
+	logger.Debug("Deleting match")
 	query := `DELETE FROM matches WHERE id = $1`
 	_, err := s.db.Exec(query, matchID)
 	if err != nil {
-		return fmt.Errorf("failed to delete match: %w", err)
+		logger.WithError(err).Error("Failed to delete match")
+		return err
 	}
+
+	logger.Info("Successfully deleted match")
 	return nil
 }
 

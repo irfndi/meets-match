@@ -2,21 +2,21 @@ package middleware
 
 import (
 	"context"
-	"log"
 
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
 
-	"github.com/meetsmatch/meetsmatch/internal/services"
+	"github.com/meetsmatch/meetsmatch/internal/interfaces"
+	"github.com/meetsmatch/meetsmatch/internal/telemetry"
 )
 
 // AuthMiddleware provides authentication middleware for bot handlers
 type AuthMiddleware struct {
-	userService *services.UserService
+	userService interfaces.UserServiceInterface
 }
 
 // NewAuthMiddleware creates a new authentication middleware
-func NewAuthMiddleware(userService *services.UserService) *AuthMiddleware {
+func NewAuthMiddleware(userService interfaces.UserServiceInterface) *AuthMiddleware {
 	return &AuthMiddleware{
 		userService: userService,
 	}
@@ -39,8 +39,15 @@ func (m *AuthMiddleware) Middleware(next bot.HandlerFunc) bot.HandlerFunc {
 
 		// Check if user exists in database
 		user, err := m.userService.GetUserByTelegramID(userID)
+		logger := telemetry.GetContextualLogger(ctx)
 		if err != nil {
-			log.Printf("Authentication failed for user %d: %v", userID, err)
+			logger.WithFields(map[string]interface{}{
+				"operation":   "authenticate_user",
+				"user_id":     userID,
+				"telegram_id": userID,
+				"service":     "auth_middleware",
+				"result":      "failed",
+			}).WithError(err).Warn("Authentication failed for user, allowing for registration")
 			// For new users, we'll let them through to handle registration
 			next(ctx, b, update)
 			return
@@ -48,7 +55,14 @@ func (m *AuthMiddleware) Middleware(next bot.HandlerFunc) bot.HandlerFunc {
 
 		// Add user to context for downstream handlers
 		ctx = context.WithValue(ctx, "user", user)
-		log.Printf("User %s (%s) authenticated successfully", user.ID, user.Name)
+		logger.WithFields(map[string]interface{}{
+			"operation":   "authenticate_user",
+			"user_id":     user.ID,
+			"user_name":   user.Name,
+			"telegram_id": userID,
+			"service":     "auth_middleware",
+			"result":      "success",
+		}).Info("User authenticated successfully")
 
 		// Continue to next handler
 		next(ctx, b, update)
