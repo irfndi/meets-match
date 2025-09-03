@@ -46,3 +46,11 @@ htmlcov/
 log/
 sqlite.db
 .DS_Store
+
+# AI tool directories
+.claude/
+.gemini/
+.trae/
+
+# Claude Code configuration (contains secrets)
+.claude.json
