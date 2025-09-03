@@ -322,7 +322,7 @@ func (c *CacheMiddleware) generateCacheKey(userID, chatID int64, messageText str
 }
 
 // sendCachedResponse sends a cached response to the user
-func (c *CacheMiddleware) sendCachedResponse(update *tgbotapi.Update, cachedResponse *CachedResponse) error {
+func (c *CacheMiddleware) sendCachedResponse(_ *tgbotapi.Update, cachedResponse *CachedResponse) error {
 	// This is a simplified implementation
 	// In a real implementation, you would use the bot API to send the cached response
 	logger := telemetry.GetContextualLogger(context.Background())

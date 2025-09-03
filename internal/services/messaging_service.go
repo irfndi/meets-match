@@ -65,15 +65,15 @@ func (s *MessagingService) SendMessage(senderID, receiverID, content, messageTyp
 			RETURNING id
 		`
 
-		err := tx.QueryRow(
+		insertErr := tx.QueryRow(
 			query,
 			message.ID, message.MatchID, message.SenderID, message.ReceiverID,
 			message.Content, message.MessageType, message.IsRead,
 			message.CreatedAt, message.UpdatedAt,
 		).Scan(&message.ID)
 
-		if err != nil {
-			return err
+		if insertErr != nil {
+			return insertErr
 		}
 
 		// Update conversation's last activity and last message
@@ -165,14 +165,14 @@ func (s *MessagingService) GetConversations(userID string, limit, offset int) ([
 	var conversations []*Conversation
 	for rows.Next() {
 		conv := &Conversation{}
-		err := rows.Scan(
+		scanErr := rows.Scan(
 			&conv.ID, &conv.MatchID, &conv.User1ID, &conv.User2ID,
 			&conv.LastMessage, &conv.LastActivity,
 			&conv.CreatedAt, &conv.UpdatedAt,
 		)
-		if err != nil {
-			logger.WithError(err).Error("Failed to scan conversation row")
-			return nil, err
+		if scanErr != nil {
+			logger.WithError(scanErr).Error("Failed to scan conversation row")
+			return nil, scanErr
 		}
 		conversations = append(conversations, conv)
 	}
@@ -215,14 +215,14 @@ func (s *MessagingService) GetMessages(conversationID string, limit, offset int)
 	var messages []*Message
 	for rows.Next() {
 		msg := &Message{}
-		err := rows.Scan(
+		scanErr := rows.Scan(
 			&msg.ID, &msg.MatchID, &msg.SenderID, &msg.ReceiverID,
 			&msg.Content, &msg.MessageType, &msg.IsRead,
 			&msg.CreatedAt, &msg.UpdatedAt,
 		)
-		if err != nil {
-			logger.WithError(err).Error("Failed to scan message row")
-			return nil, fmt.Errorf("failed to scan message: %w", err)
+		if scanErr != nil {
+			logger.WithError(scanErr).Error("Failed to scan message row")
+			return nil, fmt.Errorf("failed to scan message: %w", scanErr)
 		}
 		messages = append(messages, msg)
 	}
@@ -265,14 +265,14 @@ func (s *MessagingService) GetMessagesBetweenUsers(user1ID, user2ID string, limi
 	var messages []*Message
 	for rows.Next() {
 		msg := &Message{}
-		err := rows.Scan(
+		scanErr := rows.Scan(
 			&msg.ID, &msg.MatchID, &msg.SenderID, &msg.ReceiverID,
 			&msg.Content, &msg.MessageType, &msg.IsRead,
 			&msg.CreatedAt, &msg.UpdatedAt,
 		)
-		if err != nil {
-			logger.WithError(err).Error("Failed to scan message row")
-			return nil, fmt.Errorf("failed to scan message: %w", err)
+		if scanErr != nil {
+			logger.WithError(scanErr).Error("Failed to scan message row")
+			return nil, fmt.Errorf("failed to scan message: %w", scanErr)
 		}
 		messages = append(messages, msg)
 	}
@@ -491,14 +491,14 @@ func (s *MessagingService) GetRecentMessages(userID string, limit int) ([]*Messa
 	var messages []*Message
 	for rows.Next() {
 		msg := &Message{}
-		err := rows.Scan(
+		scanErr := rows.Scan(
 			&msg.ID, &msg.MatchID, &msg.SenderID, &msg.ReceiverID,
 			&msg.Content, &msg.MessageType, &msg.IsRead,
 			&msg.CreatedAt, &msg.UpdatedAt,
 		)
-		if err != nil {
-			logger.WithError(err).Error("Failed to scan message")
-			return nil, fmt.Errorf("failed to scan message: %w", err)
+		if scanErr != nil {
+			logger.WithError(scanErr).Error("Failed to scan message")
+			return nil, fmt.Errorf("failed to scan message: %w", scanErr)
 		}
 		messages = append(messages, msg)
 	}

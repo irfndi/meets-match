@@ -404,16 +404,16 @@ func (s *UserService) GetActiveUsers(limit, offset int) ([]*User, error) {
 	var users []*User
 	for rows.Next() {
 		user := &User{}
-		err := rows.Scan(
+		scanErr := rows.Scan(
 			&user.ID, &user.TelegramID, &user.Username, &user.Name,
 			&user.Age, &user.Gender, &user.Bio, &user.LocationText,
 			&user.Latitude, &user.Longitude, &user.Photos,
 			&user.Preferences, &user.State, &user.IsActive,
 			&user.CreatedAt, &user.UpdatedAt,
 		)
-		if err != nil {
-			logger.WithError(err).Error("Failed to scan user row")
-			return nil, fmt.Errorf("failed to scan user: %w", err)
+		if scanErr != nil {
+			logger.WithError(scanErr).Error("Failed to scan user row")
+			return nil, fmt.Errorf("failed to scan user: %w", scanErr)
 		}
 		users = append(users, user)
 	}

@@ -869,19 +869,6 @@ func (am *AlertManager) evaluateRules() {
 	}
 }
 
-// resolveAlertsForRule resolves all firing alerts for a rule
-func (am *AlertManager) resolveAlertsForRule(ruleName string) {
-	am.mu.Lock()
-	defer am.mu.Unlock()
-
-	for _, alert := range am.alerts {
-		if alert.Name == ruleName && alert.Status == AlertStatusFiring {
-			alert.Status = AlertStatusResolved
-			alert.ResolvedAt = &time.Time{}
-			*alert.ResolvedAt = time.Now()
-		}
-	}
-}
 
 // EvaluateRule evaluates a rule with a given value (for testing)
 func (am *AlertManager) EvaluateRule(rule AlertRule, value float64) (bool, *Alert) {

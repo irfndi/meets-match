@@ -357,10 +357,8 @@ func (mc *MetricsCollector) NewHistogram(name, help string, labels map[string]st
 // getMetricKey generates a unique key for a metric with labels
 func (mc *MetricsCollector) getMetricKey(name string, labels map[string]string) string {
 	key := name
-	if labels != nil {
-		for k, v := range labels {
-			key += fmt.Sprintf("_%s_%s", k, v)
-		}
+	for k, v := range labels {
+		key += fmt.Sprintf("_%s_%s", k, v)
 	}
 	return key
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"math"
 	"time"
 
 	"github.com/google/uuid"
@@ -250,16 +249,16 @@ func (s *MatchingService) GetPotentialMatches(userID string, limit int) ([]*User
 	var matches []*User
 	for rows.Next() {
 		match := &User{}
-		err := rows.Scan(
+		scanErr := rows.Scan(
 			&match.ID, &match.TelegramID, &match.Username, &match.Name,
 			&match.Age, &match.Gender, &match.Bio, &match.LocationText,
 			&match.Latitude, &match.Longitude, &match.Photos,
 			&match.Preferences, &match.State, &match.IsActive,
 			&match.CreatedAt, &match.UpdatedAt,
 		)
-		if err != nil {
-			logger.WithError(err).Error("Failed to scan potential match row")
-			return nil, err
+		if scanErr != nil {
+			logger.WithError(scanErr).Error("Failed to scan potential match row")
+			return nil, scanErr
 		}
 		matches = append(matches, match)
 	}
@@ -336,13 +335,13 @@ func (s *MatchingService) GetUserMatches(userID string, status string, limit, of
 	var matches []*Match
 	for rows.Next() {
 		match := &Match{}
-		err := rows.Scan(
+		scanErr := rows.Scan(
 			&match.ID, &match.UserID, &match.TargetID,
 			&match.Status, &match.CreatedAt, &match.UpdatedAt,
 		)
-		if err != nil {
-			logger.WithError(err).Error("Failed to scan user match row")
-			return nil, err
+		if scanErr != nil {
+			logger.WithError(scanErr).Error("Failed to scan user match row")
+			return nil, scanErr
 		}
 		matches = append(matches, match)
 	}
@@ -388,16 +387,16 @@ func (s *MatchingService) GetMutualMatches(userID string, limit, offset int) ([]
 	var matches []*User
 	for rows.Next() {
 		match := &User{}
-		err := rows.Scan(
+		scanErr := rows.Scan(
 			&match.ID, &match.TelegramID, &match.Username, &match.Name,
 			&match.Age, &match.Gender, &match.Bio, &match.LocationText,
 			&match.Latitude, &match.Longitude, &match.Photos,
 			&match.Preferences, &match.State, &match.IsActive,
 			&match.CreatedAt, &match.UpdatedAt,
 		)
-		if err != nil {
-			logger.WithError(err).Error("Failed to scan mutual match row")
-			return nil, err
+		if scanErr != nil {
+			logger.WithError(scanErr).Error("Failed to scan mutual match row")
+			return nil, scanErr
 		}
 		matches = append(matches, match)
 	}
@@ -435,23 +434,3 @@ func (s *MatchingService) DeleteMatch(matchID string) error {
 	return nil
 }
 
-// calculateDistance calculates the distance between two points using the Haversine formula
-func calculateDistance(lat1, lon1, lat2, lon2 float64) float64 {
-	const earthRadius = 6371 // Earth's radius in kilometers
-
-	// Convert degrees to radians
-	lat1Rad := lat1 * math.Pi / 180
-	lon1Rad := lon1 * math.Pi / 180
-	lat2Rad := lat2 * math.Pi / 180
-	lon2Rad := lon2 * math.Pi / 180
-
-	// Calculate differences
-	dLat := lat2Rad - lat1Rad
-	dLon := lon2Rad - lon1Rad
-
-	// Haversine formula
-	a := math.Sin(dLat/2)*math.Sin(dLat/2) + math.Cos(lat1Rad)*math.Cos(lat2Rad)*math.Sin(dLon/2)*math.Sin(dLon/2)
-	c := 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
-
-	return earthRadius * c
-}

@@ -240,11 +240,11 @@ func TestHandler_HandleWebhook_ValidUpdate(t *testing.T) {
 	// Mock user service to return nil (new user)
 	mockUserService.On("GetUserByTelegramID", int64(789)).Return(nil, nil)
 	mockUserService.On("CreateUser", int64(789), "", "").Return(&services.User{
-		ID:         1,
+		ID:         "1",
 		TelegramID: 789,
 		State:      "onboarding_name",
 	}, nil)
-	mockUserService.On("UpdateUserState", int64(1), "onboarding_name").Return(nil)
+	mockUserService.On("UpdateUserState", "1", "onboarding_name").Return(nil)
 
 	// Create request
 	body, _ := json.Marshal(update)
@@ -320,14 +320,14 @@ func TestHandler_HandleUpdate_Message(t *testing.T) {
 	// Mock user service
 	mockUserService.On("GetUserByTelegramID", int64(123)).Return(nil, nil)
 	mockUserService.On("CreateUser", int64(123), "", "").Return(&services.User{
-		ID:         1,
+		ID:         "1",
 		TelegramID: 123,
 		State:      "onboarding_name",
 	}, nil)
-	mockUserService.On("UpdateUserState", int64(1), "onboarding_name").Return(nil)
+	mockUserService.On("UpdateUserState", "1", "onboarding_name").Return(nil)
 
 	// Call handler
-	handler.HandleUpdate(context.Background(), mockBot, update)
+	handler.HandleUpdate(context.Background(), nil, update)
 
 	// Verify mocks were called
 	mockUserService.AssertExpectations(t)
@@ -352,13 +352,13 @@ func TestHandler_HandleUpdate_CallbackQuery(t *testing.T) {
 
 	// Mock user service
 	mockUserService.On("GetUserByTelegramID", int64(123)).Return(&services.User{
-		ID:         1,
+		ID:         "1",
 		TelegramID: 123,
 		State:      "active",
 	}, nil)
 
 	// Call handler
-	handler.HandleUpdate(context.Background(), mockBot, update)
+	handler.HandleUpdate(context.Background(), nil, update)
 
 	// Verify mocks were called
 	mockUserService.AssertExpectations(t)

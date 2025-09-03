@@ -482,7 +482,7 @@ func (bmm *BotMonitoringMiddleware) checkBotAlertConditions(updateType string, u
 }
 
 // checkMessageAlertConditions checks for message-specific alert conditions
-func (bmm *BotMonitoringMiddleware) checkMessageAlertConditions(messageType string, userID, chatID int64, messageSize int, duration time.Duration, err error) {
+func (bmm *BotMonitoringMiddleware) checkMessageAlertConditions(messageType string, userID, chatID int64, messageSize int, _ time.Duration, _ error) {
 	// Alert on large messages
 	if messageSize > bmm.config.MaxMessageSize {
 		alert := &Alert{
@@ -505,7 +505,7 @@ func (bmm *BotMonitoringMiddleware) checkMessageAlertConditions(messageType stri
 }
 
 // checkCallbackAlertConditions checks for callback-specific alert conditions
-func (bmm *BotMonitoringMiddleware) checkCallbackAlertConditions(callbackData string, userID, chatID int64, duration time.Duration, err error) {
+func (bmm *BotMonitoringMiddleware) checkCallbackAlertConditions(callbackData string, userID, chatID int64, _ time.Duration, err error) {
 	// Alert on callback errors
 	if err != nil {
 		alert := &Alert{
