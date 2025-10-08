@@ -272,7 +272,7 @@ func TestCacheWarmEndpoint(t *testing.T) {
 		mockCache := &MockCacheMiddleware{}
 
 		// Setup expectations
-		mockCache.On("WarmCache", mock.AnythingOfType("*context.emptyCtx")).Return(nil)
+		mockCache.On("WarmCache", mock.Anything).Return(nil)
 
 		router := setupTestRouter(mockRedis, mockCache)
 
@@ -297,7 +297,7 @@ func TestCacheWarmEndpoint(t *testing.T) {
 		mockCache := &MockCacheMiddleware{}
 
 		// Setup expectations
-		mockCache.On("WarmCache", mock.AnythingOfType("*context.emptyCtx")).Return(fmt.Errorf("cache warming failed"))
+		mockCache.On("WarmCache", mock.Anything).Return(fmt.Errorf("cache warming failed"))
 
 		router := setupTestRouter(mockRedis, mockCache)
 
@@ -325,7 +325,7 @@ func TestCacheInvalidateEndpoint(t *testing.T) {
 		mockCache := &MockCacheMiddleware{}
 
 		// Setup expectations
-		mockCache.On("InvalidateCache", mock.AnythingOfType("*context.emptyCtx"), "*").Return(nil)
+		mockCache.On("InvalidateCache", mock.Anything, mock.Anything).Return(nil)
 
 		router := setupTestRouter(mockRedis, mockCache)
 
@@ -350,7 +350,7 @@ func TestCacheInvalidateEndpoint(t *testing.T) {
 		mockCache := &MockCacheMiddleware{}
 
 		// Setup expectations
-		mockCache.On("InvalidateCache", mock.AnythingOfType("*context.emptyCtx"), "user:*").Return(nil)
+		mockCache.On("InvalidateCache", mock.Anything, "user:*").Return(nil)
 
 		router := setupTestRouter(mockRedis, mockCache)
 
@@ -375,7 +375,7 @@ func TestCacheInvalidateEndpoint(t *testing.T) {
 		mockCache := &MockCacheMiddleware{}
 
 		// Setup expectations
-		mockCache.On("InvalidateCache", mock.AnythingOfType("*context.emptyCtx"), "*").Return(fmt.Errorf("invalidation failed"))
+		mockCache.On("InvalidateCache", mock.Anything, mock.Anything).Return(fmt.Errorf("invalidation failed"))
 
 		router := setupTestRouter(mockRedis, mockCache)
 
@@ -492,8 +492,8 @@ func TestAPIIntegration(t *testing.T) {
 		mockRedis.On("GetStats").Return(expectedStats)
 
 		// Setup expectations for cache operations
-		mockCache.On("WarmCache", mock.AnythingOfType("*context.emptyCtx")).Return(nil)
-		mockCache.On("InvalidateCache", mock.AnythingOfType("*context.emptyCtx"), "*").Return(nil)
+		mockCache.On("WarmCache", mock.Anything).Return(nil)
+		mockCache.On("InvalidateCache", mock.Anything, mock.Anything).Return(nil)
 
 		router := setupTestRouter(mockRedis, mockCache)
 

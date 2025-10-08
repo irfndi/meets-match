@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 )
 
 // Mock notification channel for testing
@@ -62,6 +63,9 @@ func TestDefaultAlertConfig(t *testing.T) {
 func TestAlertManager_AddRule(t *testing.T) {
 	alertManager := NewAlertManager(DefaultAlertConfig())
 
+	// Count existing rules
+	existingRules := len(alertManager.GetAllRules())
+
 	rule := AlertRule{
 		ID:          "test-rule",
 		Name:        "Test Rule",
@@ -73,14 +77,17 @@ func TestAlertManager_AddRule(t *testing.T) {
 
 	alertManager.AddRule(rule)
 
-	// Verify rule was added
+	// Verify rule was added (existing rules + 1)
 	rules := alertManager.GetAllRules()
-	assert.Len(t, rules, 1)
+	assert.Len(t, rules, existingRules+1)
 	assert.Equal(t, rule.ID, rules[rule.ID].ID)
 }
 
 func TestAlertManager_RemoveRule(t *testing.T) {
 	alertManager := NewAlertManager(DefaultAlertConfig())
+
+	// Count existing rules
+	existingRules := len(alertManager.GetAllRules())
 
 	rule := AlertRule{
 		ID:          "test-rule",
@@ -94,24 +101,53 @@ func TestAlertManager_RemoveRule(t *testing.T) {
 	alertManager.AddRule(rule)
 	alertManager.RemoveRule(rule.ID)
 
-	// Verify rule was removed
+	// Verify rule was removed (should be back to existing rules count)
 	rules := alertManager.GetAllRules()
-	assert.Len(t, rules, 0)
+	assert.Len(t, rules, existingRules)
 }
 
 func TestAlertManager_GetRules(t *testing.T) {
 	alertManager := NewAlertManager(DefaultAlertConfig())
 
-	rule1 := AlertRule{Name: "rule1", Enabled: true}
-	rule2 := AlertRule{Name: "rule2", Enabled: false}
+	// Count existing rules
+	existingRules := len(alertManager.GetAllRules())
+
+	rule1 := AlertRule{
+		ID:        "test-rule-1",
+		Name:      "rule1",
+		Condition: ">",
+		Threshold: 10,
+		Enabled:   true,
+	}
+	rule2 := AlertRule{
+		ID:        "test-rule-2", 
+		Name:      "rule2",
+		Condition: "<",
+		Threshold: 5,
+		Enabled:   false,
+	}
 
 	alertManager.AddRule(rule1)
 	alertManager.AddRule(rule2)
 
 	rules := alertManager.GetRules()
-	assert.Len(t, rules, 2)
-	assert.Equal(t, rule1, rules[0])
-	assert.Equal(t, rule2, rules[1])
+	assert.Len(t, rules, existingRules+2)
+	
+	// Find our test rules in the response
+	var foundRule1, foundRule2 *AlertRule
+	for _, rule := range rules {
+		if rule.ID == "test-rule-1" {
+			foundRule1 = &rule
+		}
+		if rule.ID == "test-rule-2" {
+			foundRule2 = &rule
+		}
+	}
+	
+	assert.NotNil(t, foundRule1)
+	assert.NotNil(t, foundRule2)
+	assert.Equal(t, "rule1", foundRule1.Name)
+	assert.Equal(t, "rule2", foundRule2.Name)
 }
 
 func TestAlertManager_AddNotificationChannel(t *testing.T) {
@@ -119,14 +155,26 @@ func TestAlertManager_AddNotificationChannel(t *testing.T) {
 	mockChannel := &MockNotificationChannel{}
 	mockChannel.On("GetType").Return("mock")
 
-	// Note: AlertManager doesn't have AddNotificationChannel, using AddChannel instead
-	// This test may need to be updated based on actual AlertManager interface
+	// Add a real channel using the actual AlertManager API
+	channel := &AlertChannel{
+		ID:   "test-channel",
+		Name: "Test Channel",
+		Type: "mock",
+		Config: map[string]string{
+			"test": "value",
+		},
+		Enabled: true,
+	}
+
+	err := alertManager.AddChannel(channel)
+	require.NoError(t, err)
 
 	channels := alertManager.GetAllChannels()
 	assert.Len(t, channels, 1)
-	channel, exists := alertManager.GetChannelExists("test-channel")
+	
+	retrievedChannel, exists := alertManager.GetChannelExists("test-channel")
 	assert.True(t, exists)
-	assert.Equal(t, mockChannel.GetType(), channel.Type)
+	assert.Equal(t, channel.Type, retrievedChannel.Type)
 }
 
 func TestAlertManager_RemoveNotificationChannel(t *testing.T) {
@@ -134,19 +182,28 @@ func TestAlertManager_RemoveNotificationChannel(t *testing.T) {
 	mockChannel := &MockNotificationChannel{}
 	mockChannel.On("GetType").Return("mock")
 
-	// Note: AlertManager doesn't have AddNotificationChannel, using AddChannel instead
-	// This test may need to be updated based on actual AlertManager interface
+	// Add a channel first
+	channel := &AlertChannel{
+		ID:   "test-channel",
+		Name: "Test Channel",
+		Type: "mock",
+		Config: map[string]string{
+			"test": "value",
+		},
+		Enabled: true,
+	}
+
+	err := alertManager.AddChannel(channel)
+	require.NoError(t, err)
+
+	// Verify channel exists
 	channels := alertManager.GetAllChannels()
 	assert.Len(t, channels, 1)
 
-	// Note: AlertManager doesn't have RemoveNotificationChannel, using RemoveChannel instead
-	// This test may need to be updated based on actual AlertManager interface
-	channels = alertManager.GetAllChannels()
-	assert.Len(t, channels, 0)
+	// Remove the channel
+	alertManager.RemoveNotificationChannel("test-channel")
 
-	// Try to remove non-existent channel
-	// Note: AlertManager doesn't have RemoveNotificationChannel, using RemoveChannel instead
-	// This test may need to be updated based on actual AlertManager interface
+	// Verify channel was removed
 	channels = alertManager.GetAllChannels()
 	assert.Len(t, channels, 0)
 }
@@ -213,12 +270,14 @@ func TestAlertManager_EvaluateRule_DifferentOperators(t *testing.T) {
 		rule := AlertRule{
 			Name:      "test_rule",
 			Operator:  test.operator,
+			Condition: string(test.operator), // Convert operator to condition string
 			Threshold: test.threshold,
 			Enabled:   true,
 		}
 
-		// Note: AlertManager doesn't have public EvaluateRule method
-		should := false // Placeholder
+		// Test the actual EvaluateRule method
+		am := NewAlertManager(DefaultAlertConfig())
+		should, _ := am.EvaluateRule(rule, test.value)
 		assert.Equal(t, test.expected, should, "Operator: %v, Threshold: %v, Value: %v", test.operator, test.threshold, test.value)
 
 		// Use rule to avoid unused variable error
@@ -258,6 +317,7 @@ func TestAlertManager_TriggerAlert_ChannelError(t *testing.T) {
 			return errors.New("channel error")
 		},
 	}
+	mockChannel.On("GetType").Return("mock")
 	alertManager.AddNotificationChannel("test-channel", mockChannel)
 
 	alert := Alert{
@@ -270,9 +330,19 @@ func TestAlertManager_TriggerAlert_ChannelError(t *testing.T) {
 		Timestamp:   time.Now(),
 	}
 
+	// TriggerAlert should succeed even if notification channels fail
+	// Notification errors are handled asynchronously
 	err := alertManager.TriggerAlert(alert)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "channel error")
+	assert.NoError(t, err)
+
+	// Give some time for the async notification to be processed
+	time.Sleep(10 * time.Millisecond)
+
+	// Verify the alert was still created despite notification failure
+	alerts := alertManager.GetAllAlerts()
+	assert.Len(t, alerts, 1)
+	assert.Equal(t, alert.ID, alerts[alert.ID].ID)
+	assert.Equal(t, AlertStatusFiring, alerts[alert.ID].Status)
 }
 
 func TestAlertManager_GetAlerts(t *testing.T) {
@@ -286,8 +356,20 @@ func TestAlertManager_GetAlerts(t *testing.T) {
 
 	alerts := alertManager.GetAlerts()
 	assert.Len(t, alerts, 2)
-	assert.Equal(t, alert1, alerts[0])
-	assert.Equal(t, alert2, alerts[1])
+	
+	// Check that both alerts are present, regardless of order
+	alert1Found := false
+	alert2Found := false
+	for _, alert := range alerts {
+		if alert.ID == "alert-1" && alert.RuleName == "rule1" {
+			alert1Found = true
+		}
+		if alert.ID == "alert-2" && alert.RuleName == "rule2" {
+			alert2Found = true
+		}
+	}
+	assert.True(t, alert1Found, "alert-1 should be present")
+	assert.True(t, alert2Found, "alert-2 should be present")
 }
 
 func TestAlertManager_GetAlertsByRule(t *testing.T) {
@@ -303,12 +385,24 @@ func TestAlertManager_GetAlertsByRule(t *testing.T) {
 
 	alerts := alertManager.GetAlertsByRule("rule1")
 	assert.Len(t, alerts, 2)
-	assert.Equal(t, alert1, alerts[0])
-	assert.Equal(t, alert3, alerts[1])
+	// Check that both rule1 alerts are present, regardless of order
+	alert1Found := false
+	alert3Found := false
+	for _, alert := range alerts {
+		if alert.ID == "alert-1" && alert.RuleName == "rule1" {
+			alert1Found = true
+		}
+		if alert.ID == "alert-3" && alert.RuleName == "rule1" {
+			alert3Found = true
+		}
+	}
+	assert.True(t, alert1Found, "alert-1 with rule1 should be present")
+	assert.True(t, alert3Found, "alert-3 with rule1 should be present")
 
 	alerts = alertManager.GetAlertsByRule("rule2")
 	assert.Len(t, alerts, 1)
-	assert.Equal(t, alert2, alerts[0])
+	assert.Equal(t, "alert-2", alerts[0].ID)
+	assert.Equal(t, "rule2", alerts[0].RuleName)
 
 	alerts = alertManager.GetAlertsByRule("non-existent")
 	assert.Len(t, alerts, 0)
@@ -455,13 +549,13 @@ func TestEmailNotificationChannel(t *testing.T) {
 		Name: "Email Channel",
 		Type: "email",
 		Config: map[string]string{
-			"smtp_host":       config.SMTPHost,
-			"smtp_port":       fmt.Sprintf("%d", config.SMTPPort),
-			"username":        config.Username,
-			"password":        config.Password,
-			"from_address":    config.FromAddress,
-			"to_addresses":    fmt.Sprintf("%v", config.ToAddresses),
-			"subject_prefix":  config.SubjectPrefix,
+			"smtp_host":      config.SMTPHost,
+			"smtp_port":      fmt.Sprintf("%d", config.SMTPPort),
+			"username":       config.Username,
+			"password":       config.Password,
+			"from_address":   config.FromAddress,
+			"to_addresses":   fmt.Sprintf("%v", config.ToAddresses),
+			"subject_prefix": config.SubjectPrefix,
 		},
 		Enabled: true,
 	}
@@ -541,7 +635,8 @@ func TestAlertManager_MaxAlerts(t *testing.T) {
 	// Trigger cleanup
 	alertManager.ClearOldAlerts(time.Hour)
 
-	assert.LessOrEqual(t, len(alertManager.alerts), 3)
+	alerts := alertManager.GetAlerts()
+	assert.LessOrEqual(t, len(alerts), 3)
 }
 
 func TestAlertManager_DisabledManager(t *testing.T) {

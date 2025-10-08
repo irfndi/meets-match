@@ -60,7 +60,6 @@ func TestTracer_StartSpan(t *testing.T) {
 	// assert.Contains(t, tracer.activeSpans, span.SpanID)
 }
 
-
 func TestTracer_FinishSpan(t *testing.T) {
 	tracer := NewTracer(DefaultTracerConfig())
 	span := tracer.StartSpan("test-operation", SpanKindInternal)
@@ -100,7 +99,6 @@ func TestTracer_GetTrace_NotFound(t *testing.T) {
 	assert.False(t, exists)
 	assert.Nil(t, trace)
 }
-
 
 func TestTracer_GetAllTraces(t *testing.T) {
 	tracer := NewTracer(DefaultTracerConfig())
@@ -154,8 +152,6 @@ func TestSpan_SetTag(t *testing.T) {
 	assert.Equal(t, "123", span.Tags["user_id"])
 	assert.Equal(t, "read", span.Tags["operation_type"])
 }
-
-
 
 func TestExtractHTTPHeaders(t *testing.T) {
 	headers := http.Header{
@@ -269,7 +265,6 @@ func TestStartSpanFromContext_NoGlobalTracer(t *testing.T) {
 
 	assert.Nil(t, span)
 }
-
 
 func TestTracer_SamplingRate(t *testing.T) {
 	// Test with 0% sampling rate

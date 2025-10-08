@@ -67,7 +67,7 @@ graph TD
 - **Bun**: Package manager and runtime (replacing npm/pnpm)
 
 ### Data Layer
-- **PostgreSQL (16+)**: Primary relational database
+- **PostgreSQL (18+)**: Primary relational database
   - ACID compliance and strong consistency
   - Advanced features like JSONB and full-text search
   - Excellent performance for complex queries

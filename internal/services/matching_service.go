@@ -433,4 +433,3 @@ func (s *MatchingService) DeleteMatch(matchID string) error {
 	logger.Info("Successfully deleted match")
 	return nil
 }
-

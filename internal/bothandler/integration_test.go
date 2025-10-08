@@ -330,8 +330,8 @@ func TestIntegrationErrorHandling(t *testing.T) {
 	t.Run("Bot send error in webhook", func(t *testing.T) {
 		// Setup mocks
 		mockBot := &MockTelegramBot{
-		Updates: make(chan tgbotapi.Update, 100),
-	}
+			Updates: make(chan tgbotapi.Update, 100),
+		}
 		mockUserService := &MockUserService{}
 		mockMatchingService := &MockMatchingService{}
 		mockMessagingService := &MockMessagingService{}
@@ -388,8 +388,8 @@ func TestIntegrationErrorHandling(t *testing.T) {
 	t.Run("Database error in webhook", func(t *testing.T) {
 		// Setup mocks
 		mockBot := &MockTelegramBot{
-		Updates: make(chan tgbotapi.Update, 100),
-	}
+			Updates: make(chan tgbotapi.Update, 100),
+		}
 		mockUserService := &MockUserService{}
 		mockMatchingService := &MockMatchingService{}
 		mockMessagingService := &MockMessagingService{}

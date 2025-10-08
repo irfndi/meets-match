@@ -869,7 +869,6 @@ func (am *AlertManager) evaluateRules() {
 	}
 }
 
-
 // EvaluateRule evaluates a rule with a given value (for testing)
 func (am *AlertManager) EvaluateRule(rule AlertRule, value float64) (bool, *Alert) {
 	// Evaluate condition

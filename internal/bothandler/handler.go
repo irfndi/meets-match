@@ -485,11 +485,15 @@ func (h *Handler) handleCallbackQuery(callback *models.CallbackQuery) {
 	data := callback.Data
 
 	// Acknowledge the callback
-	_, err := h.bot.AnswerCallbackQuery(h.ctx, &bot.AnswerCallbackQueryParams{
-		CallbackQueryID: callback.ID,
-	})
-	if err != nil {
-		logger.WithError(err).Error("Failed to answer callback query")
+	if h.bot != nil {
+		_, err := h.bot.AnswerCallbackQuery(h.ctx, &bot.AnswerCallbackQueryParams{
+			CallbackQueryID: callback.ID,
+		})
+		if err != nil {
+			logger.WithError(err).Error("Failed to answer callback query")
+		}
+	} else {
+		logger.Debug("Bot is nil, skipping callback answer (test environment)")
 	}
 
 	user, err := h.userService.GetUserByTelegramID(userID)
@@ -550,7 +554,7 @@ func (h *Handler) handleCallbackQuery(callback *models.CallbackQuery) {
 
 	case strings.HasPrefix(data, "select_conversation_"):
 		conversationID := strings.TrimPrefix(data, "select_conversation_")
-		userIDStr := fmt.Sprintf("%d", user.ID)
+		userIDStr := user.ID
 		h.stateManager.GetSession(userIDStr, chatID) // Initialize session
 		h.setUserActiveConversation(userIDStr, conversationID)
 		h.sendMessage(chatID, "💬 Conversation selected! Now you can type your message and it will be sent to this chat. Type /conversations to switch to a different chat.")
@@ -592,7 +596,14 @@ func (h *Handler) extractCommand(text string) string {
 	if len(parts) == 0 {
 		return ""
 	}
-	return strings.TrimPrefix(parts[0], "/")
+	
+	command := strings.TrimPrefix(parts[0], "/")
+	// Handle bot username in commands like /start@botname
+	if idx := strings.Index(command, "@"); idx != -1 {
+		command = command[:idx]
+	}
+	
+	return command
 }
 
 // isCommand checks if a message is a command
@@ -606,6 +617,12 @@ func (h *Handler) sendMessage(chatID int64, text string) {
 		"chat_id":   chatID,
 		"operation": "send_message",
 	})
+
+	// Handle nil bot for testing environments
+	if h.bot == nil {
+		logger.Debug("Bot is nil, skipping message send (test environment)")
+		return
+	}
 
 	_, err := h.bot.SendMessage(h.ctx, &bot.SendMessageParams{
 		ChatID:    chatID,
@@ -624,6 +641,12 @@ func (h *Handler) sendMessageWithKeyboard(chatID int64, text string, keyboard mo
 		"operation": "send_message_with_keyboard",
 	})
 
+	// Handle nil bot for testing environments
+	if h.bot == nil {
+		logger.Debug("Bot is nil, skipping message send with keyboard (test environment)")
+		return
+	}
+
 	_, err := h.bot.SendMessage(h.ctx, &bot.SendMessageParams{
 		ChatID:      chatID,
 		Text:        text,
@@ -637,6 +660,11 @@ func (h *Handler) sendMessageWithKeyboard(chatID int64, text string, keyboard mo
 
 // RegisterHandlers registers all bot handlers with the bot instance
 func (h *Handler) RegisterHandlers() {
+	// Handle nil bot for testing environments
+	if h.bot == nil {
+		return
+	}
+
 	// Create middleware chain
 	messageHandler := h.chainMiddleware(h.handleBotUpdate)
 	callbackHandler := h.chainMiddleware(h.handleBotCallbackQuery)
@@ -932,7 +960,7 @@ func (h *Handler) handleConversationsCommand(chatID int64, user *services.User) 
 func (h *Handler) handleConversationMessage(message *models.Message, user *services.User) {
 	chatID := message.Chat.ID
 	text := message.Text
-	userIDStr := fmt.Sprintf("%d", user.ID)
+	userIDStr := user.ID
 	ctx := telemetry.WithCorrelationID(context.Background(), telemetry.NewCorrelationID())
 	logger := telemetry.GetContextualLogger(ctx).WithFields(map[string]interface{}{
 		"user_id":   user.ID,

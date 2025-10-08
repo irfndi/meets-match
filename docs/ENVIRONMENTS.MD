@@ -256,7 +256,7 @@ PROMETHEUS_ENABLED=true
 ```yaml
 # docker-compose.yml
 postgres:
-  image: postgres:15-alpine
+  image: postgres:18-alpine
   environment:
     POSTGRES_DB: meetsmatch_dev
     POSTGRES_USER: meetsmatch
@@ -271,7 +271,7 @@ postgres:
 ```yaml
 # docker-compose.prod.yml
 postgres:
-  image: postgres:15-alpine
+  image: postgres:18-alpine
   environment:
     POSTGRES_DB: meetsmatch
     POSTGRES_USER: meetsmatch

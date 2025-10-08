@@ -359,8 +359,6 @@ func TestMonitoringMiddleware_RegisterRoutes(t *testing.T) {
 // 	mockHealth.AssertExpectations(t)
 // }
 
-
-
 func TestMonitoringMiddleware_GetComponents(t *testing.T) {
 	middleware := NewMonitoringMiddleware(DefaultMiddlewareConfig())
 	realMetrics := NewMetricsCollector()

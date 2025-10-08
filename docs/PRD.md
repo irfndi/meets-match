@@ -104,7 +104,7 @@ graph TB
 #### Backend Services
 - **Go 1.21+**: High-performance Telegram bot service
 - **TypeScript/Node.js**: RESTful API service with Express.js
-- **PostgreSQL 15+**: Primary relational database
+- **PostgreSQL 18+**: Primary relational database
 - **Redis 7+**: Caching, session management, and real-time features
 - **Docker**: Containerization and orchestration
 - **Nginx**: Load balancing and reverse proxy
@@ -612,7 +612,7 @@ services:
       - api
   
   postgres:
-    image: postgres:15
+    image: postgres:18
     environment:
       - POSTGRES_DB
       - POSTGRES_USER

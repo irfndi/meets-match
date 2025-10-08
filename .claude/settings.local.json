@@ -4,7 +4,10 @@
       "Bash(go build:*)",
       "Bash(go test:*)",
       "Bash(sed:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(make:*)",
+      "Bash(go list:*)",
+      "Bash(go mod tidy:*)"
     ],
     "deny": [],
     "ask": []
