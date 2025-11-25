@@ -19,11 +19,6 @@ coverage.xml
 .pytest_cache/
 .mypy_cache/
 
-# Node.js / Bun
-node_modules/
-bun.lockb
-coverage/
-
 # IDE
 .idea/
 .vscode/
@@ -40,17 +35,9 @@ coverage/
 # UV cache
 .uv/
 
-# Misc
-.wrangler/
-htmlcov/
+# Logs
 log/
-sqlite.db
+*.log
+
+# Misc
 .DS_Store
-
-# AI tool directories
-.claude/
-.gemini/
-.trae/
-
-# Claude Code configuration (contains secrets)
-.claude.json

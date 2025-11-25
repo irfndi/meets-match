@@ -1,0 +1,306 @@
+"""Database connection utilities for the MeetMatch bot using PostgreSQL."""
+
+import os
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+
+from sqlalchemy import JSON, Boolean, DateTime, Enum, Float, ForeignKey, Integer, String, Text, create_engine
+from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, relationship, sessionmaker
+
+from src.utils.errors import DatabaseError
+from src.utils.logging import get_logger
+
+logger = get_logger(__name__)
+
+
+class Base(DeclarativeBase):
+    """Base class for SQLAlchemy models."""
+    pass
+
+
+class UserDB(Base):
+    """User database model."""
+    __tablename__ = "users"
+
+    id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    username: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    first_name: Mapped[str] = mapped_column(String(100))
+    last_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    bio: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    age: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    gender: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    interests: Mapped[List[str]] = mapped_column(JSON, default=list)
+    photos: Mapped[List[str]] = mapped_column(JSON, default=list)
+    location_latitude: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    location_longitude: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    location_city: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    location_country: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    preferences: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_profile_complete: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_active: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class MatchDB(Base):
+    """Match database model."""
+    __tablename__ = "matches"
+
+    id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    user1_id: Mapped[str] = mapped_column(String(50), ForeignKey("users.id"))
+    user2_id: Mapped[str] = mapped_column(String(50), ForeignKey("users.id"))
+    user1_action: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    user2_action: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    score_total: Mapped[float] = mapped_column(Float, default=0.0)
+    score_location: Mapped[float] = mapped_column(Float, default=0.0)
+    score_interests: Mapped[float] = mapped_column(Float, default=0.0)
+    score_preferences: Mapped[float] = mapped_column(Float, default=0.0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    matched_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    expired_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
+class ConversationDB(Base):
+    """Conversation database model."""
+    __tablename__ = "conversations"
+
+    id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    match_id: Mapped[str] = mapped_column(String(50), ForeignKey("matches.id"))
+    user1_id: Mapped[str] = mapped_column(String(50), ForeignKey("users.id"))
+    user2_id: Mapped[str] = mapped_column(String(50), ForeignKey("users.id"))
+    status: Mapped[str] = mapped_column(String(20), default="active")
+    last_message_id: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    last_message_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    messages: Mapped[List["MessageDB"]] = relationship("MessageDB", back_populates="conversation")
+
+
+class MessageDB(Base):
+    """Message database model."""
+    __tablename__ = "messages"
+
+    id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    conversation_id: Mapped[str] = mapped_column(String(50), ForeignKey("conversations.id"))
+    sender_id: Mapped[str] = mapped_column(String(50), ForeignKey("users.id"))
+    message_type: Mapped[str] = mapped_column(String(20), default="text")
+    content: Mapped[str] = mapped_column(Text)
+    media_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    is_read: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    read_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+    conversation: Mapped["ConversationDB"] = relationship("ConversationDB", back_populates="messages")
+
+
+class Database:
+    """Singleton database connection manager."""
+
+    _engine = None
+    _session_factory = None
+
+    @classmethod
+    def get_engine(cls):
+        """Get or create the database engine."""
+        if cls._engine is None:
+            from src.config import get_settings
+            
+            settings = get_settings()
+            database_url = settings.DATABASE_URL
+            
+            if not database_url:
+                raise DatabaseError("DATABASE_URL is not configured")
+
+            try:
+                cls._engine = create_engine(
+                    database_url,
+                    pool_recycle=300,
+                    pool_pre_ping=True,
+                    echo=settings.DEBUG
+                )
+                logger.info("Database engine created")
+            except Exception as e:
+                logger.error("Failed to create database engine", error=str(e))
+                raise DatabaseError(
+                    "Failed to connect to database",
+                    details={"error": str(e)}
+                ) from e
+        return cls._engine
+
+    @classmethod
+    def get_session_factory(cls):
+        """Get or create the session factory."""
+        if cls._session_factory is None:
+            cls._session_factory = sessionmaker(bind=cls.get_engine())
+        return cls._session_factory
+
+    @classmethod
+    def get_session(cls) -> Session:
+        """Get a new database session."""
+        return cls.get_session_factory()()
+
+    @classmethod
+    def create_tables(cls):
+        """Create all database tables."""
+        engine = cls.get_engine()
+        Base.metadata.create_all(engine)
+        logger.info("Database tables created")
+
+
+def get_session() -> Session:
+    """Get a database session."""
+    return Database.get_session()
+
+
+def init_database():
+    """Initialize the database and create tables."""
+    Database.create_tables()
+
+
+def execute_query(
+    table: str,
+    query_type: str,
+    filters: Optional[Dict[str, Any]] = None,
+    data: Optional[Dict[str, Any]] = None,
+    select: str = "*",
+) -> Any:
+    """Execute a query on the database (compatibility wrapper).
+
+    Args:
+        table: Table name
+        query_type: Query type (select, insert, update, delete)
+        filters: Query filters
+        data: Data for insert/update operations
+        select: Fields to select
+
+    Returns:
+        Query result
+    """
+    session = get_session()
+    filters = filters or {}
+    data = data or {}
+
+    model_map = {
+        "users": UserDB,
+        "matches": MatchDB,
+        "conversations": ConversationDB,
+        "messages": MessageDB,
+    }
+
+    model = model_map.get(table)
+    if not model:
+        raise ValueError(f"Unknown table: {table}")
+
+    try:
+        # Transform user data if needed
+        if table == "users" and data:
+            data = _transform_user_data(data)
+        
+        if query_type == "select":
+            query = session.query(model)
+            for key, value in filters.items():
+                query = query.filter(getattr(model, key) == value)
+            results = query.all()
+            session.close()
+            return type("Result", (), {"data": [_model_to_dict(r) for r in results]})()
+
+        elif query_type == "insert":
+            instance = model(**data)
+            session.add(instance)
+            session.commit()
+            result = _model_to_dict(instance)
+            session.close()
+            return type("Result", (), {"data": [result]})()
+
+        elif query_type == "update":
+            query = session.query(model)
+            for key, value in filters.items():
+                query = query.filter(getattr(model, key) == value)
+            query.update(data)
+            session.commit()
+            # Fetch updated records
+            updated_query = session.query(model)
+            for key, value in filters.items():
+                updated_query = updated_query.filter(getattr(model, key) == value)
+            results = updated_query.all()
+            session.close()
+            return type("Result", (), {"data": [_model_to_dict(r) for r in results]})()
+
+        elif query_type == "delete":
+            query = session.query(model)
+            for key, value in filters.items():
+                query = query.filter(getattr(model, key) == value)
+            query.delete()
+            session.commit()
+            session.close()
+            return type("Result", (), {"data": []})()
+
+        else:
+            raise ValueError(f"Invalid query type: {query_type}")
+
+    except Exception as e:
+        session.rollback()
+        session.close()
+        logger.error(
+            f"Failed to execute {query_type} query on {table}",
+            error=str(e),
+            filters=filters,
+            data=data,
+        )
+        raise DatabaseError(
+            f"Database operation failed: {query_type} on {table}",
+            details={"error": str(e), "filters": filters, "data": data},
+        ) from e
+
+
+def _transform_user_data(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Transform User model data to UserDB schema.
+    
+    Flattens nested location and preferences fields.
+    """
+    transformed = data.copy()
+    
+    # Flatten location if present
+    if "location" in transformed:
+        location = transformed.pop("location")
+        if location is not None and isinstance(location, dict):
+            transformed["location_latitude"] = location.get("latitude")
+            transformed["location_longitude"] = location.get("longitude")
+            transformed["location_city"] = location.get("city")
+            transformed["location_country"] = location.get("country")
+        # If location is None, just remove it (don't add location fields)
+    
+    # Preferences stays as JSON, but ensure it's a dict
+    if "preferences" in transformed and transformed["preferences"] is not None:
+        if not isinstance(transformed["preferences"], dict):
+            transformed["preferences"] = {}
+    
+    return transformed
+
+
+def _model_to_dict(model) -> Dict[str, Any]:
+    """Convert a SQLAlchemy model to a dictionary."""
+    result = {c.name: getattr(model, c.name) for c in model.__table__.columns}
+    
+    # Reconstruct location object from flat fields for UserDB
+    if hasattr(model, "location_latitude"):
+        if result.get("location_latitude") is not None:
+            result["location"] = {
+                "latitude": result.pop("location_latitude"),
+                "longitude": result.pop("location_longitude"),
+                "city": result.pop("location_city"),
+                "country": result.pop("location_country"),
+            }
+        else:
+            # Keep flat city/country fields for display when coordinates are missing
+            # but do not reconstruct nested location
+            result.pop("location_latitude", None)
+            result.pop("location_longitude", None)
+            result["location"] = None
+    
+    return result
