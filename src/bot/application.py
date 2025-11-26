@@ -1,9 +1,9 @@
 """Telegram bot application for the MeetMatch bot."""
 
-import asyncio
 from typing import Optional, Set
 
 from telegram import BotCommand
+from telegram.error import Conflict
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
@@ -13,7 +13,6 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
-from telegram.error import Conflict
 
 from src.bot.handlers import (
     about_command,
@@ -26,14 +25,15 @@ from src.bot.handlers import (
     handle_text_message,
     help_command,
     interests_command,
-    photo_handler,
     location_command,
     location_handler,
     match_callback,
     match_command,
     matches_command,
-    message_handler,
+    matches_pagination_callback,
     name_command,
+    photo_handler,
+    premium_command,
     profile_command,
     settings_callback,
     settings_command,
@@ -94,16 +94,11 @@ class BotApplication:
                     BotCommand("help", "Show help information"),
                     BotCommand("about", "About MeetMatch"),
                     BotCommand("profile", "View and edit your profile"),
-                    BotCommand("name", "Set your name"),
-                    BotCommand("age", "Set your age"),
-                    BotCommand("gender", "Set your gender"),
-                    BotCommand("bio", "Set your bio"),
-                    BotCommand("interests", "Set your interests"),
-                    BotCommand("location", "Set your location"),
                     BotCommand("match", "Find new matches"),
                     BotCommand("matches", "View your matches"),
                     BotCommand("chat", "Chat with a match"),
                     BotCommand("settings", "Adjust preferences"),
+                    BotCommand("premium", "Premium features"),
                 ]
             )
             logger.info("Bot slash commands registered")
@@ -140,6 +135,7 @@ class BotApplication:
 
         # Settings commands
         self.application.add_handler(CommandHandler("settings", settings_command))
+        self.application.add_handler(CommandHandler("premium", premium_command))
 
         # Help commands
         self.application.add_handler(CommandHandler("help", help_command))
@@ -147,11 +143,14 @@ class BotApplication:
 
         # Callback handlers
         self.application.add_handler(CallbackQueryHandler(match_callback, pattern=r"^(like_|dislike_|next_match)"))
+        self.application.add_handler(
+            CallbackQueryHandler(matches_pagination_callback, pattern=r"^(matches_page_|new_matches)")
+        )
         self.application.add_handler(CallbackQueryHandler(chat_callback, pattern=r"^(chat_|back_to_matches)"))
         self.application.add_handler(
             CallbackQueryHandler(
                 settings_callback,
-                pattern=r"^(settings_|looking_for_|min_age_|max_age_|max_distance_|notifications_|back_to_settings)",
+                pattern=r"^(settings_|region_|language_|min_age_|max_age_|max_distance_|notifications_|back_to_settings)",
             )
         )
 
@@ -164,7 +163,7 @@ class BotApplication:
                 gender_selection,
             )
         )
-        
+
         # Setup Profile button handler
         self.application.add_handler(
             MessageHandler(
@@ -172,7 +171,7 @@ class BotApplication:
                 start_profile_setup,
             )
         )
-        
+
         # Profile text input handler (for conversational flow)
         self.application.add_handler(
             MessageHandler(
@@ -213,6 +212,7 @@ class BotApplication:
                     try:
                         res = updater.stop()
                         import asyncio as _asyncio
+
                         if _asyncio.iscoroutine(res):
                             await res
                     except Exception:
@@ -225,6 +225,7 @@ class BotApplication:
                     result = stop_fn()
                     try:
                         import asyncio as _asyncio
+
                         if _asyncio.iscoroutine(result):
                             await result
                     except Exception:

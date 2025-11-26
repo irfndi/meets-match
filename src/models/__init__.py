@@ -5,18 +5,18 @@ from src.models.match import Match, MatchAction, MatchScore, MatchStatus, UserMa
 from src.models.user import Gender, Location, Preferences, RelationshipType, User
 
 __all__ = [
-    "User",
-    "Gender",
-    "Location",
-    "Preferences",
-    "RelationshipType",
-    "Match",
-    "MatchAction",
-    "MatchStatus",
-    "MatchScore",
-    "UserMatch",
     "Conversation",
     "ConversationStatus",
+    "Gender",
+    "Location",
+    "Match",
+    "MatchAction",
+    "MatchScore",
+    "MatchStatus",
     "Message",
     "MessageType",
+    "Preferences",
+    "RelationshipType",
+    "User",
+    "UserMatch",
 ]

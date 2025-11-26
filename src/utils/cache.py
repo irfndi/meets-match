@@ -7,7 +7,6 @@ import redis
 from pydantic import BaseModel
 
 from src.config import settings
-from src.utils.errors import ConfigurationError
 from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -33,11 +32,17 @@ class RedisClient:
         """
         if cls._failed:
             return None
-            
+
         if cls._instance is None:
             try:
                 if settings.REDIS_URL:
-                    cls._instance = redis.from_url(settings.REDIS_URL)
+                    # Optimize connection pool
+                    pool = redis.ConnectionPool.from_url(
+                        settings.REDIS_URL,
+                        max_connections=10,
+                        decode_responses=True,  # Automatically decode bytes to strings
+                    )
+                    cls._instance = redis.Redis(connection_pool=pool)
                     logger.info("Redis client initialized", url=settings.REDIS_URL)
                 else:
                     logger.warning(
@@ -62,7 +67,8 @@ def set_cache(key: str, value: Union[str, Dict[str, Any], BaseModel], expiration
     Args:
         key: Cache key
         value: Value to cache (string, dict, or Pydantic model)
-        expiration: Cache expiration time in seconds (default: 1 hour)
+        expiration: Cache expiration time in seconds (default: 1 hour).
+                   MUST be provided to prevent indefinite memory usage.
 
     Note:
         Silently skips caching if Redis is not available
@@ -71,7 +77,7 @@ def set_cache(key: str, value: Union[str, Dict[str, Any], BaseModel], expiration
     if client is None:
         logger.debug("Cache disabled, skipping set operation", key=key)
         return
-        
+
     try:
         # Convert value to string if needed
         if isinstance(value, BaseModel):
@@ -81,42 +87,48 @@ def set_cache(key: str, value: Union[str, Dict[str, Any], BaseModel], expiration
         else:
             cache_value = str(value)
 
+        # Enforce expiration
+        if expiration <= 0:
+            logger.warning("Cache set without expiration, forcing default 1h", key=key)
+            expiration = 3600
+
         client.set(key, cache_value, ex=expiration)
         logger.debug("Cache set", key=key, expiration=expiration)
     except Exception as e:
         logger.warning("Failed to set cache, continuing without cache", key=key, error=str(e))
 
 
-def get_cache(key: str) -> Optional[str]:
+def get_cache(key: str, extend_ttl: Optional[int] = None) -> Optional[str]:
     """Get a string value from the Redis cache.
 
     Args:
         key: Cache key
+        extend_ttl: Optional seconds to extend the TTL if key exists (sliding expiration)
 
     Returns:
         Cached value or None if not found or Redis is not available
     """
     client = RedisClient.get_client()
     if client is None:
-        logger.debug("Cache disabled, skipping get operation", key=key)
         return None
-        
+
     try:
         value = client.get(key)
-        if value:
-            return value.decode("utf-8")
-        return None
+        if value and extend_ttl:
+            client.expire(key, extend_ttl)
+        return value
     except Exception as e:
-        logger.warning("Failed to get cache, continuing without cache", key=key, error=str(e))
+        logger.warning("Failed to get cache", key=key, error=str(e))
         return None
 
 
-def get_cache_model(key: str, model_class: Type[T]) -> Optional[T]:
+def get_cache_model(key: str, model_class: Type[T], extend_ttl: Optional[int] = None) -> Optional[T]:
     """Get a Pydantic model from the Redis cache.
 
     Args:
         key: Cache key
         model_class: Pydantic model class
+        extend_ttl: Optional seconds to extend the TTL if key exists (sliding expiration)
 
     Returns:
         Pydantic model instance or None if not found
@@ -124,7 +136,7 @@ def get_cache_model(key: str, model_class: Type[T]) -> Optional[T]:
     Raises:
         ConfigurationError: If cache operation fails
     """
-    value = get_cache(key)
+    value = get_cache(key, extend_ttl=extend_ttl)
     if value:
         try:
             return model_class.model_validate_json(value)
@@ -137,6 +149,34 @@ def get_cache_model(key: str, model_class: Type[T]) -> Optional[T]:
             )
             return None
     return None
+
+
+def delete_pattern(pattern: str) -> int:
+    """Delete all keys matching a pattern.
+
+    Args:
+        pattern: Redis glob pattern (e.g. "user:*")
+
+    Returns:
+        Number of keys deleted
+    """
+    client = RedisClient.get_client()
+    if client is None:
+        return 0
+
+    count = 0
+    try:
+        # Scan for keys to avoid blocking main thread with KEYS
+        cursor = "0"
+        while cursor != 0:
+            cursor, keys = client.scan(cursor=cursor, match=pattern, count=100)
+            if keys:
+                client.delete(*keys)
+                count += len(keys)
+    except Exception as e:
+        logger.warning("Failed to delete pattern", pattern=pattern, error=str(e))
+
+    return count
 
 
 def delete_cache(key: str) -> None:
@@ -152,7 +192,7 @@ def delete_cache(key: str) -> None:
     if client is None:
         logger.debug("Cache disabled, skipping delete operation", key=key)
         return
-        
+
     try:
         client.delete(key)
         logger.debug("Cache deleted", key=key)

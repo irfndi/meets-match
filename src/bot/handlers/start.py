@@ -7,15 +7,15 @@
 # 2. Update error handling if D1/KV/R2 exceptions differ from previous DB/cache exceptions.
 # 3. Check if data structures returned by service calls have changed.
 
-from telegram import ReplyKeyboardMarkup, Update
+from telegram import Update
 from telegram.ext import ContextTypes
 
 from src.bot.middleware import user_command_limiter
+from src.bot.ui.keyboards import main_menu
 from src.models.user import User
 from src.services.user_service import create_user, get_user, update_user
 from src.utils.errors import NotFoundError
 from src.utils.logging import get_logger
-from src.bot.ui.keyboards import main_menu, registration_menu
 
 logger = get_logger(__name__)
 
@@ -31,20 +31,6 @@ To get started:
 3️⃣ View your matches with /matches
 
 Need help? Just type /help anytime.
-"""
-
-# Registration message template
-REGISTRATION_MESSAGE = """
-Great! Let's set up your profile. Please tell me:
-
-1️⃣ Your name (use /name Your Name)
-2️⃣ Your age (use /age 25, allowed range 10-65)
-3️⃣ Your gender (use /gender Male/Female)
-4️⃣ A brief bio (use /bio Your bio here)
-5️⃣ Your interests (use /interests comma,separated,list)
-6️⃣ Your location (use /location or share your location)
-
-You can update any of these later using the same commands.
 """
 
 
@@ -78,6 +64,22 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
                 },
             )
 
+        # Check for missing region or language
+        missing_region = not (
+            getattr(user, "preferences", None) and getattr(user.preferences, "preferred_country", None)
+        )
+        missing_language = not (
+            getattr(user, "preferences", None) and getattr(user.preferences, "preferred_language", None)
+        )
+
+        if missing_region or missing_language:
+            await update.message.reply_text("👋 Welcome back! Please set your region and language to continue.")
+            # Import here to avoid circular dependency
+            from src.bot.handlers.settings import settings_command
+
+            await settings_command(update, context)
+            return
+
         # Send welcome message with main menu
         await update.message.reply_text(
             f"Welcome back, {user.first_name or 'there'}! {WELCOME_MESSAGE}",
@@ -98,12 +100,13 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
         create_user(user_data)
 
-        # Send welcome and registration messages
-        await update.message.reply_text(WELCOME_MESSAGE)
-        await update.message.reply_text(
-            REGISTRATION_MESSAGE,
-            reply_markup=registration_menu(),
-        )
+        # For new users, force region/language setup immediately
+        await update.message.reply_text("👋 Welcome to MeetMatch! To get started, please set your region and language.")
+
+        # Import here to avoid circular dependency
+        from src.bot.handlers.settings import settings_command
+
+        await settings_command(update, context)
 
     except Exception as e:
         logger.error(

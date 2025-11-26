@@ -38,7 +38,8 @@ def get_user(user_id: str) -> User:
     """
     # Check cache first
     cache_key = USER_CACHE_KEY.format(user_id=user_id)
-    cached_user = get_cache_model(cache_key, User)
+    # Use sliding expiration: extend cache by 1 hour on every access
+    cached_user = get_cache_model(cache_key, User, extend_ttl=3600)
     if cached_user:
         logger.debug("User retrieved from cache", user_id=user_id)
         return cached_user
@@ -153,19 +154,33 @@ def update_user(user_id: str, data: Dict[str, Union[str, int, bool, datetime, Li
             details={"user_id": user_id},
         )
 
-    # Get updated user
-    updated_user = get_user(user_id)
-
-    # Update cache
+    # Invalidate caches to avoid stale reads
     cache_key = USER_CACHE_KEY.format(user_id=user_id)
+    delete_cache(cache_key)
+    location_cache_key = USER_LOCATION_CACHE_KEY.format(user_id=user_id)
+    if (
+        "location" in data
+        or "location_latitude" in data
+        or "location_longitude" in data
+        or "location_city" in data
+        or "location_country" in data
+    ):
+        delete_cache(location_cache_key)
+
+    # Get updated user from database and refresh caches
+    updated_user = get_user(user_id)
     set_cache(cache_key, updated_user, expiration=3600)  # 1 hour
 
-    # If location was updated, update location cache
-    if "location" in data:
-        location_cache_key = USER_LOCATION_CACHE_KEY.format(user_id=user_id)
-        location_data = cast(Dict, data["location"])
-        location = Location.model_validate(location_data)
-        set_cache(location_cache_key, location, expiration=86400)  # 24 hours
+    # Refresh location cache if available
+    if updated_user.location:
+        set_cache(location_cache_key, updated_user.location, expiration=86400)
+    elif "location" in data:
+        try:
+            location_data = cast(Dict, data["location"])  # type: ignore[index]
+            location = Location.model_validate(location_data)
+            set_cache(location_cache_key, location, expiration=86400)
+        except Exception:
+            pass
 
     logger.info("User updated", user_id=user_id)
     return updated_user
@@ -218,11 +233,17 @@ def get_user_location_text(user_id: str) -> Optional[str]:
             table="users",
             query_type="select",
             filters={"id": user_id},
-            select="id, location_city, location_country",
         )
         data = result.data or []
         if data:
             row = data[0]
+            loc = row.get("location")
+            if loc and isinstance(loc, dict):
+                city = loc.get("city") or ""
+                country = loc.get("country") or ""
+                text = f"{city}, {country}".strip().rstrip(",")
+                if text:
+                    return text
             city = row.get("location_city") or ""
             country = row.get("location_country") or ""
             text = f"{city}, {country}".strip().rstrip(",")

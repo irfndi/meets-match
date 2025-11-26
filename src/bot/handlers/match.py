@@ -11,6 +11,8 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMa
 from telegram.ext import ContextTypes
 
 from src.bot.middleware import authenticated, profile_required, user_command_limiter
+from src.bot.ui.keyboards import no_matches_menu
+from src.config import settings
 from src.services.matching_service import (
     dislike_match,
     get_active_matches,
@@ -19,9 +21,9 @@ from src.services.matching_service import (
     like_match,
 )
 from src.services.user_service import get_user
+from src.utils.cache import get_cache, set_cache
 from src.utils.errors import NotFoundError
 from src.utils.logging import get_logger
-from src.bot.ui.keyboards import no_matches_menu
 
 logger = get_logger(__name__)
 
@@ -80,6 +82,31 @@ async def match_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
     try:
         # Get potential matches
+        user = get_user(user_id)
+        tier = "free"
+        if user.preferences and getattr(user.preferences, "premium_tier", None):
+            tier = user.preferences.premium_tier or "free"
+        admin_ids = (settings.ADMIN_IDS or "").split(",") if settings.ADMIN_IDS else []
+        if user_id in [aid.strip() for aid in admin_ids if aid.strip()]:
+            tier = "admin"
+
+        limits = {"free": 20, "pro": 200, "admin": None}
+        limit = limits.get(tier, 20)
+        if limit is not None:
+            from datetime import datetime
+
+            today = datetime.utcnow().strftime("%Y%m%d")
+            key = f"user:daily:match_view:{user_id}:{today}"
+            val = get_cache(key)
+            cnt = int(val) if val and val.isdigit() else 0
+            if cnt >= limit:
+                await update.message.reply_text(
+                    "You've reached today's match limit for your plan. Use /premium to upgrade.",
+                    reply_markup=no_matches_menu(),
+                )
+                return
+            set_cache(key, str(cnt + 1), expiration=24 * 3600)
+
         potential_matches = get_potential_matches(user_id)
 
         if not potential_matches:
@@ -311,51 +338,7 @@ async def matches_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     user_id = str(update.effective_user.id)
 
     try:
-        # Get active matches
-        active_matches = get_active_matches(user_id)
-
-        if not active_matches:
-            await update.message.reply_text(
-                "You don't have any active matches yet. Use /match to start matching!",
-                reply_markup=ReplyKeyboardMarkup(
-                    [
-                        ["/match", "/profile"],
-                        ["/settings", "/help"],
-                    ],
-                    resize_keyboard=True,
-                ),
-            )
-            return
-
-        # Create message with matches list
-        message = "Your matches:\n\n"
-        keyboard = []
-
-        for match in active_matches:
-            # Get match user details
-            match_user_id = match.target_user_id if match.source_user_id == user_id else match.source_user_id
-            match_user = get_user(match_user_id)
-
-            # Add to message
-            message += f"👤 {match_user.first_name}, {match_user.age}\n"
-
-            # Add chat button
-            keyboard.append(
-                [
-                    InlineKeyboardButton(
-                        f"💬 Chat with {match_user.first_name}",
-                        callback_data=f"chat_{match.id}",
-                    )
-                ]
-            )
-
-        # Add navigation buttons
-        keyboard.append([InlineKeyboardButton("⏭️ Find new matches", callback_data="new_matches")])
-
-        await update.message.reply_text(
-            message,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-        )
+        await show_matches_page(update, context, 0)
 
     except Exception as e:
         logger.error(
@@ -365,3 +348,163 @@ async def matches_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             exc_info=e,
         )
         await update.message.reply_text("Sorry, something went wrong. Please try again later.")
+
+
+async def matches_pagination_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle pagination for matches list.
+
+    Args:
+        update: The update object
+        context: The context object
+    """
+    query = update.callback_query
+    await query.answer()
+
+    user_id = str(update.effective_user.id)
+    data = query.data
+
+    try:
+        if data == "new_matches":
+            # Delete the matches list and start matching
+            try:
+                await query.delete_message()
+            except Exception:
+                pass  # Message might already be deleted
+            await match_command(update, context)
+            return
+
+        if data.startswith("matches_page_"):
+            page = int(data.split("_")[-1])
+            await show_matches_page(update, context, page)
+
+    except Exception as e:
+        logger.error(
+            "Error in matches pagination",
+            user_id=user_id,
+            error=str(e),
+            exc_info=e,
+        )
+        try:
+            await query.edit_message_text("Sorry, something went wrong. Please try again later.")
+        except Exception:
+            pass
+
+
+async def show_matches_page(update: Update, context: ContextTypes.DEFAULT_TYPE, page: int) -> None:
+    """Show a page of matches.
+
+    Args:
+        update: The update object
+        context: The context object
+        page: Page number (0-based)
+    """
+    user_id = str(update.effective_user.id)
+    limit = 5
+    offset = page * limit
+
+    # Tier-based history limit
+    user = get_user(user_id)
+    tier = "free"
+    if user.preferences and getattr(user.preferences, "premium_tier", None):
+        tier = user.preferences.premium_tier or "free"
+
+    # Check admin status
+    admin_ids = (settings.ADMIN_IDS or "").split(",") if settings.ADMIN_IDS else []
+    if user_id in [aid.strip() for aid in admin_ids if aid.strip()]:
+        tier = "admin"
+
+    # History limits: Free = 10 matches (2 pages), Pro/Admin = Unlimited
+    history_limits = {"free": 10, "pro": None, "admin": None}
+    max_history = history_limits.get(tier, 10)
+
+    if max_history is not None and offset >= max_history:
+        text = (
+            f"<b>Match History Limit Reached</b>\n\n"
+            f"Free plan users can only view their last {max_history} matches.\n"
+            f"Upgrade to Premium to view your full match history!"
+        )
+        keyboard = [
+            [InlineKeyboardButton("⭐️ Upgrade to Premium", callback_data="premium_info")],
+            [InlineKeyboardButton("⬅️ Back", callback_data=f"matches_page_{page - 1}")],
+        ]
+
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        if update.callback_query:
+            await update.callback_query.edit_message_text(text, reply_markup=reply_markup)
+        else:
+            await update.message.reply_text(text, reply_markup=reply_markup)
+        return
+
+    # Get matches (fetch one extra to check if next page exists)
+    matches = get_active_matches(user_id, limit=limit + 1, offset=offset)
+
+    has_next = len(matches) > limit
+    current_matches = matches[:limit]
+
+    if not current_matches and page == 0:
+        text = "You don't have any active matches yet. Use /match to start matching!"
+        reply_markup = ReplyKeyboardMarkup(
+            [
+                ["/match", "/profile"],
+                ["/settings", "/help"],
+            ],
+            resize_keyboard=True,
+        )
+
+        if update.callback_query:
+            await update.callback_query.edit_message_text(text, reply_markup=None)
+            # Send a new message for the reply keyboard
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id, text="Use the menu below to navigate.", reply_markup=reply_markup
+            )
+        else:
+            await update.message.reply_text(text, reply_markup=reply_markup)
+        return
+
+    # Create message with matches list
+    message = f"<b>Your Matches (Page {page + 1})</b>\n\n"
+    keyboard = []
+
+    for match in current_matches:
+        # Get match user details
+        match_user_id = match.target_user_id if match.source_user_id == user_id else match.source_user_id
+        match_user = get_user(match_user_id)
+
+        # Add to message
+        message += f"👤 <b>{match_user.first_name}</b>, {match_user.age}\n"
+
+        # Add chat button
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    f"💬 Chat with {match_user.first_name}",
+                    callback_data=f"chat_{match.id}",
+                )
+            ]
+        )
+
+    # Add navigation buttons
+    nav_row = []
+    if page > 0:
+        nav_row.append(InlineKeyboardButton("⬅️ Previous", callback_data=f"matches_page_{page - 1}"))
+    if has_next:
+        nav_row.append(InlineKeyboardButton("Next ➡️", callback_data=f"matches_page_{page + 1}"))
+
+    if nav_row:
+        keyboard.append(nav_row)
+
+    # Add "Find new matches" button
+    keyboard.append([InlineKeyboardButton("🔍 Find new matches", callback_data="new_matches")])
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    if update.callback_query:
+        await update.callback_query.edit_message_text(
+            message,
+            reply_markup=reply_markup,
+        )
+    else:
+        await update.message.reply_text(
+            message,
+            reply_markup=reply_markup,
+        )

@@ -221,12 +221,13 @@ def get_potential_matches(user_id: str, limit: int = 10) -> List[User]:
 
     # Check if user is eligible for matching
     if not user.is_match_eligible():
-        logger.warning("User not eligible for matching", user_id=user_id)
+        logger.debug("0 match found (user not eligible)", user_id=user_id)
         return []
 
     # Check cache
     cache_key = POTENTIAL_MATCHES_CACHE_KEY.format(user_id=user_id)
-    cached_ids = get_cache(cache_key)
+    # Extend TTL to keep the match list fresh while the user is active
+    cached_ids = get_cache(cache_key, extend_ttl=3600)
     if cached_ids:
         # Get users from cache
         potential_match_ids = cached_ids.split(",")
@@ -247,13 +248,69 @@ def get_potential_matches(user_id: str, limit: int = 10) -> List[User]:
 
     # Get existing matches
     existing_matches = get_user_matches(user_id)
-    existing_match_ids = {match.user1_id if match.user2_id == user_id else match.user2_id for match in existing_matches}
+
+    # Filter out old rejections (recycle after 30 days)
+    # If a match was rejected more than 30 days ago, we allow it to be matched again
+    from datetime import datetime, timedelta
+
+    recycle_threshold = datetime.utcnow() - timedelta(days=30)
+
+    existing_match_ids = set()
+    for match in existing_matches:
+        # specific logic: if rejected and old enough, don't add to exclusion list
+        if match.status == MatchStatus.REJECTED and match.updated_at < recycle_threshold:
+            continue
+
+        # Add to exclusion list
+        existing_match_ids.add(match.user1_id if match.user2_id == user_id else match.user2_id)
+
+    # Prepare database filters
+    filters = {
+        "is_active": True,
+        "is_profile_complete": True,
+        "last_active__gte": recycle_threshold,  # Only active users in last 30 days
+    }
+
+    # 1. Age Range Filter
+    if user.preferences.min_age:
+        filters["age__gte"] = user.preferences.min_age
+    if user.preferences.max_age:
+        filters["age__lte"] = user.preferences.max_age
+
+    # 2. Gender Filter
+    if user.preferences.gender_preference:
+        filters["gender__in"] = user.preferences.gender_preference
+
+    # 3. Location Bounding Box Filter
+    # 1 degree of latitude is ~111km
+    # 1 degree of longitude varies (approx 111km * cos(lat))
+    if user.location and user.preferences.max_distance:
+        max_dist_km = user.preferences.max_distance
+        lat = user.location.latitude
+        lon = user.location.longitude
+
+        # Crude approximation for bounding box (safe side: larger box than needed)
+        # 1 degree lat ~= 111km
+        lat_delta = max_dist_km / 111.0
+
+        # 1 degree lon ~= 111km * cos(lat)
+        import math
+
+        # Avoid division by zero at poles, and ensure positive
+        cos_lat = max(0.1, math.cos(math.radians(lat)))
+        lon_delta = max_dist_km / (111.0 * cos_lat)
+
+        filters["location_latitude__gte"] = lat - lat_delta
+        filters["location_latitude__lte"] = lat + lat_delta
+        filters["location_longitude__gte"] = lon - lon_delta
+        filters["location_longitude__lte"] = lon + lon_delta
 
     # Query database for potential matches
     result = execute_query(
         table="users",
         query_type="select",
-        filters={"is_active": True, "is_profile_complete": True},
+        filters=filters,
+        limit=limit * 5,  # Fetch more candidates than needed for scoring
     )
 
     if not result.data:
@@ -483,12 +540,19 @@ def update_match(match_id: str, user_id: str, action: MatchAction) -> Match:
     return match
 
 
-def get_user_matches(user_id: str, status: Optional[MatchStatus] = None) -> List[Match]:
+def get_user_matches(
+    user_id: str,
+    status: Optional[MatchStatus] = None,
+    limit: int = 10,
+    offset: int = 0,
+) -> List[Match]:
     """Get matches for a user.
 
     Args:
         user_id: User ID
         status: Optional match status filter
+        limit: Max number of matches to return
+        offset: Number of matches to skip
 
     Returns:
         List of matches
@@ -514,6 +578,9 @@ def get_user_matches(user_id: str, status: Optional[MatchStatus] = None) -> List
         table="matches",
         query_type="select",
         filters=filters,
+        limit=limit,
+        offset=offset,
+        order_by="updated_at desc",
     )
 
     if not result.data:
@@ -574,12 +641,19 @@ def get_user_match_view(match: Match, user_id: str) -> UserMatch:
     )
 
 
-def get_user_match_views(user_id: str, status: Optional[MatchStatus] = None) -> List[UserMatch]:
+def get_user_match_views(
+    user_id: str,
+    status: Optional[MatchStatus] = None,
+    limit: int = 10,
+    offset: int = 0,
+) -> List[UserMatch]:
     """Get user-friendly views of matches for a user.
 
     Args:
         user_id: User ID
         status: Optional match status filter
+        limit: Max number of matches to return
+        offset: Number of matches to skip
 
     Returns:
         List of UserMatch views
@@ -588,7 +662,7 @@ def get_user_match_views(user_id: str, status: Optional[MatchStatus] = None) -> 
         NotFoundError: If user not found
     """
     # Get matches
-    matches = get_user_matches(user_id, status)
+    matches = get_user_matches(user_id, status, limit, offset)
 
     # Create views
     views = []
@@ -659,12 +733,12 @@ def like_match(match_id: str, user_id: Optional[str] = None) -> bool:
         True if mutual match, False otherwise
     """
     match = get_match(match_id)
-    
+
     if user_id:
         updated_match = update_match(match_id, user_id, MatchAction.LIKE)
     else:
         updated_match = update_match(match_id, match.user1_id, MatchAction.LIKE)
-    
+
     return updated_match.status == MatchStatus.MATCHED
 
 
@@ -676,20 +750,26 @@ def dislike_match(match_id: str, user_id: Optional[str] = None) -> None:
         user_id: User ID (optional, will be determined from match)
     """
     match = get_match(match_id)
-    
+
     if user_id:
         update_match(match_id, user_id, MatchAction.DISLIKE)
     else:
         update_match(match_id, match.user1_id, MatchAction.DISLIKE)
 
 
-def get_active_matches(user_id: str) -> List[Match]:
+def get_active_matches(
+    user_id: str,
+    limit: int = 10,
+    offset: int = 0,
+) -> List[Match]:
     """Get active matches for a user.
 
     Args:
         user_id: User ID
+        limit: Max number of matches to return
+        offset: Number of matches to skip
 
     Returns:
         List of active matches
     """
-    return get_user_matches(user_id, status=MatchStatus.MATCHED)
+    return get_user_matches(user_id, status=MatchStatus.MATCHED, limit=limit, offset=offset)

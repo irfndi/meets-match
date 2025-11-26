@@ -1,4 +1,4 @@
-from telegram import ReplyKeyboardMarkup, KeyboardButton
+from telegram import KeyboardButton, ReplyKeyboardMarkup
 
 
 def main_menu() -> ReplyKeyboardMarkup:
@@ -17,7 +17,7 @@ def registration_menu() -> ReplyKeyboardMarkup:
 
 def profile_main_menu() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
-        [["🔎 Browse Profiles", "🛠 Edit Profile"], ["🖼 Update Photo", "✏️ Update Bio"], ["/help"]],
+        [["👤 View Profile", "🔎 Browse Profiles"], ["🛠 Edit Profile"], ["🖼 Update Photo", "✏️ Update Bio"], ["/help"]],
         resize_keyboard=True,
         one_time_keyboard=True,
     )
@@ -100,4 +100,14 @@ def setup_profile_prompt_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         [["Setup Profile"], ["/profile"]],
         resize_keyboard=True,
+    )
+
+
+def location_candidates_keyboard(options: list[str]) -> ReplyKeyboardMarkup:
+    rows = [[opt] for opt in options]
+    rows.append(["Cancel"])
+    return ReplyKeyboardMarkup(
+        rows,
+        resize_keyboard=True,
+        one_time_keyboard=True,
     )

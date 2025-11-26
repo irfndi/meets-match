@@ -17,15 +17,13 @@ class RateLimiter:
             "media_upload": {"count": 5, "window": 60},  # 5 media uploads per minute
             "match_request": {"count": 20, "window": 60},  # 20 match requests per minute
             "report_user": {"count": 5, "window": 3600},  # 5 reports per hour
-            "profile_update": {"count": 10, "window": 3600}, # 10 profile updates per hour
+            "profile_update": {"count": 10, "window": 3600},  # 10 profile updates per hour
         }
         # This dictionary will grow indefinitely in memory - not suitable for production workers
         # Needs persistent storage (like KV) if kept.
         self.user_actions = {}
 
-    async def check_rate_limit(
-        self, user_id: int, action_type: str
-    ) -> Tuple[bool, Optional[int]]:
+    async def check_rate_limit(self, user_id: int, action_type: str) -> Tuple[bool, Optional[int]]:
         """
         Check if action is within rate limits.
         WARNING: In-memory implementation, not suitable for production Cloudflare Workers.

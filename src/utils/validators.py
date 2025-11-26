@@ -19,7 +19,7 @@ class MediaValidator:
         self.min_image_dimensions = (200, 200)
         self.max_image_dimensions = (4096, 4096)
 
-    @lru_cache(maxsize=1000)
+    @lru_cache(maxsize=1000)  # noqa: B019
     def get_mime_type(self, file_name: str) -> str | None:
         """Get MIME type from file name."""
         return mimetypes.guess_type(file_name)[0]
@@ -46,13 +46,16 @@ class MediaValidator:
         try:
             actual_type = magic.from_buffer(file_data, mime=True)
             # Allow some flexibility (e.g., jpeg vs jpg)
-            if not actual_type.startswith(mime_type.split('/')[0]):
-                 print(f"Warning: MIME type mismatch. Extension: {mime_type}, Content: {actual_type}")
-                 # Decide if you want to trust content over extension
-                 # For now, we'll trust the content if it's an allowed type
-                 if actual_type not in self.allowed_image_types and actual_type not in self.allowed_video_types:
-                    return False, f"File content type ({actual_type}) does not match extension ({mime_type}) and is not allowed."
-                 mime_type = actual_type # Trust content type if allowed
+            if not actual_type.startswith(mime_type.split("/")[0]):
+                print(f"Warning: MIME type mismatch. Extension: {mime_type}, Content: {actual_type}")
+                # Decide if you want to trust content over extension
+                # For now, we'll trust the content if it's an allowed type
+                if actual_type not in self.allowed_image_types and actual_type not in self.allowed_video_types:
+                    return (
+                        False,
+                        f"File content type ({actual_type}) does not match extension ({mime_type}) and is not allowed.",
+                    )
+                mime_type = actual_type  # Trust content type if allowed
 
         except Exception as e:
             # If magic library fails, rely on extension but log error
@@ -114,14 +117,10 @@ class MediaValidator:
             Tuple[bool, str]: (is_valid, error_message)
         """
         if file_type == "image" and file_size > self.max_image_size_bytes:
-            return False, (
-                f"Image too large. Maximum size: {self.max_image_size_bytes // 1024 // 1024}MB"
-            )
+            return False, (f"Image too large. Maximum size: {self.max_image_size_bytes // 1024 // 1024}MB")
 
         if file_type == "video" and file_size > self.max_video_size_bytes:
-            return False, (
-                f"Video too large. Maximum size: {self.max_video_size_bytes // 1024 // 1024}MB"
-            )
+            return False, (f"Video too large. Maximum size: {self.max_video_size_bytes // 1024 // 1024}MB")
 
         return True, "Valid size"
 

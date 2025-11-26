@@ -1,5 +1,6 @@
-from typing import Optional, Dict
 import asyncio
+import math
+from typing import Dict, List, Optional, Tuple
 
 from geopy.geocoders import Nominatim
 
@@ -21,7 +22,7 @@ def _extract_city_country(address: Dict[str, str]) -> Dict[str, Optional[str]]:
     return {"city": city, "country": country}
 
 
-async def geocode_city(city_text: str) -> Optional[Dict[str, Optional[str]]]:
+async def geocode_city(city_text: str, language: str = "en") -> Optional[Dict[str, Optional[str]]]:
     query = city_text.strip()
     if not query:
         return None
@@ -29,7 +30,7 @@ async def geocode_city(city_text: str) -> Optional[Dict[str, Optional[str]]]:
         result = await asyncio.to_thread(
             _geocoder.geocode,
             query,
-            language="en",
+            language=language or "en",
             addressdetails=True,
             exactly_one=True,
         )
@@ -45,6 +46,100 @@ async def geocode_city(city_text: str) -> Optional[Dict[str, Optional[str]]]:
         }
     except Exception:
         return None
+
+
+def normalize_city_alias(query_text: str, country: Optional[str]) -> str:
+    alias_map = {
+        "indonesia": {
+            "bdg": "Bandung",
+            "jkt": "Jakarta",
+            "jogja": "Yogyakarta",
+            "yogya": "Yogyakarta",
+            "sby": "Surabaya",
+            "mlg": "Malang",
+            "bgr": "Bogor",
+            "tgr": "Tangerang",
+            "dpk": "Depok",
+            "bks": "Bekasi",
+        }
+    }
+    key = (country or "").lower()
+    q = query_text.strip().lower()
+    if key in alias_map and q in alias_map[key]:
+        return alias_map[key][q]
+    return query_text
+
+
+def _distance_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    r = 6371.0
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlmb = math.radians(lon2 - lon1)
+    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlmb / 2) ** 2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    return r * c
+
+
+async def search_cities(
+    query_text: str,
+    limit: int = 8,
+    language: str = "en",
+    prefer_country: Optional[str] = None,
+    prefer_coords: Optional[Tuple[float, float]] = None,
+) -> List[Dict[str, Optional[str]]]:
+    query = query_text.strip()
+    if not query:
+        return []
+    try:
+        results = await asyncio.to_thread(
+            _geocoder.geocode,
+            query,
+            language=language or "en",
+            addressdetails=True,
+            exactly_one=False,
+            limit=max(1, limit),
+        )
+        if not results:
+            return []
+        seen = set()
+        candidates: List[Dict[str, Optional[str]]] = []
+        for r in results:
+            address = r.raw.get("address", {})
+            info = _extract_city_country(address)
+            city = info.get("city")
+            country = info.get("country")
+            if not city or not country:
+                continue
+            key = (city, country)
+            if key in seen:
+                continue
+            seen.add(key)
+            candidates.append(
+                {
+                    "latitude": float(r.latitude),
+                    "longitude": float(r.longitude),
+                    "city": city,
+                    "country": country,
+                }
+            )
+            if len(candidates) >= limit:
+                break
+        if prefer_country or prefer_coords:
+
+            def sort_key(c: Dict[str, Optional[str]]):
+                country_match = 0
+                if prefer_country and c.get("country") and c["country"].lower() == prefer_country.lower():
+                    country_match = 1
+                dist = 1e9
+                if prefer_coords and c.get("latitude") is not None and c.get("longitude") is not None:
+                    dist = _distance_km(prefer_coords[0], prefer_coords[1], float(c["latitude"]), float(c["longitude"]))
+                return (-country_match, dist)
+
+            candidates.sort(key=sort_key)
+        return candidates
+    except Exception:
+        return []
 
 
 async def reverse_geocode_coordinates(latitude: float, longitude: float) -> Optional[Dict[str, Optional[str]]]:
@@ -68,4 +163,3 @@ async def reverse_geocode_coordinates(latitude: float, longitude: float) -> Opti
         }
     except Exception:
         return None
-

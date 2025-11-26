@@ -7,10 +7,11 @@
 # 2. Update error handling if D1/KV/R2 exceptions differ from previous DB/cache exceptions.
 # 3. Check if data structures returned by service calls have changed.
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
 from src.bot.middleware import authenticated, profile_required, user_command_limiter
+from src.bot.ui.keyboards import chat_nav_menu
 from src.models.conversation import MessageType
 from src.services.conversation_service import (
     create_message,
@@ -22,7 +23,6 @@ from src.services.matching_service import get_match_by_id
 from src.services.user_service import get_user
 from src.utils.errors import NotFoundError
 from src.utils.logging import get_logger
-from src.bot.ui.keyboards import chat_nav_menu
 
 logger = get_logger(__name__)
 

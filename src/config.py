@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     ENVIRONMENT: str = "development"
     DEBUG: bool = Field(default=False)
+    STORAGE_PATH: str = "media"
+    MAX_MEDIA_COUNT: int = 5
 
     # API Configuration
     API_HOST: str = "0.0.0.0"

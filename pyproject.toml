@@ -6,27 +6,27 @@ build-backend = "setuptools.build_meta"
 name = "meetsmatch"
 version = "0.1.0"
 description = "AI-powered Telegram matchmaking bot"
-requires-python = ">=3.12"
+requires-python = ">=3.13"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "python-telegram-bot>=21.0",
-    "supabase>=2.0.0",
+    "python-telegram-bot>=21.9",
     "redis>=5.0.0",
-    "pydantic>=2.6.0",
+    "pydantic>=2.9.0",
     "pydantic-settings>=2.2.0",
-    "sqlalchemy>=2.0.25",
+    "sqlalchemy>=2.0.30",
     "structlog>=24.1.0",
     "alembic>=1.13.0",
-    "fastapi>=0.109.0",
-    "uvicorn>=0.27.0",
+    "fastapi>=0.115.0",
+    "uvicorn>=0.30.0",
     "geopy>=2.4.0",
     "sentry-sdk>=1.40.0",
     "psycopg2-binary>=2.9.9",
     "python-dotenv>=1.0.0",
+    "pillow>=12.0.0",
 ]
 
 [project.optional-dependencies]
@@ -42,7 +42,7 @@ dev = [
 
 [tool.ruff]
 line-length = 120
-target-version = "py312"
+target-version = "py313"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "C4", "RUF"]
@@ -52,7 +52,7 @@ ignore = ["E501"]
 known-first-party = ["meetsmatch"]
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.13"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true

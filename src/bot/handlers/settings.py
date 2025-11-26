@@ -11,7 +11,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
 from src.bot.middleware import authenticated, user_command_limiter
-from src.models.user import Gender, Preferences
+from src.models.user import Preferences
 from src.services.user_service import get_user, update_user, update_user_preferences
 from src.utils.logging import get_logger
 
@@ -21,15 +21,13 @@ logger = get_logger(__name__)
 SETTINGS_MESSAGE = """
 ⚙️ *Settings*
 
-Adjust your matching preferences below:
+Manage your region and language:
 
-*Current preferences:*
-🔍 Looking for: {looking_for}
-📏 Age range: {min_age}-{max_age}
-📍 Max distance: {max_distance} km
-🔔 Notifications: {notifications}
+*Current:*
+🌍 Region: {region}
+🗣 Language: {language}
 
-Select an option to change:
+Use /premium to customize age range, distance, notifications (coming soon).
 """
 
 
@@ -44,56 +42,58 @@ async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     # Apply rate limiting
     await user_command_limiter()(update, context)
 
+    # Clear any pending setting states to prevent interference
+    context.user_data.pop("awaiting_region", None)
+    context.user_data.pop("awaiting_language", None)
+
     user_id = str(update.effective_user.id)
 
     try:
         # Get user preferences
         user = get_user(user_id)
 
-        # Format looking for based on preferences.gender_preference
-        if user.preferences and user.preferences.gender_preference:
-            gp = set([g.value if isinstance(g, Gender) else g for g in user.preferences.gender_preference])
-            if gp == {Gender.MALE.value}:
-                looking_for = "Men"
-            elif gp == {Gender.FEMALE.value}:
-                looking_for = "Women"
-            else:
-                looking_for = "Everyone"
-        else:
-            looking_for = "Everyone"
-
-        # Format other preferences
-        min_age = (user.preferences.min_age if user.preferences and user.preferences.min_age else 10)
-        max_age = (user.preferences.max_age if user.preferences and user.preferences.max_age else 65)
-        max_distance = (
-            user.preferences.max_distance if user.preferences and user.preferences.max_distance else 50
+        region = (
+            user.preferences.preferred_country if user.preferences and user.preferences.preferred_country else "Not set"
         )
-        notifications = "On" if (
-            user.preferences.notifications_enabled
-            if user.preferences and user.preferences.notifications_enabled is not None
-            else True
-        ) else "Off"
+        language = (
+            user.preferences.preferred_language
+            if user.preferences and user.preferences.preferred_language
+            else (update.effective_user.language_code or "Not set")
+        )
 
         # Send settings message
-        await update.message.reply_text(
-            SETTINGS_MESSAGE.format(
-                looking_for=looking_for,
-                min_age=min_age,
-                max_age=max_age,
-                max_distance=max_distance,
-                notifications=notifications,
-            ),
-            parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup(
-                [
-                    [InlineKeyboardButton("🔍 Looking for", callback_data="settings_looking_for")],
-                    [InlineKeyboardButton("📏 Age range", callback_data="settings_age_range")],
-                    [InlineKeyboardButton("📍 Max distance", callback_data="settings_max_distance")],
-                    [InlineKeyboardButton("🔔 Notifications", callback_data="settings_notifications")],
-                    [InlineKeyboardButton("🔄 Reset to defaults", callback_data="settings_reset")],
-                ]
-            ),
-        )
+        if update.message:
+            await update.message.reply_text(
+                SETTINGS_MESSAGE.format(
+                    region=region,
+                    language=language,
+                ),
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup(
+                    [
+                        [InlineKeyboardButton("🌍 Region", callback_data="settings_region")],
+                        [InlineKeyboardButton("🗣 Language", callback_data="settings_language")],
+                        [InlineKeyboardButton("💠 Premium", callback_data="settings_premium")],
+                        [InlineKeyboardButton("🔄 Reset to defaults", callback_data="settings_reset")],
+                    ]
+                ),
+            )
+        elif update.callback_query:
+            await update.callback_query.edit_message_text(
+                SETTINGS_MESSAGE.format(
+                    region=region,
+                    language=language,
+                ),
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup(
+                    [
+                        [InlineKeyboardButton("🌍 Region", callback_data="settings_region")],
+                        [InlineKeyboardButton("🗣 Language", callback_data="settings_language")],
+                        [InlineKeyboardButton("💠 Premium", callback_data="settings_premium")],
+                        [InlineKeyboardButton("🔄 Reset to defaults", callback_data="settings_reset")],
+                    ]
+                ),
+            )
 
     except Exception as e:
         logger.error(
@@ -102,7 +102,10 @@ async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             error=str(e),
             exc_info=e,
         )
-        await update.message.reply_text("Sorry, something went wrong. Please try again later.")
+        if update.message:
+            await update.message.reply_text("Sorry, something went wrong. Please try again later.")
+        elif update.callback_query:
+            await update.callback_query.message.reply_text("Sorry, something went wrong. Please try again later.")
 
 
 @authenticated
@@ -120,24 +123,50 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         await query.answer()
         callback_data = query.data
 
-        if callback_data == "settings_looking_for":
-            # Show looking for options
+        if callback_data == "settings_region":
             await query.edit_message_text(
-                "Who are you interested in meeting?",
+                "Select your region (country):",
                 reply_markup=InlineKeyboardMarkup(
                     [
-                        [InlineKeyboardButton("Men", callback_data="looking_for_male")],
-                        [InlineKeyboardButton("Women", callback_data="looking_for_female")],
-                        [InlineKeyboardButton("Everyone", callback_data="looking_for_everyone")],
+                        [InlineKeyboardButton("Indonesia", callback_data="region_Indonesia")],
+                        [InlineKeyboardButton("Singapore", callback_data="region_Singapore")],
+                        [InlineKeyboardButton("Malaysia", callback_data="region_Malaysia")],
+                        [InlineKeyboardButton("United States", callback_data="region_United States")],
+                        [InlineKeyboardButton("India", callback_data="region_India")],
+                        [InlineKeyboardButton("Type Country", callback_data="region_type")],
                         [InlineKeyboardButton("« Back", callback_data="back_to_settings")],
                     ]
                 ),
             )
 
-        elif callback_data.startswith("looking_for_"):
-            # Handle looking for selection
-            looking_for = callback_data[12:]
-            await handle_looking_for(update, context, looking_for)
+        elif callback_data.startswith("region_"):
+            country = callback_data.split("_", 1)[1]
+            await handle_region(update, context, country)
+
+        elif callback_data == "region_type":
+            await query.edit_message_text("Please type your country name (e.g., Indonesia):")
+            context.user_data["awaiting_region"] = True
+
+        elif callback_data == "settings_language":
+            await query.edit_message_text(
+                "Select your language:",
+                reply_markup=InlineKeyboardMarkup(
+                    [
+                        [InlineKeyboardButton("English (en)", callback_data="language_en")],
+                        [InlineKeyboardButton("Bahasa Indonesia (id)", callback_data="language_id")],
+                        [InlineKeyboardButton("Type Language Code", callback_data="language_type")],
+                        [InlineKeyboardButton("« Back", callback_data="back_to_settings")],
+                    ]
+                ),
+            )
+
+        elif callback_data.startswith("language_"):
+            code = callback_data.split("_", 1)[1]
+            await handle_language(update, context, code)
+
+        elif callback_data == "language_type":
+            await query.edit_message_text("Please type your language code (e.g., en, id):")
+            context.user_data["awaiting_language"] = True
 
         elif callback_data == "settings_age_range":
             # Show age range options
@@ -248,45 +277,94 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         await query.edit_message_text("Sorry, something went wrong. Please try again with /settings.")
 
 
-async def handle_looking_for(update: Update, context: ContextTypes.DEFAULT_TYPE, looking_for: str) -> None:
-    """Handle looking for selection.
-
-    Args:
-        update: The update object
-        context: The context object
-        looking_for: Looking for value
-    """
+async def handle_region(update: Update, context: ContextTypes.DEFAULT_TYPE, country: str) -> None:
     query = update.callback_query
     user_id = str(update.effective_user.id)
 
     try:
-        # Map selection to preferences.gender_preference
         user = get_user(user_id)
         prefs = user.preferences or Preferences()
-        if looking_for == "male":
-            prefs.gender_preference = [Gender.MALE]
-        elif looking_for == "female":
-            prefs.gender_preference = [Gender.FEMALE]
-        else:
-            prefs.gender_preference = None
-        update_user_preferences(user_id, prefs)
+        prefs.preferred_country = country
 
-        # Show confirmation
-        await query.edit_message_text(
-            f"✅ Looking for preference updated to: {looking_for.capitalize()}",
-            reply_markup=InlineKeyboardMarkup(
-                [[InlineKeyboardButton("« Back to Settings", callback_data="back_to_settings")]]
-            ),
-        )
+        # Sync to user location if not set or update country
+        from src.models.user import Location
+
+        if not user.location:
+            user.location = Location(latitude=0.0, longitude=0.0, country=country)
+        else:
+            user.location.country = country
+
+        # Update user with both preferences and location
+        update_user(user_id, {"preferences": prefs.model_dump(), "location": user.location.model_dump()})
+
+        # Clear awaiting state if it exists
+        context.user_data.pop("awaiting_region", None)
+
+        # Check if language is set
+        if not prefs.preferred_language:
+            await query.edit_message_text(
+                f"✅ Region updated to: {country}\n\nNow, please select your language:",
+                reply_markup=InlineKeyboardMarkup(
+                    [
+                        [InlineKeyboardButton("English (en)", callback_data="language_en")],
+                        [InlineKeyboardButton("Bahasa Indonesia (id)", callback_data="language_id")],
+                        [InlineKeyboardButton("Type Language Code", callback_data="language_type")],
+                    ]
+                ),
+            )
+        else:
+            await query.edit_message_text(
+                f"✅ Region updated to: {country}",
+                reply_markup=InlineKeyboardMarkup(
+                    [[InlineKeyboardButton("« Back to Settings", callback_data="back_to_settings")]]
+                ),
+            )
 
     except Exception as e:
-        logger.error(
-            "Error updating looking for preference",
-            user_id=user_id,
-            looking_for=looking_for,
-            error=str(e),
-            exc_info=e,
-        )
+        logger.error("Error updating region", user_id=user_id, country=country, error=str(e), exc_info=e)
+        await query.edit_message_text("Sorry, something went wrong. Please try again.")
+
+
+async def handle_language(update: Update, context: ContextTypes.DEFAULT_TYPE, language_code: str) -> None:
+    query = update.callback_query
+    user_id = str(update.effective_user.id)
+
+    try:
+        code = (language_code or "").strip().lower()
+        if not code:
+            await query.edit_message_text("Please type a valid language code (e.g., en, id).")
+            return
+        user = get_user(user_id)
+        prefs = user.preferences or Preferences()
+        prefs.preferred_language = code
+        update_user_preferences(user_id, prefs)
+
+        # Clear awaiting state if it exists
+        context.user_data.pop("awaiting_language", None)
+
+        # Check if region is set
+        if not prefs.preferred_country:
+            await query.edit_message_text(
+                f"✅ Language updated to: {code}\n\nNow, please select your region:",
+                reply_markup=InlineKeyboardMarkup(
+                    [
+                        [InlineKeyboardButton("Indonesia (ID)", callback_data="region_Indonesia")],
+                        [InlineKeyboardButton("United States (US)", callback_data="region_United States")],
+                        [InlineKeyboardButton("United Kingdom (UK)", callback_data="region_United Kingdom")],
+                        [InlineKeyboardButton("Other", callback_data="region_other")],
+                    ]
+                ),
+            )
+        else:
+            await query.edit_message_text(
+                f"✅ Language updated to: {code}",
+                reply_markup=InlineKeyboardMarkup(
+                    [[InlineKeyboardButton("« Back to Settings", callback_data="back_to_settings")]]
+                ),
+            )
+
+    except Exception as e:
+        logger.error("Error updating language", user_id=user_id, language=language_code, error=str(e), exc_info=e)
         await query.edit_message_text("Sorry, something went wrong. Please try again.")
 
 
@@ -426,7 +504,6 @@ async def handle_reset_settings(update: Update, context: ContextTypes.DEFAULT_TY
 
     try:
         # Reset user preferences to defaults
-        user = get_user(user_id)
         prefs = Preferences()
         prefs.min_age = 10
         prefs.max_age = 65
@@ -451,3 +528,35 @@ async def handle_reset_settings(update: Update, context: ContextTypes.DEFAULT_TY
             exc_info=e,
         )
         await query.edit_message_text("Sorry, something went wrong. Please try again.")
+
+
+PREMIUM_MESSAGE = """
+💠 *Premium*
+
+Coming soon.
+
+Plans:
+- Free: Daily match limit, basic features
+- Pro: Higher limits, customize age range, distance, notifications
+
+Your current tier: {tier}
+"""
+
+
+@authenticated
+async def premium_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await user_command_limiter()(update, context)
+    user_id = str(update.effective_user.id)
+    user = get_user(user_id)
+    tier = "free"
+    if user.preferences and getattr(user.preferences, "premium_tier", None):
+        tier = user.preferences.premium_tier or "free"
+    from src.config import settings as app_settings
+
+    admin_ids = (app_settings.ADMIN_IDS or "").split(",") if app_settings.ADMIN_IDS else []
+    if user_id in [aid.strip() for aid in admin_ids if aid.strip()]:
+        tier = "admin"
+    await update.message.reply_text(
+        PREMIUM_MESSAGE.format(tier=tier),
+        parse_mode="Markdown",
+    )

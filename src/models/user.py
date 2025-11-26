@@ -53,6 +53,9 @@ class Preferences(BaseModel):
     relationship_type: Optional[List[RelationshipType]] = None
     max_distance: Optional[int] = None  # in kilometers
     notifications_enabled: Optional[bool] = True
+    preferred_language: Optional[str] = None
+    preferred_country: Optional[str] = None
+    premium_tier: Optional[str] = None
 
     @validator("min_age", "max_age")
     def validate_age_range(cls, v: Optional[int], values: Dict[str, int]) -> Optional[int]:
@@ -94,6 +97,16 @@ class Preferences(BaseModel):
         if v is not None and (v < 1 or v > 500):
             raise ValidationError("Distance must be between 1 and 500 kilometers")
         return v
+
+    @validator("premium_tier")
+    def validate_tier(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        allowed = {"free", "pro", "admin"}
+        lv = v.lower()
+        if lv not in allowed:
+            raise ValidationError("Invalid premium tier")
+        return lv
 
 
 class User(BaseModel):
@@ -170,8 +183,8 @@ class User(BaseModel):
         Raises:
             ValidationError: If photos are invalid
         """
-        if len(v) > 6:
-            raise ValidationError("Maximum 6 photos allowed")
+        if len(v) > 5:
+            raise ValidationError("Maximum 5 photos allowed")
         return v
 
     def is_match_eligible(self) -> bool:

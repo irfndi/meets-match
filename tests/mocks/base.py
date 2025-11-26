@@ -54,7 +54,7 @@ class Model:
             Model: A new instance of this model
         """
         if hasattr(cls, "instances"):
-            for instance in getattr(cls, "instances"):
+            for instance in cls.instances:
                 if instance.id == id:
                     return instance
         # Return a new instance if not found
@@ -72,7 +72,7 @@ class Model:
         """
         instance = cls(**kwargs)
         if hasattr(cls, "instances"):
-            getattr(cls, "instances").append(instance)
+            cls.instances.append(instance)
         return instance
 
     @classmethod
@@ -89,7 +89,7 @@ class Model:
             return []
 
         results = []
-        for instance in getattr(cls, "instances"):
+        for instance in cls.instances:
             matches = True
             for key, value in kwargs.items():
                 if getattr(instance, key, None) != value:

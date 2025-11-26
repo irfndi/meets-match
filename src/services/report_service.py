@@ -9,12 +9,10 @@
 # 3. Adapt methods to work with D1 bindings passed via context (e.g., 'env.DB').
 # 4. Error handling needs to be updated for D1 exceptions.
 
-from datetime import datetime, timedelta
 from typing import List, Tuple
 
 # FIXME: These imports are from the old SQLAlchemy models in src/meetsmatch/models.py
 # They need to be replaced with Pydantic models from src/models/ and D1 interaction logic.
-from sqlalchemy import func
 # from .models import Interaction, Session, User # Original imports, commented out
 
 
@@ -84,7 +82,7 @@ class ReportManager:
         # finally:
         #     session.close()
 
-    async def get_user_reports(self, user_id: int) -> List[dict]: # FIXME: Return type should be List[InteractionModel]
+    async def get_user_reports(self, user_id: int) -> List[dict]:  # FIXME: Return type should be List[InteractionModel]
         """Get all reports for a specific user. FIXME: Needs D1 migration."""
         raise NotImplementedError("Report logic needs migration to Cloudflare D1")
         # session = Session()
@@ -103,7 +101,7 @@ class ReportManager:
         # finally:
         #     session.close()
 
-    async def get_banned_users(self) -> List[dict]: # FIXME: Return type should be List[UserModel]
+    async def get_banned_users(self) -> List[dict]:  # FIXME: Return type should be List[UserModel]
         """Get list of banned users. FIXME: Needs D1 migration."""
         raise NotImplementedError("Report logic needs migration to Cloudflare D1")
         # session = Session()

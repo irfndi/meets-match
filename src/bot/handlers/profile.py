@@ -8,26 +8,28 @@
 # 3. Check if data structures returned by service calls have changed.
 # 4. Ensure photo handling logic aligns with R2 implementation in user_service.
 
-from telegram import ReplyKeyboardMarkup, Update, KeyboardButton
+from telegram import ReplyKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
-from src.bot.middleware import authenticated, user_command_limiter
-from src.models.user import Gender
-from src.services.user_service import get_user, update_user, get_user_location_text
 from src.bot.handlers.match import match_command
-from src.services.geocoding_service import geocode_city, reverse_geocode_coordinates
-from src.utils.logging import get_logger
+from src.bot.middleware import authenticated, user_command_limiter
 from src.bot.ui.keyboards import (
-    main_menu,
-    profile_main_menu,
     cancel_keyboard,
-    skip_keyboard,
-    skip_cancel_keyboard,
     gender_keyboard,
     gender_optional_keyboard,
     location_keyboard,
     location_optional_keyboard,
+    main_menu,
+    profile_main_menu,
+    skip_cancel_keyboard,
+    skip_keyboard,
 )
+from src.config import settings
+from src.models.user import Gender
+from src.services.geocoding_service import geocode_city, reverse_geocode_coordinates
+from src.services.user_service import get_user, get_user_location_text, update_user
+from src.utils.logging import get_logger
+from src.utils.media import delete_media, save_media
 
 logger = get_logger(__name__)
 
@@ -69,7 +71,9 @@ AGE_UPDATE_MESSAGE = "How old are you? (must be between 10-65)"
 GENDER_UPDATE_MESSAGE = "Please select your gender:"
 BIO_UPDATE_MESSAGE = "Tell us a bit about yourself (max 300 characters):"
 INTERESTS_UPDATE_MESSAGE = "What are your interests? List them separated by commas (e.g., music, travel, cooking):"
-LOCATION_UPDATE_MESSAGE = "Where are you located? Share your location or type 'City, Country' (e.g., 'Berlin, Germany'):"
+LOCATION_UPDATE_MESSAGE = (
+    "Where are you located? Share your location or type 'City, Country' (e.g., 'Berlin, Germany'):"
+)
 
 # Conversation state keys
 STATE_AWAITING_NAME = "awaiting_name"
@@ -111,7 +115,7 @@ def get_missing_recommended_fields(user) -> list:
         missing.append("gender")
     if not user.bio:
         missing.append("bio")
-    if not getattr(user, 'interests', None) or len(user.interests) == 0:
+    if not getattr(user, "interests", None) or len(user.interests) == 0:
         missing.append("interests")
     if not user.location or not user.location.city:
         missing.append("location")
@@ -120,33 +124,33 @@ def get_missing_recommended_fields(user) -> list:
 
 def check_and_update_profile_complete(user_id: str, context: ContextTypes.DEFAULT_TYPE = None) -> bool:
     """Check if profile is complete and update the flag if needed.
-    
+
     Profile is considered complete when all REQUIRED fields are filled.
     Recommended fields are optional and don't block matching.
-    
+
     If context is provided, also refreshes context.user_data["user"].
-    
+
     Returns True if profile is now complete.
     """
     user = get_user(user_id)
     missing_required = get_missing_required_fields(user)
-    
+
     is_complete = len(missing_required) == 0
-    
+
     if is_complete and not user.is_profile_complete:
         update_user(user_id, {"is_profile_complete": True})
         user = get_user(user_id)
-        if context:
+        if context and context.user_data is not None:
             context.user_data["user"] = user
         return True
     elif not is_complete and user.is_profile_complete:
         update_user(user_id, {"is_profile_complete": False})
         user = get_user(user_id)
-        if context:
+        if context and context.user_data is not None:
             context.user_data["user"] = user
-    elif context:
+    elif context and context.user_data is not None:
         context.user_data["user"] = user
-    
+
     return is_complete
 
 
@@ -155,18 +159,25 @@ STATE_ADHOC_CONTINUE = "adhoc_continue_profile"
 
 async def prompt_for_next_missing_field(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: str) -> bool:
     """Prompt user for the next missing required or recommended field (ad-hoc mode).
-    
+
     Returns True if there was a missing field to prompt for, False if profile is complete.
     This is for single field edits, NOT the guided setup flow.
     """
+    if context.user_data is None:
+        logger.error("context.user_data is None in prompt_for_next_missing_field")
+        return False
+    if not update.message:
+        logger.error("update.message is None in prompt_for_next_missing_field")
+        return False
+
     user = get_user(user_id)
     missing_required = get_missing_required_fields(user)
     missing_recommended = get_missing_recommended_fields(user)
-    
+
     if not missing_required:
         context.user_data.pop(STATE_ADHOC_CONTINUE, None)
         check_and_update_profile_complete(user_id, context)
-        
+
         if not missing_recommended:
             await update.message.reply_text(
                 "🎉 Your profile is fully complete! You can start matching with /match!",
@@ -187,22 +198,26 @@ async def prompt_for_next_missing_field(update: Update, context: ContextTypes.DE
                 ),
             )
         return False
-    
+
     context.user_data[STATE_ADHOC_CONTINUE] = True
-    
+
     next_field = missing_required[0]
     field_label = next_field.capitalize()
     await update.message.reply_text(
         f"Your profile still needs: {field_label}\n\nLet's complete it now!",
     )
-    
+
     if next_field == "name":
         context.user_data[STATE_AWAITING_NAME] = True
-        await update.message.reply_text(NAME_UPDATE_MESSAGE, reply_markup=ReplyKeyboardMarkup([["Cancel"]], resize_keyboard=True))
+        await update.message.reply_text(
+            NAME_UPDATE_MESSAGE, reply_markup=ReplyKeyboardMarkup([["Cancel"]], resize_keyboard=True)
+        )
     elif next_field == "age":
         context.user_data[STATE_AWAITING_AGE] = True
-        await update.message.reply_text(AGE_UPDATE_MESSAGE, reply_markup=ReplyKeyboardMarkup([["Cancel"]], resize_keyboard=True))
-    
+        await update.message.reply_text(
+            AGE_UPDATE_MESSAGE, reply_markup=ReplyKeyboardMarkup([["Cancel"]], resize_keyboard=True)
+        )
+
     return True
 
 
@@ -217,8 +232,11 @@ async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     # Apply rate limiting
     await user_command_limiter()(update, context)
 
-    user_id = str(update.effective_user.id)
-    user = get_user(user_id)
+    if not update.message or context.user_data is None:
+        return
+
+    # user_id = str(update.effective_user.id) # unused
+    # user = get_user(user_id) # unused
 
     await update.message.reply_text(
         PROFILE_MENU_MESSAGE,
@@ -238,6 +256,9 @@ async def name_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     # Apply rate limiting
     await user_command_limiter()(update, context)
 
+    if not update.message or not update.message.text or not update.effective_user or context.user_data is None:
+        return
+
     message_text = update.message.text.strip()
 
     # Check if command includes the name inline (legacy support)
@@ -250,11 +271,15 @@ async def name_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     # Set conversation state and prompt user
     clear_conversation_state(context)
     context.user_data[STATE_AWAITING_NAME] = True
-    
+
     user_id = str(update.effective_user.id)
     user = get_user(user_id)
     has_name = bool(getattr(user, "first_name", None))
-    prompt = NAME_UPDATE_MESSAGE if not has_name else f"{NAME_UPDATE_MESSAGE}\n\nCurrent: {user.first_name}\nType 'Skip' to keep the current value."
+    prompt = (
+        NAME_UPDATE_MESSAGE
+        if not has_name
+        else f"{NAME_UPDATE_MESSAGE}\n\nCurrent: {user.first_name}\nType 'Skip' to keep the current value."
+    )
     await update.message.reply_text(
         prompt,
         reply_markup=(skip_cancel_keyboard("Type your name") if has_name else cancel_keyboard("Type your name")),
@@ -263,14 +288,17 @@ async def name_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 async def _save_name(update: Update, context: ContextTypes.DEFAULT_TYPE, name: str) -> None:
     """Save the user's name."""
+    if not update.effective_user or not update.message or context.user_data is None:
+        return
+
     user_id = str(update.effective_user.id)
-    
+
     try:
         update_user(user_id, {"first_name": name})
         user = get_user(user_id)
         context.user_data["user"] = user
         await update.message.reply_text(NAME_UPDATED_MESSAGE.format(name=name))
-        
+
         if context.user_data.get(STATE_PROFILE_SETUP) is not None:
             await _next_profile_step(update, context)
         elif context.user_data.get(STATE_ADHOC_CONTINUE):
@@ -294,6 +322,9 @@ async def age_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     # Apply rate limiting
     await user_command_limiter()(update, context)
 
+    if not update.message or not update.message.text or not update.effective_user or context.user_data is None:
+        return
+
     message_text = update.message.text.strip()
 
     # Check if command includes the age inline (legacy support)
@@ -306,33 +337,42 @@ async def age_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     # Set conversation state and prompt user
     clear_conversation_state(context)
     context.user_data[STATE_AWAITING_AGE] = True
-    
+
     user_id = str(update.effective_user.id)
     user = get_user(user_id)
     has_age = bool(getattr(user, "age", None))
-    prompt = AGE_UPDATE_MESSAGE if not has_age else f"{AGE_UPDATE_MESSAGE}\n\nCurrent: {user.age}\nType 'Skip' to keep the current value."
+    prompt = (
+        AGE_UPDATE_MESSAGE
+        if not has_age
+        else f"{AGE_UPDATE_MESSAGE}\n\nCurrent: {user.age}\nType 'Skip' to keep the current value."
+    )
     await update.message.reply_text(
         prompt,
-        reply_markup=(skip_cancel_keyboard("Enter a number 10-65") if has_age else cancel_keyboard("Enter a number 10-65")),
+        reply_markup=(
+            skip_cancel_keyboard("Enter a number 10-65") if has_age else cancel_keyboard("Enter a number 10-65")
+        ),
     )
 
 
 async def _save_age(update: Update, context: ContextTypes.DEFAULT_TYPE, age_str: str) -> bool:
     """Save the user's age. Returns True if successful."""
+    if not update.effective_user or not update.message or context.user_data is None:
+        return False
+
     user_id = str(update.effective_user.id)
-    
+
     try:
         age = int(age_str)
-        
+
         if age < 10 or age > 65:
             await update.message.reply_text("Age must be between 10 and 65. Please try again:")
             return False
-        
+
         update_user(user_id, {"age": age})
         user = get_user(user_id)
         context.user_data["user"] = user
         await update.message.reply_text(AGE_UPDATED_MESSAGE.format(age=age))
-        
+
         if context.user_data.get(STATE_PROFILE_SETUP) is not None:
             await _next_profile_step(update, context)
         else:
@@ -358,6 +398,9 @@ async def gender_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     # Apply rate limiting
     await user_command_limiter()(update, context)
 
+    if not update.message or not update.message.text or not update.effective_user or context.user_data is None:
+        return
+
     message_text = update.message.text.strip()
 
     # Check if command includes the gender
@@ -366,10 +409,18 @@ async def gender_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         user = get_user(user_id)
         cur = None
         try:
-            cur = user.gender.name.capitalize() if getattr(user, "gender", None) and hasattr(user.gender, "name") else (str(user.gender) if getattr(user, "gender", None) else None)
+            cur = (
+                user.gender.name.capitalize()
+                if getattr(user, "gender", None) and hasattr(user.gender, "name")
+                else (str(user.gender) if getattr(user, "gender", None) else None)
+            )
         except Exception:
             cur = str(getattr(user, "gender", "")) or None
-        prompt = GENDER_UPDATE_MESSAGE if not cur else f"{GENDER_UPDATE_MESSAGE}\n\nCurrent: {cur}\nType 'Skip' to keep the current value."
+        prompt = (
+            GENDER_UPDATE_MESSAGE
+            if not cur
+            else f"{GENDER_UPDATE_MESSAGE}\n\nCurrent: {cur}\nType 'Skip' to keep the current value."
+        )
         await update.message.reply_text(
             prompt,
             reply_markup=gender_keyboard(),
@@ -390,6 +441,9 @@ async def gender_selection(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         update: The update object
         context: The context object
     """
+    if context.user_data is None or not update.message or not update.message.text:
+        return
+
     # Check if we're awaiting gender selection
     if not context.user_data.get("awaiting_gender"):
         return
@@ -410,6 +464,9 @@ async def process_gender_selection(update: Update, context: ContextTypes.DEFAULT
         context: The context object
         gender_str: Selected gender string
     """
+    if not update.effective_user or not update.message or context.user_data is None:
+        return
+
     user_id = str(update.effective_user.id)
     in_profile_setup = context.user_data.get(STATE_PROFILE_SETUP) is not None
 
@@ -422,7 +479,7 @@ async def process_gender_selection(update: Update, context: ContextTypes.DEFAULT
             reply_markup=main_menu(),
         )
         return
-    
+
     if gender_str.lower() == "skip":
         context.user_data.pop("awaiting_gender", None)
         if in_profile_setup:
@@ -448,7 +505,7 @@ async def process_gender_selection(update: Update, context: ContextTypes.DEFAULT
         user = get_user(user_id)
         context.user_data["user"] = user
         await update.message.reply_text(GENDER_UPDATED_MESSAGE.format(gender=gender.value))
-        
+
         context.user_data.pop("awaiting_gender", None)
 
         if in_profile_setup:
@@ -476,6 +533,9 @@ async def bio_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     # Apply rate limiting
     await user_command_limiter()(update, context)
 
+    if not update.message or not update.message.text or not update.effective_user or context.user_data is None:
+        return
+
     message_text = update.message.text.strip()
 
     # Check if command includes the bio inline (legacy support)
@@ -488,11 +548,15 @@ async def bio_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     # Set conversation state and prompt user
     clear_conversation_state(context)
     context.user_data[STATE_AWAITING_BIO] = True
-    
+
     user_id = str(update.effective_user.id)
     user = get_user(user_id)
     cur = getattr(user, "bio", None)
-    prompt = BIO_UPDATE_MESSAGE if not cur else f"{BIO_UPDATE_MESSAGE}\n\nCurrent: {cur}\nType 'Skip' to keep the current value."
+    prompt = (
+        BIO_UPDATE_MESSAGE
+        if not cur
+        else f"{BIO_UPDATE_MESSAGE}\n\nCurrent: {cur}\nType 'Skip' to keep the current value."
+    )
     await update.message.reply_text(
         prompt,
         reply_markup=skip_keyboard("Write a short bio"),
@@ -501,18 +565,21 @@ async def bio_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
 async def _save_bio(update: Update, context: ContextTypes.DEFAULT_TYPE, bio: str) -> bool:
     """Save the user's bio. Returns True if successful."""
+    if not update.effective_user or not update.message or context.user_data is None:
+        return False
+
     user_id = str(update.effective_user.id)
-    
+
     try:
         if len(bio) > 300:
             await update.message.reply_text("Bio is too long. Please keep it under 300 characters:")
             return False
-        
+
         update_user(user_id, {"bio": bio})
         user = get_user(user_id)
         context.user_data["user"] = user
         await update.message.reply_text(BIO_UPDATED_MESSAGE)
-        
+
         if context.user_data.get(STATE_PROFILE_SETUP) is not None:
             await _next_profile_step(update, context)
         else:
@@ -535,6 +602,9 @@ async def interests_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     # Apply rate limiting
     await user_command_limiter()(update, context)
 
+    if not update.message or not update.message.text or not update.effective_user or context.user_data is None:
+        return
+
     message_text = update.message.text.strip()
 
     # Check if command includes the interests inline (legacy support)
@@ -547,12 +617,16 @@ async def interests_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     # Set conversation state and prompt user
     clear_conversation_state(context)
     context.user_data[STATE_AWAITING_INTERESTS] = True
-    
+
     user_id = str(update.effective_user.id)
     user = get_user(user_id)
     cur_list = getattr(user, "interests", []) or []
     cur = ", ".join(cur_list) if cur_list else None
-    prompt = INTERESTS_UPDATE_MESSAGE if not cur else f"{INTERESTS_UPDATE_MESSAGE}\n\nCurrent: {cur}\nType 'Skip' to keep the current value."
+    prompt = (
+        INTERESTS_UPDATE_MESSAGE
+        if not cur
+        else f"{INTERESTS_UPDATE_MESSAGE}\n\nCurrent: {cur}\nType 'Skip' to keep the current value."
+    )
     await update.message.reply_text(
         prompt,
         reply_markup=skip_keyboard("music, travel, cooking"),
@@ -561,24 +635,27 @@ async def interests_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
 async def _save_interests(update: Update, context: ContextTypes.DEFAULT_TYPE, interests_text: str) -> bool:
     """Save the user's interests. Returns True if successful."""
+    if not update.effective_user or not update.message or context.user_data is None:
+        return False
+
     user_id = str(update.effective_user.id)
-    
+
     try:
         interests = [interest.strip() for interest in interests_text.split(",") if interest.strip()]
-        
+
         if not interests:
             await update.message.reply_text("Please provide at least one interest:")
             return False
-        
+
         if len(interests) > 10:
             await update.message.reply_text("Too many interests. Please provide at most 10:")
             return False
-        
+
         update_user(user_id, {"interests": interests})
         user = get_user(user_id)
         context.user_data["user"] = user
         await update.message.reply_text(INTERESTS_UPDATED_MESSAGE)
-        
+
         if context.user_data.get(STATE_PROFILE_SETUP) is not None:
             await _next_profile_step(update, context)
         else:
@@ -601,6 +678,9 @@ async def location_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     # Apply rate limiting
     await user_command_limiter()(update, context)
 
+    if not update.effective_user or not update.message or not update.message.text or context.user_data is None:
+        return
+
     str(update.effective_user.id)
     message_text = update.message.text.strip()
 
@@ -608,7 +688,11 @@ async def location_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     if message_text.startswith("/location"):
         user_id = str(update.effective_user.id)
         cur = get_user_location_text(user_id)
-        prompt = LOCATION_UPDATE_MESSAGE if not cur else f"{LOCATION_UPDATE_MESSAGE}\n\nCurrent: {cur}\nType 'Skip' to keep the current value."
+        prompt = (
+            LOCATION_UPDATE_MESSAGE
+            if not cur
+            else f"{LOCATION_UPDATE_MESSAGE}\n\nCurrent: {cur}\nType 'Skip' to keep the current value."
+        )
         await update.message.reply_text(
             prompt,
             reply_markup=(location_optional_keyboard() if cur else location_keyboard()),
@@ -626,6 +710,9 @@ async def location_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         context: The context object
     """
     # Always handle incoming location messages
+
+    if not update.effective_user or not update.message or not update.message.location or context.user_data is None:
+        return
 
     user_id = str(update.effective_user.id)
     in_profile_setup = context.user_data.get(STATE_PROFILE_SETUP) is not None
@@ -680,9 +767,12 @@ async def process_manual_location(update: Update, context: ContextTypes.DEFAULT_
         context: The context object
         location_text: Location text
     """
+    if not update.effective_user or not update.message or context.user_data is None:
+        return
+
     user_id = str(update.effective_user.id)
     in_profile_setup = context.user_data.get(STATE_PROFILE_SETUP) is not None
-    
+
     if location_text.lower() == "skip":
         context.user_data.pop("awaiting_location", None)
         if in_profile_setup:
@@ -694,11 +784,15 @@ async def process_manual_location(update: Update, context: ContextTypes.DEFAULT_
     try:
         raw = location_text.strip()
         if not raw:
-            await update.message.reply_text("Please type 'City, Country' (e.g., 'Berlin, Germany') or share your location:")
+            await update.message.reply_text(
+                "Please type 'City, Country' (e.g., 'Berlin, Germany') or share your location:"
+            )
             return
 
         if "," not in raw:
-            await update.message.reply_text("Please use the format 'City, Country' (e.g., 'Berlin, Germany') or share your location using the button.")
+            await update.message.reply_text(
+                "Please use the format 'City, Country' (e.g., 'Berlin, Germany') or share your location using the button."
+            )
             return
 
         parts = [part.strip() for part in raw.split(",") if part.strip()]
@@ -726,9 +820,11 @@ async def process_manual_location(update: Update, context: ContextTypes.DEFAULT_
         user = get_user(user_id)
         context.user_data["user"] = user
         await update.message.reply_text(
-            LOCATION_UPDATED_MESSAGE.format(location=f"{location_data['location_city']}, {location_data['location_country']}")
+            LOCATION_UPDATED_MESSAGE.format(
+                location=f"{location_data['location_city']}, {location_data['location_country']}"
+            )
         )
-        
+
         context.user_data.pop("awaiting_location", None)
 
         if in_profile_setup:
@@ -747,6 +843,8 @@ async def process_manual_location(update: Update, context: ContextTypes.DEFAULT_
 
 def clear_conversation_state(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Clear all conversation states."""
+    if context.user_data is None:
+        return
     states_to_clear = [
         STATE_AWAITING_NAME,
         STATE_AWAITING_AGE,
@@ -765,18 +863,21 @@ PROFILE_STEPS = ["name", "age", "gender", "bio", "interests", "location"]
 
 async def _next_profile_step(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Move to the next step in profile setup."""
+    if not update.effective_user or not update.message or context.user_data is None:
+        return
+
     current_step = context.user_data.get(STATE_PROFILE_SETUP, 0)
     next_step = current_step + 1
-    
+
     if next_step >= len(PROFILE_STEPS):
         # Profile setup complete
         context.user_data.pop(STATE_PROFILE_SETUP, None)
         clear_conversation_state(context)
-        
+
         user_id = str(update.effective_user.id)
         user = get_user(user_id)
         missing_required = get_missing_required_fields(user)
-        
+
         if missing_required:
             await update.message.reply_text(
                 f"Almost there! You still need to set: {', '.join(f.capitalize() for f in missing_required)}\n\n"
@@ -785,23 +886,27 @@ async def _next_profile_step(update: Update, context: ContextTypes.DEFAULT_TYPE)
             )
         else:
             check_and_update_profile_complete(user_id, context)
-            
+
             await update.message.reply_text(
                 "🎉 Great! Your profile is now complete!\n\nYou can view your profile with /profile or start matching with /match!",
                 reply_markup=main_menu(),
             )
         return
-    
+
     context.user_data[STATE_PROFILE_SETUP] = next_step
     step_name = PROFILE_STEPS[next_step]
-    
+
     # Trigger the appropriate command
     if step_name == "name":
         user_id = str(update.effective_user.id)
         user = get_user(user_id)
         has_name = bool(getattr(user, "first_name", None))
         context.user_data[STATE_AWAITING_NAME] = True
-        prompt = NAME_UPDATE_MESSAGE if not has_name else f"{NAME_UPDATE_MESSAGE}\n\nCurrent: {user.first_name}\nType 'Skip' to keep the current value."
+        prompt = (
+            NAME_UPDATE_MESSAGE
+            if not has_name
+            else f"{NAME_UPDATE_MESSAGE}\n\nCurrent: {user.first_name}\nType 'Skip' to keep the current value."
+        )
         await update.message.reply_text(
             prompt,
             reply_markup=(skip_cancel_keyboard("Type your name") if has_name else cancel_keyboard("Type your name")),
@@ -811,10 +916,16 @@ async def _next_profile_step(update: Update, context: ContextTypes.DEFAULT_TYPE)
         user = get_user(user_id)
         has_age = bool(getattr(user, "age", None))
         context.user_data[STATE_AWAITING_AGE] = True
-        prompt = AGE_UPDATE_MESSAGE if not has_age else f"{AGE_UPDATE_MESSAGE}\n\nCurrent: {user.age}\nType 'Skip' to keep the current value."
+        prompt = (
+            AGE_UPDATE_MESSAGE
+            if not has_age
+            else f"{AGE_UPDATE_MESSAGE}\n\nCurrent: {user.age}\nType 'Skip' to keep the current value."
+        )
         await update.message.reply_text(
             prompt,
-            reply_markup=(skip_cancel_keyboard("Enter a number 10-65") if has_age else cancel_keyboard("Enter a number 10-65")),
+            reply_markup=(
+                skip_cancel_keyboard("Enter a number 10-65") if has_age else cancel_keyboard("Enter a number 10-65")
+            ),
         )
     elif step_name == "gender":
         context.user_data["awaiting_gender"] = True
@@ -822,10 +933,18 @@ async def _next_profile_step(update: Update, context: ContextTypes.DEFAULT_TYPE)
         user = get_user(user_id)
         cur = None
         try:
-            cur = user.gender.name.capitalize() if getattr(user, "gender", None) and hasattr(user.gender, "name") else (str(user.gender) if getattr(user, "gender", None) else None)
+            cur = (
+                user.gender.name.capitalize()
+                if getattr(user, "gender", None) and hasattr(user.gender, "name")
+                else (str(user.gender) if getattr(user, "gender", None) else None)
+            )
         except Exception:
             cur = str(getattr(user, "gender", "")) or None
-        prompt = GENDER_UPDATE_MESSAGE if not cur else f"{GENDER_UPDATE_MESSAGE}\n\nCurrent: {cur}\nType 'Skip' to keep the current value."
+        prompt = (
+            GENDER_UPDATE_MESSAGE
+            if not cur
+            else f"{GENDER_UPDATE_MESSAGE}\n\nCurrent: {cur}\nType 'Skip' to keep the current value."
+        )
         await update.message.reply_text(
             prompt,
             reply_markup=gender_optional_keyboard(),
@@ -835,7 +954,11 @@ async def _next_profile_step(update: Update, context: ContextTypes.DEFAULT_TYPE)
         user_id = str(update.effective_user.id)
         user = get_user(user_id)
         cur = getattr(user, "bio", None)
-        prompt = BIO_UPDATE_MESSAGE if not cur else f"{BIO_UPDATE_MESSAGE}\n\nCurrent: {cur}\nType 'Skip' to keep the current value."
+        prompt = (
+            BIO_UPDATE_MESSAGE
+            if not cur
+            else f"{BIO_UPDATE_MESSAGE}\n\nCurrent: {cur}\nType 'Skip' to keep the current value."
+        )
         await update.message.reply_text(prompt, reply_markup=skip_keyboard("Optional - you can Skip"))
     elif step_name == "interests":
         context.user_data[STATE_AWAITING_INTERESTS] = True
@@ -843,13 +966,21 @@ async def _next_profile_step(update: Update, context: ContextTypes.DEFAULT_TYPE)
         user = get_user(user_id)
         cur_list = getattr(user, "interests", []) or []
         cur = ", ".join(cur_list) if cur_list else None
-        prompt = INTERESTS_UPDATE_MESSAGE if not cur else f"{INTERESTS_UPDATE_MESSAGE}\n\nCurrent: {cur}\nType 'Skip' to keep the current value."
+        prompt = (
+            INTERESTS_UPDATE_MESSAGE
+            if not cur
+            else f"{INTERESTS_UPDATE_MESSAGE}\n\nCurrent: {cur}\nType 'Skip' to keep the current value."
+        )
         await update.message.reply_text(prompt, reply_markup=skip_keyboard("Optional - you can Skip"))
     elif step_name == "location":
         context.user_data["awaiting_location"] = True
         user_id = str(update.effective_user.id)
         cur = get_user_location_text(user_id)
-        prompt = LOCATION_UPDATE_MESSAGE if not cur else f"{LOCATION_UPDATE_MESSAGE}\n\nCurrent: {cur}\nType 'Skip' to keep the current value."
+        prompt = (
+            LOCATION_UPDATE_MESSAGE
+            if not cur
+            else f"{LOCATION_UPDATE_MESSAGE}\n\nCurrent: {cur}\nType 'Skip' to keep the current value."
+        )
         await update.message.reply_text(
             prompt,
             reply_markup=(location_optional_keyboard() if cur else location_keyboard()),
@@ -858,22 +989,25 @@ async def _next_profile_step(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 async def start_profile_setup(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Start the guided profile setup flow."""
+    if not update.message or context.user_data is None:
+        return
+
     clear_conversation_state(context)
     context.user_data[STATE_PROFILE_SETUP] = -1  # Will be incremented to 0
-    
+
     await update.message.reply_text(
         "Let's set up your profile! I'll guide you through each step.\n\nYou can type 'Skip' to skip optional fields or 'Cancel' to stop at any time.",
     )
-    
+
     await _next_profile_step(update, context)
 
 
 @authenticated
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle text messages when awaiting user input."""
-    if not update.message or not update.message.text:
+    if not update.message or not update.message.text or not update.effective_user or context.user_data is None:
         return
-    
+
     text = update.message.text.strip()
 
     if context.user_data.get(STATE_PROFILE_MENU):
@@ -895,10 +1029,14 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             user_id = str(update.effective_user.id)
             user = get_user(user_id)
             cur = getattr(user, "bio", None)
-            prompt = BIO_UPDATE_MESSAGE if not cur else f"{BIO_UPDATE_MESSAGE}\n\nCurrent: {cur}\nType 'Skip' to keep the current value."
+            prompt = (
+                BIO_UPDATE_MESSAGE
+                if not cur
+                else f"{BIO_UPDATE_MESSAGE}\n\nCurrent: {cur}\nType 'Skip' to keep the current value."
+            )
             await update.message.reply_text(prompt)
             return
-    
+
     # Handle cancel
     if text.lower() == "cancel":
         clear_conversation_state(context)
@@ -909,16 +1047,16 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             reply_markup=main_menu(),
         )
         return
-    
+
     # Handle skip (for optional fields in profile setup or adhoc continue mode)
     if text.lower() == "skip":
         in_profile_setup = context.user_data.get(STATE_PROFILE_SETUP) is not None
         in_adhoc_mode = context.user_data.get(STATE_ADHOC_CONTINUE)
-        
+
         if in_profile_setup:
             current_step = context.user_data.get(STATE_PROFILE_SETUP, 0)
             step_name = PROFILE_STEPS[current_step] if 0 <= current_step < len(PROFILE_STEPS) else None
-            
+
             user_id = str(update.effective_user.id)
             user = get_user(user_id)
             if step_name == "name":
@@ -935,7 +1073,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
                     return
                 await update.message.reply_text("This field is required and cannot be skipped. Please enter a value:")
                 return
-            
+
             if step_name == "gender":
                 context.user_data.pop("awaiting_gender", None)
             elif step_name == "bio":
@@ -944,7 +1082,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
                 context.user_data.pop(STATE_AWAITING_INTERESTS, None)
             elif step_name == "location":
                 context.user_data.pop("awaiting_location", None)
-            
+
             await _next_profile_step(update, context)
             return
         elif in_adhoc_mode:
@@ -956,9 +1094,9 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             context.user_data.pop(STATE_ADHOC_CONTINUE, None)
             await prompt_for_next_missing_field(update, context, user_id)
             return
-    
+
     user_id = str(update.effective_user.id)
-    
+
     # Check conversation states and process accordingly
     if context.user_data.get(STATE_AWAITING_NAME):
         if text.lower() == "skip":
@@ -977,7 +1115,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             return
         context.user_data.pop(STATE_AWAITING_NAME, None)
         await _save_name(update, context, text)
-        
+
     elif context.user_data.get(STATE_AWAITING_AGE):
         if text.lower() == "skip":
             user = get_user(str(update.effective_user.id))
@@ -993,14 +1131,14 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         success = await _save_age(update, context, text)
         if success:
             context.user_data.pop(STATE_AWAITING_AGE, None)
-        
+
     elif context.user_data.get("awaiting_gender"):
         if text.lower() == "skip":
             context.user_data.pop("awaiting_gender", None)
             await prompt_for_next_missing_field(update, context, user_id)
             return
         await process_gender_selection(update, context, text)
-        
+
     elif context.user_data.get(STATE_AWAITING_BIO):
         if text.lower() == "skip":
             context.user_data.pop(STATE_AWAITING_BIO, None)
@@ -1009,7 +1147,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         success = await _save_bio(update, context, text)
         if success:
             context.user_data.pop(STATE_AWAITING_BIO, None)
-        
+
     elif context.user_data.get(STATE_AWAITING_INTERESTS):
         if text.lower() == "skip":
             context.user_data.pop(STATE_AWAITING_INTERESTS, None)
@@ -1020,7 +1158,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             context.user_data.pop(STATE_AWAITING_INTERESTS, None)
     elif context.user_data.get(STATE_AWAITING_PHOTO):
         await update.message.reply_text("Please send a photo.")
-        
+
     elif context.user_data.get("awaiting_location"):
         if text.lower() == "skip":
             context.user_data.pop("awaiting_location", None)
@@ -1034,17 +1172,52 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             if len(parts) >= 2 and parts[0] and parts[1]:
                 await process_manual_location(update, context, text)
 
+
 @authenticated
 async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if not update.message or not update.message.photo:
+    """Handle photo and video uploads."""
+    if not update.message or not update.effective_user or context.user_data is None:
         return
+
     user_id = str(update.effective_user.id)
-    file_id = update.message.photo[-1].file_id
-    user = get_user(user_id)
-    photos = list(user.photos or [])
-    photos.append(file_id)
-    photos = photos[-6:]
-    update_user(user_id, {"photos": photos})
+    file_obj = None
+    file_ext = "jpg"
+
+    if update.message.photo:
+        file_obj = update.message.photo[-1]
+    elif update.message.video:
+        file_obj = update.message.video
+        file_ext = "mp4"  # Default video ext
+        if file_obj.mime_type:
+            ext = file_obj.mime_type.split("/")[-1]
+            if ext:
+                file_ext = ext
+    else:
+        return
+
+    try:
+        new_file = await file_obj.get_file()
+        byte_array = await new_file.download_as_bytearray()
+
+        saved_path = save_media(byte_array, user_id, file_ext)
+
+        user = get_user(user_id)
+        photos = list(user.photos or [])
+        photos.append(saved_path)
+
+        # Enforce max media count (delete oldest)
+        if len(photos) > settings.MAX_MEDIA_COUNT:
+            removed = photos.pop(0)
+            delete_media(removed)
+
+        update_user(user_id, {"photos": photos})
+
+        await update.message.reply_text("✅ Media added to your profile!")
+
+    except Exception as e:
+        logger.error("Error saving media", user_id=user_id, error=str(e))
+        await update.message.reply_text("Failed to save media. Please try again.")
+
     context.user_data.pop(STATE_AWAITING_PHOTO, None)
     context.user_data["user"] = get_user(user_id)
     await update.message.reply_text("✅ Profile photo updated.")

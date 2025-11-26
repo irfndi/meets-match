@@ -36,7 +36,8 @@ class I18n:
                 print(f"Warning: Translation not found for language '{lang}' in {localedir}")
                 self.translations[lang] = gettext.NullTranslations()
 
-    @lru_cache(maxsize=1024)
+    # B019: lru_cache on method can cause memory leaks, but I18n is a singleton
+    @lru_cache(maxsize=1024)  # noqa: B019
     def get_text(self, key: str, lang: str = "en") -> str:
         """
         Get translated text for a given key and language.

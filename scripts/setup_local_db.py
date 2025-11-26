@@ -1,14 +1,16 @@
+import sys
+
 import psycopg2
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
-import sys
+
 
 def setup_local_db():
     print("Setting up local database...")
-    
+
     # Connect to default 'postgres' database with current user
     # Assuming 'irfandi' is the superuser based on previous check
     try:
-        conn = psycopg2.connect(dbname='postgres', user='irfandi', host='localhost')
+        conn = psycopg2.connect(dbname="postgres", user="irfandi", host="localhost")
         conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
         cur = conn.cursor()
     except Exception as e:
@@ -40,6 +42,7 @@ def setup_local_db():
     cur.close()
     conn.close()
     print("Database setup complete!")
+
 
 if __name__ == "__main__":
     setup_local_db()

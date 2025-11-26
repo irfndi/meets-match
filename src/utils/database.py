@@ -1,10 +1,9 @@
 """Database connection utilities for the MeetMatch bot using PostgreSQL."""
 
-import os
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import JSON, Boolean, DateTime, Enum, Float, ForeignKey, Integer, String, Text, create_engine
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, create_engine, or_
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, relationship, sessionmaker
 
 from src.utils.errors import DatabaseError
@@ -15,11 +14,13 @@ logger = get_logger(__name__)
 
 class Base(DeclarativeBase):
     """Base class for SQLAlchemy models."""
+
     pass
 
 
 class UserDB(Base):
     """User database model."""
+
     __tablename__ = "users"
 
     id: Mapped[str] = mapped_column(String(50), primary_key=True)
@@ -45,6 +46,7 @@ class UserDB(Base):
 
 class MatchDB(Base):
     """Match database model."""
+
     __tablename__ = "matches"
 
     id: Mapped[str] = mapped_column(String(50), primary_key=True)
@@ -65,6 +67,7 @@ class MatchDB(Base):
 
 class ConversationDB(Base):
     """Conversation database model."""
+
     __tablename__ = "conversations"
 
     id: Mapped[str] = mapped_column(String(50), primary_key=True)
@@ -82,6 +85,7 @@ class ConversationDB(Base):
 
 class MessageDB(Base):
     """Message database model."""
+
     __tablename__ = "messages"
 
     id: Mapped[str] = mapped_column(String(50), primary_key=True)
@@ -109,27 +113,19 @@ class Database:
         """Get or create the database engine."""
         if cls._engine is None:
             from src.config import get_settings
-            
+
             settings = get_settings()
             database_url = settings.DATABASE_URL
-            
+
             if not database_url:
                 raise DatabaseError("DATABASE_URL is not configured")
 
             try:
-                cls._engine = create_engine(
-                    database_url,
-                    pool_recycle=300,
-                    pool_pre_ping=True,
-                    echo=settings.DEBUG
-                )
+                cls._engine = create_engine(database_url, pool_recycle=300, pool_pre_ping=True, echo=settings.DEBUG)
                 logger.info("Database engine created")
             except Exception as e:
                 logger.error("Failed to create database engine", error=str(e))
-                raise DatabaseError(
-                    "Failed to connect to database",
-                    details={"error": str(e)}
-                ) from e
+                raise DatabaseError("Failed to connect to database", details={"error": str(e)}) from e
         return cls._engine
 
     @classmethod
@@ -168,6 +164,9 @@ def execute_query(
     filters: Optional[Dict[str, Any]] = None,
     data: Optional[Dict[str, Any]] = None,
     select: str = "*",
+    limit: Optional[int] = None,
+    offset: Optional[int] = None,
+    order_by: Optional[str] = None,
 ) -> Any:
     """Execute a query on the database (compatibility wrapper).
 
@@ -177,6 +176,9 @@ def execute_query(
         filters: Query filters
         data: Data for insert/update operations
         select: Fields to select
+        limit: Max number of records to return
+        offset: Number of records to skip
+        order_by: Field to sort by (e.g. "created_at desc")
 
     Returns:
         Query result
@@ -200,11 +202,62 @@ def execute_query(
         # Transform user data if needed
         if table == "users" and data:
             data = _transform_user_data(data)
-        
+
         if query_type == "select":
             query = session.query(model)
             for key, value in filters.items():
-                query = query.filter(getattr(model, key) == value)
+                if key == "$or":
+                    # Handle OR condition
+                    # Expects value to be a list of dicts: [{"field": value}, {"field": value}]
+                    or_conditions = []
+                    for condition in value:
+                        for k, v in condition.items():
+                            or_conditions.append(getattr(model, k) == v)
+                    if or_conditions:
+                        query = query.filter(or_(*or_conditions))
+                elif "__" in key:
+                    # Handle special operators (gte, lte, in)
+                    field_name, op = key.rsplit("__", 1)
+                    if hasattr(model, field_name):
+                        column = getattr(model, field_name)
+                        if op == "gte":
+                            query = query.filter(column >= value)
+                        elif op == "lte":
+                            query = query.filter(column <= value)
+                        elif op == "gt":
+                            query = query.filter(column > value)
+                        elif op == "lt":
+                            query = query.filter(column < value)
+                        elif op == "in":
+                            query = query.filter(column.in_(value))
+                        elif op == "like":
+                            query = query.filter(column.like(value))
+                        elif op == "ilike":
+                            query = query.filter(column.ilike(value))
+                        else:
+                            # Fallback to exact match if operator not recognized
+                            query = query.filter(column == value)
+                else:
+                    query = query.filter(getattr(model, key) == value)
+
+            # Handle sorting
+            if order_by:
+                parts = order_by.split()
+                field_name = parts[0]
+                direction = parts[1].lower() if len(parts) > 1 else "asc"
+                if hasattr(model, field_name):
+                    col = getattr(model, field_name)
+                    if direction == "desc":
+                        query = query.order_by(col.desc())
+                    else:
+                        query = query.order_by(col.asc())
+
+            # Handle pagination
+            if limit:
+                query = query.limit(limit)
+            if offset:
+                query = query.offset(offset)
+
             results = query.all()
             session.close()
             return type("Result", (), {"data": [_model_to_dict(r) for r in results]})()
@@ -260,11 +313,11 @@ def execute_query(
 
 def _transform_user_data(data: Dict[str, Any]) -> Dict[str, Any]:
     """Transform User model data to UserDB schema.
-    
+
     Flattens nested location and preferences fields.
     """
     transformed = data.copy()
-    
+
     # Flatten location if present
     if "location" in transformed:
         location = transformed.pop("location")
@@ -274,19 +327,19 @@ def _transform_user_data(data: Dict[str, Any]) -> Dict[str, Any]:
             transformed["location_city"] = location.get("city")
             transformed["location_country"] = location.get("country")
         # If location is None, just remove it (don't add location fields)
-    
+
     # Preferences stays as JSON, but ensure it's a dict
     if "preferences" in transformed and transformed["preferences"] is not None:
         if not isinstance(transformed["preferences"], dict):
             transformed["preferences"] = {}
-    
+
     return transformed
 
 
 def _model_to_dict(model) -> Dict[str, Any]:
     """Convert a SQLAlchemy model to a dictionary."""
     result = {c.name: getattr(model, c.name) for c in model.__table__.columns}
-    
+
     # Reconstruct location object from flat fields for UserDB
     if hasattr(model, "location_latitude"):
         if result.get("location_latitude") is not None:
@@ -302,5 +355,5 @@ def _model_to_dict(model) -> Dict[str, Any]:
             result.pop("location_latitude", None)
             result.pop("location_longitude", None)
             result["location"] = None
-    
+
     return result
