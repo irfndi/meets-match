@@ -5,6 +5,7 @@
 import gettext
 import os
 from functools import lru_cache
+from typing import Any, Dict
 
 SUPPORTED_LANGUAGES = {
     "en": "English",
@@ -16,11 +17,11 @@ SUPPORTED_LANGUAGES = {
 
 
 class I18n:
-    def __init__(self):
-        self.translations = {}
+    def __init__(self) -> None:
+        self.translations: Dict[str, Any] = {}
         self._load_translations()
 
-    def _load_translations(self):
+    def _load_translations(self) -> None:
         """Load all available translations."""
         # FIXME: Verify this path after moving the file
         localedir = os.path.join(os.path.dirname(__file__), "..", "..", "locales")
@@ -51,7 +52,7 @@ class I18n:
         """
         if lang not in self.translations:
             lang = "en"
-        return self.translations[lang].gettext(key)
+        return str(self.translations[lang].gettext(key))
 
     def get_supported_languages(self) -> dict:
         """Get dictionary of supported languages."""

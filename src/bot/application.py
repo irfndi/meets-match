@@ -18,8 +18,6 @@ from src.bot.handlers import (
     about_command,
     age_command,
     bio_command,
-    chat_callback,
-    chat_command,
     gender_command,
     gender_selection,
     handle_text_message,
@@ -35,13 +33,14 @@ from src.bot.handlers import (
     photo_handler,
     premium_command,
     profile_command,
+    reengagement_response,
     settings_callback,
     settings_command,
     start_command,
     start_profile_setup,
+    view_profile_callback,
 )
-
-# Middleware imports will be added as needed
+from src.bot.jobs import inactive_user_reminder_job
 from src.config import settings
 from src.utils.errors import MeetMatchError
 from src.utils.logging import get_logger
@@ -87,6 +86,16 @@ class BotApplication:
 
     async def _post_init(self, application: Application) -> None:
         """Set bot slash commands after application initialization."""
+        # Register scheduled jobs
+        if application.job_queue:
+            application.job_queue.run_repeating(
+                inactive_user_reminder_job,
+                interval=86400,  # Run daily
+                first=60,  # Start after 60 seconds
+                name="inactive_user_reminder",
+            )
+            logger.info("Inactive user reminder job registered")
+
         try:
             await application.bot.set_my_commands(
                 [
@@ -96,7 +105,6 @@ class BotApplication:
                     BotCommand("profile", "View and edit your profile"),
                     BotCommand("match", "Find new matches"),
                     BotCommand("matches", "View your matches"),
-                    BotCommand("chat", "Chat with a match"),
                     BotCommand("settings", "Adjust preferences"),
                     BotCommand("premium", "Premium features"),
                 ]
@@ -130,9 +138,6 @@ class BotApplication:
         self.application.add_handler(CommandHandler("match", match_command))
         self.application.add_handler(CommandHandler("matches", matches_command))
 
-        # Chat commands
-        self.application.add_handler(CommandHandler("chat", chat_command))
-
         # Settings commands
         self.application.add_handler(CommandHandler("settings", settings_command))
         self.application.add_handler(CommandHandler("premium", premium_command))
@@ -143,10 +148,10 @@ class BotApplication:
 
         # Callback handlers
         self.application.add_handler(CallbackQueryHandler(match_callback, pattern=r"^(like_|dislike_|next_match)"))
+        self.application.add_handler(CallbackQueryHandler(view_profile_callback, pattern=r"^view_profile_"))
         self.application.add_handler(
-            CallbackQueryHandler(matches_pagination_callback, pattern=r"^(matches_page_|new_matches)")
+            CallbackQueryHandler(matches_pagination_callback, pattern=r"^(matches_page_|new_matches|back_to_matches)")
         )
-        self.application.add_handler(CallbackQueryHandler(chat_callback, pattern=r"^(chat_|back_to_matches)"))
         self.application.add_handler(
             CallbackQueryHandler(
                 settings_callback,
@@ -161,6 +166,14 @@ class BotApplication:
             MessageHandler(
                 filters.Regex(r"^(Male|Female)$") & filters.ChatType.PRIVATE,
                 gender_selection,
+            )
+        )
+
+        # Re-engagement response handler
+        self.application.add_handler(
+            MessageHandler(
+                filters.Regex(r"^(1 🚀|2)$") & filters.ChatType.PRIVATE,
+                reengagement_response,
             )
         )
 
@@ -185,7 +198,7 @@ class BotApplication:
 
         logger.info("Handlers registered")
 
-    async def _error_handler(self, update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    async def _error_handler(self, update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle errors in the bot.
 
         Args:
@@ -197,12 +210,15 @@ class BotApplication:
         """
         error = context.error
 
+        # Cast update to Update if possible for type checking, though it can be None
+        update_obj = update if isinstance(update, object) else None
+
         # Handle polling conflict explicitly to avoid repeated error spam
         if isinstance(error, Conflict):
             logger.error(
                 "Polling conflict detected: another bot instance is running for this token.",
                 error=str(error),
-                update_id=update.update_id if update else None,
+                update_id=getattr(update_obj, "update_id", None),
             )
 
             app = context.application
@@ -235,7 +251,9 @@ class BotApplication:
             return
 
         # Get chat ID for error response
-        chat_id = update.effective_chat.id if update and update.effective_chat else None
+        chat_id = None
+        if update_obj and hasattr(update_obj, "effective_chat") and update_obj.effective_chat:
+            chat_id = update_obj.effective_chat.id
 
         if isinstance(error, MeetMatchError):
             # Handle custom errors
@@ -244,7 +262,7 @@ class BotApplication:
                 error_type=error.__class__.__name__,
                 error_message=str(error),
                 error_details=getattr(error, "details", {}),
-                update_id=update.update_id if update else None,
+                update_id=getattr(update_obj, "update_id", None),
             )
 
             if chat_id:
@@ -257,7 +275,7 @@ class BotApplication:
             logger.error(
                 "Unexpected bot error",
                 error=str(error),
-                update_id=update.update_id if update else None,
+                update_id=getattr(update_obj, "update_id", None),
                 exc_info=error,
             )
 
@@ -289,6 +307,8 @@ class BotApplication:
         """Run the bot application."""
         if not self.application:
             self.setup_sync()
+
+        assert self.application is not None
 
         logger.info("Bot starting...")
         try:

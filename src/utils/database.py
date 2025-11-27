@@ -1,15 +1,20 @@
 """Database connection utilities for the MeetMatch bot using PostgreSQL."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, create_engine, or_
-from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, relationship, sessionmaker
+from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
 from src.utils.errors import DatabaseError
 from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+def utcnow() -> datetime:
+    """Get current UTC time (naive) to replace datetime.utcnow()."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class Base(DeclarativeBase):
@@ -39,9 +44,10 @@ class UserDB(Base):
     preferences: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_profile_complete: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    last_active: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+    last_active: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    last_reminded_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
 
 class MatchDB(Base):
@@ -59,47 +65,10 @@ class MatchDB(Base):
     score_location: Mapped[float] = mapped_column(Float, default=0.0)
     score_interests: Mapped[float] = mapped_column(Float, default=0.0)
     score_preferences: Mapped[float] = mapped_column(Float, default=0.0)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
     matched_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     expired_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-
-
-class ConversationDB(Base):
-    """Conversation database model."""
-
-    __tablename__ = "conversations"
-
-    id: Mapped[str] = mapped_column(String(50), primary_key=True)
-    match_id: Mapped[str] = mapped_column(String(50), ForeignKey("matches.id"))
-    user1_id: Mapped[str] = mapped_column(String(50), ForeignKey("users.id"))
-    user2_id: Mapped[str] = mapped_column(String(50), ForeignKey("users.id"))
-    status: Mapped[str] = mapped_column(String(20), default="active")
-    last_message_id: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    last_message_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-    messages: Mapped[List["MessageDB"]] = relationship("MessageDB", back_populates="conversation")
-
-
-class MessageDB(Base):
-    """Message database model."""
-
-    __tablename__ = "messages"
-
-    id: Mapped[str] = mapped_column(String(50), primary_key=True)
-    conversation_id: Mapped[str] = mapped_column(String(50), ForeignKey("conversations.id"))
-    sender_id: Mapped[str] = mapped_column(String(50), ForeignKey("users.id"))
-    message_type: Mapped[str] = mapped_column(String(20), default="text")
-    content: Mapped[str] = mapped_column(Text)
-    media_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    is_read: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    read_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-
-    conversation: Mapped["ConversationDB"] = relationship("ConversationDB", back_populates="messages")
 
 
 class Database:
@@ -109,7 +78,7 @@ class Database:
     _session_factory = None
 
     @classmethod
-    def get_engine(cls):
+    def get_engine(cls) -> Any:
         """Get or create the database engine."""
         if cls._engine is None:
             from src.config import get_settings
@@ -129,7 +98,7 @@ class Database:
         return cls._engine
 
     @classmethod
-    def get_session_factory(cls):
+    def get_session_factory(cls) -> Any:
         """Get or create the session factory."""
         if cls._session_factory is None:
             cls._session_factory = sessionmaker(bind=cls.get_engine())
@@ -138,10 +107,10 @@ class Database:
     @classmethod
     def get_session(cls) -> Session:
         """Get a new database session."""
-        return cls.get_session_factory()()
+        return cls.get_session_factory()()  # type: ignore
 
     @classmethod
-    def create_tables(cls):
+    def create_tables(cls) -> None:
         """Create all database tables."""
         engine = cls.get_engine()
         Base.metadata.create_all(engine)
@@ -153,7 +122,7 @@ def get_session() -> Session:
     return Database.get_session()
 
 
-def init_database():
+def init_database() -> None:
     """Initialize the database and create tables."""
     Database.create_tables()
 
@@ -190,8 +159,6 @@ def execute_query(
     model_map = {
         "users": UserDB,
         "matches": MatchDB,
-        "conversations": ConversationDB,
-        "messages": MessageDB,
     }
 
     model = model_map.get(table)
@@ -274,7 +241,7 @@ def execute_query(
             query = session.query(model)
             for key, value in filters.items():
                 query = query.filter(getattr(model, key) == value)
-            query.update(data)
+            query.update(data)  # type: ignore
             session.commit()
             # Fetch updated records
             updated_query = session.query(model)
@@ -336,7 +303,7 @@ def _transform_user_data(data: Dict[str, Any]) -> Dict[str, Any]:
     return transformed
 
 
-def _model_to_dict(model) -> Dict[str, Any]:
+def _model_to_dict(model: Any) -> Dict[str, Any]:
     """Convert a SQLAlchemy model to a dictionary."""
     result = {c.name: getattr(model, c.name) for c in model.__table__.columns}
 

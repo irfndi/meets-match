@@ -66,7 +66,7 @@ This document outlines the core technologies, libraries, and tools used in the d
 
 ## Data Persistence
 
-* `PostgreSQL`: Structured data (users, profiles, matches, conversations, messages).
+* `PostgreSQL`: Structured data (users, profiles, matches).
 * `Redis` (optional): Ephemeral data (session state, rate limits, cache).
 * `Backups`: Use PostgreSQL backup tools/policies at the VPS level.
 

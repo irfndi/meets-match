@@ -10,9 +10,8 @@ class MockSettings:
     TELEGRAM_TOKEN: str = "test_token"
     TELEGRAM_BOT_TOKEN: str = "test_bot_token"
 
-    # Supabase Configuration
-    SUPABASE_URL: str = "https://test.supabase.co"
-    SUPABASE_KEY: str = "test_key"
+    # Database Configuration
+    DATABASE_URL: str = "postgresql://user:password@localhost:5432/meetsmatch"
 
     # Redis/KV Configuration
     REDIS_URL: str = "redis://localhost:6379/0"
@@ -35,3 +34,7 @@ class MockSettings:
 
 # Create a global mock settings instance
 settings = MockSettings()
+
+
+def get_settings():
+    return settings

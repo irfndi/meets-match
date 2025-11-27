@@ -1,8 +1,8 @@
 """Configuration management for the MeetMatch bot."""
 
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
-from pydantic import Field, validator
+from pydantic import Field, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -45,19 +45,21 @@ class Settings(BaseSettings):
     INTERESTS_WEIGHT: float = 0.5
     PREFERENCES_WEIGHT: float = 0.2
 
-    @validator("ENABLE_SENTRY", pre=True)
-    def set_enable_sentry(cls, v: Any, values: Dict[str, Any]) -> bool:
+    @field_validator("ENABLE_SENTRY", mode="before")
+    @classmethod
+    def set_enable_sentry(cls, v: Any, info: ValidationInfo) -> bool:
         """Enable Sentry if DSN is provided and explicitly enabled."""
         if isinstance(v, bool):
-            return v and values.get("SENTRY_DSN") is not None
-        return values.get("SENTRY_DSN") is not None and str(v).lower() == "true"
+            return v and info.data.get("SENTRY_DSN") is not None
+        return info.data.get("SENTRY_DSN") is not None and str(v).lower() == "true"
 
-    @validator("DEBUG", pre=True)
-    def set_debug(cls, v: Any, values: Dict[str, Any]) -> bool:
-        """Set debug mode based on environment."""
+    @field_validator("DEBUG", mode="before")
+    @classmethod
+    def set_debug(cls, v: Any, info: ValidationInfo) -> bool:
+        """Enable debug mode if ENVIRONMENT is development."""
         if isinstance(v, bool):
             return v
-        return values.get("ENVIRONMENT", "").lower() == "development"
+        return bool(info.data.get("ENVIRONMENT", "").lower() == "development")
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", case_sensitive=True, extra="ignore")
 

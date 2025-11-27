@@ -1,16 +1,9 @@
 """Matching service for the MeetMatch bot."""
 
-# TODO: Cloudflare Migration (D1/KV)
-# This service likely contains logic interacting with the database (Supabase/PostgreSQL)
-# to fetch user data for matching and potentially caching results (Redis).
-# All database read operations must be rewritten to use the Cloudflare D1 client API (via bindings).
-# All caching logic needs to be updated to use Cloudflare KV (via bindings).
-# Review all methods for persistence and caching logic.
-
 import uuid
-from typing import List, Optional
+from typing import Any, List, Optional
 
-from geopy.distance import geodesic
+from geopy.distance import geodesic  # type: ignore
 
 from src.config import settings
 from src.models.match import Match, MatchAction, MatchScore, MatchStatus, UserMatch
@@ -249,16 +242,18 @@ def get_potential_matches(user_id: str, limit: int = 10) -> List[User]:
     # Get existing matches
     existing_matches = get_user_matches(user_id)
 
-    # Filter out old rejections (recycle after 30 days)
-    # If a match was rejected more than 30 days ago, we allow it to be matched again
-    from datetime import datetime, timedelta
+    # Filter out old rejections and matches (recycle after 30 days)
+    # If a match was rejected or matched more than 30 days ago, we allow it to be matched again
+    from datetime import datetime, timedelta, timezone
 
-    recycle_threshold = datetime.utcnow() - timedelta(days=30)
+    recycle_threshold = datetime.now(timezone.utc) - timedelta(days=30)
 
     existing_match_ids = set()
     for match in existing_matches:
-        # specific logic: if rejected and old enough, don't add to exclusion list
-        if match.status == MatchStatus.REJECTED and match.updated_at < recycle_threshold:
+        # specific logic: if (rejected or matched) and old enough, don't add to exclusion list
+        if (
+            match.status == MatchStatus.REJECTED or match.status == MatchStatus.MATCHED
+        ) and match.updated_at < recycle_threshold:
             continue
 
         # Add to exclusion list
@@ -372,6 +367,57 @@ def create_match(user1_id: str, user2_id: str) -> Match:
     # Get users
     user1 = get_user(user1_id)
     user2 = get_user(user2_id)
+
+    # Check for existing match
+    existing_match_query = execute_query(
+        table="matches",
+        query_type="select",
+        filters={
+            "$or": [
+                {"user1_id": user1_id, "user2_id": user2_id},
+                {"user1_id": user2_id, "user2_id": user1_id},
+            ]
+        },
+    )
+
+    if existing_match_query.data:
+        existing_match = Match.model_validate(existing_match_query.data[0])
+
+        # Check if we should recycle this match
+        from datetime import datetime, timedelta, timezone
+
+        recycle_threshold = datetime.now(timezone.utc) - timedelta(days=30)
+
+        if (
+            existing_match.status in [MatchStatus.REJECTED, MatchStatus.MATCHED]
+            and existing_match.updated_at < recycle_threshold
+        ):
+            logger.info("Recycling existing match", match_id=existing_match.id)
+
+            # Reset match to PENDING state
+            existing_match.status = MatchStatus.PENDING
+            existing_match.user1_action = None
+            existing_match.user2_action = None
+            existing_match.matched_at = None
+            existing_match.updated_at = datetime.now(timezone.utc)
+
+            # Update in database
+            execute_query(
+                table="matches",
+                query_type="update",
+                filters={"id": existing_match.id},
+                data=existing_match.model_dump(),
+            )
+
+            return existing_match
+
+        logger.info(
+            "Match already exists",
+            match_id=existing_match.id,
+            user1_id=user1_id,
+            user2_id=user2_id,
+        )
+        return existing_match
 
     # Calculate match score
     score = calculate_match_score(user1, user2)
@@ -564,7 +610,7 @@ def get_user_matches(
     get_user(user_id)
 
     # Query database
-    filters = {
+    filters: dict[str, Any] = {
         "$or": [
             {"user1_id": user_id},
             {"user2_id": user_id},

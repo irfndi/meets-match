@@ -113,7 +113,7 @@ def get_cache(key: str, extend_ttl: Optional[int] = None) -> Optional[str]:
         return None
 
     try:
-        value = client.get(key)
+        value: Optional[str] = client.get(key)  # type: ignore
         if value and extend_ttl:
             client.expire(key, extend_ttl)
         return value
@@ -167,12 +167,15 @@ def delete_pattern(pattern: str) -> int:
     count = 0
     try:
         # Scan for keys to avoid blocking main thread with KEYS
-        cursor = "0"
-        while cursor != 0:
-            cursor, keys = client.scan(cursor=cursor, match=pattern, count=100)
+        cursor: Any = "0"
+        while True:
+            cursor, keys = client.scan(cursor=cursor, match=pattern, count=100)  # type: ignore
             if keys:
                 client.delete(*keys)
                 count += len(keys)
+
+            if str(cursor) == "0":
+                break
     except Exception as e:
         logger.warning("Failed to delete pattern", pattern=pattern, error=str(e))
 

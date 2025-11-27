@@ -1,13 +1,5 @@
 """User service for the MeetMatch bot."""
 
-# TODO: Cloudflare Migration (D1/KV/R2)
-# This service likely contains logic interacting with the database (Supabase/PostgreSQL)
-# for user CRUD, caching (Redis), and potentially file storage (S3 for photos).
-# - All database CRUD operations must be rewritten to use Cloudflare D1 (via bindings).
-# - All caching logic needs to be updated to use Cloudflare KV (via bindings).
-# - Any photo/file storage logic must be updated to use Cloudflare R2 (via bindings).
-# Review all methods for persistence, caching, and file storage logic.
-
 from datetime import datetime
 from typing import Dict, List, Optional, Union, cast
 
@@ -220,7 +212,7 @@ def get_user_location_text(user_id: str) -> Optional[str]:
     """
     try:
         user = get_user(user_id)
-        if getattr(user, "location", None) and getattr(user.location, "city", None):
+        if user.location and user.location.city:
             city = user.location.city or ""
             country = user.location.country or ""
             text = f"{city}, {country}".strip().rstrip(",")
@@ -354,3 +346,37 @@ def update_last_active(user_id: str) -> None:
     now = datetime.now()
     update_user(user_id, {"last_active": now})
     logger.debug("User last active updated", user_id=user_id, timestamp=now)
+
+
+def get_inactive_users(days_inactive: int) -> List[User]:
+    """Get users who have been inactive for exactly the specified number of days."""
+    from datetime import datetime, timedelta, timezone
+
+    # Calculate the time range for "exact" match (e.g., between X and X+1 days ago)
+    # We want users where (now - last_active) is close to days_inactive.
+    # So last_active should be between (now - days_inactive - 1) and (now - days_inactive)
+
+    # Example: If days_inactive=1 (yesterday)
+    # We want users active between 48h ago and 24h ago?
+    # Or simply: last_active < (now - days) AND last_active >= (now - days - 1)
+
+    now = datetime.now(timezone.utc)
+    end_date = now - timedelta(days=days_inactive)
+    start_date = end_date - timedelta(days=1)
+
+    # We use execute_query with range filters
+    # src/utils/database.py supports "__gte", "__lte", "__gt", "__lt"
+
+    # last_active >= start_date AND last_active < end_date
+    # means they were last active strictly within that 24h window X days ago.
+
+    result = execute_query(
+        table="users",
+        query_type="select",
+        filters={"last_active__gte": start_date, "last_active__lt": end_date, "is_active": True},
+    )
+
+    if not result.data:
+        return []
+
+    return [User.model_validate(u) for u in result.data]

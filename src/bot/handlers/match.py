@@ -1,13 +1,6 @@
 """Match handlers for the MeetMatch bot."""
 
-# TODO: Post-Cloudflare Migration Review
-# These handlers rely on the service layer (e.g., user_service, matching_service, conversation_service).
-# After the service layer is refactored to use Cloudflare D1/KV/R2:
-# 1. Review how Cloudflare bindings/context ('env') are passed to service calls, if needed.
-# 2. Update error handling if D1/KV/R2 exceptions differ from previous DB/cache exceptions.
-# 3. Check if data structures returned by service calls have changed.
-
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, ReplyKeyboardRemove, Update
 from telegram.ext import ContextTypes
 
 from src.bot.middleware import authenticated, profile_required, user_command_limiter
@@ -507,4 +500,28 @@ async def show_matches_page(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         await update.message.reply_text(
             message,
             reply_markup=reply_markup,
+        )
+
+
+async def reengagement_response(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle re-engagement response (1 🚀 or 2).
+
+    Args:
+        update: The update object
+        context: The context object
+    """
+    if not update.message or not update.message.text:
+        return
+
+    text = update.message.text.strip()
+
+    if text == "1 🚀":
+        # Start matching flow
+        await match_command(update, context)
+
+    elif text == "2":
+        # Dismiss
+        await update.message.reply_text(
+            "Okay, type /match when you're ready.",
+            reply_markup=ReplyKeyboardRemove(),
         )

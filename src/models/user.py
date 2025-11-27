@@ -1,17 +1,10 @@
 """User model for the MeetMatch bot."""
 
-# TODO: Cloudflare D1 Migration
-# These Pydantic models define the data structure and validation.
-# They are generally compatible with Cloudflare D1 which uses JSON objects.
-# However, the persistence logic (CRUD operations) that uses these models
-# (likely located in the 'src/services/' directory) needs to be rewritten
-# to use the Cloudflare D1 client API instead of Supabase/SQLAlchemy.
-
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List, Optional
+from typing import List, Optional
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, ValidationInfo, field_validator
 
 from src.utils.errors import ValidationError
 
@@ -57,13 +50,14 @@ class Preferences(BaseModel):
     preferred_country: Optional[str] = None
     premium_tier: Optional[str] = None
 
-    @validator("min_age", "max_age")
-    def validate_age_range(cls, v: Optional[int], values: Dict[str, int]) -> Optional[int]:
+    @field_validator("min_age", "max_age")
+    @classmethod
+    def validate_age_range(cls, v: Optional[int], info: ValidationInfo) -> Optional[int]:
         """Validate age range.
 
         Args:
             v: Age value
-            values: Previously validated values
+            info: Validation info containing other field values
 
         Returns:
             Validated age value
@@ -75,13 +69,16 @@ class Preferences(BaseModel):
             raise ValidationError("Age must be between 10 and 65")
 
         # Check min_age <= max_age if both are set
-        if "min_age" in values and values["min_age"] is not None and v is not None:
-            if values["min_age"] > v:
+        # We only check this when validating max_age, as min_age should be available then
+        if info.field_name == "max_age" and v is not None:
+            min_age = info.data.get("min_age")
+            if min_age is not None and min_age > v:
                 raise ValidationError("min_age must be less than or equal to max_age")
 
         return v
 
-    @validator("max_distance")
+    @field_validator("max_distance")
+    @classmethod
     def validate_distance(cls, v: Optional[int]) -> Optional[int]:
         """Validate distance range.
 
@@ -98,7 +95,8 @@ class Preferences(BaseModel):
             raise ValidationError("Distance must be between 1 and 500 kilometers")
         return v
 
-    @validator("premium_tier")
+    @field_validator("premium_tier")
+    @classmethod
     def validate_tier(cls, v: Optional[str]) -> Optional[str]:
         if v is None:
             return v
@@ -128,8 +126,10 @@ class User(BaseModel):
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
     last_active: datetime = Field(default_factory=datetime.now)
+    last_reminded_at: Optional[datetime] = None
 
-    @validator("age")
+    @field_validator("age")
+    @classmethod
     def validate_age(cls, v: Optional[int]) -> Optional[int]:
         """Validate user age.
 
@@ -146,7 +146,8 @@ class User(BaseModel):
             raise ValidationError("Age must be between 10 and 65")
         return v
 
-    @validator("interests")
+    @field_validator("interests")
+    @classmethod
     def validate_interests(cls, v: List[str]) -> List[str]:
         """Validate user interests.
 
@@ -170,7 +171,8 @@ class User(BaseModel):
 
         return unique_interests
 
-    @validator("photos")
+    @field_validator("photos")
+    @classmethod
     def validate_photos(cls, v: List[str]) -> List[str]:
         """Validate user photos.
 

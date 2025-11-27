@@ -1,13 +1,7 @@
 """Settings handlers for the MeetMatch bot."""
 
-# TODO: Post-Cloudflare Migration Review
-# These handlers rely on the service layer (e.g., user_service).
-# After the service layer is refactored to use Cloudflare D1/KV/R2:
-# 1. Review how Cloudflare bindings/context ('env') are passed to service calls, if needed.
-# 2. Update error handling if D1/KV/R2 exceptions differ from previous DB/cache exceptions.
-# 3. Check if data structures returned by service calls have changed.
-
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 
 from src.bot.middleware import authenticated, user_command_limiter
@@ -43,8 +37,12 @@ async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     await user_command_limiter()(update, context)
 
     # Clear any pending setting states to prevent interference
-    context.user_data.pop("awaiting_region", None)
-    context.user_data.pop("awaiting_language", None)
+    if context.user_data:
+        context.user_data.pop("awaiting_region", None)
+        context.user_data.pop("awaiting_language", None)
+
+    if not update.effective_user:
+        return
 
     user_id = str(update.effective_user.id)
 
@@ -79,21 +77,28 @@ async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 ),
             )
         elif update.callback_query:
-            await update.callback_query.edit_message_text(
-                SETTINGS_MESSAGE.format(
-                    region=region,
-                    language=language,
-                ),
-                parse_mode="Markdown",
-                reply_markup=InlineKeyboardMarkup(
-                    [
-                        [InlineKeyboardButton("🌍 Region", callback_data="settings_region")],
-                        [InlineKeyboardButton("🗣 Language", callback_data="settings_language")],
-                        [InlineKeyboardButton("💠 Premium", callback_data="settings_premium")],
-                        [InlineKeyboardButton("🔄 Reset to defaults", callback_data="settings_reset")],
-                    ]
-                ),
-            )
+            try:
+                await update.callback_query.edit_message_text(
+                    SETTINGS_MESSAGE.format(
+                        region=region,
+                        language=language,
+                    ),
+                    parse_mode="Markdown",
+                    reply_markup=InlineKeyboardMarkup(
+                        [
+                            [InlineKeyboardButton("🌍 Region", callback_data="settings_region")],
+                            [InlineKeyboardButton("🗣 Language", callback_data="settings_language")],
+                            [InlineKeyboardButton("💠 Premium", callback_data="settings_premium")],
+                            [InlineKeyboardButton("🔄 Reset to defaults", callback_data="settings_reset")],
+                        ]
+                    ),
+                )
+            except BadRequest as e:
+                if "Message is not modified" in str(e):
+                    # Ignore if message is not modified
+                    pass
+                else:
+                    raise e
 
     except Exception as e:
         logger.error(
@@ -104,8 +109,12 @@ async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         )
         if update.message:
             await update.message.reply_text("Sorry, something went wrong. Please try again later.")
-        elif update.callback_query:
-            await update.callback_query.message.reply_text("Sorry, something went wrong. Please try again later.")
+        elif update.callback_query and update.callback_query.message:
+            # Check if message is accessible (not InaccessibleMessage)
+            from telegram import Message
+
+            if isinstance(update.callback_query.message, Message):
+                await update.callback_query.message.reply_text("Sorry, something went wrong. Please try again later.")
 
 
 @authenticated
@@ -116,12 +125,17 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         update: The update object
         context: The context object
     """
+    if not update.callback_query or not update.effective_user:
+        return
+
     query = update.callback_query
     user_id = str(update.effective_user.id)
 
     try:
         await query.answer()
         callback_data = query.data
+        if not callback_data:
+            return
 
         if callback_data == "settings_region":
             await query.edit_message_text(
@@ -145,7 +159,8 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
         elif callback_data == "region_type":
             await query.edit_message_text("Please type your country name (e.g., Indonesia):")
-            context.user_data["awaiting_region"] = True
+            if context.user_data is not None:
+                context.user_data["awaiting_region"] = True
 
         elif callback_data == "settings_language":
             await query.edit_message_text(
@@ -166,7 +181,8 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
         elif callback_data == "language_type":
             await query.edit_message_text("Please type your language code (e.g., en, id):")
-            context.user_data["awaiting_language"] = True
+            if context.user_data is not None:
+                context.user_data["awaiting_language"] = True
 
         elif callback_data == "settings_age_range":
             # Show age range options
@@ -278,6 +294,8 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
 
 async def handle_region(update: Update, context: ContextTypes.DEFAULT_TYPE, country: str) -> None:
+    if not update.callback_query or not update.effective_user:
+        return
     query = update.callback_query
     user_id = str(update.effective_user.id)
 
@@ -298,7 +316,8 @@ async def handle_region(update: Update, context: ContextTypes.DEFAULT_TYPE, coun
         update_user(user_id, {"preferences": prefs.model_dump(), "location": user.location.model_dump()})
 
         # Clear awaiting state if it exists
-        context.user_data.pop("awaiting_region", None)
+        if context.user_data:
+            context.user_data.pop("awaiting_region", None)
 
         # Check if language is set
         if not prefs.preferred_language:
@@ -326,6 +345,8 @@ async def handle_region(update: Update, context: ContextTypes.DEFAULT_TYPE, coun
 
 
 async def handle_language(update: Update, context: ContextTypes.DEFAULT_TYPE, language_code: str) -> None:
+    if not update.callback_query or not update.effective_user:
+        return
     query = update.callback_query
     user_id = str(update.effective_user.id)
 
@@ -340,7 +361,8 @@ async def handle_language(update: Update, context: ContextTypes.DEFAULT_TYPE, la
         update_user_preferences(user_id, prefs)
 
         # Clear awaiting state if it exists
-        context.user_data.pop("awaiting_language", None)
+        if context.user_data:
+            context.user_data.pop("awaiting_language", None)
 
         # Check if region is set
         if not prefs.preferred_country:
@@ -377,6 +399,8 @@ async def handle_age_range(update: Update, context: ContextTypes.DEFAULT_TYPE, a
         age_type: Age type (min or max)
         age_value: Age value
     """
+    if not update.callback_query or not update.effective_user:
+        return
     query = update.callback_query
     user_id = str(update.effective_user.id)
 
@@ -420,6 +444,8 @@ async def handle_max_distance(update: Update, context: ContextTypes.DEFAULT_TYPE
         context: The context object
         distance: Distance value
     """
+    if not update.callback_query or not update.effective_user:
+        return
     query = update.callback_query
     user_id = str(update.effective_user.id)
 
@@ -462,6 +488,8 @@ async def handle_notifications(update: Update, context: ContextTypes.DEFAULT_TYP
         context: The context object
         enabled: Whether notifications are enabled
     """
+    if not update.callback_query or not update.effective_user:
+        return
     query = update.callback_query
     user_id = str(update.effective_user.id)
 
@@ -499,6 +527,8 @@ async def handle_reset_settings(update: Update, context: ContextTypes.DEFAULT_TY
         update: The update object
         context: The context object
     """
+    if not update.callback_query or not update.effective_user:
+        return
     query = update.callback_query
     user_id = str(update.effective_user.id)
 
@@ -546,6 +576,8 @@ Your current tier: {tier}
 @authenticated
 async def premium_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await user_command_limiter()(update, context)
+    if not update.effective_user or not update.message:
+        return
     user_id = str(update.effective_user.id)
     user = get_user(user_id)
     tier = "free"

@@ -1,12 +1,5 @@
 """Start command handlers for the MeetMatch bot."""
 
-# TODO: Post-Cloudflare Migration Review
-# These handlers rely on the service layer (e.g., user_service).
-# After the service layer is refactored to use Cloudflare D1/KV/R2:
-# 1. Review how Cloudflare bindings/context ('env') are passed to service calls, if needed.
-# 2. Update error handling if D1/KV/R2 exceptions differ from previous DB/cache exceptions.
-# 3. Check if data structures returned by service calls have changed.
-
 from telegram import Update
 from telegram.ext import ContextTypes
 
@@ -44,6 +37,9 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     # Apply rate limiting
     await user_command_limiter()(update, context)
 
+    if not update.effective_user or not update.message:
+        return
+
     user_id = str(update.effective_user.id)
     username = update.effective_user.username
     first_name = update.effective_user.first_name
@@ -55,14 +51,14 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
         # Update user data if needed
         if (username and username != user.username) or (first_name and first_name != user.first_name):
-            update_user(
-                user_id,
-                {
-                    "username": username or user.username,
-                    "first_name": first_name or user.first_name,
-                    "last_active": "now()",
-                },
-            )
+            from typing import Any, Dict
+
+            update_data: Dict[str, Any] = {
+                "username": username or user.username or "",
+                "first_name": first_name or user.first_name or "",
+                "last_active": "now()",
+            }
+            update_user(user_id, update_data)
 
         # Check for missing region or language
         missing_region = not (

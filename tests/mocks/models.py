@@ -1,9 +1,7 @@
 """Mock models for testing."""
 
-import uuid
-from datetime import datetime
 from enum import Enum
-from typing import ClassVar, List
+from typing import List
 
 from .base import Model
 
@@ -23,24 +21,6 @@ class RelationshipType(str, Enum):
     DATING = "dating"
     BUSINESS = "business"
     MENTORSHIP = "mentorship"
-
-
-class ConversationStatus(str, Enum):
-    """Mock conversation status enum."""
-
-    ACTIVE = "active"
-    INACTIVE = "inactive"
-    BLOCKED = "blocked"
-
-
-class MessageType(str, Enum):
-    """Mock message type enum."""
-
-    TEXT = "text"
-    IMAGE = "image"
-    AUDIO = "audio"
-    VIDEO = "video"
-    DOCUMENT = "document"
 
 
 # Mock model classes
@@ -114,33 +94,6 @@ class Preferences(Model):
             created_at="2023-01-01T00:00:00Z",
             updated_at="2023-01-01T00:00:00Z",
         )
-
-
-class Conversation(Model):
-    """Mock conversation model."""
-
-    instances: ClassVar[List["Conversation"]] = []
-
-    def __init__(self):
-        super().__init__(id=str(uuid.uuid4()), messages=[])
-        Conversation.instances.append(self)
-
-
-class Message(Model):
-    """Mock message model."""
-
-    def __init__(self, content: str = "Test message", sender_id: str = "user123"):
-        super().__init__(content=content, sender_id=sender_id, created_at=datetime.now())
-
-    @classmethod
-    async def create(cls, conversation_id, content, sender_id):
-        new_message = cls(content, sender_id)
-        for conv in Conversation.instances:
-            if conv.id == conversation_id:
-                conv.messages.append(new_message)
-                new_message.conversation_id = conversation_id
-                break
-        return new_message
 
 
 class Match(Model):

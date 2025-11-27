@@ -5,12 +5,12 @@ import mimetypes
 from functools import lru_cache
 from typing import Tuple
 
-import magic
+import magic  # type: ignore
 from PIL import Image
 
 
 class MediaValidator:
-    def __init__(self):
+    def __init__(self) -> None:
         # TODO: Consider making these configurable via src/config.py
         self.max_image_size_bytes = 5 * 1024 * 1024  # 5MB
         self.max_video_size_bytes = 20 * 1024 * 1024  # 20MB

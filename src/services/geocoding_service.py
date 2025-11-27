@@ -1,8 +1,8 @@
 import asyncio
 import math
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
-from geopy.geocoders import Nominatim
+from geopy.geocoders import Nominatim  # type: ignore
 
 _geocoder = Nominatim(user_agent="meetsmatch-bot/1.0")
 
@@ -22,7 +22,7 @@ def _extract_city_country(address: Dict[str, str]) -> Dict[str, Optional[str]]:
     return {"city": city, "country": country}
 
 
-async def geocode_city(city_text: str, language: str = "en") -> Optional[Dict[str, Optional[str]]]:
+async def geocode_city(city_text: str, language: str = "en") -> Optional[Dict[str, Any]]:
     query = city_text.strip()
     if not query:
         return None
@@ -87,7 +87,7 @@ async def search_cities(
     language: str = "en",
     prefer_country: Optional[str] = None,
     prefer_coords: Optional[Tuple[float, float]] = None,
-) -> List[Dict[str, Optional[str]]]:
+) -> List[Dict[str, Any]]:
     query = query_text.strip()
     if not query:
         return []
@@ -103,7 +103,7 @@ async def search_cities(
         if not results:
             return []
         seen = set()
-        candidates: List[Dict[str, Optional[str]]] = []
+        candidates: List[Dict[str, Any]] = []
         for r in results:
             address = r.raw.get("address", {})
             info = _extract_city_country(address)
@@ -127,13 +127,16 @@ async def search_cities(
                 break
         if prefer_country or prefer_coords:
 
-            def sort_key(c: Dict[str, Optional[str]]):
-                country_match = 0
-                if prefer_country and c.get("country") and c["country"].lower() == prefer_country.lower():
-                    country_match = 1
+            def sort_key(c: Dict[str, Any]) -> Tuple[float, float]:
+                country_match = 0.0
+                country_val = c.get("country")
+                if prefer_country and country_val and str(country_val).lower() == prefer_country.lower():
+                    country_match = 1.0
                 dist = 1e9
-                if prefer_coords and c.get("latitude") is not None and c.get("longitude") is not None:
-                    dist = _distance_km(prefer_coords[0], prefer_coords[1], float(c["latitude"]), float(c["longitude"]))
+                lat = c.get("latitude")
+                lon = c.get("longitude")
+                if prefer_coords and lat is not None and lon is not None:
+                    dist = _distance_km(prefer_coords[0], prefer_coords[1], float(lat), float(lon))
                 return (-country_match, dist)
 
             candidates.sort(key=sort_key)
@@ -142,7 +145,7 @@ async def search_cities(
         return []
 
 
-async def reverse_geocode_coordinates(latitude: float, longitude: float) -> Optional[Dict[str, Optional[str]]]:
+async def reverse_geocode_coordinates(latitude: float, longitude: float) -> Optional[Dict[str, Any]]:
     try:
         result = await asyncio.to_thread(
             _geocoder.reverse,

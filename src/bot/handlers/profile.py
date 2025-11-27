@@ -1,14 +1,8 @@
 """Profile management handlers for the MeetMatch bot."""
 
-# TODO: Post-Cloudflare Migration Review
-# These handlers rely on the service layer (e.g., user_service, conversation_service).
-# After the service layer is refactored to use Cloudflare D1/KV/R2:
-# 1. Review how Cloudflare bindings/context ('env') are passed to service calls, if needed.
-# 2. Update error handling if D1/KV/R2 exceptions differ from previous DB/cache exceptions.
-# 3. Check if data structures returned by service calls have changed.
-# 4. Ensure photo handling logic aligns with R2 implementation in user_service.
+from typing import Any
 
-from telegram import ReplyKeyboardMarkup, Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, PhotoSize, ReplyKeyboardMarkup, Update, Video
 from telegram.ext import ContextTypes
 
 from src.bot.handlers.match import match_command
@@ -25,7 +19,7 @@ from src.bot.ui.keyboards import (
     skip_keyboard,
 )
 from src.config import settings
-from src.models.user import Gender
+from src.models.user import Gender, User
 from src.services.geocoding_service import geocode_city, reverse_geocode_coordinates
 from src.services.user_service import get_user, get_user_location_text, update_user
 from src.utils.logging import get_logger
@@ -98,7 +92,7 @@ REQUIRED_FIELDS = ["name", "age"]
 RECOMMENDED_FIELDS = ["gender", "bio", "interests", "location"]
 
 
-def get_missing_required_fields(user) -> list:
+def get_missing_required_fields(user: User) -> list[str]:
     """Get list of missing required fields for a user."""
     missing = []
     if not user.first_name:
@@ -108,7 +102,7 @@ def get_missing_required_fields(user) -> list:
     return missing
 
 
-def get_missing_recommended_fields(user) -> list:
+def get_missing_recommended_fields(user: User) -> list[str]:
     """Get list of missing recommended fields for a user."""
     missing = []
     if not user.gender:
@@ -122,7 +116,7 @@ def get_missing_recommended_fields(user) -> list:
     return missing
 
 
-def check_and_update_profile_complete(user_id: str, context: ContextTypes.DEFAULT_TYPE = None) -> bool:
+def check_and_update_profile_complete(user_id: str, context: ContextTypes.DEFAULT_TYPE | None = None) -> bool:
     """Check if profile is complete and update the flag if needed.
 
     Profile is considered complete when all REQUIRED fields are filled.
@@ -408,14 +402,11 @@ async def gender_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         user_id = str(update.effective_user.id)
         user = get_user(user_id)
         cur = None
-        try:
-            cur = (
-                user.gender.name.capitalize()
-                if getattr(user, "gender", None) and hasattr(user.gender, "name")
-                else (str(user.gender) if getattr(user, "gender", None) else None)
-            )
-        except Exception:
-            cur = str(getattr(user, "gender", "")) or None
+        if user.gender and isinstance(user.gender, Gender):
+            cur = user.gender.name.capitalize()
+        elif user.gender:
+            cur = str(user.gender)
+
         prompt = (
             GENDER_UPDATE_MESSAGE
             if not cur
@@ -724,7 +715,7 @@ async def location_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
         geo = await reverse_geocode_coordinates(latitude, longitude)
 
-        location_data = {
+        location_data: dict[str, Any] = {
             "location_latitude": latitude,
             "location_longitude": longitude,
             "location_city": (geo or {}).get("city") or "Unknown City",
@@ -809,7 +800,7 @@ async def process_manual_location(update: Update, context: ContextTypes.DEFAULT_
             )
             return
 
-        location_data = {
+        location_data: dict[str, Any] = {
             "location_latitude": geo["latitude"],
             "location_longitude": geo["longitude"],
             "location_city": geo["city"],
@@ -932,14 +923,10 @@ async def _next_profile_step(update: Update, context: ContextTypes.DEFAULT_TYPE)
         user_id = str(update.effective_user.id)
         user = get_user(user_id)
         cur = None
-        try:
-            cur = (
-                user.gender.name.capitalize()
-                if getattr(user, "gender", None) and hasattr(user.gender, "name")
-                else (str(user.gender) if getattr(user, "gender", None) else None)
-            )
-        except Exception:
-            cur = str(getattr(user, "gender", "")) or None
+        if user.gender and isinstance(user.gender, Gender):
+            cur = user.gender.name.capitalize()
+        elif user.gender:
+            cur = str(user.gender)
         prompt = (
             GENDER_UPDATE_MESSAGE
             if not cur
@@ -1011,19 +998,35 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     text = update.message.text.strip()
 
     if context.user_data.get(STATE_PROFILE_MENU):
-        if text.startswith("1") or text == "🔎 Browse Profiles":
+        if text.startswith("1") or text == "👤 View Profile":
+            # Show own profile
+            user_id = str(update.effective_user.id)
+            user = get_user(user_id)
+            profile_text = VIEW_PROFILE_TEMPLATE.format(
+                name=user.first_name,
+                age=user.age,
+                gender=user.gender.value.capitalize()
+                if isinstance(user.gender, Gender)
+                else (user.gender or "Not specified"),
+                bio=user.bio or "No bio yet.",
+                interests=", ".join(user.interests) if user.interests else "No interests listed.",
+                location=get_user_location_text(user.id) or "Location hidden",
+            )
+            await update.message.reply_text(profile_text, reply_markup=profile_main_menu())
+            return
+        if text == "🔎 Browse Profiles":
             await match_command(update, context)
             return
-        if text == "2" or text == "🛠 Edit Profile":
+        if text.startswith("2") or text == "🛠 Edit Profile":
             context.user_data.pop(STATE_PROFILE_MENU, None)
             await start_profile_setup(update, context)
             return
-        if text == "3" or text == "🖼 Update Photo":
+        if text.startswith("3") or text == "🖼 Update Photo":
             context.user_data.pop(STATE_PROFILE_MENU, None)
             context.user_data[STATE_AWAITING_PHOTO] = True
             await update.message.reply_text("Send a photo to update your profile.")
             return
-        if text == "4" or text == "✏️ Update Bio":
+        if text.startswith("4") or text == "✏️ Update Bio":
             context.user_data.pop(STATE_PROFILE_MENU, None)
             context.user_data[STATE_AWAITING_BIO] = True
             user_id = str(update.effective_user.id)
@@ -1171,6 +1174,13 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             parts = [p.strip() for p in text.split(",")]
             if len(parts) >= 2 and parts[0] and parts[1]:
                 await process_manual_location(update, context, text)
+                return
+
+        # Default response for unhandled text
+        await update.message.reply_text(
+            "I didn't understand that. Please use the menu commands or /help to see what I can do.",
+            reply_markup=main_menu(),
+        )
 
 
 @authenticated
@@ -1180,22 +1190,25 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         return
 
     user_id = str(update.effective_user.id)
-    file_obj = None
+    file_obj: PhotoSize | Video | None = None
     file_ext = "jpg"
 
     if update.message.photo:
         file_obj = update.message.photo[-1]
     elif update.message.video:
-        file_obj = update.message.video
+        video_obj = update.message.video
+        file_obj = video_obj
         file_ext = "mp4"  # Default video ext
-        if file_obj.mime_type:
-            ext = file_obj.mime_type.split("/")[-1]
+        if video_obj.mime_type:
+            ext = video_obj.mime_type.split("/")[-1]
             if ext:
                 file_ext = ext
     else:
         return
 
     try:
+        if file_obj is None:
+            return
         new_file = await file_obj.get_file()
         byte_array = await new_file.download_as_bytearray()
 
@@ -1221,3 +1234,53 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     context.user_data.pop(STATE_AWAITING_PHOTO, None)
     context.user_data["user"] = get_user(user_id)
     await update.message.reply_text("✅ Profile photo updated.")
+
+
+VIEW_PROFILE_TEMPLATE = """
+👤 {name}, {age}
+⚧ {gender}
+
+�� {bio}
+
+🌟 Interests: {interests}
+
+📍 {location}
+"""
+
+
+async def view_profile_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle viewing another user's profile."""
+    if not update.callback_query:
+        return
+
+    query = update.callback_query
+    await query.answer()
+
+    data = query.data
+    if not data or not data.startswith("view_profile_"):
+        return
+
+    target_user_id = data.split("_")[-1]
+
+    try:
+        target_user = get_user(target_user_id)
+
+        profile_text = VIEW_PROFILE_TEMPLATE.format(
+            name=target_user.first_name,
+            age=target_user.age,
+            gender=target_user.gender.value.capitalize()
+            if isinstance(target_user.gender, Gender)
+            else (target_user.gender or "Not specified"),
+            bio=target_user.bio or "No bio yet.",
+            interests=", ".join(target_user.interests) if target_user.interests else "No interests listed.",
+            location=get_user_location_text(target_user.id) or "Location hidden",
+        )
+
+        # We can add a "Back" button that goes back to matches list
+        keyboard = [[InlineKeyboardButton("🔙 Back to Matches", callback_data="back_to_matches")]]
+
+        await query.edit_message_text(text=profile_text, reply_markup=InlineKeyboardMarkup(keyboard))
+
+    except Exception as e:
+        logger.error("Error viewing profile", target_user_id=target_user_id, error=str(e))
+        await query.edit_message_text("Could not load profile.")

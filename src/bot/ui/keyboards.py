@@ -65,6 +65,14 @@ def location_keyboard() -> ReplyKeyboardMarkup:
     )
 
 
+def reengagement_keyboard() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        [["1 🚀", "2"]],
+        resize_keyboard=True,
+        one_time_keyboard=True,
+    )
+
+
 def location_optional_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         [[KeyboardButton(text="Share Location", request_location=True)], ["Skip"]],
@@ -85,13 +93,6 @@ def skip_cancel_keyboard(placeholder: str | None = None) -> ReplyKeyboardMarkup:
 def no_matches_menu() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         [["/profile", "/settings"], ["/matches", "/help"]],
-        resize_keyboard=True,
-    )
-
-
-def chat_nav_menu() -> ReplyKeyboardMarkup:
-    return ReplyKeyboardMarkup(
-        [["/matches", "/match"], ["/profile", "/help"]],
         resize_keyboard=True,
     )
 

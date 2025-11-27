@@ -39,7 +39,7 @@ def save_media(file_content: bytes, user_id: str, file_ext: str = "jpg") -> str:
     # Compress image if it's an image
     if file_ext.lower() in ["jpg", "jpeg", "png"]:
         try:
-            image = Image.open(io.BytesIO(file_content))
+            image: Image.Image = Image.open(io.BytesIO(file_content))
             # Convert to RGB if needed (e.g. for PNG with transparency)
             if image.mode in ("RGBA", "P"):
                 image = image.convert("RGB")

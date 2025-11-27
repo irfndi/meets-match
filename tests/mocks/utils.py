@@ -17,6 +17,10 @@ logger.debug = MagicMock()
 logger.exception = MagicMock()
 
 
+def get_logger(name=None):
+    return logger
+
+
 # Mock error classes
 class ValidationError(Exception):
     """Mock validation error."""
@@ -38,5 +42,41 @@ class NotFoundError(Exception):
 
 class ServiceError(Exception):
     """Mock service error."""
+
+    pass
+
+
+class DatabaseError(Exception):
+    """Mock database error."""
+
+    pass
+
+
+class ConfigurationError(Exception):
+    """Mock configuration error."""
+
+    pass
+
+
+class ExternalServiceError(Exception):
+    """Mock external service error."""
+
+    pass
+
+
+class MatchingError(Exception):
+    """Mock matching error."""
+
+    pass
+
+
+class MeetMatchError(Exception):
+    """Mock base error."""
+
+    pass
+
+
+class RateLimitError(Exception):
+    """Mock rate limit error."""
 
     pass
