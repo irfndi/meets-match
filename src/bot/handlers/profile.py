@@ -22,10 +22,24 @@ from src.config import settings
 from src.models.user import Gender, User
 from src.services.geocoding_service import geocode_city, reverse_geocode_coordinates
 from src.services.user_service import get_user, get_user_location_text, update_user
+from src.utils.cache import delete_cache, set_cache
 from src.utils.logging import get_logger
 from src.utils.media import delete_media, save_media
 
 logger = get_logger(__name__)
+
+USER_EDITING_STATE_KEY = "user:editing:{user_id}"
+
+
+def set_user_editing_state(user_id: str, is_editing: bool) -> None:
+    """Set the user's editing state in Redis."""
+    key = USER_EDITING_STATE_KEY.format(user_id=user_id)
+    if is_editing:
+        # Set with 1 hour expiration in case they abandon the session
+        set_cache(key, "1", expiration=3600)
+    else:
+        delete_cache(key)
+
 
 # Profile command messages
 PROFILE_COMPLETE_MESSAGE = """
@@ -160,55 +174,75 @@ async def prompt_for_next_missing_field(update: Update, context: ContextTypes.DE
     if context.user_data is None:
         logger.error("context.user_data is None in prompt_for_next_missing_field")
         return False
-    if not update.message:
-        logger.error("update.message is None in prompt_for_next_missing_field")
+    if not update.effective_message:
+        logger.error("update.effective_message is None in prompt_for_next_missing_field")
         return False
 
     user = get_user(user_id)
     missing_required = get_missing_required_fields(user)
     missing_recommended = get_missing_recommended_fields(user)
+    skipped_fields = context.user_data.get("skipped_profile_fields", [])
 
     if not missing_required:
         context.user_data.pop(STATE_ADHOC_CONTINUE, None)
         check_and_update_profile_complete(user_id, context)
 
-        if not missing_recommended:
-            await update.message.reply_text(
-                "🎉 Your profile is fully complete! You can start matching with /match!",
-                reply_markup=ReplyKeyboardMarkup(
-                    [["/profile", "/match"], ["/matches", "/help"]],
-                    resize_keyboard=True,
-                ),
-            )
-        else:
-            missing_labels = [f.capitalize() for f in missing_recommended]
-            await update.message.reply_text(
-                f"✅ Your profile is ready for matching! You can start with /match now.\n\n"
-                f"Optional fields you can still add: {', '.join(missing_labels)}\n"
-                f"Use /profile to add them anytime!",
-                reply_markup=ReplyKeyboardMarkup(
-                    [["/profile", "/match"], ["/matches", "/help"]],
-                    resize_keyboard=True,
-                ),
-            )
+        # Also check recommended fields (which are required for matching eligibility)
+        # Filter out fields that have been explicitly skipped in this session
+        remaining_recommended = [f for f in missing_recommended if f not in skipped_fields]
+
+        if remaining_recommended:
+            next_field = remaining_recommended[0]
+            field_label = next_field.capitalize()
+
+            # Allow skipping bio if it's the only thing missing?
+            # But let's prompt for it as part of the flow.
+
+            context.user_data[STATE_ADHOC_CONTINUE] = True
+
+            if next_field == "gender":
+                await update.effective_message.reply_text(GENDER_UPDATE_MESSAGE, reply_markup=gender_keyboard())
+                return True
+            elif next_field == "bio":
+                context.user_data[STATE_AWAITING_BIO] = True
+                await update.effective_message.reply_text(
+                    BIO_UPDATE_MESSAGE, reply_markup=skip_keyboard("Write a short bio")
+                )
+                return True
+            elif next_field == "interests":
+                context.user_data[STATE_AWAITING_INTERESTS] = True
+                await update.effective_message.reply_text(
+                    INTERESTS_UPDATE_MESSAGE, reply_markup=skip_keyboard("music, travel, cooking")
+                )
+                return True
+            elif next_field == "location":
+                context.user_data["awaiting_location"] = True
+                await update.effective_message.reply_text(LOCATION_UPDATE_MESSAGE, reply_markup=location_keyboard())
+                return True
+
+        # All fields (required + recommended) are done or skipped
+        await update.effective_message.reply_text(
+            "🎉 Your profile is fully complete! You can start matching with /match!",
+            reply_markup=main_menu(),
+        )
         return False
 
     context.user_data[STATE_ADHOC_CONTINUE] = True
 
     next_field = missing_required[0]
     field_label = next_field.capitalize()
-    await update.message.reply_text(
+    await update.effective_message.reply_text(
         f"Your profile still needs: {field_label}\n\nLet's complete it now!",
     )
 
     if next_field == "name":
         context.user_data[STATE_AWAITING_NAME] = True
-        await update.message.reply_text(
+        await update.effective_message.reply_text(
             NAME_UPDATE_MESSAGE, reply_markup=ReplyKeyboardMarkup([["Cancel"]], resize_keyboard=True)
         )
     elif next_field == "age":
         context.user_data[STATE_AWAITING_AGE] = True
-        await update.message.reply_text(
+        await update.effective_message.reply_text(
             AGE_UPDATE_MESSAGE, reply_markup=ReplyKeyboardMarkup([["Cancel"]], resize_keyboard=True)
         )
 
@@ -769,6 +803,11 @@ async def process_manual_location(update: Update, context: ContextTypes.DEFAULT_
         if in_profile_setup:
             await _next_profile_step(update, context)
         else:
+            skipped = context.user_data.get("skipped_profile_fields", [])
+            if "location" not in skipped:
+                skipped.append("location")
+                context.user_data["skipped_profile_fields"] = skipped
+
             await prompt_for_next_missing_field(update, context, user_id)
         return
 
@@ -832,7 +871,7 @@ async def process_manual_location(update: Update, context: ContextTypes.DEFAULT_
         await update.message.reply_text("Sorry, something went wrong. Please try again or share your location.")
 
 
-def clear_conversation_state(context: ContextTypes.DEFAULT_TYPE) -> None:
+def clear_conversation_state(context: ContextTypes.DEFAULT_TYPE, user_id: str | None = None) -> None:
     """Clear all conversation states."""
     if context.user_data is None:
         return
@@ -844,9 +883,14 @@ def clear_conversation_state(context: ContextTypes.DEFAULT_TYPE) -> None:
         STATE_ADHOC_CONTINUE,
         "awaiting_gender",
         "awaiting_location",
+        "skipped_profile_fields",
     ]
     for state in states_to_clear:
         context.user_data.pop(state, None)
+
+    # Also clear the editing state in Redis
+    if user_id:
+        set_user_editing_state(user_id, False)
 
 
 PROFILE_STEPS = ["name", "age", "gender", "bio", "interests", "location"]
@@ -863,9 +907,9 @@ async def _next_profile_step(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if next_step >= len(PROFILE_STEPS):
         # Profile setup complete
         context.user_data.pop(STATE_PROFILE_SETUP, None)
-        clear_conversation_state(context)
-
         user_id = str(update.effective_user.id)
+        clear_conversation_state(context, user_id=user_id)
+
         user = get_user(user_id)
         missing_required = get_missing_required_fields(user)
 
@@ -886,6 +930,9 @@ async def _next_profile_step(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     context.user_data[STATE_PROFILE_SETUP] = next_step
     step_name = PROFILE_STEPS[next_step]
+
+    # Set editing state in Redis
+    set_user_editing_state(str(update.effective_user.id), True)
 
     # Trigger the appropriate command
     if step_name == "name":
@@ -976,10 +1023,11 @@ async def _next_profile_step(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 async def start_profile_setup(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Start the guided profile setup flow."""
-    if not update.message or context.user_data is None:
+    if not update.message or context.user_data is None or not update.effective_user:
         return
 
-    clear_conversation_state(context)
+    user_id = str(update.effective_user.id)
+    clear_conversation_state(context, user_id=user_id)
     context.user_data[STATE_PROFILE_SETUP] = -1  # Will be incremented to 0
 
     await update.message.reply_text(
@@ -1024,12 +1072,14 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         if text.startswith("3") or text == "🖼 Update Photo":
             context.user_data.pop(STATE_PROFILE_MENU, None)
             context.user_data[STATE_AWAITING_PHOTO] = True
+            set_user_editing_state(str(update.effective_user.id), True)
             await update.message.reply_text("Send a photo to update your profile.")
             return
         if text.startswith("4") or text == "✏️ Update Bio":
             context.user_data.pop(STATE_PROFILE_MENU, None)
             context.user_data[STATE_AWAITING_BIO] = True
             user_id = str(update.effective_user.id)
+            set_user_editing_state(user_id, True)
             user = get_user(user_id)
             cur = getattr(user, "bio", None)
             prompt = (
@@ -1042,7 +1092,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     # Handle cancel
     if text.lower() == "cancel":
-        clear_conversation_state(context)
+        clear_conversation_state(context, user_id=str(update.effective_user.id))
         context.user_data.pop(STATE_PROFILE_SETUP, None)
         context.user_data.pop(STATE_ADHOC_CONTINUE, None)
         await update.message.reply_text(
@@ -1138,6 +1188,12 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     elif context.user_data.get("awaiting_gender"):
         if text.lower() == "skip":
             context.user_data.pop("awaiting_gender", None)
+
+            skipped = context.user_data.get("skipped_profile_fields", [])
+            if "gender" not in skipped:
+                skipped.append("gender")
+                context.user_data["skipped_profile_fields"] = skipped
+
             await prompt_for_next_missing_field(update, context, user_id)
             return
         await process_gender_selection(update, context, text)
@@ -1145,6 +1201,12 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     elif context.user_data.get(STATE_AWAITING_BIO):
         if text.lower() == "skip":
             context.user_data.pop(STATE_AWAITING_BIO, None)
+
+            skipped = context.user_data.get("skipped_profile_fields", [])
+            if "bio" not in skipped:
+                skipped.append("bio")
+                context.user_data["skipped_profile_fields"] = skipped
+
             await prompt_for_next_missing_field(update, context, user_id)
             return
         success = await _save_bio(update, context, text)
@@ -1154,6 +1216,12 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     elif context.user_data.get(STATE_AWAITING_INTERESTS):
         if text.lower() == "skip":
             context.user_data.pop(STATE_AWAITING_INTERESTS, None)
+
+            skipped = context.user_data.get("skipped_profile_fields", [])
+            if "interests" not in skipped:
+                skipped.append("interests")
+                context.user_data["skipped_profile_fields"] = skipped
+
             await prompt_for_next_missing_field(update, context, user_id)
             return
         success = await _save_interests(update, context, text)
@@ -1165,6 +1233,12 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     elif context.user_data.get("awaiting_location"):
         if text.lower() == "skip":
             context.user_data.pop("awaiting_location", None)
+
+            skipped = context.user_data.get("skipped_profile_fields", [])
+            if "location" not in skipped:
+                skipped.append("location")
+                context.user_data["skipped_profile_fields"] = skipped
+
             await prompt_for_next_missing_field(update, context, user_id)
             return
         await process_manual_location(update, context, text)

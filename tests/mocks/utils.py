@@ -3,10 +3,10 @@
 from unittest.mock import AsyncMock, MagicMock
 
 # Mock cache functions
-get_cache = AsyncMock()
-set_cache = AsyncMock()
-delete_cache = AsyncMock()
-get_cache_model = AsyncMock()
+get_cache = MagicMock()
+set_cache = MagicMock()
+delete_cache = MagicMock()
+get_cache_model = MagicMock()
 
 # Mock logger
 logger = MagicMock()

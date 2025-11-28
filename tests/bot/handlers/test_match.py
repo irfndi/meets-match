@@ -56,7 +56,7 @@ def mock_dependencies(match_handler_module):
     """Mock external dependencies."""
     mock_get_user = MagicMock()
     mock_get_potential = MagicMock()
-    mock_create_match = MagicMock()
+    mock_get_match_by_id = MagicMock()
     mock_like_match = MagicMock()
     mock_dislike_match = MagicMock()
     mock_get_active = MagicMock()
@@ -68,10 +68,12 @@ def mock_dependencies(match_handler_module):
 
     # Mock UI helpers
     mock_no_matches_menu = MagicMock()
+    mock_create_match = MagicMock()
 
     with (
         patch.object(match_handler_module, "get_user", mock_get_user),
         patch.object(match_handler_module, "get_potential_matches", mock_get_potential),
+        patch.object(match_handler_module, "get_match_by_id", mock_get_match_by_id),
         patch.object(match_handler_module, "create_match", mock_create_match),
         patch.object(match_handler_module, "like_match", mock_like_match),
         patch.object(match_handler_module, "dislike_match", mock_dislike_match),
@@ -84,6 +86,7 @@ def mock_dependencies(match_handler_module):
         yield {
             "get_user": mock_get_user,
             "get_potential_matches": mock_get_potential,
+            "get_match_by_id": mock_get_match_by_id,
             "create_match": mock_create_match,
             "like_match": mock_like_match,
             "dislike_match": mock_dislike_match,
@@ -146,20 +149,33 @@ async def test_match_command_with_match(match_handler_module, mock_dependencies,
 
     # Mock user
     mock_user = MagicMock()
+    mock_user.first_name = "Jane"
+    mock_user.age = 25
+    mock_user.gender.value = "Female"
+    mock_user.bio = "Hello"
+    mock_user.interests = ["Music"]
+    mock_user.location.city = "Jakarta"
+    mock_user.location.country = "Indonesia"
+
     mock_deps["get_user"].return_value = mock_user
 
-    # Mock potential match
-    mock_match = MagicMock()
-    mock_match.id = "67890"
-    mock_match.first_name = "Jane"
-    mock_match.age = 25
-    mock_match.gender.value = "Female"
-    mock_match.bio = "Hello"
-    mock_match.interests = ["Music"]
-    mock_match.location.city = "Jakarta"
-    mock_match.location.country = "Indonesia"
+    # Mock potential match (User object)
+    mock_match_user = MagicMock()
+    mock_match_user.id = "67890"
+    mock_match_user.first_name = "Jane"
+    mock_match_user.age = 25
+    mock_match_user.gender.value = "Female"
+    mock_match_user.bio = "Hello"
+    mock_match_user.interests = ["Music"]
+    mock_match_user.location.city = "Jakarta"
+    mock_match_user.location.country = "Indonesia"
 
-    mock_deps["get_potential_matches"].return_value = [mock_match]
+    mock_deps["get_potential_matches"].return_value = [mock_match_user]
+
+    # Mock create_match return value
+    mock_created_match = MagicMock()
+    mock_created_match.id = "match_abc"
+    mock_deps["create_match"].return_value = mock_created_match
 
     await match_handler_module.match_command(update, context)
 
@@ -177,17 +193,20 @@ async def test_handle_like_match(match_handler_module, mock_dependencies, mock_u
     update, context = mock_update_context
     mock_deps = mock_dependencies
 
-    update.callback_query.data = "like_user_67890"
+    update.callback_query.data = "like_match_123"
 
     # Mock target user
     mock_target = MagicMock()
     mock_target.first_name = "Jane"
+    mock_target.id = "target_123"
     mock_deps["get_user"].return_value = mock_target
 
-    # Mock match creation
+    # Mock match retrieval
     mock_match = MagicMock()
     mock_match.id = "match_123"
-    mock_deps["create_match"].return_value = mock_match
+    mock_match.user1_id = "12345"
+    mock_match.user2_id = "target_123"
+    mock_deps["get_match_by_id"].return_value = mock_match
 
     # Mock like (not mutual)
     mock_deps["like_match"].return_value = False
@@ -195,7 +214,7 @@ async def test_handle_like_match(match_handler_module, mock_dependencies, mock_u
     await match_handler_module.match_callback(update, context)
 
     # Verify like_match called
-    mock_deps["like_match"].assert_called_with("match_123", "12345")
+    mock_deps["like_match"].assert_called_with("match_123")
 
     # Verify confirmation message
     update.callback_query.edit_message_text.assert_called()
@@ -208,17 +227,20 @@ async def test_handle_mutual_match(match_handler_module, mock_dependencies, mock
     update, context = mock_update_context
     mock_deps = mock_dependencies
 
-    update.callback_query.data = "like_user_67890"
+    update.callback_query.data = "like_match_123"
 
     # Mock target user
     mock_target = MagicMock()
     mock_target.first_name = "Jane"
+    mock_target.id = "target_123"
     mock_deps["get_user"].return_value = mock_target
 
-    # Mock match creation
+    # Mock match retrieval
     mock_match = MagicMock()
     mock_match.id = "match_123"
-    mock_deps["create_match"].return_value = mock_match
+    mock_match.user1_id = "12345"
+    mock_match.user2_id = "target_123"
+    mock_deps["get_match_by_id"].return_value = mock_match
 
     # Mock like (mutual)
     mock_deps["like_match"].return_value = True
@@ -264,5 +286,5 @@ async def test_matches_command_list(match_handler_module, mock_dependencies, moc
 
     # Verify matches list sent
     update.message.reply_text.assert_called()
-    assert "Your Matches" in update.message.reply_text.call_args[0][0]
+    assert "Your Active Matches" in update.message.reply_text.call_args[0][0]
     assert "Jane" in update.message.reply_text.call_args[0][0]

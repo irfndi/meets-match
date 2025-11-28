@@ -21,12 +21,16 @@ USER_MATCHES_CACHE_KEY = "user_matches:{user_id}"
 MATCH_CACHE_KEY = "match:{match_id}"
 
 get_match = AsyncMock()
+get_match_by_id = AsyncMock()
 calculate_match_score = AsyncMock()
 get_potential_matches = AsyncMock()
 get_user_match_view = AsyncMock()
 get_user_match_views = AsyncMock()
 get_user_matches = AsyncMock()
 get_active_matches = AsyncMock()
+get_saved_matches = AsyncMock()
+skip_match = AsyncMock()
+get_pending_incoming_likes_count = AsyncMock()
 create_match = AsyncMock()
 update_match = AsyncMock()
 like_match = AsyncMock()

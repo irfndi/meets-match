@@ -147,10 +147,14 @@ class BotApplication:
         self.application.add_handler(CommandHandler("about", about_command))
 
         # Callback handlers
-        self.application.add_handler(CallbackQueryHandler(match_callback, pattern=r"^(like_|dislike_|next_match)"))
+        self.application.add_handler(
+            CallbackQueryHandler(match_callback, pattern=r"^(like_|dislike_|next_match|skip_notification|view_match_)")
+        )
         self.application.add_handler(CallbackQueryHandler(view_profile_callback, pattern=r"^view_profile_"))
         self.application.add_handler(
-            CallbackQueryHandler(matches_pagination_callback, pattern=r"^(matches_page_|new_matches|back_to_matches)")
+            CallbackQueryHandler(
+                matches_pagination_callback, pattern=r"^(matches_page_|saved_matches_page_|new_matches|back_to_matches)"
+            )
         )
         self.application.add_handler(
             CallbackQueryHandler(

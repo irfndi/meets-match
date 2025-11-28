@@ -90,9 +90,11 @@ def mock_dependencies(match_handler_module, mock_current_user, mock_potential_ma
 
     mock_match = MagicMock()
     mock_match.id = "match_abc123"
-    mock_match.target_user_id = "67890"  # Ensure target user ID is set for get_match_by_id
+    mock_match.user1_id = "12345"
+    mock_match.user2_id = "67890"
 
     mock_get_match_by_id = MagicMock(return_value=mock_match)
+    mock_create_match = MagicMock(return_value=mock_match)
     mock_like_match = MagicMock()
     mock_dislike_match = MagicMock()
     mock_get_active = MagicMock()
@@ -103,6 +105,7 @@ def mock_dependencies(match_handler_module, mock_current_user, mock_potential_ma
         patch.object(match_handler_module, "get_user", mock_get_user),
         patch.object(match_handler_module, "get_potential_matches", mock_get_potential),
         patch.object(match_handler_module, "get_match_by_id", mock_get_match_by_id),
+        patch.object(match_handler_module, "create_match", mock_create_match),
         patch.object(match_handler_module, "like_match", mock_like_match),
         patch.object(match_handler_module, "dislike_match", mock_dislike_match),
         patch.object(match_handler_module, "get_active_matches", mock_get_active),
@@ -113,6 +116,7 @@ def mock_dependencies(match_handler_module, mock_current_user, mock_potential_ma
             "get_user": mock_get_user,
             "get_potential_matches": mock_get_potential,
             "get_match_by_id": mock_get_match_by_id,
+            "create_match": mock_create_match,
             "like_match": mock_like_match,
             "dislike_match": mock_dislike_match,
         }
@@ -178,8 +182,8 @@ async def test_match_display_flow(match_handler_module, mock_dependencies, mock_
 
     # Verify buttons
     reply_markup = update.message.reply_text.call_args[1]["reply_markup"]
-    assert reply_markup.inline_keyboard[0][0].callback_data == "like_user_67890"
-    assert reply_markup.inline_keyboard[0][1].callback_data == "dislike_user_67890"
+    assert reply_markup.inline_keyboard[0][0].callback_data == "like_match_abc123"
+    assert reply_markup.inline_keyboard[0][1].callback_data == "dislike_match_abc123"
 
 
 @pytest.mark.asyncio
@@ -188,15 +192,15 @@ async def test_like_flow(match_handler_module, mock_dependencies, mock_update_co
     update, context = mock_update_context
 
     # Setup: User clicks like
-    update.callback_query.data = "like_user_67890"
+    update.callback_query.data = "like_match_abc123"
     mock_dependencies["like_match"].return_value = None  # Not a mutual match yet
 
     # Execute
     await match_handler_module.match_callback(update, context)
 
     # Verify service called
-    # like_match(match_id, user_id)
-    mock_dependencies["like_match"].assert_called_with("match_abc123", "12345")
+    # like_match(match_id)
+    mock_dependencies["like_match"].assert_called_with("match_abc123")
 
     # Verify response
     update.callback_query.edit_message_text.assert_called()
@@ -209,13 +213,13 @@ async def test_dislike_flow(match_handler_module, mock_dependencies, mock_update
     update, context = mock_update_context
 
     # Setup: User clicks pass
-    update.callback_query.data = "dislike_user_67890"
+    update.callback_query.data = "dislike_match_abc123"
 
     # Execute
     await match_handler_module.match_callback(update, context)
 
     # Verify service called
-    # dislike_match(match_id, user_id)
+    # dislike_match(match_id)
     mock_dependencies["dislike_match"].assert_called_with("match_abc123")
 
     # Verify response
@@ -229,7 +233,7 @@ async def test_mutual_match_flow(match_handler_module, mock_dependencies, mock_u
     update, context = mock_update_context
 
     # Setup: User clicks like, and it IS a match
-    update.callback_query.data = "like_user_67890"
+    update.callback_query.data = "like_match_abc123"
     mock_match = MagicMock()  # The match object returned
     mock_dependencies["like_match"].return_value = mock_match
 

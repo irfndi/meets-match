@@ -3,7 +3,10 @@ from telegram import KeyboardButton, ReplyKeyboardMarkup
 
 def main_menu() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
-        [["/profile", "/match"], ["/matches", "/settings"], ["/help"]],
+        [
+            ["1. Start Match 🚀", "2. View Profile 👤"],
+            ["3. Sleep / Pause 💤", "4. Invite Friend 📨"],
+        ],
         resize_keyboard=True,
     )
 

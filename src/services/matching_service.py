@@ -242,18 +242,22 @@ def get_potential_matches(user_id: str, limit: int = 10) -> List[User]:
     # Get existing matches
     existing_matches = get_user_matches(user_id)
 
-    # Filter out old rejections and matches (recycle after 30 days)
-    # If a match was rejected or matched more than 30 days ago, we allow it to be matched again
+    # Filter out old rejections and matches
+    # Matches: Recycle after 30 days
+    # Rejections: Recycle after 7 days (shorter period)
     from datetime import datetime, timedelta, timezone
 
-    recycle_threshold = datetime.now(timezone.utc) - timedelta(days=30)
+    now = datetime.now(timezone.utc)
+    recycle_threshold_matched = now - timedelta(days=30)
+    recycle_threshold_rejected = now - timedelta(days=7)
 
     existing_match_ids = set()
     for match in existing_matches:
         # specific logic: if (rejected or matched) and old enough, don't add to exclusion list
-        if (
-            match.status == MatchStatus.REJECTED or match.status == MatchStatus.MATCHED
-        ) and match.updated_at < recycle_threshold:
+        is_old_matched = match.status == MatchStatus.MATCHED and match.updated_at < recycle_threshold_matched
+        is_old_rejected = match.status == MatchStatus.REJECTED and match.updated_at < recycle_threshold_rejected
+
+        if is_old_matched or is_old_rejected:
             continue
 
         # Add to exclusion list
@@ -263,7 +267,7 @@ def get_potential_matches(user_id: str, limit: int = 10) -> List[User]:
     filters = {
         "is_active": True,
         "is_profile_complete": True,
-        "last_active__gte": recycle_threshold,  # Only active users in last 30 days
+        "last_active__gte": recycle_threshold_matched,  # Only active users in last 30 days
     }
 
     # 1. Age Range Filter
@@ -386,12 +390,18 @@ def create_match(user1_id: str, user2_id: str) -> Match:
         # Check if we should recycle this match
         from datetime import datetime, timedelta, timezone
 
-        recycle_threshold = datetime.now(timezone.utc) - timedelta(days=30)
+        now = datetime.now(timezone.utc)
+        recycle_threshold_matched = now - timedelta(days=30)
+        recycle_threshold_rejected = now - timedelta(days=7)
 
-        if (
-            existing_match.status in [MatchStatus.REJECTED, MatchStatus.MATCHED]
-            and existing_match.updated_at < recycle_threshold
-        ):
+        is_old_matched = (
+            existing_match.status == MatchStatus.MATCHED and existing_match.updated_at < recycle_threshold_matched
+        )
+        is_old_rejected = (
+            existing_match.status == MatchStatus.REJECTED and existing_match.updated_at < recycle_threshold_rejected
+        )
+
+        if is_old_matched or is_old_rejected:
             logger.info("Recycling existing match", match_id=existing_match.id)
 
             # Reset match to PENDING state
@@ -803,6 +813,21 @@ def dislike_match(match_id: str, user_id: Optional[str] = None) -> None:
         update_match(match_id, match.user1_id, MatchAction.DISLIKE)
 
 
+def skip_match(match_id: str, user_id: Optional[str] = None) -> None:
+    """Skip a match (save for later).
+
+    Args:
+        match_id: Match ID
+        user_id: User ID (optional, will be determined from match)
+    """
+    match = get_match(match_id)
+
+    if user_id:
+        update_match(match_id, user_id, MatchAction.SKIP)
+    else:
+        update_match(match_id, match.user1_id, MatchAction.SKIP)
+
+
 def get_active_matches(
     user_id: str,
     limit: int = 10,
@@ -819,3 +844,77 @@ def get_active_matches(
         List of active matches
     """
     return get_user_matches(user_id, status=MatchStatus.MATCHED, limit=limit, offset=offset)
+
+
+def get_saved_matches(
+    user_id: str,
+    limit: int = 10,
+    offset: int = 0,
+) -> List[Match]:
+    """Get saved (skipped) matches for a user.
+
+    Args:
+        user_id: User ID
+        limit: Max number of matches to return
+        offset: Number of matches to skip
+
+    Returns:
+        List of saved matches
+    """
+    # Check if user exists
+    get_user(user_id)
+
+    # Query database for matches where the user action is SKIP
+    filters: dict[str, Any] = {
+        "$or": [
+            {"user1_id": user_id, "user1_action": MatchAction.SKIP},
+            {"user2_id": user_id, "user2_action": MatchAction.SKIP},
+        ]
+    }
+
+    result = execute_query(
+        table="matches",
+        query_type="select",
+        filters=filters,
+        limit=limit,
+        offset=offset,
+        order_by="updated_at desc",
+    )
+
+    if not result.data:
+        return []
+
+    return [Match.model_validate(match_data) for match_data in result.data]
+
+
+def get_pending_incoming_likes_count(user_id: str) -> int:
+    """Get count of pending incoming likes for a user.
+
+    Args:
+        user_id: User ID
+
+    Returns:
+        Count of pending incoming likes
+    """
+    # Check if user exists
+    get_user(user_id)
+
+    # Query database for matches where the other user has LIKED and current user hasn't acted
+    filters: dict[str, Any] = {
+        "status": MatchStatus.PENDING,
+        "$or": [
+            {"user1_id": user_id, "user2_action": MatchAction.LIKE, "user1_action": None},
+            {"user2_id": user_id, "user1_action": MatchAction.LIKE, "user2_action": None},
+        ],
+    }
+
+    result = execute_query(
+        table="matches",
+        query_type="count",
+        filters=filters,
+    )
+
+    if not result.data:
+        return 0
+
+    return int(result.data[0]["count"])

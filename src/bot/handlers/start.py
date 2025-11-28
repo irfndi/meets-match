@@ -76,6 +76,28 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             await settings_command(update, context)
             return
 
+        # Check if user is eligible for matching
+        if user.is_match_eligible():
+            from src.bot.handlers.match import get_and_show_match
+
+            match_shown = await get_and_show_match(update, context, user_id)
+            if match_shown:
+                return
+
+            # If no matches, show main menu with specific message
+            await update.message.reply_text(
+                "Wait until someone sees you... 🕰️",
+                reply_markup=main_menu(),
+            )
+            return
+
+        # If not eligible, try to continue registration
+        from src.bot.handlers.profile import prompt_for_next_missing_field
+
+        has_missing = await prompt_for_next_missing_field(update, context, user_id)
+        if has_missing:
+            return
+
         # Send welcome message with main menu
         await update.message.reply_text(
             f"Welcome back, {user.first_name or 'there'}! {WELCOME_MESSAGE}",

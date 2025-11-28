@@ -42,6 +42,7 @@ def mock_dependencies(start_handler_module):
     mock_update_user = MagicMock()
     mock_limiter = MagicMock(return_value=AsyncMock())  # Returns an async function
     mock_main_menu = MagicMock()
+    mock_prompt_missing = AsyncMock(return_value=False)
 
     with (
         patch.object(start_handler_module, "get_user", mock_get_user),
@@ -49,6 +50,7 @@ def mock_dependencies(start_handler_module):
         patch.object(start_handler_module, "update_user", mock_update_user),
         patch.object(start_handler_module, "user_command_limiter", mock_limiter),
         patch.object(start_handler_module, "main_menu", mock_main_menu),
+        patch("src.bot.handlers.profile.prompt_for_next_missing_field", mock_prompt_missing),
     ):
         yield {
             "get_user": mock_get_user,
@@ -56,6 +58,7 @@ def mock_dependencies(start_handler_module):
             "update_user": mock_update_user,
             "limiter": mock_limiter,
             "main_menu": mock_main_menu,
+            "prompt_missing": mock_prompt_missing,
         }
 
 
@@ -88,33 +91,99 @@ def mock_update_context():
     return update, context
 
 
+@pytest.fixture
+def mock_match_module():
+    """Mock match module to avoid import errors and verify calls."""
+    mock_module = MagicMock()
+    mock_func = AsyncMock()
+    mock_module.get_and_show_match = mock_func
+
+    with patch.dict(sys.modules, {"src.bot.handlers.match": mock_module}):
+        yield mock_func
+
+
 @pytest.mark.asyncio
-async def test_start_existing_user(start_handler_module, mock_dependencies, mock_update_context):
-    """Test start command for existing user with complete profile."""
+async def test_start_existing_user_eligible_match_found(
+    start_handler_module, mock_dependencies, mock_update_context, mock_match_module
+):
+    """Test start command for eligible user with matches."""
     update, context = mock_update_context
     mock_deps = mock_dependencies
 
     # Mock existing user
     mock_user = MagicMock()
     mock_user.id = "12345"
-    mock_user.username = "testuser"
-    mock_user.first_name = "Test"
-    # Mock preferences present
     mock_user.preferences.preferred_country = "USA"
     mock_user.preferences.preferred_language = "en"
+    mock_user.is_match_eligible.return_value = True
+
+    mock_deps["get_user"].return_value = mock_user
+    mock_match_module.return_value = True  # Match found and shown
+
+    await start_handler_module.start_command(update, context)
+
+    # Verify match checked
+    mock_match_module.assert_called_with(update, context, "12345")
+
+    # Verify NO welcome message (since match shown)
+    update.message.reply_text.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_start_existing_user_eligible_no_match(
+    start_handler_module, mock_dependencies, mock_update_context, mock_match_module
+):
+    """Test start command for eligible user with NO matches."""
+    update, context = mock_update_context
+    mock_deps = mock_dependencies
+
+    # Mock existing user
+    mock_user = MagicMock()
+    mock_user.id = "12345"
+    mock_user.preferences.preferred_country = "USA"
+    mock_user.preferences.preferred_language = "en"
+    mock_user.is_match_eligible.return_value = True
+
+    mock_deps["get_user"].return_value = mock_user
+    mock_match_module.return_value = False  # No match found
+
+    await start_handler_module.start_command(update, context)
+
+    # Verify match checked
+    mock_match_module.assert_called_with(update, context, "12345")
+
+    # Verify "Wait until..." message
+    update.message.reply_text.assert_called()
+    args, _ = update.message.reply_text.call_args
+    assert "Wait until someone sees you" in args[0]
+
+
+@pytest.mark.asyncio
+async def test_start_existing_user_not_eligible(
+    start_handler_module, mock_dependencies, mock_update_context, mock_match_module
+):
+    """Test start command for ineligible user."""
+    update, context = mock_update_context
+    mock_deps = mock_dependencies
+
+    # Mock existing user
+    mock_user = MagicMock()
+    mock_user.id = "12345"
+    mock_user.preferences.preferred_country = "USA"
+    mock_user.preferences.preferred_language = "en"
+    mock_user.is_match_eligible.return_value = False
 
     mock_deps["get_user"].return_value = mock_user
 
     await start_handler_module.start_command(update, context)
 
-    # Verify limiter called
-    mock_deps["limiter"].assert_called()
+    # Verify match NOT checked
+    mock_match_module.assert_not_called()
 
     # Verify welcome message
     update.message.reply_text.assert_called()
-    args, kwargs = update.message.reply_text.call_args
+    args, _ = update.message.reply_text.call_args
     assert "Welcome back" in args[0]
-    assert "reply_markup" in kwargs
 
 
 @pytest.mark.asyncio
@@ -142,7 +211,9 @@ async def test_start_new_user(start_handler_module, mock_dependencies, mock_upda
 
 
 @pytest.mark.asyncio
-async def test_start_existing_user_update_info(start_handler_module, mock_dependencies, mock_update_context):
+async def test_start_existing_user_update_info(
+    start_handler_module, mock_dependencies, mock_update_context, mock_match_module
+):
     """Test start command updates user info if changed."""
     update, context = mock_update_context
     mock_deps = mock_dependencies
@@ -154,6 +225,8 @@ async def test_start_existing_user_update_info(start_handler_module, mock_depend
     mock_user.first_name = "Old"
     mock_user.preferences.preferred_country = "USA"
     mock_user.preferences.preferred_language = "en"
+    # Set eligible to False to skip match logic, or True and mock match logic
+    mock_user.is_match_eligible.return_value = False
 
     mock_deps["get_user"].return_value = mock_user
 
