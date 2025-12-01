@@ -35,7 +35,7 @@ async def auto_sleep_inactive_users_job(context: ContextTypes.DEFAULT_TYPE) -> N
             logger.debug("No users eligible for auto-sleep")
             return
 
-        logger.info(f"Found {len(users)} users eligible for auto-sleep")
+        logger.info("Found users eligible for auto-sleep", count=len(users))
 
         for user in users:
             try:
@@ -54,15 +54,15 @@ async def auto_sleep_inactive_users_job(context: ContextTypes.DEFAULT_TYPE) -> N
                     )
                 except Exception as e:
                     # User might have blocked the bot or other issues
-                    logger.warning(f"Failed to notify user {user.id} about auto-sleep: {e}")
+                    logger.warning("Failed to notify user about auto-sleep", user_id=user.id, error=str(e))
 
-                logger.info(f"Auto-slept user {user.id}")
+                logger.info("Auto-slept user", user_id=user.id)
 
             except Exception as e:
-                logger.warning(f"Failed to auto-sleep user {user.id}: {e}")
+                logger.warning("Failed to auto-sleep user", user_id=user.id, error=str(e))
 
     except Exception as e:
-        logger.error(f"Error in auto-sleep job: {e}")
+        logger.error("Error in auto-sleep job", error=str(e))
 
 
 async def inactive_user_reminder_job(context: ContextTypes.DEFAULT_TYPE) -> None:

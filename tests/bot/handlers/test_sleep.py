@@ -70,11 +70,7 @@ async def test_sleep_command_success(sleep_handler_module, mock_update_context):
         patch.object(sleep_handler_module, "set_user_sleeping") as mock_set_sleeping,
         patch.object(sleep_handler_module, "authenticated", lambda f: f),
     ):
-        # Need to reload the function after patching the decorator
-        # Instead, we call the underlying function directly by accessing __wrapped__
-        # But the decorator is applied at module load time, so let's just call the function
-        # and mock get_user and set_user_sleeping
-
+        # Call the unwrapped function to bypass the @authenticated decorator
         await sleep_handler_module.sleep_command.__wrapped__(update, context)
 
         mock_get_user.assert_called_once_with("12345")
