@@ -24,6 +24,7 @@ from src.bot.handlers.profile import (
     view_profile_callback,
 )
 from src.bot.handlers.settings import premium_command, settings_callback, settings_command
+from src.bot.handlers.sleep import sleep_command, wake_up_user
 from src.bot.handlers.start import start_command
 
 __all__ = [
@@ -48,7 +49,9 @@ __all__ = [
     "reengagement_response",
     "settings_callback",
     "settings_command",
+    "sleep_command",
     "start_command",
     "start_profile_setup",
     "view_profile_callback",
+    "wake_up_user",
 ]

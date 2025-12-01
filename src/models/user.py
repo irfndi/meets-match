@@ -122,6 +122,7 @@ class User(BaseModel):
     location: Optional[Location] = None
     preferences: Preferences = Field(default_factory=Preferences)
     is_active: bool = True
+    is_sleeping: bool = False
     is_profile_complete: bool = False
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
@@ -197,6 +198,7 @@ class User(BaseModel):
         """
         return (
             self.is_active
+            and not self.is_sleeping
             and self.is_profile_complete
             and self.age is not None
             and self.gender is not None

@@ -36,11 +36,12 @@ from src.bot.handlers import (
     reengagement_response,
     settings_callback,
     settings_command,
+    sleep_command,
     start_command,
     start_profile_setup,
     view_profile_callback,
 )
-from src.bot.jobs import inactive_user_reminder_job
+from src.bot.jobs import auto_sleep_inactive_users_job, inactive_user_reminder_job
 from src.config import settings
 from src.utils.errors import MeetMatchError
 from src.utils.logging import get_logger
@@ -96,6 +97,15 @@ class BotApplication:
             )
             logger.info("Inactive user reminder job registered")
 
+            # Register auto-sleep job - runs every minute to check for inactive users
+            application.job_queue.run_repeating(
+                auto_sleep_inactive_users_job,
+                interval=60,  # Run every minute
+                first=30,  # Start after 30 seconds
+                name="auto_sleep_inactive_users",
+            )
+            logger.info("Auto-sleep inactive users job registered")
+
         try:
             await application.bot.set_my_commands(
                 [
@@ -107,6 +117,7 @@ class BotApplication:
                     BotCommand("matches", "View your matches"),
                     BotCommand("settings", "Adjust preferences"),
                     BotCommand("premium", "Premium features"),
+                    BotCommand("sleep", "Pause matching and go to sleep mode"),
                 ]
             )
             logger.info("Bot slash commands registered")
@@ -141,6 +152,9 @@ class BotApplication:
         # Settings commands
         self.application.add_handler(CommandHandler("settings", settings_command))
         self.application.add_handler(CommandHandler("premium", premium_command))
+
+        # Sleep command
+        self.application.add_handler(CommandHandler("sleep", sleep_command))
 
         # Help commands
         self.application.add_handler(CommandHandler("help", help_command))
@@ -178,6 +192,14 @@ class BotApplication:
             MessageHandler(
                 filters.Regex(r"^(1 🚀|2)$") & filters.ChatType.PRIVATE,
                 reengagement_response,
+            )
+        )
+
+        # Sleep/Pause button handler (main menu button)
+        self.application.add_handler(
+            MessageHandler(
+                filters.Regex(r"^3\. Sleep / Pause 💤$") & filters.ChatType.PRIVATE,
+                sleep_command,
             )
         )
 

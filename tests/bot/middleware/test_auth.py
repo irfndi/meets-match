@@ -47,6 +47,7 @@ def mock_dependencies(auth_middleware_module):
     mock_get_potential_matches = MagicMock()
     mock_get_cache = MagicMock()
     mock_update_user = MagicMock()
+    mock_wake_user = MagicMock()
 
     # Patch in the module
     with (
@@ -54,6 +55,7 @@ def mock_dependencies(auth_middleware_module):
         patch("src.bot.middleware.auth.update_last_active", mock_update_last_active),
         patch("src.bot.middleware.auth.get_potential_matches", mock_get_potential_matches),
         patch("src.bot.middleware.auth.get_cache", mock_get_cache),
+        patch("src.bot.middleware.auth.wake_user", mock_wake_user),
         patch("src.services.user_service.update_user", mock_update_user),
     ):
         yield {
@@ -62,6 +64,7 @@ def mock_dependencies(auth_middleware_module):
             "get_potential_matches": mock_get_potential_matches,
             "get_cache": mock_get_cache,
             "update_user": mock_update_user,
+            "wake_user": mock_wake_user,
         }
 
 
@@ -90,6 +93,7 @@ async def test_authenticated_success(auth_middleware_module, mock_dependencies, 
 
     # Mock user
     mock_user = MagicMock()
+    mock_user.is_sleeping = False  # Not sleeping
     mock_user.preferences.preferred_country = "USA"
     mock_user.preferences.preferred_language = "en"
     mock_deps["get_user"].return_value = mock_user
@@ -132,6 +136,7 @@ async def test_authenticated_warmup_triggered(auth_middleware_module, mock_depen
     mock_deps = mock_dependencies
 
     mock_user = MagicMock()
+    mock_user.is_sleeping = False  # Not sleeping
     mock_user.preferences.preferred_country = "USA"
     mock_user.preferences.preferred_language = "en"
     mock_deps["get_user"].return_value = mock_user
@@ -155,6 +160,7 @@ async def test_authenticated_missing_setup(auth_middleware_module, mock_dependen
     mock_deps = mock_dependencies
 
     mock_user = MagicMock()
+    mock_user.is_sleeping = False  # Not sleeping
     mock_user.preferences = None  # Missing preferences
     mock_deps["get_user"].return_value = mock_user
     mock_deps["get_cache"].return_value = True
@@ -177,6 +183,7 @@ async def test_admin_only_success(auth_middleware_module, mock_dependencies, moc
     mock_deps = mock_dependencies
 
     mock_user = MagicMock()
+    mock_user.is_sleeping = False  # Not sleeping
     mock_user.preferences.preferred_country = "USA"
     mock_user.preferences.preferred_language = "en"
     mock_deps["get_user"].return_value = mock_user
@@ -198,6 +205,7 @@ async def test_admin_only_fail(auth_middleware_module, mock_dependencies, mock_u
     mock_deps = mock_dependencies
 
     mock_user = MagicMock()
+    mock_user.is_sleeping = False  # Not sleeping
     mock_user.preferences.preferred_country = "USA"
     mock_user.preferences.preferred_language = "en"
     mock_deps["get_user"].return_value = mock_user
@@ -222,6 +230,7 @@ async def test_profile_required_success(auth_middleware_module, mock_dependencie
     mock_user = MagicMock()
     mock_user.first_name = "John"
     mock_user.age = 25
+    mock_user.is_sleeping = False  # Not sleeping
     mock_user.is_profile_complete = True
     context.user_data["user"] = mock_user
 
@@ -253,6 +262,7 @@ async def test_profile_required_fail(auth_middleware_module, mock_dependencies, 
     mock_user = MagicMock()
     mock_user.first_name = None  # Missing name
     mock_user.age = 25
+    mock_user.is_sleeping = False  # Not sleeping
 
     # Setup for @authenticated
     mock_deps["get_user"].return_value = mock_user
