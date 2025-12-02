@@ -40,7 +40,7 @@ from src.bot.handlers import (
     start_profile_setup,
     view_profile_callback,
 )
-from src.bot.jobs import inactive_user_reminder_job
+from src.bot.jobs import cleanup_old_media_job, inactive_user_reminder_job
 from src.config import settings
 from src.utils.errors import MeetMatchError
 from src.utils.logging import get_logger
@@ -95,6 +95,14 @@ class BotApplication:
                 name="inactive_user_reminder",
             )
             logger.info("Inactive user reminder job registered")
+
+            application.job_queue.run_repeating(
+                cleanup_old_media_job,
+                interval=86400,  # Run daily
+                first=3600,  # Start after 1 hour
+                name="cleanup_old_media",
+            )
+            logger.info("Old media cleanup job registered")
 
         try:
             await application.bot.set_my_commands(

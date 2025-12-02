@@ -1,6 +1,6 @@
 """Mock utilities for testing."""
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 # Mock cache functions
 get_cache = MagicMock()

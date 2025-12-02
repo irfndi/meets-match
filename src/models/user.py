@@ -185,8 +185,8 @@ class User(BaseModel):
         Raises:
             ValidationError: If photos are invalid
         """
-        if len(v) > 5:
-            raise ValidationError("Maximum 5 photos allowed")
+        if len(v) > 3:
+            raise ValidationError("Maximum 3 photos allowed")
         return v
 
     def is_match_eligible(self) -> bool:

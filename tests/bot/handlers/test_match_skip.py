@@ -68,7 +68,6 @@ def mock_dependencies(match_handler_module):
     mock_set_cache = MagicMock()
 
     # Mock UI helpers
-    mock_no_matches_menu = MagicMock()
     mock_main_menu = MagicMock()
     mock_skip_match = MagicMock()
 
@@ -82,7 +81,6 @@ def mock_dependencies(match_handler_module):
         patch.object(match_handler_module, "user_command_limiter", mock_limiter),
         patch.object(match_handler_module, "get_cache", mock_get_cache),
         patch.object(match_handler_module, "set_cache", mock_set_cache),
-        patch.object(match_handler_module, "no_matches_menu", mock_no_matches_menu),
         patch.object(match_handler_module, "main_menu", mock_main_menu),
     ):
         yield {

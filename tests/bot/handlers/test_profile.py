@@ -211,6 +211,7 @@ async def test_check_and_update_profile_complete(profile_handler_module, mock_de
     # Test complete profile
     mock_user.first_name = "John"
     mock_user.age = 25
+    mock_user.photos = ["photo.jpg"]
     mock_user.is_profile_complete = False
 
     result = profile_handler_module.check_and_update_profile_complete("12345")

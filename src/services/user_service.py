@@ -132,6 +132,7 @@ def update_user(user_id: str, data: Dict[str, Union[str, int, bool, datetime, Li
     data["updated_at"] = datetime.now()
 
     # Update user in database
+    logger.debug("Executing update_user query", user_id=user_id, data=data)
     result = execute_query(
         table="users",
         query_type="update",
