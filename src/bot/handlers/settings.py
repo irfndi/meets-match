@@ -1,5 +1,7 @@
 """Settings handlers for the MeetMatch bot."""
 
+from typing import Any, Dict, cast
+
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
@@ -274,6 +276,27 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             enabled = callback_data[14:] == "on"
             await handle_notifications(update, context, enabled)
 
+        elif callback_data == "settings_premium":
+            # Reuse logic from premium_command
+            user = get_user(user_id)
+            tier = "free"
+            if user.preferences and getattr(user.preferences, "premium_tier", None):
+                tier = user.preferences.premium_tier or "free"
+
+            from src.config import settings as app_settings
+
+            admin_ids = (app_settings.ADMIN_IDS or "").split(",") if app_settings.ADMIN_IDS else []
+            if user_id in [aid.strip() for aid in admin_ids if aid.strip()]:
+                tier = "admin"
+
+            await query.edit_message_text(
+                PREMIUM_MESSAGE.format(tier=tier),
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup(
+                    [[InlineKeyboardButton("« Back to Settings", callback_data="back_to_settings")]]
+                ),
+            )
+
         elif callback_data == "settings_reset":
             # Reset settings to defaults
             await handle_reset_settings(update, context)
@@ -313,7 +336,9 @@ async def handle_region(update: Update, context: ContextTypes.DEFAULT_TYPE, coun
             user.location.country = country
 
         # Update user with both preferences and location
-        update_user(user_id, {"preferences": prefs.model_dump(), "location": user.location.model_dump()})
+        update_data: Dict[str, Any] = {"preferences": prefs.model_dump(), "location": user.location.model_dump()}
+        logger.info("Updating user region in handle_region", user_id=user_id, country=country, update_data=update_data)
+        update_user(user_id, cast(Dict[str, Any], update_data))
 
         # Clear awaiting state if it exists
         if context.user_data:

@@ -71,6 +71,7 @@ def mock_potential_match():
     user.bio = "Loves hiking and coding."
     user.interests = ["Hiking", "Coding"]
     user.location = Location(latitude=0.0, longitude=0.0, city="Wonderland", country="Magic")
+    user.photos = ["alice.jpg"]
     return user
 
 

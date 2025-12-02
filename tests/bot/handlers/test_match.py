@@ -67,7 +67,6 @@ def mock_dependencies(match_handler_module):
     mock_set_cache = MagicMock()
 
     # Mock UI helpers
-    mock_no_matches_menu = MagicMock()
     mock_create_match = MagicMock()
 
     with (
@@ -81,7 +80,6 @@ def mock_dependencies(match_handler_module):
         patch.object(match_handler_module, "user_command_limiter", mock_limiter),
         patch.object(match_handler_module, "get_cache", mock_get_cache),
         patch.object(match_handler_module, "set_cache", mock_set_cache),
-        patch.object(match_handler_module, "no_matches_menu", mock_no_matches_menu),
     ):
         yield {
             "get_user": mock_get_user,
@@ -139,6 +137,74 @@ async def test_match_command_no_matches(match_handler_module, mock_dependencies,
     # Verify no matches message
     update.message.reply_text.assert_called()
     assert "No potential matches found" in update.message.reply_text.call_args[0][0]
+
+
+@pytest.mark.asyncio
+async def test_match_command_with_match_and_media(
+    match_handler_module, mock_dependencies, mock_update_context, tmp_path
+):
+    """Test /match command with a match that has media."""
+    update, context = mock_update_context
+    mock_deps = mock_dependencies
+
+    # Mock user
+    mock_user = MagicMock()
+    mock_user.first_name = "Jane"
+    mock_user.age = 25
+    mock_user.gender.value = "Female"
+    mock_user.bio = "Hello"
+    mock_user.interests = ["Music"]
+    mock_user.location.city = "Jakarta"
+    mock_user.location.country = "Indonesia"
+
+    mock_deps["get_user"].return_value = mock_user
+
+    # Create dummy media files
+    media_dir = tmp_path / "media"
+    media_dir.mkdir()
+    photo_file = media_dir / "photo.jpg"
+    photo_file.write_bytes(b"fake image data")
+    video_file = media_dir / "video.mp4"
+    video_file.write_bytes(b"fake video data")
+
+    # Mock potential match (User object) with media
+    mock_match_user = MagicMock()
+    mock_match_user.id = "67890"
+    mock_match_user.first_name = "Jane"
+    mock_match_user.age = 25
+    mock_match_user.gender.value = "Female"
+    mock_match_user.bio = "Hello"
+    mock_match_user.interests = ["Music"]
+    mock_match_user.location.city = "Jakarta"
+    mock_match_user.location.country = "Indonesia"
+    # Photos are stored as relative paths
+    mock_match_user.photos = ["photo.jpg", "video.mp4"]
+
+    mock_deps["get_potential_matches"].return_value = [mock_match_user]
+
+    # Mock create_match return value
+    mock_created_match = MagicMock()
+    mock_created_match.id = "match_abc"
+    mock_deps["create_match"].return_value = mock_created_match
+
+    # Patch get_storage_path to return our temp dir
+    with patch("src.bot.media_sender.get_storage_path", return_value=media_dir):
+        await match_handler_module.match_command(update, context)
+
+    # Verify media group sent
+    update.message.reply_media_group.assert_called_once()
+    media_args = update.message.reply_media_group.call_args[1]["media"]
+    assert len(media_args) == 2
+    # Check types (indirectly via checking if they are InputMedia objects)
+    # We can't easily check exact types without importing them, but we can check attributes if needed.
+    # Or just rely on the fact that it was called.
+
+    # Verify match profile sent (text)
+    update.message.reply_text.assert_called()
+    args, kwargs = update.message.reply_text.call_args
+    assert "Jane" in args[0]
+    assert "Jakarta" in args[0]
+    assert "reply_markup" in kwargs
 
 
 @pytest.mark.asyncio
@@ -288,3 +354,68 @@ async def test_matches_command_list(match_handler_module, mock_dependencies, moc
     update.message.reply_text.assert_called()
     assert "Your Active Matches" in update.message.reply_text.call_args[0][0]
     assert "Jane" in update.message.reply_text.call_args[0][0]
+
+
+@pytest.mark.asyncio
+async def test_handle_view_match_with_media(match_handler_module, mock_dependencies, mock_update_context, tmp_path):
+    """Test viewing a match profile with media via callback."""
+    update, context = mock_update_context
+    mock_deps = mock_dependencies
+
+    # Mock callback query
+    update.callback_query.data = "view_match_match_123"
+    update.callback_query.message.chat_id = 12345
+
+    # Mock match
+    mock_match = MagicMock()
+    mock_match.id = "match_123"
+    mock_match.user1_id = "12345"
+    mock_match.user2_id = "67890"
+    mock_match.status = "matched"  # Use string or enum if available, but string might fail if logic checks Enum
+    # Logic checks: if match.status == MatchStatus.MATCHED:
+    # So we should use the real enum or mock it correctly.
+    # Since we imported match_handler_module, we can use match_handler_module.MatchStatus.MATCHED
+
+    # We need to import MatchStatus from src.models.match, but the test file doesn't import it.
+    # However, we can mock the attribute access or import it inside test.
+    # Let's try to import it if possible, or just use MagicMock for status.
+    mock_match.status = match_handler_module.MatchStatus.MATCHED
+
+    mock_deps["get_match_by_id"].return_value = mock_match
+
+    # Create dummy media files
+    media_dir = tmp_path / "media"
+    media_dir.mkdir()
+    photo_file = media_dir / "photo.jpg"
+    photo_file.write_bytes(b"fake image data")
+
+    # Mock target user with media
+    mock_target_user = MagicMock()
+    mock_target_user.id = "67890"
+    mock_target_user.first_name = "Jane"
+    mock_target_user.age = 25
+    mock_target_user.gender.value = "Female"
+    mock_target_user.bio = "Hello"
+    mock_target_user.interests = ["Music"]
+    mock_target_user.location.city = "Jakarta"
+    mock_target_user.location.country = "Indonesia"
+    mock_target_user.photos = ["photo.jpg"]
+
+    mock_deps["get_user"].return_value = mock_target_user
+
+    # Patch get_storage_path to return our temp dir
+    with patch("src.bot.media_sender.get_storage_path", return_value=media_dir):
+        await match_handler_module.match_callback(update, context)
+
+    # Verify media group sent
+    context.bot.send_media_group.assert_called_once()
+    call_args = context.bot.send_media_group.call_args[1]
+    assert call_args["chat_id"] == 12345
+    assert len(call_args["media"]) == 1
+
+    # Verify profile message sent (text)
+    context.bot.send_message.assert_called()
+    _, kwargs = context.bot.send_message.call_args
+    assert "Jane" in kwargs["text"]
+    assert "Jakarta" in kwargs["text"]
+    assert "reply_markup" in kwargs

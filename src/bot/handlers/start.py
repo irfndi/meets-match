@@ -61,12 +61,15 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             update_user(user_id, update_data)
 
         # Check for missing region or language
-        missing_region = not (
-            getattr(user, "preferences", None) and getattr(user.preferences, "preferred_country", None)
+        prefs = getattr(user, "preferences", None)
+        logger.info(
+            "Checking user preferences in start_command",
+            user_id=user_id,
+            preferences=prefs.model_dump() if prefs else None,
         )
-        missing_language = not (
-            getattr(user, "preferences", None) and getattr(user.preferences, "preferred_language", None)
-        )
+
+        missing_region = not (prefs and getattr(prefs, "preferred_country", None))
+        missing_language = not (prefs and getattr(prefs, "preferred_language", None))
 
         if missing_region or missing_language:
             await update.message.reply_text("👋 Welcome back! Please set your region and language to continue.")
@@ -74,6 +77,15 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             from src.bot.handlers.settings import settings_command
 
             await settings_command(update, context)
+            return
+
+        # Check for missing profile fields (casual prompt)
+        # This handles both required fields (always prompted) and recommended fields (prompted if cooldown passed)
+        # We do this BEFORE matching to ensure profile quality, but respect the cooldown for skipped fields.
+        from src.bot.handlers.profile import prompt_for_next_missing_field
+
+        has_missing = await prompt_for_next_missing_field(update, context, user_id, silent_if_complete=True)
+        if has_missing:
             return
 
         # Check if user is eligible for matching
@@ -91,12 +103,9 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             )
             return
 
-        # If not eligible, try to continue registration
-        from src.bot.handlers.profile import prompt_for_next_missing_field
-
-        has_missing = await prompt_for_next_missing_field(update, context, user_id)
-        if has_missing:
-            return
+        # If not eligible, show main menu
+        # Note: We already attempted to prompt for missing fields above.
+        # If we are here, it means the user is ineligible AND we are in cooldown (or user explicitly skipped).
 
         # Send welcome message with main menu
         await update.message.reply_text(

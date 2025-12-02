@@ -1,10 +1,19 @@
 """Match handlers for the MeetMatch bot."""
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Message, ReplyKeyboardRemove, Update
+from typing import cast
+
+from telegram import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Message,
+    ReplyKeyboardRemove,
+    Update,
+)
 from telegram.ext import ContextTypes
 
+from src.bot.media_sender import send_media_group_safe
 from src.bot.middleware import authenticated, profile_required, user_command_limiter
-from src.bot.ui.keyboards import main_menu, no_matches_menu
+from src.bot.ui.keyboards import main_menu
 from src.config import settings
 from src.models.match import MatchStatus
 from src.services.matching_service import (
@@ -29,9 +38,9 @@ logger = get_logger(__name__)
 
 # Match command messages
 NO_MATCHES_MESSAGE = """
-No potential matches found at the moment.
+No potential matches found right now. 🕵️
 
-Try again later or adjust your matching preferences with /settings.
+Try adjusting your preferences in <b>Settings ⚙️</b> or check back later!
 """
 
 MATCH_PROFILE_TEMPLATE = """
@@ -78,7 +87,15 @@ async def match_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     # Apply rate limiting
     await user_command_limiter()(update, context)
 
-    if not update.effective_user or not update.message:
+    if not update.effective_user:
+        return
+
+    # Determine message object to reply to
+    message = update.message
+    if not message and update.callback_query and update.callback_query.message:
+        message = cast(Message, update.callback_query.message)
+
+    if not message:
         return
 
     user_id = str(update.effective_user.id)
@@ -86,9 +103,10 @@ async def match_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     match_shown = await get_and_show_match(update, context, user_id)
 
     if not match_shown:
-        await update.message.reply_text(
+        await message.reply_text(
             NO_MATCHES_MESSAGE,
-            reply_markup=no_matches_menu(),
+            parse_mode="HTML",
+            reply_markup=main_menu(),
         )
 
 
@@ -103,7 +121,12 @@ async def get_and_show_match(update: Update, context: ContextTypes.DEFAULT_TYPE,
     Returns:
         bool: True if a match was shown, False otherwise
     """
-    if not update.message:
+    # Determine message object to reply to
+    message = update.message
+    if not message and update.callback_query and update.callback_query.message:
+        message = cast(Message, update.callback_query.message)
+
+    if not message:
         return False
 
     try:
@@ -126,9 +149,9 @@ async def get_and_show_match(update: Update, context: ContextTypes.DEFAULT_TYPE,
             val = get_cache(key)
             cnt = int(val) if val and val.isdigit() else 0
             if cnt >= limit:
-                await update.message.reply_text(
+                await message.reply_text(
                     "You've reached today's match limit for your plan. Use /premium to upgrade.",
-                    reply_markup=no_matches_menu(),
+                    reply_markup=main_menu(),
                 )
                 return True  # Treated as shown/handled to avoid "no matches" fallback in some contexts
 
@@ -156,26 +179,34 @@ async def get_and_show_match(update: Update, context: ContextTypes.DEFAULT_TYPE,
         )
 
         # Send match profile
-        await update.message.reply_text(
-            MATCH_PROFILE_TEMPLATE.format(
-                name=match_user.first_name,
-                age=match_user.age,
-                gender=match_user.gender.value if match_user.gender else "Not specified",
-                bio=match_user.bio or "No bio provided",
-                interests=interests_text,
-                location=location_text,
-            ),
-            reply_markup=InlineKeyboardMarkup(
+        profile_text = MATCH_PROFILE_TEMPLATE.format(
+            name=match_user.first_name,
+            age=match_user.age,
+            gender=match_user.gender.value if match_user.gender else "Not specified",
+            bio=match_user.bio or "No bio provided",
+            interests=interests_text,
+            location=location_text,
+        )
+
+        reply_markup = InlineKeyboardMarkup(
+            [
                 [
-                    [
-                        InlineKeyboardButton("👍 Like", callback_data=f"like_{match.id}"),
-                        InlineKeyboardButton("👎 Pass", callback_data=f"dislike_{match.id}"),
-                    ],
-                    [
-                        InlineKeyboardButton("⏭️ Next", callback_data="next_match"),
-                    ],
-                ]
-            ),
+                    InlineKeyboardButton("👍 Like", callback_data=f"like_{match.id}"),
+                    InlineKeyboardButton("👎 Pass", callback_data=f"dislike_{match.id}"),
+                ],
+                [
+                    InlineKeyboardButton("⏭️ Next", callback_data="next_match"),
+                ],
+            ]
+        )
+
+        # Send media if available
+        if match_user.photos and len(match_user.photos) > 0:
+            await send_media_group_safe(message.reply_media_group, match_user.photos)
+
+        await message.reply_text(
+            profile_text,
+            reply_markup=reply_markup,
         )
         return True
 
@@ -186,7 +217,7 @@ async def get_and_show_match(update: Update, context: ContextTypes.DEFAULT_TYPE,
             error=str(e),
             exc_info=e,
         )
-        await update.message.reply_text("Sorry, something went wrong. Please try again later.")
+        await message.reply_text("Sorry, something went wrong. Please try again later.")
         return True  # Handled error
 
 
@@ -470,11 +501,32 @@ async def handle_view_match(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         # Add Back button
         buttons.append([InlineKeyboardButton("⬅️ Back to Matches", callback_data="matches_page_0")])
 
-        await query.edit_message_text(message_text, reply_markup=InlineKeyboardMarkup(buttons))
+        reply_markup = InlineKeyboardMarkup(buttons)
+
+        # Delete the previous message (menu/list) to show media cleanly
+        try:
+            await query.delete_message()
+        except Exception:
+            pass  # Message might be too old or already deleted
+
+        # Send media if available
+        if match_user.photos and len(match_user.photos) > 0 and query.message and hasattr(query.message, "chat_id"):
+            chat_id = cast(Message, query.message).chat_id
+            await send_media_group_safe(context.bot.send_media_group, match_user.photos, chat_id=chat_id)
+
+        if query.message and hasattr(query.message, "chat_id"):
+            chat_id = cast(Message, query.message).chat_id
+            await context.bot.send_message(chat_id=chat_id, text=message_text, reply_markup=reply_markup)
 
     except Exception as e:
         logger.error("Error viewing match", error=str(e), match_id=match_id)
-        await query.edit_message_text("Could not load profile. Please try again later.")
+        # If we fail, try to send error message
+        try:
+            if query.message and hasattr(query.message, "chat_id"):
+                chat_id = cast(Message, query.message).chat_id
+                await context.bot.send_message(chat_id=chat_id, text="Could not load profile. Please try again later.")
+        except Exception:
+            pass
 
 
 @authenticated

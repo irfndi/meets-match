@@ -1,11 +1,25 @@
 """Profile management handlers for the MeetMatch bot."""
 
-from typing import Any
+import time
+from typing import Any, List, Union, cast
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, PhotoSize, ReplyKeyboardMarkup, Update, Video
+from telegram import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    InputMediaPhoto,
+    InputMediaVideo,
+    Message,
+    PhotoSize,
+    ReplyKeyboardMarkup,
+    ReplyKeyboardRemove,
+    Update,
+    Video,
+)
 from telegram.ext import ContextTypes
 
 from src.bot.handlers.match import match_command
+from src.bot.handlers.settings import settings_command
+from src.bot.media_sender import send_media_group_safe
 from src.bot.middleware import authenticated, user_command_limiter
 from src.bot.ui.keyboards import (
     cancel_keyboard,
@@ -21,10 +35,10 @@ from src.bot.ui.keyboards import (
 from src.config import settings
 from src.models.user import Gender, User
 from src.services.geocoding_service import geocode_city, reverse_geocode_coordinates
-from src.services.user_service import get_user, get_user_location_text, update_user
+from src.services.user_service import get_user, get_user_location_text, set_user_sleeping, update_user
 from src.utils.cache import delete_cache, set_cache
 from src.utils.logging import get_logger
-from src.utils.media import delete_media, save_media
+from src.utils.media import delete_media, get_storage_path, save_media
 
 logger = get_logger(__name__)
 
@@ -113,6 +127,8 @@ def get_missing_required_fields(user: User) -> list[str]:
         missing.append("name")
     if not user.age:
         missing.append("age")
+    if not user.photos or len(user.photos) < 1:
+        missing.append("photos")
     return missing
 
 
@@ -165,10 +181,18 @@ def check_and_update_profile_complete(user_id: str, context: ContextTypes.DEFAUL
 STATE_ADHOC_CONTINUE = "adhoc_continue_profile"
 
 
-async def prompt_for_next_missing_field(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: str) -> bool:
+async def prompt_for_next_missing_field(
+    update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: str, silent_if_complete: bool = False
+) -> bool:
     """Prompt user for the next missing required or recommended field (ad-hoc mode).
 
-    Returns True if there was a missing field to prompt for, False if profile is complete.
+    Args:
+        update: The update object
+        context: The context object
+        user_id: The user ID
+        silent_if_complete: If True, don't send "Profile complete" message when returning False.
+
+    Returns True if there was a missing field to prompt for, False if profile is complete (or cooldown active).
     This is for single field edits, NOT the guided setup flow.
     """
     if context.user_data is None:
@@ -181,7 +205,29 @@ async def prompt_for_next_missing_field(update: Update, context: ContextTypes.DE
     user = get_user(user_id)
     missing_required = get_missing_required_fields(user)
     missing_recommended = get_missing_recommended_fields(user)
-    skipped_fields = context.user_data.get("skipped_profile_fields", [])
+    # Handle skipped fields with "casual" reminder logic (cooldown)
+    skipped_data = context.user_data.get("skipped_profile_fields", {})
+
+    # Migration: If it's a list (legacy), convert to dict with current time
+    if isinstance(skipped_data, list):
+        skipped_data = {f: time.time() for f in skipped_data}
+        context.user_data["skipped_profile_fields"] = skipped_data
+
+    # Filter skipped fields based on cooldown (e.g., 1 day)
+    # If skipped recently (< 1 day), suppress prompt.
+    # If skipped long ago (> 1 day), allow prompting again.
+    COOLDOWN = 24 * 3600  # 1 day (reduced from 3 days for better engagement)
+    now = time.time()
+    skipped_fields = [f for f, t in skipped_data.items() if now - t < COOLDOWN]
+
+    logger.info(
+        "prompt_for_next_missing_field",
+        user_id=user_id,
+        missing_required=missing_required,
+        missing_recommended=missing_recommended,
+        skipped_fields=skipped_fields,
+        skipped_data=skipped_data,
+    )
 
     if not missing_required:
         context.user_data.pop(STATE_ADHOC_CONTINUE, None)
@@ -201,6 +247,7 @@ async def prompt_for_next_missing_field(update: Update, context: ContextTypes.DE
             context.user_data[STATE_ADHOC_CONTINUE] = True
 
             if next_field == "gender":
+                context.user_data["awaiting_gender"] = True
                 await update.effective_message.reply_text(GENDER_UPDATE_MESSAGE, reply_markup=gender_keyboard())
                 return True
             elif next_field == "bio":
@@ -221,10 +268,11 @@ async def prompt_for_next_missing_field(update: Update, context: ContextTypes.DE
                 return True
 
         # All fields (required + recommended) are done or skipped
-        await update.effective_message.reply_text(
-            "🎉 Your profile is fully complete! You can start matching with /match!",
-            reply_markup=main_menu(),
-        )
+        if not silent_if_complete:
+            await update.effective_message.reply_text(
+                "🎉 Your profile is fully complete! You can start matching with /match!",
+                reply_markup=main_menu(),
+            )
         return False
 
     context.user_data[STATE_ADHOC_CONTINUE] = True
@@ -244,6 +292,12 @@ async def prompt_for_next_missing_field(update: Update, context: ContextTypes.DE
         context.user_data[STATE_AWAITING_AGE] = True
         await update.effective_message.reply_text(
             AGE_UPDATE_MESSAGE, reply_markup=ReplyKeyboardMarkup([["Cancel"]], resize_keyboard=True)
+        )
+    elif next_field == "photos":
+        context.user_data[STATE_AWAITING_PHOTO] = True
+        await update.effective_message.reply_text(
+            "Please upload at least one photo or video to complete your profile! 📸",
+            reply_markup=ReplyKeyboardMarkup([["Cancel"]], resize_keyboard=True),
         )
 
     return True
@@ -466,11 +520,20 @@ async def gender_selection(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         update: The update object
         context: The context object
     """
-    if context.user_data is None or not update.message or not update.message.text:
+    if context.user_data is None or not update.message or not update.message.text or not update.effective_user:
         return
+
+    logger.info(
+        "gender_selection handler triggered",
+        user_id=update.effective_user.id,
+        text=update.message.text,
+        user_data_keys=list(context.user_data.keys()) if context.user_data else [],
+        awaiting_gender=context.user_data.get("awaiting_gender"),
+    )
 
     # Check if we're awaiting gender selection
     if not context.user_data.get("awaiting_gender"):
+        logger.info("gender_selection ignored: awaiting_gender not set")
         return
 
     # Process the selected gender
@@ -493,6 +556,8 @@ async def process_gender_selection(update: Update, context: ContextTypes.DEFAULT
         return
 
     user_id = str(update.effective_user.id)
+    logger.info("Processing gender selection", user_id=user_id, gender_input=gender_str)
+
     in_profile_setup = context.user_data.get(STATE_PROFILE_SETUP) is not None
 
     if gender_str.lower() == "cancel":
@@ -1044,9 +1109,17 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
 
     text = update.message.text.strip()
+    user_id = str(update.effective_user.id)
+
+    logger.info(
+        "handle_text_message triggered",
+        user_id=user_id,
+        text=text,
+        states=list(context.user_data.keys()) if context.user_data else [],
+    )
 
     if context.user_data.get(STATE_PROFILE_MENU):
-        if text.startswith("1") or text == "👤 View Profile":
+        if text == "👤 View Profile":
             # Show own profile
             user_id = str(update.effective_user.id)
             user = get_user(user_id)
@@ -1056,26 +1129,32 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
                 gender=user.gender.value.capitalize()
                 if isinstance(user.gender, Gender)
                 else (user.gender or "Not specified"),
+                media_count=len(user.photos) if user.photos else 0,
                 bio=user.bio or "No bio yet.",
                 interests=", ".join(user.interests) if user.interests else "No interests listed.",
                 location=get_user_location_text(user.id) or "Location hidden",
             )
+
+            # Send media if available
+            if user.photos and len(user.photos) > 0:
+                await send_media_group_safe(update.message.reply_media_group, user.photos)
+
             await update.message.reply_text(profile_text, reply_markup=profile_main_menu())
             return
         if text == "🔎 Browse Profiles":
             await match_command(update, context)
             return
-        if text.startswith("2") or text == "🛠 Edit Profile":
+        if text == "🛠 Edit Profile":
             context.user_data.pop(STATE_PROFILE_MENU, None)
             await start_profile_setup(update, context)
             return
-        if text.startswith("3") or text == "🖼 Update Photo":
+        if text == "🖼 Update Photo":
             context.user_data.pop(STATE_PROFILE_MENU, None)
             context.user_data[STATE_AWAITING_PHOTO] = True
             set_user_editing_state(str(update.effective_user.id), True)
             await update.message.reply_text("Send a photo to update your profile.")
             return
-        if text.startswith("4") or text == "✏️ Update Bio":
+        if text == "✏️ Update Bio":
             context.user_data.pop(STATE_PROFILE_MENU, None)
             context.user_data[STATE_AWAITING_BIO] = True
             user_id = str(update.effective_user.id)
@@ -1090,6 +1169,39 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             await update.message.reply_text(prompt)
             return
 
+    # Handle Main Menu buttons (Global)
+    if text == "🚀 Start Match":
+        await match_command(update, context)
+        return
+
+    if text == "👤 View Profile":
+        # Call profile_command logic directly or invoke it
+        await profile_command(update, context)
+        return
+
+    if text == "💤 Sleep / Pause":
+        user_id = str(update.effective_user.id)
+        # Set user to sleeping state - they remain visible to others but are paused
+        set_user_sleeping(user_id, True)
+
+        status_msg = (
+            "💤 *You are now paused.*\n\n"
+            "You have logged out of the session, but your profile remains visible to others in the match cycle.\n\n"
+            "We will notify you here if someone likes your profile! 🔔\n\n"
+            "Type /start to wake up and resume."
+        )
+        await update.message.reply_text(status_msg, parse_mode="Markdown", reply_markup=ReplyKeyboardRemove())
+        return
+
+    if text == "📨 Invite Friend":
+        msg = "📨 *Invite Friends*\n\nThis feature is coming soon! Stay tuned."
+        await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=main_menu())
+        return
+
+    if text == "⚙️ Settings":
+        await settings_command(update, context)
+        return
+
     # Handle cancel
     if text.lower() == "cancel":
         clear_conversation_state(context, user_id=str(update.effective_user.id))
@@ -1103,8 +1215,26 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     # Handle skip (for optional fields in profile setup or adhoc continue mode)
     if text.lower() == "skip":
+        logger.info(
+            "Skip command received",
+            user_id=user_id,
+            states=list(context.user_data.keys()) if context.user_data else [],
+            text=text,
+            adhoc_val=context.user_data.get(STATE_ADHOC_CONTINUE),
+            bio_val=context.user_data.get(STATE_AWAITING_BIO),
+        )
         in_profile_setup = context.user_data.get(STATE_PROFILE_SETUP) is not None
-        in_adhoc_mode = context.user_data.get(STATE_ADHOC_CONTINUE)
+
+        # Robust adhoc mode detection
+        in_adhoc_mode = (
+            context.user_data.get(STATE_ADHOC_CONTINUE)
+            or context.user_data.get("awaiting_gender")
+            or context.user_data.get(STATE_AWAITING_BIO)
+            or context.user_data.get(STATE_AWAITING_INTERESTS)
+            or context.user_data.get("awaiting_location")
+        ) and not in_profile_setup
+
+        logger.info("Skip mode detection", in_profile_setup=in_profile_setup, in_adhoc_mode=in_adhoc_mode)
 
         if in_profile_setup:
             current_step = context.user_data.get(STATE_PROFILE_SETUP, 0)
@@ -1127,19 +1257,59 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
                 await update.message.reply_text("This field is required and cannot be skipped. Please enter a value:")
                 return
 
+            skipped = context.user_data.get("skipped_profile_fields", {})
+            if isinstance(skipped, list):
+                skipped = {f: time.time() for f in skipped}
+
             if step_name == "gender":
                 context.user_data.pop("awaiting_gender", None)
+                skipped["gender"] = time.time()
             elif step_name == "bio":
                 context.user_data.pop(STATE_AWAITING_BIO, None)
+                skipped["bio"] = time.time()
             elif step_name == "interests":
                 context.user_data.pop(STATE_AWAITING_INTERESTS, None)
+                skipped["interests"] = time.time()
             elif step_name == "location":
                 context.user_data.pop("awaiting_location", None)
+                skipped["location"] = time.time()
 
+            context.user_data["skipped_profile_fields"] = skipped
             await _next_profile_step(update, context)
             return
         elif in_adhoc_mode:
             user_id = str(update.effective_user.id)
+
+            logger.info("Adhoc skip triggered", user_id=user_id, user_data_keys=list(context.user_data.keys()))
+
+            # Identify which field is being skipped and add to skipped_profile_fields
+            # Use list() to create a copy to ensure mutation is detected
+            skipped = context.user_data.get("skipped_profile_fields", {})
+            if isinstance(skipped, list):
+                skipped = {f: time.time() for f in skipped}
+
+            field_skipped = False
+            if context.user_data.get("awaiting_gender"):
+                skipped["gender"] = time.time()
+                field_skipped = True
+            elif context.user_data.get(STATE_AWAITING_BIO):
+                skipped["bio"] = time.time()
+                field_skipped = True
+            elif context.user_data.get(STATE_AWAITING_INTERESTS):
+                skipped["interests"] = time.time()
+                field_skipped = True
+            elif context.user_data.get("awaiting_location"):
+                skipped["location"] = time.time()
+                field_skipped = True
+
+            if not field_skipped:
+                logger.warning("Adhoc skip triggered but no matching state found!", user_id=user_id)
+
+            logger.info(
+                "Updating skipped fields", before=context.user_data.get("skipped_profile_fields", []), after=skipped
+            )
+            context.user_data["skipped_profile_fields"] = skipped
+
             context.user_data.pop("awaiting_gender", None)
             context.user_data.pop(STATE_AWAITING_BIO, None)
             context.user_data.pop(STATE_AWAITING_INTERESTS, None)
@@ -1189,10 +1359,12 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         if text.lower() == "skip":
             context.user_data.pop("awaiting_gender", None)
 
-            skipped = context.user_data.get("skipped_profile_fields", [])
-            if "gender" not in skipped:
-                skipped.append("gender")
-                context.user_data["skipped_profile_fields"] = skipped
+            skipped = context.user_data.get("skipped_profile_fields", {})
+            if isinstance(skipped, list):
+                skipped = {f: time.time() for f in skipped}
+
+            skipped["gender"] = time.time()
+            context.user_data["skipped_profile_fields"] = skipped
 
             await prompt_for_next_missing_field(update, context, user_id)
             return
@@ -1202,10 +1374,12 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         if text.lower() == "skip":
             context.user_data.pop(STATE_AWAITING_BIO, None)
 
-            skipped = context.user_data.get("skipped_profile_fields", [])
-            if "bio" not in skipped:
-                skipped.append("bio")
-                context.user_data["skipped_profile_fields"] = skipped
+            skipped = context.user_data.get("skipped_profile_fields", {})
+            if isinstance(skipped, list):
+                skipped = {f: time.time() for f in skipped}
+
+            skipped["bio"] = time.time()
+            context.user_data["skipped_profile_fields"] = skipped
 
             await prompt_for_next_missing_field(update, context, user_id)
             return
@@ -1217,10 +1391,12 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         if text.lower() == "skip":
             context.user_data.pop(STATE_AWAITING_INTERESTS, None)
 
-            skipped = context.user_data.get("skipped_profile_fields", [])
-            if "interests" not in skipped:
-                skipped.append("interests")
-                context.user_data["skipped_profile_fields"] = skipped
+            skipped = context.user_data.get("skipped_profile_fields", {})
+            if isinstance(skipped, list):
+                skipped = {f: time.time() for f in skipped}
+
+            skipped["interests"] = time.time()
+            context.user_data["skipped_profile_fields"] = skipped
 
             await prompt_for_next_missing_field(update, context, user_id)
             return
@@ -1234,10 +1410,12 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         if text.lower() == "skip":
             context.user_data.pop("awaiting_location", None)
 
-            skipped = context.user_data.get("skipped_profile_fields", [])
-            if "location" not in skipped:
-                skipped.append("location")
-                context.user_data["skipped_profile_fields"] = skipped
+            skipped = context.user_data.get("skipped_profile_fields", {})
+            if isinstance(skipped, list):
+                skipped = {f: time.time() for f in skipped}
+
+            skipped["location"] = time.time()
+            context.user_data["skipped_profile_fields"] = skipped
 
             await prompt_for_next_missing_field(update, context, user_id)
             return
@@ -1299,13 +1477,19 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
         update_user(user_id, {"photos": photos})
 
-        await update.message.reply_text("✅ Media added to your profile!")
+        # Check if profile is now complete (if this was the last missing field)
+        if context.user_data.get(STATE_ADHOC_CONTINUE):
+            # Re-run prompt logic to check if anything else is missing or show success
+            await prompt_for_next_missing_field(update, context, user_id)
+        else:
+            await update.message.reply_text("✅ Media added to your profile!")
 
     except Exception as e:
         logger.error("Error saving media", user_id=user_id, error=str(e))
         await update.message.reply_text("Failed to save media. Please try again.")
 
     context.user_data.pop(STATE_AWAITING_PHOTO, None)
+    context.user_data[STATE_PROFILE_MENU] = True
     context.user_data["user"] = get_user(user_id)
     await update.message.reply_text("✅ Profile photo updated.")
 
@@ -1314,7 +1498,9 @@ VIEW_PROFILE_TEMPLATE = """
 👤 {name}, {age}
 ⚧ {gender}
 
-�� {bio}
+📸 Media: {media_count} item(s)
+
+📝 {bio}
 
 🌟 Interests: {interests}
 
@@ -1328,6 +1514,9 @@ async def view_profile_callback(update: Update, context: ContextTypes.DEFAULT_TY
         return
 
     query = update.callback_query
+    # We must answer callback queries
+    # However, if we're sending a media group, the original message might be deleted/modified
+    # so we should answer quickly.
     await query.answer()
 
     data = query.data
@@ -1345,6 +1534,7 @@ async def view_profile_callback(update: Update, context: ContextTypes.DEFAULT_TY
             gender=target_user.gender.value.capitalize()
             if isinstance(target_user.gender, Gender)
             else (target_user.gender or "Not specified"),
+            media_count=len(target_user.photos) if target_user.photos else 0,
             bio=target_user.bio or "No bio yet.",
             interests=", ".join(target_user.interests) if target_user.interests else "No interests listed.",
             location=get_user_location_text(target_user.id) or "Location hidden",
@@ -1352,9 +1542,74 @@ async def view_profile_callback(update: Update, context: ContextTypes.DEFAULT_TY
 
         # We can add a "Back" button that goes back to matches list
         keyboard = [[InlineKeyboardButton("🔙 Back to Matches", callback_data="back_to_matches")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
 
-        await query.edit_message_text(text=profile_text, reply_markup=InlineKeyboardMarkup(keyboard))
+        # If user has photos, send them as a media group (or single photo)
+        if target_user.photos and len(target_user.photos) > 0:
+            media_group: List[Union[InputMediaPhoto, InputMediaVideo]] = []
+            opened_files = []
+            storage_path = get_storage_path()
+
+            try:
+                for photo_path in target_user.photos:
+                    full_path = storage_path / photo_path
+                    if full_path.exists():
+                        f = open(full_path, "rb")
+                        opened_files.append(f)
+                        # Determine type based on extension (simple check)
+                        # Our save_media logic ensures jpg for images, but let's be safe
+                        if full_path.suffix.lower() in [".jpg", ".jpeg", ".png"]:
+                            # For local files, we open them
+                            media_group.append(InputMediaPhoto(media=f))
+                        elif full_path.suffix.lower() in [".mp4", ".mov", ".avi"]:
+                            media_group.append(InputMediaVideo(media=f))
+
+                if media_group:
+                    # Add caption to the first item
+                    media_group[0].caption = profile_text
+
+                    # Delete the previous message (menu) to show media cleanly
+                    # Or we can just send new messages.
+                    # Standard UX: User clicked "View Profile", so we replace the list with profile details.
+                    # Sending media group is a new message operation usually.
+
+                    # Option A: Delete previous message and send media group
+                    try:
+                        await query.delete_message()
+                    except Exception:
+                        pass  # Message might be too old or already deleted
+
+                    if query.message and hasattr(query.message, "chat_id"):
+                        chat_id = cast(Message, query.message).chat_id
+                        await context.bot.send_media_group(chat_id=chat_id, media=media_group)
+
+                    # Send the buttons as a separate message because media groups can't have inline keyboards easily
+                    # attached to the whole group in a way that persists navigation well.
+                    # Actually, InputMedia supports caption but not inline keyboard for the group as a whole in the same way.
+                    # Best practice: Send media group, then send a text message with controls (or attached to the last item?)
+                    # Telegram API limitation: send_media_group returns a list of messages.
+
+                    if query.message and hasattr(query.message, "chat_id"):
+                        chat_id = cast(Message, query.message).chat_id
+                        await context.bot.send_message(
+                            chat_id=chat_id,
+                            text="Use the button below to go back.",
+                            reply_markup=reply_markup,
+                        )
+                else:
+                    # Photos listed but files missing? Fallback to text
+                    await query.edit_message_text(text=profile_text, reply_markup=reply_markup)
+            finally:
+                for f in opened_files:
+                    f.close()
+        else:
+            # No photos, just text
+            await query.edit_message_text(text=profile_text, reply_markup=reply_markup)
 
     except Exception as e:
         logger.error("Error viewing profile", target_user_id=target_user_id, error=str(e))
-        await query.edit_message_text("Could not load profile.")
+        # If we fail, try to edit the message to show error
+        try:
+            await query.edit_message_text("Could not load profile. Please try again.")
+        except Exception:
+            pass

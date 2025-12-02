@@ -29,10 +29,11 @@ class TestUserModel:
         """Test is_match_eligible returns True for complete, active, non-sleeping user."""
         assert complete_user.is_match_eligible() is True
 
-    def test_is_match_eligible_sleeping_user(self, complete_user):
-        """Test is_match_eligible returns False for sleeping user."""
+    def test_is_match_eligible_sleeping_user_still_visible(self, complete_user):
+        """Test is_match_eligible returns True for sleeping user (profile still visible)."""
         complete_user.is_sleeping = True
-        assert complete_user.is_match_eligible() is False
+        # Sleeping users are still visible to others in the match cycle
+        assert complete_user.is_match_eligible() is True
 
     def test_is_match_eligible_inactive_user(self, complete_user):
         """Test is_match_eligible returns False for inactive user."""

@@ -122,7 +122,7 @@ class User(BaseModel):
     location: Optional[Location] = None
     preferences: Preferences = Field(default_factory=Preferences)
     is_active: bool = True
-    is_sleeping: bool = False
+    is_sleeping: bool = False  # True when user is in sleep/pause mode (manual or auto)
     is_profile_complete: bool = False
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
@@ -186,8 +186,8 @@ class User(BaseModel):
         Raises:
             ValidationError: If photos are invalid
         """
-        if len(v) > 5:
-            raise ValidationError("Maximum 5 photos allowed")
+        if len(v) > 3:
+            raise ValidationError("Maximum 3 photos allowed")
         return v
 
     def is_match_eligible(self) -> bool:
@@ -198,7 +198,6 @@ class User(BaseModel):
         """
         return (
             self.is_active
-            and not self.is_sleeping
             and self.is_profile_complete
             and self.age is not None
             and self.gender is not None

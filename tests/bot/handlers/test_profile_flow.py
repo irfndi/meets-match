@@ -60,6 +60,7 @@ class MockUser:
         self.bio = None
         self.interests = []
         self.location = None
+        self.photos = []
         self.is_profile_complete = False
 
 
@@ -258,6 +259,10 @@ async def test_full_profile_creation_flow(
         "city": "New York",
         "country": "USA",
     }
+
+    # Inject photos to simulate that they were uploaded previously or handled
+    # so that the profile is considered complete after location
+    mock_user_state.photos = ["dummy.jpg"]
 
     await profile_handler_module.handle_text_message(update, context)
 

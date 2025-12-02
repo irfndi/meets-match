@@ -45,7 +45,7 @@ def save_media(file_content: bytes, user_id: str, file_ext: str = "jpg") -> str:
                 image = image.convert("RGB")
 
             # Save with compression
-            image.save(file_path, "JPEG", quality=85, optimize=True)
+            image.save(file_path, "JPEG", quality=70, optimize=True)
             # If we converted/saved as JPEG, ensure extension matches
             if file_ext.lower() != "jpg":
                 file_path = file_path.with_suffix(".jpg")
