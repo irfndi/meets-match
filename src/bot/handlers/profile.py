@@ -1473,7 +1473,7 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         # Enforce max media count (delete oldest)
         if len(photos) > settings.MAX_MEDIA_COUNT:
             removed = photos.pop(0)
-            delete_media(removed)
+            delete_media(removed, user_id=user_id, reason="replaced")
 
         update_user(user_id, {"photos": photos})
 
