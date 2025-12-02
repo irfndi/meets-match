@@ -1464,7 +1464,7 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         new_file = await file_obj.get_file()
         byte_array = await new_file.download_as_bytearray()
 
-        saved_path = save_media(byte_array, user_id, file_ext)
+        saved_path = save_media(bytes(byte_array), user_id, file_ext)
 
         user = get_user(user_id)
         photos = list(user.photos or [])

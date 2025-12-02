@@ -25,7 +25,6 @@ rsync -avz \
   --exclude '.DS_Store' \
   --exclude '.pytest_cache' \
   --exclude '.ruff_cache' \
-  --exclude '.mypy_cache' \
   --exclude '.env' \
   . root@217.216.35.77:/opt/apps/meetsmatch/code/
 ```

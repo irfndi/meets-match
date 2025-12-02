@@ -2,7 +2,7 @@
 
 from typing import Optional, Set
 
-from telegram import BotCommand
+from telegram import BotCommand, Update
 from telegram.error import Conflict
 from telegram.ext import (
     Application,
@@ -223,7 +223,7 @@ class BotApplication:
         error = context.error
 
         # Cast update to Update if possible for type checking, though it can be None
-        update_obj = update if isinstance(update, object) else None
+        update_obj: Optional[Update] = update if isinstance(update, Update) else None
 
         # Handle polling conflict explicitly to avoid repeated error spam
         if isinstance(error, Conflict):
