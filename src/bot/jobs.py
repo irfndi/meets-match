@@ -47,9 +47,10 @@ async def auto_sleep_inactive_users_job(context: ContextTypes.DEFAULT_TYPE) -> N
                     await context.bot.send_message(
                         chat_id=user.id,
                         text=(
-                            "💤 You've been automatically put to sleep due to inactivity.\n\n"
-                            "While sleeping, you won't appear in match searches.\n\n"
-                            "Send any message or use /start when you're ready to come back!"
+                            "💤 You've been automatically paused due to inactivity.\n\n"
+                            "Your profile remains visible to others in the match cycle.\n\n"
+                            "We will notify you here if someone likes your profile! 🔔\n\n"
+                            "Type /start to wake up and resume."
                         ),
                     )
                 except Exception as e:

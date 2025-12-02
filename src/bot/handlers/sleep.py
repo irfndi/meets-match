@@ -12,14 +12,13 @@ logger = get_logger(__name__)
 
 # Sleep command messages
 SLEEP_MESSAGE = """
-💤 You are now in sleep mode!
+💤 You are now paused.
 
-While sleeping:
-• You won't appear in other users' match searches
-• You won't receive match notifications
-• Your profile and matches are saved
+You have logged out of the session, but your profile remains visible to others in the match cycle.
 
-When you're ready to come back, just send any message or use /start!
+We will notify you here if someone likes your profile! 🔔
+
+Type /start to wake up and resume.
 """
 
 WAKE_UP_MESSAGE = """

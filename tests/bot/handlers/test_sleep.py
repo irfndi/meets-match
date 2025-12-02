@@ -77,7 +77,7 @@ async def test_sleep_command_success(sleep_handler_module, mock_update_context):
         mock_set_sleeping.assert_called_once_with("12345", True)
         update.message.reply_text.assert_called_once()
         args, kwargs = update.message.reply_text.call_args
-        assert "You are now in sleep mode" in args[0]
+        assert "You are now paused" in args[0]
         assert isinstance(kwargs.get("reply_markup"), ReplyKeyboardRemove)
 
 
