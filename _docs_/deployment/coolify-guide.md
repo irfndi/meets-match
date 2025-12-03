@@ -65,7 +65,37 @@ ssh root@217.216.35.77 "systemctl status meetsmatch.service"
 ### 7. Deploy
 Click **"Deploy"** in Coolify.
 
-## Troubleshooting
+### 6. Configure Backups (Important)
+You mentioned using an R2 bucket for backups. Here is how to configure it in Coolify:
+
+1.  **Add S3/R2 Storage:**
+    *   Go to **Settings** -> **S3 & Compatible Storage**.
+    *   Click **Add**.
+    *   Fill in your R2 details:
+        *   **Name:** `cloudflare-r2-backup`
+        *   **Endpoint:** `https://<your-account-id>.r2.cloudflarestorage.com`
+        *   **Region:** `auto` (or your specific region)
+        *   **Access Key:** `<your-access-key>`
+        *   **Secret Key:** `<your-secret-key>`
+        *   **Bucket:** `<your-bucket-name>`
+    *   Save.
+
+2.  **Enable Database Backups:**
+    *   Go to your **Project** -> **PostgreSQL Resource**.
+    *   Click **Scheduled Backups**.
+    *   Set the **Frequency** (e.g., `0 0 * * *` for daily at midnight).
+    *   Select the **S3 Storage** you just added.
+    *   Click **Save**.
+
+3.  **Persistent Storage for Media:**
+    *   The bot stores media in `/app/media`. To ensure this is not lost during deployments:
+    *   Go to **Bot Resource** -> **Storage**.
+    *   Add a new volume:
+        *   **Source Path:** `meetsmatch-media` (or a host path like `/opt/apps/meetsmatch/media`)
+        *   **Destination Path:** `/app/media`
+    *   Save and **Redeploy**.
+
+### 7. Troubleshooting
 - **Logs:** View logs in the Coolify UI under the specific resource.
 - **Shell:** Use the "Terminal" tab in Coolify to exec into the container.
 - **Connection Refused:** Ensure `pg_hba.conf` allows `0.0.0.0/0` (or docker subnet) and `redis.conf` binds to `10.0.0.1` or `0.0.0.0`.
