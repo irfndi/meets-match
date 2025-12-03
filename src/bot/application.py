@@ -324,7 +324,7 @@ class BotApplication:
 
         logger.info("Bot starting...")
         try:
-            self.application.run_polling(drop_pending_updates=True, bootstrap_retries=5)
+            self.application.run_polling(drop_pending_updates=True, bootstrap_retries=-1)
         except Conflict as ce:
             logger.error(
                 "Polling conflict detected: another bot instance is running for this token.",
@@ -368,7 +368,6 @@ class BotApplication:
                     drop_pending_updates=True, 
                     bootstrap_retries=-1, # Infinite retries to handle temporary connection issues
                     timeout=20, # Increase timeout slightly
-                    read_timeout=20
                 )
             except Conflict as e:
                 logger.error("Polling conflict detected during startup", error=str(e))
