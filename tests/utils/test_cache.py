@@ -29,7 +29,7 @@ def restore_real_cache_module():
 
         importlib.reload(src.utils.cache)
     except ImportError:
-        pass
+        pass  # Module may not be available in test environment
 
     yield
 

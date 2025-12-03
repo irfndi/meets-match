@@ -242,7 +242,6 @@ async def prompt_for_next_missing_field(
 
         if remaining_recommended:
             next_field = remaining_recommended[0]
-            field_label = next_field.capitalize()
 
             # Allow skipping bio if it's the only thing missing?
             # But let's prompt for it as part of the flow.
@@ -1800,4 +1799,4 @@ async def view_profile_callback(update: Update, context: ContextTypes.DEFAULT_TY
         try:
             await query.edit_message_text("Could not load profile. Please try again.")
         except Exception:
-            pass
+            pass  # Silently ignore if we can't send the error message

@@ -526,7 +526,7 @@ async def handle_view_match(update: Update, context: ContextTypes.DEFAULT_TYPE, 
                 chat_id = cast(Message, query.message).chat_id
                 await context.bot.send_message(chat_id=chat_id, text="Could not load profile. Please try again later.")
         except Exception:
-            pass
+            pass  # Silently ignore if we can't send the error message
 
 
 @authenticated
@@ -607,7 +607,7 @@ async def matches_pagination_callback(update: Update, context: ContextTypes.DEFA
         try:
             await query.edit_message_text("Sorry, something went wrong. Please try again later.")
         except Exception:
-            pass
+            pass  # Silently ignore if we can't send the error message
 
 
 async def show_matches_page(update: Update, context: ContextTypes.DEFAULT_TYPE, page: int) -> None:

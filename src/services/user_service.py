@@ -173,7 +173,7 @@ def update_user(user_id: str, data: Dict[str, Union[str, int, bool, datetime, Li
             location = Location.model_validate(location_data)
             set_cache(location_cache_key, location, expiration=86400)
         except Exception:
-            pass
+            pass  # Ignore cache update failures for location
 
     logger.info("User updated", user_id=user_id)
     return updated_user
@@ -219,7 +219,7 @@ def get_user_location_text(user_id: str) -> Optional[str]:
             text = f"{city}, {country}".strip().rstrip(",")
             return text if text else None
     except Exception:
-        pass
+        pass  # Fall through to try DB query fallback
 
     try:
         result = execute_query(
@@ -242,7 +242,7 @@ def get_user_location_text(user_id: str) -> Optional[str]:
             text = f"{city}, {country}".strip().rstrip(",")
             return text if text else None
     except Exception:
-        pass
+        pass  # Return None if location cannot be determined
 
     return None
 

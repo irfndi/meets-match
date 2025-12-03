@@ -19,14 +19,16 @@ async def test_get_mime_type(validator):
 
 
 @pytest.mark.asyncio
-async def test_validate_file_type_extension_only(validator):
-    # This might fail if magic is not installed or mocked, but let's try
-    # We'll mock magic if needed, but the code imports it.
+async def test_validate_file_type_png(validator):
+    """Test file type validation with PNG file."""
+    with patch("src.utils.validators.magic") as mock_magic:
+        mock_magic.from_buffer.return_value = "image/png"
 
-    # Valid image extension
-    # Note: The code tries to read content with magic.
-    # We need to provide bytes that match the extension or mock magic.
-    pass
+        is_valid, file_type = await validator.validate_file_type(b"fake_png_data", "test.png")
+
+        assert is_valid is True
+        assert file_type == "image"
+        mock_magic.from_buffer.assert_called_once()
 
 
 @pytest.mark.asyncio
