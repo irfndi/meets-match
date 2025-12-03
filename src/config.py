@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     ENABLE_SENTRY: bool = Field(default=False)
 
     # Application Configuration
-    APP_NAME: str = "MeetMatch Bot"
+    APP_NAME: str = "MeetsMatch Bot"
     LOG_LEVEL: str = "INFO"
     ENVIRONMENT: str = "development"
     DEBUG: bool = Field(default=False)
