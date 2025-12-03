@@ -118,19 +118,24 @@ def location_candidates_keyboard(options: list[str]) -> ReplyKeyboardMarkup:
     )
 
 
-def media_upload_keyboard(media_count: int = 0, max_count: int = 3) -> ReplyKeyboardMarkup:
+def media_upload_keyboard(
+    media_count: int = 0, max_count: int = 3, allow_done: bool = False
+) -> ReplyKeyboardMarkup:
     """Keyboard for multi-file upload with Done button.
 
     Args:
         media_count: Number of media files uploaded so far
         max_count: Maximum allowed media files
+        allow_done: Whether to show Done button even if media_count is 0
 
     Returns:
-        Keyboard with Done (if media uploaded) and Cancel buttons
+        Keyboard with Done (if media uploaded or allowed) and Cancel buttons
     """
     rows = []
     if media_count > 0:
         rows.append([f"✅ Done ({media_count}/{max_count})"])
+    elif allow_done:
+        rows.append(["✅ Done"])
     rows.append(["Cancel"])
     return ReplyKeyboardMarkup(
         rows,

@@ -1116,7 +1116,7 @@ async def _next_profile_step(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 f"Press '✅ Done' when finished."
             )
             # Start keyboard count at 0 for new upload session (replace logic)
-            reply_markup = media_upload_keyboard(0, settings.MAX_MEDIA_COUNT)
+            reply_markup = media_upload_keyboard(0, settings.MAX_MEDIA_COUNT, allow_done=True)
 
         await update.message.reply_text(prompt, reply_markup=reply_markup)
 
@@ -1187,7 +1187,10 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             context.user_data.pop(STATE_PROFILE_MENU, None)
             context.user_data[STATE_AWAITING_PHOTO] = True
             context.user_data[STATE_PENDING_MEDIA] = []  # Start fresh upload session
-            set_user_editing_state(str(update.effective_user.id), True)
+            user_id = str(update.effective_user.id)
+            set_user_editing_state(user_id, True)
+            user = get_user(user_id)
+            has_photos = bool(user.photos and len(user.photos) > 0)
             settings = get_settings()
             await update.message.reply_text(
                 f"📸 Send photos or videos for your profile (up to {settings.MAX_MEDIA_COUNT}).\n\n"
@@ -1195,7 +1198,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
                 f"• Images: max 5MB, min 200x200px\n"
                 f"• Videos: max 20MB\n\n"
                 f"Press '✅ Done' when finished or 'Cancel' to abort.",
-                reply_markup=media_upload_keyboard(0, settings.MAX_MEDIA_COUNT),
+                reply_markup=media_upload_keyboard(0, settings.MAX_MEDIA_COUNT, allow_done=has_photos),
             )
             return
         if text == "✏️ Update Bio":
@@ -1587,6 +1590,8 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         return
 
     user_id = str(update.effective_user.id)
+    user = get_user(user_id)
+    has_photos = bool(user.photos and len(user.photos) > 0)
     settings = get_settings()
     file_obj: PhotoSize | Video | None = None
     file_ext = "jpg"
@@ -1617,7 +1622,9 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         await update.message.reply_text(
             f"❌ You've already added {settings.MAX_MEDIA_COUNT} files. "
             f"Press '✅ Done' to save or 'Cancel' to start over.",
-            reply_markup=media_upload_keyboard(len(pending_media), settings.MAX_MEDIA_COUNT),
+            reply_markup=media_upload_keyboard(
+                len(pending_media), settings.MAX_MEDIA_COUNT, allow_done=has_photos
+            ),
         )
         return
 
@@ -1633,7 +1640,9 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         if not is_valid_size:
             await update.message.reply_text(
                 f"❌ {size_result}",
-                reply_markup=media_upload_keyboard(len(pending_media), settings.MAX_MEDIA_COUNT),
+                reply_markup=media_upload_keyboard(
+                    len(pending_media), settings.MAX_MEDIA_COUNT, allow_done=has_photos
+                ),
             )
             return
 
@@ -1643,7 +1652,9 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             if not is_valid_image:
                 await update.message.reply_text(
                     f"❌ {image_result}",
-                    reply_markup=media_upload_keyboard(len(pending_media), settings.MAX_MEDIA_COUNT),
+                    reply_markup=media_upload_keyboard(
+                        len(pending_media), settings.MAX_MEDIA_COUNT, allow_done=has_photos
+                    ),
                 )
                 return
 
@@ -1664,14 +1675,16 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
         await update.message.reply_text(
             success_msg,
-            reply_markup=media_upload_keyboard(media_count, settings.MAX_MEDIA_COUNT),
+            reply_markup=media_upload_keyboard(media_count, settings.MAX_MEDIA_COUNT, allow_done=has_photos),
         )
 
     except Exception as e:
         logger.error("Error processing media", user_id=user_id, error=str(e))
         await update.message.reply_text(
             "❌ Failed to process media. Please try again.",
-            reply_markup=media_upload_keyboard(len(pending_media), settings.MAX_MEDIA_COUNT),
+            reply_markup=media_upload_keyboard(
+                len(pending_media), settings.MAX_MEDIA_COUNT, allow_done=has_photos
+            ),
         )
 
 
