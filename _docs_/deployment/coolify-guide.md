@@ -100,5 +100,46 @@ You mentioned using an R2 bucket for backups. Here is how to configure it in Coo
 - **Shell:** Use the "Terminal" tab in Coolify to exec into the container.
 - **Connection Refused:** Ensure `pg_hba.conf` allows `0.0.0.0/0` (or docker subnet) and `redis.conf` binds to `10.0.0.1` or `0.0.0.0`.
 
+## 8. Migrating to Coolify Managed Resources (Recommended)
+Using Coolify-managed Postgres and Redis provides better isolation, automated backups, and easier management.
+
+### Step 1: Identify New Resources
+- **Postgres:** Find the container name or resource name in Coolify (e.g., `postgresql-database-ow484s4kw8kg0wwk8kkgcogw`).
+- **Redis:** Find the container name (e.g., `redis-database-wc4g00ook8ck08css8c40ksk`).
+
+### Step 2: Dump Old Data (Postgres)
+Run this on the server (via SSH) to backup the existing data from the host database:
+```bash
+# Dump data from host port 5433 (Host Postgres)
+pg_dump -h 127.0.0.1 -p 5433 -U meetsmatch meetsmatch > meetsmatch_backup.sql
+# Password is usually 'password' (check your old env)
+```
+
+### Step 3: Restore to New Container
+Run this on the server to import data into the new Coolify Postgres container:
+```bash
+# Replace 'postgresql-database-ow484s4kw8kg0wwk8kkgcogw' with your ACTUAL container name
+cat meetsmatch_backup.sql | docker exec -i postgresql-database-ow484s4kw8kg0wwk8kkgcogw psql -U postgres -d postgres
+```
+*Note: You might want to create a specific database/user inside the container first using `docker exec -it <container> psql -U postgres`, but using the default `postgres` DB is fine for simple setups.*
+
+### Step 4: Update Bot Environment Variables
+Update the bot's environment variables in Coolify to point to the new resources:
+
+**Postgres:**
+- `DB_HOST`: `postgresql-database-ow484s4kw8kg0wwk8kkgcogw` (Use the container name)
+- `DB_PORT`: `5432` (Default internal port)
+- `DB_USER`: `postgres`
+- `DB_PASSWORD`: (Get this from Coolify UI -> Project -> Postgres Resource)
+- `DB_NAME`: `postgres` (or whatever you restored into)
+
+**Redis:**
+- `REDIS_HOST`: `redis-database-wc4g00ook8ck08css8c40ksk` (Use the container name)
+- `REDIS_PORT`: `6379`
+- `REDIS_PASSWORD`: (Get this from Coolify UI -> Project -> Redis Resource)
+
+### Step 5: Redeploy
+Click **"Redeploy"** on the bot resource.
+
 ## Legacy (Systemd)
 If you prefer to run without Docker (not managed by Coolify), refer to `DEPLOYMENT.MD` for the systemd service configuration.
