@@ -28,16 +28,19 @@ from src.bot.ui.keyboards import (
     location_keyboard,
     location_optional_keyboard,
     main_menu,
+    media_upload_keyboard,
     profile_main_menu,
     skip_cancel_keyboard,
     skip_keyboard,
 )
+from src.config import get_settings
 from src.models.user import Gender, User
 from src.services.geocoding_service import geocode_city, reverse_geocode_coordinates
 from src.services.user_service import get_user, get_user_location_text, update_user
 from src.utils.cache import delete_cache, set_cache
 from src.utils.logging import get_logger
 from src.utils.media import delete_media, get_storage_path, save_media
+from src.utils.validators import media_validator
 
 logger = get_logger(__name__)
 
@@ -104,6 +107,7 @@ STATE_AWAITING_INTERESTS = "awaiting_interests"
 STATE_PROFILE_SETUP = "profile_setup_step"
 STATE_PROFILE_MENU = "profile_menu"
 STATE_AWAITING_PHOTO = "awaiting_photo"
+STATE_PENDING_MEDIA = "pending_media"  # List of media paths being uploaded in current session
 
 # Confirmation messages
 NAME_UPDATED_MESSAGE = "✅ Name updated to: {name}"
@@ -944,6 +948,8 @@ def clear_conversation_state(context: ContextTypes.DEFAULT_TYPE, user_id: str | 
         STATE_AWAITING_AGE,
         STATE_AWAITING_BIO,
         STATE_AWAITING_INTERESTS,
+        STATE_AWAITING_PHOTO,
+        STATE_PENDING_MEDIA,
         STATE_ADHOC_CONTINUE,
         "awaiting_gender",
         "awaiting_location",
@@ -1150,8 +1156,17 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         if text == "🖼 Update Photo":
             context.user_data.pop(STATE_PROFILE_MENU, None)
             context.user_data[STATE_AWAITING_PHOTO] = True
+            context.user_data[STATE_PENDING_MEDIA] = []  # Start fresh upload session
             set_user_editing_state(str(update.effective_user.id), True)
-            await update.message.reply_text("Send a photo to update your profile.")
+            settings = get_settings()
+            await update.message.reply_text(
+                f"📸 Send photos or videos for your profile (up to {settings.MAX_MEDIA_COUNT}).\n\n"
+                f"📏 Limits:\n"
+                f"• Images: max 5MB, min 200x200px\n"
+                f"• Videos: max 20MB\n\n"
+                f"Press '✅ Done' when finished or 'Cancel' to abort.",
+                reply_markup=media_upload_keyboard(0, settings.MAX_MEDIA_COUNT),
+            )
             return
         if text == "✏️ Update Bio":
             context.user_data.pop(STATE_PROFILE_MENU, None)
@@ -1201,8 +1216,59 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         await settings_command(update, context)
         return
 
+    # Handle Done button for media upload
+    if text.startswith("✅ Done"):
+        pending_media = context.user_data.get(STATE_PENDING_MEDIA, [])
+        if pending_media:
+            user_id = str(update.effective_user.id)
+            user = get_user(user_id)
+            old_photos = list(user.photos or [])
+
+            # Replace behavior: Delete all existing photos and track them for 365-day retention
+            for old_photo in old_photos:
+                delete_media(old_photo, user_id=user_id, reason="replaced")
+
+            # Set the new photos (replacement, not adding)
+            update_user(user_id, {"photos": pending_media})
+
+            # Clear state
+            context.user_data.pop(STATE_AWAITING_PHOTO, None)
+            context.user_data.pop(STATE_PENDING_MEDIA, None)
+            context.user_data[STATE_PROFILE_MENU] = True
+            context.user_data["user"] = get_user(user_id)
+
+            media_count = len(pending_media)
+            if old_photos:
+                await update.message.reply_text(
+                    f"✅ Profile media replaced! ({media_count} file{'s' if media_count > 1 else ''})",
+                    reply_markup=main_menu(),
+                )
+            else:
+                await update.message.reply_text(
+                    f"✅ Profile media saved! ({media_count} file{'s' if media_count > 1 else ''})",
+                    reply_markup=main_menu(),
+                )
+
+            # Check if profile is now complete
+            if context.user_data.get(STATE_ADHOC_CONTINUE):
+                await prompt_for_next_missing_field(update, context, user_id)
+        else:
+            await update.message.reply_text(
+                "❌ No media uploaded yet. Please send at least one photo or video.",
+                reply_markup=media_upload_keyboard(0, get_settings().MAX_MEDIA_COUNT),
+            )
+        return
+
     # Handle cancel
     if text.lower() == "cancel":
+        # Clean up any pending media files that weren't saved
+        pending_media = context.user_data.get(STATE_PENDING_MEDIA, [])
+        if pending_media:
+            user_id = str(update.effective_user.id)
+            for media_path in pending_media:
+                delete_media(media_path, user_id=user_id, reason="cancelled")
+            context.user_data.pop(STATE_PENDING_MEDIA, None)
+
         clear_conversation_state(context, user_id=str(update.effective_user.id))
         context.user_data.pop(STATE_PROFILE_SETUP, None)
         context.user_data.pop(STATE_ADHOC_CONTINUE, None)
@@ -1436,25 +1502,47 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 @authenticated
 async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle photo and video uploads."""
+    """Handle photo and video uploads with validation and multi-file support."""
     if not update.message or not update.effective_user or context.user_data is None:
         return
 
     user_id = str(update.effective_user.id)
+    settings = get_settings()
     file_obj: PhotoSize | Video | None = None
     file_ext = "jpg"
+    file_type = "image"
+    file_name = "upload.jpg"
 
     if update.message.photo:
         file_obj = update.message.photo[-1]
+        file_name = "photo.jpg"
     elif update.message.video:
         video_obj = update.message.video
         file_obj = video_obj
-        file_ext = "mp4"  # Default video ext
+        file_ext = "mp4"
+        file_type = "video"
+        file_name = "video.mp4"
         if video_obj.mime_type:
             ext = video_obj.mime_type.split("/")[-1]
             if ext:
                 file_ext = ext
+                file_name = f"video.{ext}"
     else:
+        return
+
+    # Initialize pending media list if not exists
+    if STATE_PENDING_MEDIA not in context.user_data:
+        context.user_data[STATE_PENDING_MEDIA] = []
+
+    pending_media: list = context.user_data[STATE_PENDING_MEDIA]
+
+    # Check if we already have max media
+    if len(pending_media) >= settings.MAX_MEDIA_COUNT:
+        await update.message.reply_text(
+            f"❌ You've already added {settings.MAX_MEDIA_COUNT} files. "
+            f"Press '✅ Done' to save or 'Cancel' to start over.",
+            reply_markup=media_upload_keyboard(len(pending_media), settings.MAX_MEDIA_COUNT),
+        )
         return
 
     try:
@@ -1462,38 +1550,64 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             return
         new_file = await file_obj.get_file()
         byte_array = await new_file.download_as_bytearray()
+        file_data = bytes(byte_array)
 
+        # Validate file type
+        is_valid_type, type_result = await media_validator.validate_file_type(file_data, file_name)
+        if not is_valid_type:
+            await update.message.reply_text(
+                f"❌ {type_result}\n\nPlease send a valid image (JPEG, PNG, WebP, GIF) or video (MP4, MOV, WebM).",
+                reply_markup=media_upload_keyboard(len(pending_media), settings.MAX_MEDIA_COUNT),
+            )
+            return
+        file_type = type_result  # 'image' or 'video'
+
+        # Validate file size
+        is_valid_size, size_result = await media_validator.validate_file_size(len(file_data), file_type)
+        if not is_valid_size:
+            await update.message.reply_text(
+                f"❌ {size_result}",
+                reply_markup=media_upload_keyboard(len(pending_media), settings.MAX_MEDIA_COUNT),
+            )
+            return
+
+        # Validate image dimensions (only for images)
+        if file_type == "image":
+            is_valid_image, image_result = await media_validator.validate_image(file_data)
+            if not is_valid_image:
+                await update.message.reply_text(
+                    f"❌ {image_result}",
+                    reply_markup=media_upload_keyboard(len(pending_media), settings.MAX_MEDIA_COUNT),
+                )
+                return
+
+        # Save the media file
         saved_path = save_media(byte_array, user_id, file_ext)
+        pending_media.append(saved_path)
+        context.user_data[STATE_PENDING_MEDIA] = pending_media
 
-        user = get_user(user_id)
-        old_photos = list(user.photos or [])
+        media_count = len(pending_media)
+        remaining = settings.MAX_MEDIA_COUNT - media_count
 
-        # Replace behavior: Delete all existing photos and track them for 365-day retention
-        for old_photo in old_photos:
-            delete_media(old_photo, user_id=user_id, reason="replaced")
-
-        # Set the new photo as the only photo (replacement, not adding)
-        photos = [saved_path]
-
-        update_user(user_id, {"photos": photos})
-
-        # Check if profile is now complete (if this was the last missing field)
-        if context.user_data.get(STATE_ADHOC_CONTINUE):
-            # Re-run prompt logic to check if anything else is missing or show success
-            await prompt_for_next_missing_field(update, context, user_id)
+        if remaining > 0:
+            await update.message.reply_text(
+                f"✅ {file_type.capitalize()} added ({media_count}/{settings.MAX_MEDIA_COUNT})!\n\n"
+                f"Send more files or press '✅ Done' to save your profile media.",
+                reply_markup=media_upload_keyboard(media_count, settings.MAX_MEDIA_COUNT),
+            )
         else:
-            if old_photos:
-                await update.message.reply_text("✅ Profile photo replaced!")
-            else:
-                await update.message.reply_text("✅ Profile photo added!")
+            await update.message.reply_text(
+                f"✅ {file_type.capitalize()} added ({media_count}/{settings.MAX_MEDIA_COUNT})!\n\n"
+                f"Maximum reached. Press '✅ Done' to save your profile media.",
+                reply_markup=media_upload_keyboard(media_count, settings.MAX_MEDIA_COUNT),
+            )
 
     except Exception as e:
-        logger.error("Error saving media", user_id=user_id, error=str(e))
-        await update.message.reply_text("Failed to save media. Please try again.")
-
-    context.user_data.pop(STATE_AWAITING_PHOTO, None)
-    context.user_data[STATE_PROFILE_MENU] = True
-    context.user_data["user"] = get_user(user_id)
+        logger.error("Error processing media", user_id=user_id, error=str(e))
+        await update.message.reply_text(
+            "❌ Failed to process media. Please try again.",
+            reply_markup=media_upload_keyboard(len(pending_media), settings.MAX_MEDIA_COUNT),
+        )
 
 
 VIEW_PROFILE_TEMPLATE = """

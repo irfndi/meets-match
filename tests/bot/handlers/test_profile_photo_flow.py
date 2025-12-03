@@ -5,7 +5,13 @@ from telegram import Message, PhotoSize, Update
 from telegram import User as TelegramUser
 from telegram.ext import ContextTypes
 
-from src.bot.handlers.profile import STATE_AWAITING_PHOTO, STATE_PROFILE_MENU, handle_text_message, photo_handler
+from src.bot.handlers.profile import (
+    STATE_AWAITING_PHOTO,
+    STATE_PENDING_MEDIA,
+    STATE_PROFILE_MENU,
+    handle_text_message,
+    photo_handler,
+)
 from src.models.user import Gender, User
 
 
@@ -21,16 +27,23 @@ def mock_profile_module():
         patch("src.bot.handlers.profile.send_media_group_safe"),
         patch("src.bot.middleware.auth.update_last_active"),
         patch("src.bot.middleware.auth.get_cache"),
+        patch("src.bot.handlers.profile.media_validator") as mock_validator,
     ):
         # Make sure both get_users return the same mock or are configured similarly
         # We yield the first one, but we'll configure the second one in the test to match
         mock_auth_get_user.side_effect = lambda uid: mock_get_user(uid)
 
+        # Configure validator to pass all validations by default
+        mock_validator.validate_file_type = AsyncMock(return_value=(True, "image"))
+        mock_validator.validate_file_size = AsyncMock(return_value=(True, "Valid size"))
+        mock_validator.validate_image = AsyncMock(return_value=(True, "Valid image"))
+
         yield mock_get_user, mock_update_user, mock_save_media
 
 
 @pytest.mark.asyncio
-async def test_photo_update_restores_menu_state(mock_profile_module):
+async def test_photo_upload_adds_to_pending_media(mock_profile_module):
+    """Test that photo uploads add files to pending media list (multi-file upload flow)."""
     mock_get_user, _, mock_save_media = mock_profile_module
 
     # Setup
@@ -45,21 +58,56 @@ async def test_photo_update_restores_menu_state(mock_profile_module):
     update.message.photo = [MagicMock(spec=PhotoSize)]
     update.message.photo[-1].get_file = AsyncMock()
     update.message.photo[-1].get_file.return_value.download_as_bytearray = AsyncMock(return_value=b"data")
+    update.message.video = None
     update.message.reply_text = AsyncMock()
     # Important: set effective_message for middleware
     update.effective_message = update.message
 
     context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
-    context.user_data = {STATE_AWAITING_PHOTO: True}
-    # Note: STATE_PROFILE_MENU is NOT in user_data initially (removed when entering photo mode)
+    context.user_data = {STATE_AWAITING_PHOTO: True, STATE_PENDING_MEDIA: []}
 
     # Execute photo_handler
     await photo_handler(update, context)
 
-    # Assertions
+    # Assertions - with multi-file upload, STATE_AWAITING_PHOTO stays active until Done is pressed
+    assert STATE_AWAITING_PHOTO in context.user_data
+    # Pending media should have the new file
+    assert "new_photo.jpg" in context.user_data[STATE_PENDING_MEDIA]
+    # User should get feedback about the upload
+    update.message.reply_text.assert_called()
+
+
+@pytest.mark.asyncio
+async def test_done_button_saves_and_clears_state(mock_profile_module):
+    """Test that pressing Done saves pending media and clears state."""
+    mock_get_user, mock_update_user, _ = mock_profile_module
+
+    user_id = "12345"
+    user = User(id=user_id, first_name="Test", age=25, gender=Gender.MALE, photos=["old.jpg"])
+    mock_get_user.return_value = user
+
+    update = MagicMock(spec=Update)
+    update.effective_user = TelegramUser(id=int(user_id), first_name="Test", is_bot=False)
+    update.message = MagicMock(spec=Message)
+    update.message.text = "✅ Done (2/3)"
+    update.message.reply_text = AsyncMock()
+    update.effective_message = update.message
+
+    context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
+    context.user_data = {
+        STATE_AWAITING_PHOTO: True,
+        STATE_PENDING_MEDIA: ["photo1.jpg", "photo2.jpg"],
+    }
+
+    # Execute handle_text_message (which handles the Done button)
+    await handle_text_message(update, context)
+
+    # Assertions - state should be cleared after Done
     assert STATE_AWAITING_PHOTO not in context.user_data
-    # THIS IS THE BUG: We expect STATE_PROFILE_MENU to be restored
-    assert STATE_PROFILE_MENU in context.user_data, "STATE_PROFILE_MENU should be restored after photo update"
+    assert STATE_PENDING_MEDIA not in context.user_data
+    assert STATE_PROFILE_MENU in context.user_data
+    # Should have called update_user to save the photos
+    mock_update_user.assert_called()
 
 
 @pytest.mark.asyncio
