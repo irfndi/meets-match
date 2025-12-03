@@ -16,12 +16,15 @@ RUN apt-get update && apt-get install -y \
 # Install uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 
-# Copy the project files
-COPY . .
+# Copy dependency files first for better layer caching
+COPY pyproject.toml uv.lock ./
 
 # Install dependencies
 # --frozen ensures we stick to the lockfile
 RUN uv sync --frozen
+
+# Copy the rest of the project files
+COPY . .
 
 # Set environment variables
 ENV PATH="/app/.venv/bin:$PATH"
