@@ -184,6 +184,48 @@ def check_and_update_profile_complete(user_id: str, context: ContextTypes.DEFAUL
 STATE_ADHOC_CONTINUE = "adhoc_continue_profile"
 
 
+async def _send_message_safe(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, reply_markup=None) -> bool:
+    """Send a message safely, handling both message and callback query contexts.
+
+    Tries update.effective_message.reply_text() first, then falls back to
+    context.bot.send_message() using the effective chat/user ID.
+
+    Args:
+        update: The update object
+        context: The context object
+        text: Text content to send
+        reply_markup: Optional keyboard markup
+
+    Returns:
+        True if message was sent successfully, False otherwise
+    """
+    # Try effective_message first
+    if update.effective_message:
+        await update.effective_message.reply_text(text, reply_markup=reply_markup)
+        return True
+
+    # Fallback: try to get chat_id from various sources
+    chat_id = None
+    if update.effective_chat:
+        chat_id = update.effective_chat.id
+    elif update.effective_user:
+        # For private chats, user_id == chat_id
+        chat_id = update.effective_user.id
+    elif update.callback_query and update.callback_query.message:
+        # Try to get chat_id from callback_query.message even if it's InaccessibleMessage
+        try:
+            chat_id = update.callback_query.message.chat.id
+        except AttributeError:
+            pass
+
+    if chat_id:
+        await context.bot.send_message(chat_id=chat_id, text=text, reply_markup=reply_markup)
+        return True
+
+    logger.error("Could not send message: no effective_message, effective_chat, or effective_user")
+    return False
+
+
 async def prompt_for_next_missing_field(
     update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: str, silent_if_complete: bool = False
 ) -> bool:
@@ -201,8 +243,18 @@ async def prompt_for_next_missing_field(
     if context.user_data is None:
         logger.error("context.user_data is None in prompt_for_next_missing_field")
         return False
-    if not update.effective_message:
-        logger.error("update.effective_message is None in prompt_for_next_missing_field")
+
+    # Get a reliable way to send messages (handles both message and callback contexts)
+    # We check this early and fail fast if we can't send messages
+    can_send = update.effective_message or update.effective_chat or update.effective_user
+    if not can_send and update.callback_query and update.callback_query.message:
+        try:
+            can_send = update.callback_query.message.chat.id is not None
+        except AttributeError:
+            pass
+
+    if not can_send:
+        logger.error("Cannot send messages: no effective_message, effective_chat, or effective_user")
         return False
 
     user = get_user(user_id)
@@ -253,29 +305,31 @@ async def prompt_for_next_missing_field(
 
             if next_field == "gender":
                 context.user_data["awaiting_gender"] = True
-                await update.effective_message.reply_text(GENDER_UPDATE_MESSAGE, reply_markup=gender_keyboard())
+                await _send_message_safe(update, context, GENDER_UPDATE_MESSAGE, reply_markup=gender_keyboard())
                 return True
             elif next_field == "bio":
                 context.user_data[STATE_AWAITING_BIO] = True
-                await update.effective_message.reply_text(
-                    BIO_UPDATE_MESSAGE, reply_markup=skip_keyboard("Write a short bio")
+                await _send_message_safe(
+                    update, context, BIO_UPDATE_MESSAGE, reply_markup=skip_keyboard("Write a short bio")
                 )
                 return True
             elif next_field == "interests":
                 context.user_data[STATE_AWAITING_INTERESTS] = True
-                await update.effective_message.reply_text(
-                    INTERESTS_UPDATE_MESSAGE, reply_markup=skip_keyboard("music, travel, cooking")
+                await _send_message_safe(
+                    update, context, INTERESTS_UPDATE_MESSAGE, reply_markup=skip_keyboard("music, travel, cooking")
                 )
                 return True
             elif next_field == "location":
                 context.user_data["awaiting_location"] = True
-                await update.effective_message.reply_text(LOCATION_UPDATE_MESSAGE, reply_markup=location_keyboard())
+                await _send_message_safe(update, context, LOCATION_UPDATE_MESSAGE, reply_markup=location_keyboard())
                 return True
 
         # All fields (required + recommended) are done or skipped
         logger.info("All fields complete or skipped", silent=silent_if_complete)
         if not silent_if_complete:
-            await update.effective_message.reply_text(
+            await _send_message_safe(
+                update,
+                context,
                 "🎉 Your profile is fully complete! You can start matching with /match!",
                 reply_markup=main_menu(),
             )
@@ -286,25 +340,29 @@ async def prompt_for_next_missing_field(
     next_field = missing_required[0]
     logger.info("Prompting for required field", field=next_field)
     field_label = next_field.capitalize()
-    await update.effective_message.reply_text(
+    await _send_message_safe(
+        update,
+        context,
         f"Your profile still needs: {field_label}\n\nLet's complete it now!",
     )
 
     if next_field == "name":
         context.user_data[STATE_AWAITING_NAME] = True
-        await update.effective_message.reply_text(
-            NAME_UPDATE_MESSAGE, reply_markup=ReplyKeyboardMarkup([["Cancel"]], resize_keyboard=True)
+        await _send_message_safe(
+            update, context, NAME_UPDATE_MESSAGE, reply_markup=ReplyKeyboardMarkup([["Cancel"]], resize_keyboard=True)
         )
     elif next_field == "age":
         context.user_data[STATE_AWAITING_AGE] = True
-        await update.effective_message.reply_text(
-            AGE_UPDATE_MESSAGE, reply_markup=ReplyKeyboardMarkup([["Cancel"]], resize_keyboard=True)
+        await _send_message_safe(
+            update, context, AGE_UPDATE_MESSAGE, reply_markup=ReplyKeyboardMarkup([["Cancel"]], resize_keyboard=True)
         )
     elif next_field == "photos":
         context.user_data[STATE_AWAITING_PHOTO] = True
         context.user_data[STATE_PENDING_MEDIA] = []
         settings = get_settings()
-        await update.effective_message.reply_text(
+        await _send_message_safe(
+            update,
+            context,
             f"Please upload at least one photo or video to complete your profile! 📸 (up to {settings.MAX_MEDIA_COUNT})",
             reply_markup=media_upload_keyboard(0, settings.MAX_MEDIA_COUNT),
         )

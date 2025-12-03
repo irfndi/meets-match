@@ -219,3 +219,138 @@ async def test_check_and_update_profile_complete(profile_handler_module, mock_de
 
     # Verify update_user called to set is_profile_complete=True
     mock_deps["update_user"].assert_called_with("12345", {"is_profile_complete": True})
+
+
+@pytest.mark.asyncio
+async def test_send_message_safe_uses_effective_message_when_available(profile_handler_module, mock_update_context):
+    """Test _send_message_safe uses effective_message.reply_text when available."""
+    update, context = mock_update_context
+    update.effective_message = update.message  # Ensure effective_message is set
+
+    result = await profile_handler_module._send_message_safe(update, context, "Test message")
+
+    assert result is True
+    update.effective_message.reply_text.assert_called_once_with("Test message", reply_markup=None)
+
+
+@pytest.mark.asyncio
+async def test_send_message_safe_falls_back_to_bot_send_message(profile_handler_module, mock_update_context):
+    """Test _send_message_safe falls back to context.bot.send_message when effective_message is None."""
+    update, context = mock_update_context
+
+    # Simulate callback query with inaccessible message (effective_message is None)
+    update.effective_message = None
+    update.effective_chat = MagicMock()
+    update.effective_chat.id = 12345
+
+    # Mock context.bot.send_message
+    context.bot = MagicMock()
+    context.bot.send_message = AsyncMock()
+
+    result = await profile_handler_module._send_message_safe(update, context, "Test message")
+
+    assert result is True
+    context.bot.send_message.assert_called_once_with(chat_id=12345, text="Test message", reply_markup=None)
+
+
+@pytest.mark.asyncio
+async def test_send_message_safe_uses_effective_user_as_fallback(profile_handler_module, mock_update_context):
+    """Test _send_message_safe uses effective_user.id when effective_message and effective_chat are None."""
+    update, context = mock_update_context
+
+    # Simulate callback query with inaccessible message
+    update.effective_message = None
+    update.effective_chat = None
+    update.effective_user = MagicMock()
+    update.effective_user.id = 12345
+
+    # Mock context.bot.send_message
+    context.bot = MagicMock()
+    context.bot.send_message = AsyncMock()
+
+    result = await profile_handler_module._send_message_safe(update, context, "Test message")
+
+    assert result is True
+    context.bot.send_message.assert_called_once_with(chat_id=12345, text="Test message", reply_markup=None)
+
+
+@pytest.mark.asyncio
+async def test_send_message_safe_uses_callback_query_message_chat(profile_handler_module, mock_update_context):
+    """Test _send_message_safe extracts chat_id from callback_query.message.chat when others are None."""
+    update, context = mock_update_context
+
+    # Simulate callback query with accessible message but None effective_message (edge case)
+    update.effective_message = None
+    update.effective_chat = None
+    update.effective_user = None
+    update.callback_query = MagicMock()
+    update.callback_query.message = MagicMock()
+    update.callback_query.message.chat = MagicMock()
+    update.callback_query.message.chat.id = 12345
+
+    # Mock context.bot.send_message
+    context.bot = MagicMock()
+    context.bot.send_message = AsyncMock()
+
+    result = await profile_handler_module._send_message_safe(update, context, "Test message")
+
+    assert result is True
+    context.bot.send_message.assert_called_once_with(chat_id=12345, text="Test message", reply_markup=None)
+
+
+@pytest.mark.asyncio
+async def test_send_message_safe_returns_false_when_no_chat_id_available(profile_handler_module, mock_update_context):
+    """Test _send_message_safe returns False when no chat_id can be determined."""
+    update, context = mock_update_context
+
+    # Simulate complete failure to get chat_id
+    update.effective_message = None
+    update.effective_chat = None
+    update.effective_user = None
+    update.callback_query = None
+
+    result = await profile_handler_module._send_message_safe(update, context, "Test message")
+
+    assert result is False
+
+
+@pytest.mark.asyncio
+async def test_prompt_for_next_missing_field_works_with_callback_query(
+    profile_handler_module, mock_dependencies, mock_update_context
+):
+    """Test prompt_for_next_missing_field works when called from callback query context.
+
+    This is the critical test for the new user onboarding flow:
+    After setting region/language via callbacks, the profile prompt should be shown
+    even if effective_message is None (which can happen with inaccessible messages).
+    """
+    update, context = mock_update_context
+    mock_deps = mock_dependencies
+
+    # Simulate callback query context where effective_message might be inaccessible
+    update.effective_message = None
+    update.effective_chat = MagicMock()
+    update.effective_chat.id = 12345
+
+    # Mock context.bot.send_message
+    context.bot = MagicMock()
+    context.bot.send_message = AsyncMock()
+
+    # Mock user with missing age (required field)
+    mock_user = MagicMock()
+    mock_user.first_name = "Test"
+    mock_user.age = None
+    mock_user.photos = ["photo.jpg"]
+    mock_user.gender = None
+    mock_user.bio = None
+    mock_user.interests = []
+    mock_user.location = None
+    mock_user.is_profile_complete = False
+    mock_deps["get_user"].return_value = mock_user
+
+    result = await profile_handler_module.prompt_for_next_missing_field(update, context, "12345")
+
+    assert result is True
+    assert context.user_data.get("awaiting_age") is True
+    # Verify messages were sent via bot.send_message
+    assert context.bot.send_message.called
