@@ -50,6 +50,13 @@ def settings_handler_module(mock_middleware_fix):
 
 
 @pytest.fixture
+def user_model_classes():
+    """Provide access to user model classes (Preferences, Location, etc.)."""
+    user_model = importlib.import_module("src.models.user")
+    return {"Preferences": user_model.Preferences, "Location": user_model.Location}
+
+
+@pytest.fixture
 def mock_dependencies(settings_handler_module):
     """Mock external dependencies."""
     mock_get_user = MagicMock()
@@ -137,14 +144,13 @@ async def test_settings_callback_region(settings_handler_module, mock_dependenci
 
 
 @pytest.mark.asyncio
-async def test_settings_callback_update_region(settings_handler_module, mock_dependencies, mock_update_context):
+async def test_settings_callback_update_region(
+    settings_handler_module, mock_dependencies, mock_update_context, user_model_classes
+):
     """Test settings callback for updating region."""
     update, context = mock_update_context
     mock_deps = mock_dependencies
-
-    # Get real Preferences class
-    user_model = importlib.import_module("src.models.user")
-    Preferences = user_model.Preferences
+    Preferences = user_model_classes["Preferences"]
 
     update.callback_query.data = "region_Indonesia"
 
@@ -169,14 +175,13 @@ async def test_settings_callback_update_region(settings_handler_module, mock_dep
 
 
 @pytest.mark.asyncio
-async def test_settings_callback_update_language(settings_handler_module, mock_dependencies, mock_update_context):
+async def test_settings_callback_update_language(
+    settings_handler_module, mock_dependencies, mock_update_context, user_model_classes
+):
     """Test settings callback for updating language."""
     update, context = mock_update_context
     mock_deps = mock_dependencies
-
-    # Get real Preferences class
-    user_model = importlib.import_module("src.models.user")
-    Preferences = user_model.Preferences
+    Preferences = user_model_classes["Preferences"]
 
     update.callback_query.data = "language_id"
 
@@ -259,15 +264,12 @@ async def test_settings_callback_language_type_prompts_for_text_input(
 
 @pytest.mark.asyncio
 async def test_settings_callback_region_with_space_in_name(
-    settings_handler_module, mock_dependencies, mock_update_context
+    settings_handler_module, mock_dependencies, mock_update_context, user_model_classes
 ):
     """Test settings callback correctly handles country names with spaces."""
     update, context = mock_update_context
     mock_deps = mock_dependencies
-
-    # Get real Preferences class
-    user_model = importlib.import_module("src.models.user")
-    Preferences = user_model.Preferences
+    Preferences = user_model_classes["Preferences"]
 
     update.callback_query.data = "region_United States"
 
