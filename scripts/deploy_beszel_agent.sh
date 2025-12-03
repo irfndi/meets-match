@@ -2,11 +2,19 @@
 # Deploy Beszel Agent to the server
 set -e
 
-SERVER_IP="217.216.35.77"
-USER="root"
-PORT="45876"
-# The public key provided by the user
-KEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHleR0ymtBMlJ7AlM+dhd8VqwJgQ7x9/RVO2XQV2hxjb"
+# Configuration - can be overridden via environment variables
+SERVER_IP="${SERVER_IP:-217.216.35.77}"
+USER="${USER:-root}"
+PORT="${PORT:-45876}"
+
+# The SSH public key must be provided as the first argument or via BESZEL_KEY environment variable
+KEY="${1:-$BESZEL_KEY}"
+
+if [ -z "$KEY" ]; then
+    echo "Usage: $0 <ssh-public-key>" >&2
+    echo "Or set the BESZEL_KEY environment variable" >&2
+    exit 1
+fi
 
 echo "Deploying Beszel Agent to $SERVER_IP..."
 
@@ -17,7 +25,7 @@ docker run -d \
   --network host \
   -v /var/run/docker.sock:/var/run/docker.sock:ro \
   -e PORT=$PORT \
-  -e KEY='$KEY' \
+  -e KEY=\"$KEY\" \
   henrygd/beszel-agent"
 
 echo "Beszel Agent deployed successfully!"

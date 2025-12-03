@@ -1,5 +1,6 @@
 """Telegram bot application for the MeetMatch bot."""
 
+import sys
 from typing import Optional, Set
 
 from telegram import BotCommand, Update
@@ -236,40 +237,13 @@ class BotApplication:
 
         # Handle polling conflict explicitly to avoid repeated error spam
         if isinstance(error, Conflict):
-            logger.error(
-                "Polling conflict detected: another bot instance is running for this token.",
+            logger.critical(
+                "Polling conflict detected: another bot instance is running for this token. Shutting down.",
                 error=str(error),
                 update_id=getattr(update_obj, "update_id", None),
             )
-
-            app = context.application
-            try:
-                updater = getattr(app, "updater", None)
-                if updater:
-                    try:
-                        res = updater.stop()
-                        import asyncio as _asyncio
-
-                        if _asyncio.iscoroutine(res):
-                            await res
-                    except Exception:
-                        pass  # Silently ignore errors during graceful shutdown
-            except Exception:
-                pass  # Silently ignore errors during graceful shutdown
-            try:
-                stop_fn = getattr(app, "stop", None)
-                if callable(stop_fn):
-                    result = stop_fn()
-                    try:
-                        import asyncio as _asyncio
-
-                        if _asyncio.iscoroutine(result):
-                            await result
-                    except Exception:
-                        pass  # Silently ignore errors during graceful shutdown
-            except Exception:
-                pass  # Silently ignore errors during graceful shutdown
-            return
+            # Exit with code 2 for polling conflict; let the process manager (systemd/Docker) handle the restart
+            sys.exit(2)
 
         # Get chat ID for error response
         chat_id = None

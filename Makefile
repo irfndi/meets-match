@@ -39,6 +39,10 @@ migrate:
 	uv run alembic upgrade head
 
 makemigrations:
+ifndef msg
+	@echo "Usage: make makemigrations msg=\"Your migration message\"" >&2
+	@exit 1
+endif
 	uv run alembic revision --autogenerate -m "$(msg)"
 
 lock:
