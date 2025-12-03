@@ -71,6 +71,19 @@ class MatchDB(Base):
     expired_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
 
+class DeletedMediaDB(Base):
+    """Deleted media tracking model for soft delete and 365-day retention."""
+
+    __tablename__ = "deleted_media"
+
+    id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(50), ForeignKey("users.id"), index=True)
+    file_path: Mapped[str] = mapped_column(String(500))
+    deleted_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+    reason: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    is_purged: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
 class Database:
     """Singleton database connection manager."""
 
@@ -163,6 +176,7 @@ def execute_query(
     model_map = {
         "users": UserDB,
         "matches": MatchDB,
+        "deleted_media": DeletedMediaDB,
     }
 
     model = model_map.get(table)
