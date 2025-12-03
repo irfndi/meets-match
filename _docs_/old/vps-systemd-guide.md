@@ -1,4 +1,10 @@
-# VPS Multi-Application Management Guide with systemd
+# [DEPRECATED] VPS Multi-Application Management Guide with systemd
+
+> **⚠️ IMPORTANT:** This deployment method is **deprecated**. We have migrated to **Coolify** for better management, isolation, and ease of use.
+> Please refer to the **[Coolify Deployment Guide](./coolify-guide.md)** for the current deployment instructions.
+> This guide is kept for historical reference only.
+
+# VPS Multi-Application Management Guide with systemd (Legacy)
 
 A comprehensive guide for deploying and managing multiple isolated applications on a single VPS using systemd, with complete examples for both shared and isolated architectures.
 

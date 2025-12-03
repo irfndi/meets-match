@@ -357,14 +357,23 @@ async def handle_region(update: Update, context: ContextTypes.DEFAULT_TYPE, coun
                 ),
             )
         else:
-            await query.edit_message_text(
-                f"✅ Region updated to: {country}",
-                reply_markup=None,
-            )
             # Both set, continue to profile setup if needed
             from src.bot.handlers.profile import prompt_for_next_missing_field
 
-            await prompt_for_next_missing_field(update, context, user_id)
+            prompted = await prompt_for_next_missing_field(update, context, user_id)
+
+            # If we prompted for a missing field, we don't need a Back button (focus on new prompt)
+            # If we didn't prompt (profile complete or cooldown), show Back button so user isn't stuck
+            reply_markup = None
+            if not prompted:
+                reply_markup = InlineKeyboardMarkup(
+                    [[InlineKeyboardButton("« Back to Settings", callback_data="back_to_settings")]]
+                )
+
+            await query.edit_message_text(
+                f"✅ Region updated to: {country}",
+                reply_markup=reply_markup,
+            )
 
     except Exception as e:
         logger.error("Error updating region", user_id=user_id, country=country, error=str(e), exc_info=e)

@@ -1,4 +1,10 @@
-# Deployment Guide for MeetsMatch (VPS)
+# [DEPRECATED] Deployment Guide for MeetsMatch (VPS)
+
+> **⚠️ IMPORTANT:** This deployment method is **deprecated**. We have migrated to **Coolify** for better management, isolation, and ease of use.
+> Please refer to the **[Coolify Deployment Guide](deployment/coolify-guide.md)** for the current deployment instructions.
+> This guide is kept for historical reference only.
+
+# Deployment Guide for MeetsMatch (VPS) (Legacy)
 
 ## Overview
 **Target Server:** `217.216.35.77`
@@ -25,6 +31,7 @@ rsync -avz \
   --exclude '.DS_Store' \
   --exclude '.pytest_cache' \
   --exclude '.ruff_cache' \
+  --exclude '.mypy_cache' \
   --exclude '.env' \
   . root@217.216.35.77:/opt/apps/meetsmatch/code/
 ```
