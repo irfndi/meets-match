@@ -12,6 +12,7 @@ help:
 	@echo "  make makemigrations  Create a new migration (usage: make makemigrations msg=\"message\")"
 	@echo "  make lock            Update uv.lock"
 	@echo "  make clean           Remove temporary files"
+	@echo "  make deploy-monitor  Deploy Beszel Agent to VPS"
 
 run:
 	uv run python main.py
@@ -47,3 +48,7 @@ clean:
 	find . -type d -name "__pycache__" -exec rm -rf {} +
 	find . -type d -name ".pytest_cache" -exec rm -rf {} +
 	find . -type d -name ".ruff_cache" -exec rm -rf {} +
+
+deploy-monitor:
+	./scripts/deploy_beszel_agent.sh
+
