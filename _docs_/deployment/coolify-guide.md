@@ -133,40 +133,28 @@ You must now update the bot's environment variables in the Coolify UI to switch 
 ### Step 5: Redeploy
 Click **"Redeploy"** on the bot resource.
 
-## 9. Configuring Error Tracking (Bugsink)
-You mentioned setting up Bugsink. Since Bugsink is Sentry-compatible, the bot is already configured to use it.
+## 9. Configuring Error Tracking (GlitchTip)
+We have switched to **GlitchTip** (an open-source Sentry alternative) for error tracking.
 
 1.  **Get your DSN:**
-    *   In Bugsink, create a new project (select "Python" or "Sentry").
-    *   Copy the **DSN** (Client Key). It looks like `https://key@bugsink.domain/1`.
+    *   In GlitchTip, create a new project.
+    *   Go to **Settings** -> **Client Keys (DSN)**.
+    *   Copy the **DSN** URL.
 
 2.  **Update Environment Variables:**
     *   Go to Coolify -> Bot Resource -> Environment Variables.
-    *   Add the following:
+    *   Add/Update the following:
         ```env
         ENABLE_SENTRY=true
-        SENTRY_DSN=https://your-bugsink-dsn-here
+        SENTRY_DSN=http://69008bb355b74053b4ba0cf730ca9b93@glitchtip-wcsg4s4kcwo0oo40wscwkcks.217.216.35.77.sslip.io/1
         ```
+    *(Replace the DSN above with your actual one if it changes).*
 
 3.  **Redeploy:**
     *   Click **Redeploy** to apply the changes.
-    *   The bot will now send errors to your Bugsink instance.
 
-**Troubleshooting Bugsink:**
-
-*   **DSN Issue:** If Coolify doesn't auto-inject the variable (you see `$SERVICE_PASSWORD...` in logs), use this value (found from your Bugsink instance):
-    ```
-    https://VqZrDaF5RjM303IGUq6A1OOynrQMRpn2YTDUTKqn3bHjaMAy60rALkCeSnDekwXz@bugsink-ek8g8scs8c0w0k08gwos0wc4.217.216.35.77.sslip.io:8000/1
-    ```
-    *(Copy this entire URL into `SENTRY_DSN`)*
-
-*   **404 Not Found on Public URL:**
-    If `http://bugsink-....sslip.io` returns a 404, but the service is running:
-    1. Go to your **Bugsink Resource** in Coolify.
-    2. Go to **Settings (General)**.
-    3. Look for **Ports Exposes**.
-    4. Ensure it is set to `8000`. (Bugsink listens on port 8000 by default).
-    5. Click **Save** and **Redeploy**.
+**Testing the Integration:**
+To verify it's working, you can temporarily add a bug to your code (e.g., `1/0`) or wait for a real error. GlitchTip should capture it.
 
 ---
 
