@@ -59,7 +59,7 @@ def get_logger(name: str, **initial_values: Any) -> structlog.stdlib.BoundLogger
     Returns:
         A configured structured logger
     """
-    return structlog.get_logger(name).bind(**initial_values)
+    return structlog.get_logger(name).bind(**initial_values)  # type: ignore
 
 
 def log_error(

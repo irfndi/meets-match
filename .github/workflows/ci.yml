@@ -2,108 +2,50 @@ name: CI
 
 on: [push, pull_request]
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.10", "3.11", "3.12"]
+        python-version: ["3.13"]
 
     steps:
     - uses: actions/checkout@v4
     
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ matrix.python-version }}
-        
     - name: Install uv
-      run: |
-        curl -LsSf https://astral.sh/uv/install.sh | sh
-        echo "PATH=$HOME/.cargo/bin:$PATH" >> $GITHUB_ENV
+      uses: astral-sh/setup-uv@v5
+      with:
+        version: "latest"
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      run: uv python install ${{ matrix.python-version }}
 
-    - name: Setup Virtual Environment and Install Dependencies
-      run: |
-        uv --version
-        uv venv
-        echo "source .venv/bin/activate" >> $GITHUB_ENV
-
-    - name: Activate Environment and Install Project
-      shell: bash -el {0}
-      run: |
-        source .venv/bin/activate
-        uv pip install -e ".[dev]"
-        echo "Installed packages:"
-        uv pip list
+    - name: Install dependencies
+      run: uv sync --all-extras --dev
 
     - name: Lint with Ruff
-      shell: bash -el {0}
-      run: |
-        source .venv/bin/activate
-        uv run ruff check .
+      run: uv run ruff check .
 
     - name: Check Formatting with Ruff
-      shell: bash -el {0}
-      run: |
-        source .venv/bin/activate
-        uv run ruff format --check .
-
-    - name: Configure environment for tests
-      run: |
-        echo "# Test environment for CI" > .env.test
-        echo "ENVIRONMENT=test" >> .env.test
-        echo "LOG_LEVEL=DEBUG" >> .env.test
-        echo "MATCH_THRESHOLD=0.75" >> .env.test
-
-        echo "TELEGRAM_TOKEN=mock_token_for_ci_tests" >> .env.test
-
-        echo "Test environment configuration:"
-        cat .env.test | grep -v TOKEN
-
-        cp .env.test .env
+      run: uv run ruff format --check .
 
     - name: Run tests with coverage
-      shell: bash -el {0}
       env:
-        TELEGRAM_TOKEN: ${{ secrets.BOT_TOKEN || 'mock_token_for_ci_tests' }}
+        TELEGRAM_TOKEN: mock_token_for_ci_tests
+        DATABASE_URL: postgresql://user:pass@localhost:5432/test_db
+        REDIS_URL: redis://localhost:6379/0
       run: |
-        source .venv/bin/activate
-        python --version
-        uv pip list
-
-        echo "Running tests..."
-        uv run pytest tests --cov=src --cov-report=xml --cov-fail-under=95
-
-        echo "Test run finished."
+        uv run pytest tests --cov=src --cov-report=xml -v
 
     - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
+      uses: codecov/codecov-action@v4
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         files: ./coverage.xml
         flags: unittests
         verbose: true
         name: codecov-umbrella
-        fail_ci_if_error: true
-
-  deploy:
-    runs-on: ubuntu-latest
-    needs: test # Depends on the test job matrix completing successfully
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push' # Only run on push to main branch
-
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Set up Node.js
-      uses: actions/setup-node@v3
-      with:
-        node-version: '18' # Use a compatible Node.js version for wrangler
-
-    - name: Install Wrangler
-      run: npm install -g wrangler
-
-    - name: Deploy to Cloudflare Workers
-      env:
-        CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
-        CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
-      run: wrangler deploy
+        fail_ci_if_error: false

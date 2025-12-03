@@ -13,9 +13,9 @@
 Our Telegram bot helps users find and schedule meetups using AI-powered matching. Built with:
 - Python 3.10+
 - python-telegram-bot v20.3+
-- Cloudflare KV for caching and session data
-- Cloudflare D1 for persistent relational data
-- Deployed as a Cloudflare Worker
+- Redis (optional) for caching and session data
+- PostgreSQL for persistent relational data
+- Deployed on a VPS as a systemd service
 
 ## Development Environment Setup
 
@@ -49,38 +49,27 @@ uv pip install -e ".[dev]"
 
 ### Development Tools
 ```bash
-# Development tools (like ruff, pytest, pylyzer) are installed via pyproject.toml's [dev] extra
+# Development tools (like ruff, pytest, ty) are installed via pyproject.toml's [dev] extra
 
 # Setup pre-commit hooks (if using pre-commit)
 pre-commit install
 ```
 
-### Local Cloudflare Worker Setup (Using Wrangler)
+### Local Development
 
-1. Install Wrangler CLI (if not already installed):
+Use `uv` for local development:
+
 ```bash
-npm install -g wrangler
+# Sync dependencies
+uv sync
+
+# Run the bot
+uv run python main.py
 ```
 
-2. Authenticate Wrangler (if not already done):
-```bash
-wrangler login
-```
-
-3. Create `.dev.vars` file in the project root for local secrets (this file is gitignored):
-```ini
-# .dev.vars (DO NOT COMMIT)
-TELEGRAM_TOKEN="your_local_test_bot_token"
-# Add other secrets or environment variables needed for local testing
-```
-
-4. Run the worker locally (this will also pick up D1/KV bindings from wrangler.toml):
-```bash
-# Make sure you are in the project root directory where wrangler.toml is located
-wrangler dev --env test --vars .dev.vars
-```
-
-This command starts a local server simulating the Cloudflare environment.
+Optional services:
+- Ensure Redis is running if caching is enabled (`REDIS_URL` configured).
+- Ensure PostgreSQL is running and `DATABASE_URL` is configured.
 
 ## Project Structure
 ```
@@ -98,7 +87,7 @@ scripts/               # Deployment/maintenance scripts
 ## Coding Conventions
 1. **Type Annotations**:
    - Use Python 3.10+ syntax
-   - Strict mypy validation
+   - Strict type validation with ty
 
 2. **Error Handling**:
    - Use custom exceptions from `errors.py`
@@ -119,30 +108,41 @@ ruff check .
 ruff format .
 
 # Type checking
-pylyzer src/
+ty check
 ```
 
 ## Deployment
-The bot is deployed as a Cloudflare Worker.
+The bot is deployed on a VPS and managed via `systemd`.
 
 ### Environment Configuration
-- Use `.dev.vars` for local development secrets and Cloudflare dashboard for production secrets.
-- Configuration includes Telegram Bot Token, D1 Database bindings, and KV Namespace bindings.
+- Use `.env` for both local and production configuration.
+- Critical variables include `TELEGRAM_BOT_TOKEN`, `DATABASE_URL`, and `REDIS_URL` (optional).
 
 ### Deployment Steps
 ```bash
-# Install wrangler CLI (if not already installed)
-# npm install -g wrangler
+# Prepare the VPS (PostgreSQL, Redis, uv)
+ssh root@<SERVER_IP>
+cd /opt/meetsmatch
+# Copy project files to /opt/meetsmatch
 
-# Authenticate wrangler
-# wrangler login
+# Create and fill .env
+cp .env.example .env
+vi .env
 
-# Deploy to Cloudflare
-wrangler deploy
+# Sync dependencies
+uv sync
+
+# Install and start systemd service
+sudo cp meetsmatch.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now meetsmatch
+
+# View logs
+journalctl -u meetsmatch -f
 ```
 
 ### CI/CD
-- GitHub Actions are configured to automatically test and deploy the worker on pushes to the main branch.
+- GitHub Actions are configured to automatically run tests and coverage on pushes.
 - Codecov reports are generated and uploaded during the CI process.
 
 ## Contributing

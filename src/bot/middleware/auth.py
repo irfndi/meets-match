@@ -1,12 +1,16 @@
 """Authentication middleware for the MeetMatch bot."""
 
+import asyncio
 from functools import wraps
 from typing import Any, Callable, List, Optional, TypeVar, cast
 
-from telegram import Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
-from src.services.user_service import get_user, update_last_active
+from src.bot.ui.keyboards import main_menu, setup_profile_prompt_keyboard
+from src.services.matching_service import POTENTIAL_MATCHES_CACHE_KEY, get_potential_matches
+from src.services.user_service import get_user, update_last_active, wake_user
+from src.utils.cache import get_cache
 from src.utils.errors import NotFoundError
 from src.utils.logging import get_logger
 
@@ -14,6 +18,25 @@ logger = get_logger(__name__)
 
 # Type variable for handler functions
 HandlerType = TypeVar("HandlerType", bound=Callable[..., Any])
+
+# Message shown when a sleeping user wakes up
+WAKE_UP_MESSAGE = """
+👋 Welcome back!
+
+You're now active again and visible to potential matches.
+
+What would you like to do?
+"""
+
+
+async def warm_up_matches(user_id: str) -> None:
+    """Background task to warm up match cache."""
+    try:
+        # Run blocking DB call in a separate thread to avoid blocking the event loop
+        await asyncio.to_thread(get_potential_matches, user_id)
+        logger.debug("Match cache warmed up in background", user_id=user_id)
+    except Exception as e:
+        logger.warning("Failed to warm up match cache", user_id=user_id, error=str(e))
 
 
 def authenticated(func: HandlerType) -> HandlerType:
@@ -31,22 +54,83 @@ def authenticated(func: HandlerType) -> HandlerType:
         """Check if user is authenticated before executing handler."""
         if not update.effective_user:
             logger.warning("No user found in update")
-            await update.effective_message.reply_text("Authentication failed. Please try again.")
+            if update.effective_message:
+                await update.effective_message.reply_text("Authentication failed. Please try again.")
             return
 
         user_id = str(update.effective_user.id)
 
         try:
             # Try to get user from database
-            user = get_user(user_id)
+            # Run blocking DB call in a separate thread
+            user = await asyncio.to_thread(get_user, user_id)
+
+            # Check if user is sleeping - wake them up on any interaction
+            if user.is_sleeping:
+                logger.info("Waking up sleeping user", user_id=user_id)
+                user = await asyncio.to_thread(wake_user, user_id)
+
+                # Send wake up message
+                if update.effective_message:
+                    await update.effective_message.reply_text(
+                        WAKE_UP_MESSAGE,
+                        reply_markup=main_menu(),
+                    )
+
+                # Store updated user in context and return (let them start fresh)
+                if context.user_data is not None:
+                    context.user_data["user"] = user
+                return
 
             # Update last active timestamp
-            update_last_active(user_id)
+            # Run blocking DB call in a separate thread
+            await asyncio.to_thread(update_last_active, user_id)
+
+            # Cache Warm-up: Check if matches are cached, if not, trigger background generation
+            # This ensures when user clicks /matches, data is likely ready
+            # Also extend TTL if it exists, since user is active
+            cache_key = POTENTIAL_MATCHES_CACHE_KEY.format(user_id=user_id)
+            if not get_cache(cache_key, extend_ttl=3600):
+                # Check if task is already running to avoid duplicates/spam
+                if context.user_data is not None:
+                    existing_task = context.user_data.get("warmup_task")
+                    if not existing_task or existing_task.done():
+                        # Fire and forget background task
+                        # Store reference in context to prevent garbage collection
+                        task = asyncio.create_task(warm_up_matches(user_id))
+                        context.user_data["warmup_task"] = task
 
             # Store user in context
-            context.user_data["user"] = user
+            if context.user_data is not None:
+                context.user_data["user"] = user
 
-            # Execute handler
+            missing_region = not (
+                getattr(user, "preferences", None) and getattr(user.preferences, "preferred_country", None)
+            )
+            missing_language = not (
+                getattr(user, "preferences", None) and getattr(user.preferences, "preferred_language", None)
+            )
+            is_callback = getattr(update, "callback_query", None) is not None
+            command = update.message.text.split()[0] if update.message and update.message.text else ""
+            allowed = ["/start", "/settings"]
+
+            if (missing_region or missing_language) and not is_callback and command not in allowed:
+                msg = "Please complete your setup before continuing:"
+                buttons = []
+                if missing_region:
+                    msg += "\n• Region is not set"
+                    buttons.append([InlineKeyboardButton("🌍 Set Region", callback_data="settings_region")])
+                if missing_language:
+                    msg += "\n• Language is not set"
+                    buttons.append([InlineKeyboardButton("🗣 Set Language", callback_data="settings_language")])
+
+                if update.effective_message:
+                    await update.effective_message.reply_text(
+                        msg,
+                        reply_markup=InlineKeyboardMarkup(buttons),
+                    )
+                return
+
             return await func(update, context, *args, **kwargs)
 
         except NotFoundError:
@@ -60,7 +144,8 @@ def authenticated(func: HandlerType) -> HandlerType:
                 return await func(update, context, *args, **kwargs)
 
             # Redirect to registration
-            await update.effective_message.reply_text("Please register first by using the /start command.")
+            if update.effective_message:
+                await update.effective_message.reply_text("Please register first by using the /start command.")
             return
 
         except Exception as e:
@@ -70,9 +155,10 @@ def authenticated(func: HandlerType) -> HandlerType:
                 error=str(e),
                 exc_info=e,
             )
-            await update.effective_message.reply_text(
-                "An error occurred during authentication. Please try again later."
-            )
+            if update.effective_message:
+                await update.effective_message.reply_text(
+                    "An error occurred during authentication. Please try again later."
+                )
             return
 
     return cast(HandlerType, wrapper)
@@ -102,12 +188,16 @@ def admin_only(admin_ids: Optional[List[str]] = None) -> Callable[[HandlerType],
         @authenticated
         async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE, *args: Any, **kwargs: Any) -> Any:
             """Check if user is an admin before executing handler."""
+            if not update.effective_user:
+                return
+
             user_id = str(update.effective_user.id)
 
             # Check if user is in admin list
             if admin_ids and user_id not in admin_ids:
                 logger.warning("Non-admin user attempted admin action", user_id=user_id)
-                await update.effective_message.reply_text("You don't have permission to perform this action.")
+                if update.effective_message:
+                    await update.effective_message.reply_text("You don't have permission to perform this action.")
                 return
 
             # Execute handler
@@ -119,7 +209,10 @@ def admin_only(admin_ids: Optional[List[str]] = None) -> Callable[[HandlerType],
 
 
 def profile_required(func: HandlerType) -> HandlerType:
-    """Decorator to ensure user has a complete profile.
+    """Decorator to ensure user has completed required profile fields.
+
+    Required fields: name, age
+    Recommended (optional) fields: gender, bio, interests, location
 
     Args:
         func: Handler function to decorate
@@ -127,24 +220,56 @@ def profile_required(func: HandlerType) -> HandlerType:
     Returns:
         Decorated handler function
     """
+    from src.services.user_service import update_user
 
     @wraps(func)
     @authenticated
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE, *args: Any, **kwargs: Any) -> Any:
-        """Check if user has a complete profile before executing handler."""
-        user = context.user_data.get("user")
+        """Check if user has completed required profile fields before executing handler."""
+        user = None
+        if context.user_data is not None:
+            user = context.user_data.get("user")
 
-        if not user or not user.is_profile_complete:
-            logger.info(
-                "User profile incomplete",
-                user_id=str(update.effective_user.id),
-            )
-            await update.effective_message.reply_text(
-                "Please complete your profile first by using the /profile command."
-            )
+        if not user:
+            if update.effective_message:
+                await update.effective_message.reply_text("Please register first by using the /start command.")
             return
+
+        missing_required = []
+        if not user.first_name:
+            missing_required.append("Name")
+        if not user.age:
+            missing_required.append("Age")
+
+        if missing_required:
+            if not update.effective_user:
+                return
+
+            logger.info(
+                "User profile incomplete - missing required fields",
+                user_id=str(update.effective_user.id),
+                missing=missing_required,
+            )
+
+            missing_text = ", ".join(missing_required)
+
+            if update.effective_message:
+                await update.effective_message.reply_text(
+                    f"You need to complete your profile before matching.\n\n"
+                    f"Missing required fields: {missing_text}\n\n"
+                    f"Click 'Setup Profile' to complete your profile now!",
+                    reply_markup=setup_profile_prompt_keyboard(),
+                )
+            return
+
+        if not user.is_profile_complete:
+            if update.effective_user:
+                update_user(str(update.effective_user.id), {"is_profile_complete": True})
+                user = get_user(str(update.effective_user.id))
+                if context.user_data is not None:
+                    context.user_data["user"] = user
 
         # Execute handler
         return await func(update, context, *args, **kwargs)
 
-    return wrapper
+    return cast(HandlerType, wrapper)
