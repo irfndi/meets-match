@@ -19,12 +19,12 @@ async def test_get_mime_type(validator):
 
 
 @pytest.mark.asyncio
-async def test_validate_file_type_extension_only(validator):
-    """Test file type validation with valid extension and matching content."""
+async def test_validate_file_type_png(validator):
+    """Test file type validation with PNG file."""
     with patch("src.utils.validators.magic") as mock_magic:
-        mock_magic.from_buffer.return_value = "image/jpeg"
+        mock_magic.from_buffer.return_value = "image/png"
 
-        is_valid, file_type = await validator.validate_file_type(b"fake_jpeg_data", "test.jpg")
+        is_valid, file_type = await validator.validate_file_type(b"fake_png_data", "test.png")
 
         assert is_valid is True
         assert file_type == "image"
