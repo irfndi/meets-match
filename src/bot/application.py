@@ -352,15 +352,27 @@ class BotApplication:
 
         logger.info("Bot starting in background mode...")
         await self.application.initialize()
+        
+        # Delete webhook before polling to avoid conflict
+        try:
+            logger.info("Ensuring webhook is deleted before polling...")
+            await self.application.bot.delete_webhook(drop_pending_updates=True)
+        except Exception as e:
+            logger.warning(f"Failed to delete webhook: {e}")
+
         await self.application.start()
         if self.application.updater:
             try:
-                await self.application.updater.start_polling(drop_pending_updates=True, bootstrap_retries=5)
+                # Use allowed_updates to filter updates if needed, but None gets all defaults
+                await self.application.updater.start_polling(
+                    drop_pending_updates=True, 
+                    bootstrap_retries=-1, # Infinite retries to handle temporary connection issues
+                    timeout=20, # Increase timeout slightly
+                    read_timeout=20
+                )
             except Conflict as e:
                 logger.error("Polling conflict detected during startup", error=str(e))
                 # We don't raise here, we just let it be.
-                # The health check will report failure because updater.running will be False (hopefully)
-                # Actually, if start_polling raises, updater.running might not be set.
                 pass
 
     async def stop(self) -> None:
