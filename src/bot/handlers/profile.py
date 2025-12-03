@@ -32,7 +32,6 @@ from src.bot.ui.keyboards import (
     skip_cancel_keyboard,
     skip_keyboard,
 )
-from src.config import settings
 from src.models.user import Gender, User
 from src.services.geocoding_service import geocode_city, reverse_geocode_coordinates
 from src.services.user_service import get_user, get_user_location_text, update_user
@@ -1467,13 +1466,14 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         saved_path = save_media(byte_array, user_id, file_ext)
 
         user = get_user(user_id)
-        photos = list(user.photos or [])
-        photos.append(saved_path)
+        old_photos = list(user.photos or [])
 
-        # Enforce max media count (delete oldest)
-        if len(photos) > settings.MAX_MEDIA_COUNT:
-            removed = photos.pop(0)
-            delete_media(removed, user_id=user_id, reason="replaced")
+        # Replace behavior: Delete all existing photos and track them for 365-day retention
+        for old_photo in old_photos:
+            delete_media(old_photo, user_id=user_id, reason="replaced")
+
+        # Set the new photo as the only photo (replacement, not adding)
+        photos = [saved_path]
 
         update_user(user_id, {"photos": photos})
 
@@ -1482,7 +1482,10 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             # Re-run prompt logic to check if anything else is missing or show success
             await prompt_for_next_missing_field(update, context, user_id)
         else:
-            await update.message.reply_text("✅ Media added to your profile!")
+            if old_photos:
+                await update.message.reply_text("✅ Profile photo replaced!")
+            else:
+                await update.message.reply_text("✅ Profile photo added!")
 
     except Exception as e:
         logger.error("Error saving media", user_id=user_id, error=str(e))
@@ -1491,7 +1494,6 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     context.user_data.pop(STATE_AWAITING_PHOTO, None)
     context.user_data[STATE_PROFILE_MENU] = True
     context.user_data["user"] = get_user(user_id)
-    await update.message.reply_text("✅ Profile photo updated.")
 
 
 VIEW_PROFILE_TEMPLATE = """
