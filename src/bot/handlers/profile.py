@@ -1534,7 +1534,7 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     if STATE_PENDING_MEDIA not in context.user_data:
         context.user_data[STATE_PENDING_MEDIA] = []
 
-    pending_media: list = context.user_data[STATE_PENDING_MEDIA]
+    pending_media: list[str] = context.user_data[STATE_PENDING_MEDIA]
 
     # Check if we already have max media
     if len(pending_media) >= settings.MAX_MEDIA_COUNT:
@@ -1581,26 +1581,25 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
                 )
                 return
 
-        # Save the media file
-        saved_path = save_media(byte_array, user_id, file_ext)
+        # Save the media file (use file_data which is the validated bytes)
+        saved_path = save_media(file_data, user_id, file_ext)
         pending_media.append(saved_path)
         context.user_data[STATE_PENDING_MEDIA] = pending_media
 
         media_count = len(pending_media)
         remaining = settings.MAX_MEDIA_COUNT - media_count
 
+        # Success message
+        success_msg = f"✅ {file_type.capitalize()} added ({media_count}/{settings.MAX_MEDIA_COUNT})!\n\n"
         if remaining > 0:
-            await update.message.reply_text(
-                f"✅ {file_type.capitalize()} added ({media_count}/{settings.MAX_MEDIA_COUNT})!\n\n"
-                f"Send more files or press '✅ Done' to save your profile media.",
-                reply_markup=media_upload_keyboard(media_count, settings.MAX_MEDIA_COUNT),
-            )
+            success_msg += "Send more files or press '✅ Done' to save your profile media."
         else:
-            await update.message.reply_text(
-                f"✅ {file_type.capitalize()} added ({media_count}/{settings.MAX_MEDIA_COUNT})!\n\n"
-                f"Maximum reached. Press '✅ Done' to save your profile media.",
-                reply_markup=media_upload_keyboard(media_count, settings.MAX_MEDIA_COUNT),
-            )
+            success_msg += "Maximum reached. Press '✅ Done' to save your profile media."
+
+        await update.message.reply_text(
+            success_msg,
+            reply_markup=media_upload_keyboard(media_count, settings.MAX_MEDIA_COUNT),
+        )
 
     except Exception as e:
         logger.error("Error processing media", user_id=user_id, error=str(e))
