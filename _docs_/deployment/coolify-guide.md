@@ -152,5 +152,12 @@ You mentioned setting up Bugsink. Since Bugsink is Sentry-compatible, the bot is
     *   Click **Redeploy** to apply the changes.
     *   The bot will now send errors to your Bugsink instance.
 
+    **Troubleshooting Bugsink DSN:**
+    If Coolify doesn't auto-inject the variable (you see `$SERVICE_PASSWORD...` in logs), use this value (found from your Bugsink instance):
+    ```
+    https://VqZrDaF5RjM303IGUq6A1OOynrQMRpn2YTDUTKqn3bHjaMAy60rALkCeSnDekwXz@bugsink-ek8g8scs8c0w0k08gwos0wc4.217.216.35.77.sslip.io:8000/1
+    ```
+    *(Copy this entire URL into `SENTRY_DSN`)*
+
 ## Legacy (Systemd)
 If you prefer to run without Docker (not managed by Coolify), refer to `DEPLOYMENT.MD` for the systemd service configuration.
