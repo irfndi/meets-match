@@ -118,9 +118,7 @@ def location_candidates_keyboard(options: list[str]) -> ReplyKeyboardMarkup:
     )
 
 
-def media_upload_keyboard(
-    media_count: int = 0, max_count: int = 3, allow_done: bool = False
-) -> ReplyKeyboardMarkup:
+def media_upload_keyboard(media_count: int = 0, max_count: int = 3, allow_done: bool = False) -> ReplyKeyboardMarkup:
     """Keyboard for multi-file upload with Done button.
 
     Args:

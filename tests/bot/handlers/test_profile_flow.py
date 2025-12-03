@@ -117,6 +117,7 @@ def mock_dependencies(profile_handler_module, mock_user_state):
         patch.object(profile_handler_module, "location_optional_keyboard", mock_location_opt_kb),
         patch.object(profile_handler_module, "skip_keyboard", mock_skip_kb),
         patch.object(profile_handler_module, "get_user_location_text", return_value=None),
+        patch.object(profile_handler_module, "send_media_group_safe", new_callable=AsyncMock),
         patch("src.bot.handlers.profile.geocode_city", new_callable=AsyncMock) as mock_geocode,
     ):
         yield {

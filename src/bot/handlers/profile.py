@@ -1112,8 +1112,8 @@ async def _next_profile_step(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
             prompt = (
                 f"📸 You have {len(cur_photos)} photos/videos (shown above).\n"
-                f"Send new media to REPLACE them, or press '✅ Done' to keep current photos.\n\n"
-                f"Press '✅ Done' when finished."
+                f"To REPLACE them, send new photos/videos.\n"
+                f"To KEEP them, press '✅ Done'."
             )
             # Start keyboard count at 0 for new upload session (replace logic)
             reply_markup = media_upload_keyboard(0, settings.MAX_MEDIA_COUNT, allow_done=True)
@@ -1622,9 +1622,7 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         await update.message.reply_text(
             f"❌ You've already added {settings.MAX_MEDIA_COUNT} files. "
             f"Press '✅ Done' to save or 'Cancel' to start over.",
-            reply_markup=media_upload_keyboard(
-                len(pending_media), settings.MAX_MEDIA_COUNT, allow_done=has_photos
-            ),
+            reply_markup=media_upload_keyboard(len(pending_media), settings.MAX_MEDIA_COUNT, allow_done=has_photos),
         )
         return
 
@@ -1640,9 +1638,7 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         if not is_valid_size:
             await update.message.reply_text(
                 f"❌ {size_result}",
-                reply_markup=media_upload_keyboard(
-                    len(pending_media), settings.MAX_MEDIA_COUNT, allow_done=has_photos
-                ),
+                reply_markup=media_upload_keyboard(len(pending_media), settings.MAX_MEDIA_COUNT, allow_done=has_photos),
             )
             return
 
@@ -1682,9 +1678,7 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         logger.error("Error processing media", user_id=user_id, error=str(e))
         await update.message.reply_text(
             "❌ Failed to process media. Please try again.",
-            reply_markup=media_upload_keyboard(
-                len(pending_media), settings.MAX_MEDIA_COUNT, allow_done=has_photos
-            ),
+            reply_markup=media_upload_keyboard(len(pending_media), settings.MAX_MEDIA_COUNT, allow_done=has_photos),
         )
 
 
