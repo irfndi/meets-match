@@ -45,9 +45,14 @@ app = FastAPI(
 @app.get("/health")
 async def health_check() -> JSONResponse:
     """Health check endpoint."""
+    is_running = bot_app.is_running
+    status_code = 200 if is_running else 503
+    
     return JSONResponse(
+        status_code=status_code,
         content={
-            "status": "ok",
+            "status": "ok" if is_running else "error",
+            "bot_running": is_running,
             "app": settings.APP_NAME,
             "environment": settings.ENVIRONMENT,
         }

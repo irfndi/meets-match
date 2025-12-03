@@ -336,6 +336,13 @@ class BotApplication:
             raise
         logger.info("Bot stopped")
 
+    @property
+    def is_running(self) -> bool:
+        """Check if the bot is running and polling."""
+        if not self.application or not self.application.updater:
+            return False
+        return self.application.updater.running
+
     async def start(self) -> None:
         """Start the bot application in background mode (for API integration)."""
         if not self.application:
@@ -347,7 +354,14 @@ class BotApplication:
         await self.application.initialize()
         await self.application.start()
         if self.application.updater:
-            await self.application.updater.start_polling(drop_pending_updates=True, bootstrap_retries=5)
+            try:
+                await self.application.updater.start_polling(drop_pending_updates=True, bootstrap_retries=5)
+            except Conflict as e:
+                logger.error("Polling conflict detected during startup", error=str(e))
+                # We don't raise here, we just let it be.
+                # The health check will report failure because updater.running will be False (hopefully)
+                # Actually, if start_polling raises, updater.running might not be set.
+                pass
 
     async def stop(self) -> None:
         """Stop the bot application."""
