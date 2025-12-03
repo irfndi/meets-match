@@ -173,14 +173,14 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                 ),
             )
 
-        elif callback_data.startswith("region_"):
-            country = callback_data.split("_", 1)[1]
-            await handle_region(update, context, country)
-
         elif callback_data == "region_type":
             await query.edit_message_text("Please type your country name (e.g., Indonesia):")
             if context.user_data is not None:
                 context.user_data["awaiting_region"] = True
+
+        elif callback_data.startswith("region_"):
+            country = callback_data.split("_", 1)[1]
+            await handle_region(update, context, country)
 
         elif callback_data == "settings_language":
             await query.edit_message_text(
@@ -195,14 +195,14 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                 ),
             )
 
-        elif callback_data.startswith("language_"):
-            code = callback_data.split("_", 1)[1]
-            await handle_language(update, context, code)
-
         elif callback_data == "language_type":
             await query.edit_message_text("Please type your language code (e.g., en, id):")
             if context.user_data is not None:
                 context.user_data["awaiting_language"] = True
+
+        elif callback_data.startswith("language_"):
+            code = callback_data.split("_", 1)[1]
+            await handle_language(update, context, code)
 
         elif callback_data == "settings_age_range":
             # Show age range options
