@@ -317,9 +317,19 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
 
 async def handle_region(update: Update, context: ContextTypes.DEFAULT_TYPE, country: str) -> None:
-    if not update.callback_query or not update.effective_user:
+    if not update.effective_user:
         return
-    query = update.callback_query
+
+    # Determine if this is a callback or message
+    is_callback = update.callback_query is not None
+    message = update.callback_query.message if is_callback else update.message
+
+    async def reply_or_edit(text, reply_markup=None):
+        if is_callback and update.callback_query:
+            await update.callback_query.edit_message_text(text, reply_markup=reply_markup)
+        elif message:
+            await message.reply_text(text, reply_markup=reply_markup)
+
     user_id = str(update.effective_user.id)
 
     try:
@@ -346,7 +356,7 @@ async def handle_region(update: Update, context: ContextTypes.DEFAULT_TYPE, coun
 
         # Check if language is set
         if not prefs.preferred_language:
-            await query.edit_message_text(
+            await reply_or_edit(
                 f"✅ Region updated to: {country}\n\nNow, please select your language:",
                 reply_markup=InlineKeyboardMarkup(
                     [
@@ -370,26 +380,36 @@ async def handle_region(update: Update, context: ContextTypes.DEFAULT_TYPE, coun
                     [[InlineKeyboardButton("« Back to Settings", callback_data="back_to_settings")]]
                 )
 
-            await query.edit_message_text(
+            await reply_or_edit(
                 f"✅ Region updated to: {country}",
                 reply_markup=reply_markup,
             )
 
     except Exception as e:
         logger.error("Error updating region", user_id=user_id, country=country, error=str(e), exc_info=e)
-        await query.edit_message_text("Sorry, something went wrong. Please try again.")
+        await reply_or_edit("Sorry, something went wrong. Please try again.")
 
 
 async def handle_language(update: Update, context: ContextTypes.DEFAULT_TYPE, language_code: str) -> None:
-    if not update.callback_query or not update.effective_user:
+    if not update.effective_user:
         return
-    query = update.callback_query
+
+    # Determine if this is a callback or message
+    is_callback = update.callback_query is not None
+    message = update.callback_query.message if is_callback else update.message
+
+    async def reply_or_edit(text, reply_markup=None):
+        if is_callback and update.callback_query:
+            await update.callback_query.edit_message_text(text, reply_markup=reply_markup)
+        elif message:
+            await message.reply_text(text, reply_markup=reply_markup)
+
     user_id = str(update.effective_user.id)
 
     try:
         code = (language_code or "").strip().lower()
         if not code:
-            await query.edit_message_text("Please type a valid language code (e.g., en, id).")
+            await reply_or_edit("Please type a valid language code (e.g., en, id).")
             return
         user = get_user(user_id)
         prefs = user.preferences or Preferences()
@@ -402,7 +422,7 @@ async def handle_language(update: Update, context: ContextTypes.DEFAULT_TYPE, la
 
         # Check if region is set
         if not prefs.preferred_country:
-            await query.edit_message_text(
+            await reply_or_edit(
                 f"✅ Language updated to: {code}\n\nNow, please select your region:",
                 reply_markup=InlineKeyboardMarkup(
                     [
@@ -425,14 +445,14 @@ async def handle_language(update: Update, context: ContextTypes.DEFAULT_TYPE, la
                     [[InlineKeyboardButton("« Back to Settings", callback_data="back_to_settings")]]
                 )
 
-            await query.edit_message_text(
+            await reply_or_edit(
                 f"✅ Language updated to: {code}",
                 reply_markup=reply_markup,
             )
 
     except Exception as e:
         logger.error("Error updating language", user_id=user_id, language=language_code, error=str(e), exc_info=e)
-        await query.edit_message_text("Sorry, something went wrong. Please try again.")
+        await reply_or_edit("Sorry, something went wrong. Please try again.")
 
 
 async def handle_age_range(update: Update, context: ContextTypes.DEFAULT_TYPE, age_type: str, age_value: int) -> None:
