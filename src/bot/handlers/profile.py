@@ -35,7 +35,7 @@ from src.bot.ui.keyboards import (
 from src.config import settings
 from src.models.user import Gender, User
 from src.services.geocoding_service import geocode_city, reverse_geocode_coordinates
-from src.services.user_service import get_user, get_user_location_text, update_user
+from src.services.user_service import get_user, get_user_location_text, set_user_sleeping, update_user
 from src.utils.cache import delete_cache, set_cache
 from src.utils.logging import get_logger
 from src.utils.media import delete_media, get_storage_path, save_media

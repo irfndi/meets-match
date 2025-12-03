@@ -6,7 +6,7 @@ from telegram.ext import ContextTypes
 from src.bot.ui.keyboards import reengagement_keyboard
 from src.models.user import Gender
 from src.services.matching_service import get_pending_incoming_likes_count
-from src.services.user_service import get_inactive_users, update_user
+from src.services.user_service import get_inactive_users, get_users_for_auto_sleep, set_user_sleeping, update_user
 from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -14,8 +14,58 @@ logger = get_logger(__name__)
 # Fibonacci sequence for inactivity reminders (in days) - Modified for 3-day aggressive phase
 INACTIVITY_DAYS = [1, 2, 3, 7, 14, 30]
 
+# Auto-sleep inactivity threshold in minutes
+AUTO_SLEEP_INACTIVITY_MINUTES = 15
+
 # Placeholder image for "We Miss You" - can be replaced with actual asset URL
 REMINDER_IMAGE_URL = "https://placehold.co/600x400/png?text=We+Miss+You"
+
+
+async def auto_sleep_inactive_users_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Job to automatically put inactive users into sleep/pause mode.
+
+    Users who have been inactive for AUTO_SLEEP_INACTIVITY_MINUTES minutes
+    will be automatically set to sleeping status. Their profile remains visible
+    to others in the match cycle, but they are in "paused" state.
+    """
+    logger.info("Running auto-sleep inactive users job")
+
+    try:
+        users = get_users_for_auto_sleep(AUTO_SLEEP_INACTIVITY_MINUTES)
+        if not users:
+            logger.debug("No users eligible for auto-sleep")
+            return
+
+        logger.info("Found users eligible for auto-sleep", count=len(users))
+
+        for user in users:
+            try:
+                # Set user to sleeping
+                set_user_sleeping(user.id, True)
+
+                # Send notification to user about auto-sleep
+                try:
+                    await context.bot.send_message(
+                        chat_id=user.id,
+                        text=(
+                            "💤 *You've been automatically paused due to inactivity.*\n\n"
+                            "Your profile remains visible to others in the match cycle.\n\n"
+                            "We will notify you here if someone likes your profile! 🔔\n\n"
+                            "Type /start to wake up and resume."
+                        ),
+                        parse_mode="Markdown",
+                    )
+                except Exception as e:
+                    # User might have blocked the bot or other issues
+                    logger.warning("Failed to notify user about auto-sleep", user_id=user.id, error=str(e))
+
+                logger.info("Auto-slept user", user_id=user.id)
+
+            except Exception as e:
+                logger.warning("Failed to auto-sleep user", user_id=user.id, error=str(e))
+
+    except Exception as e:
+        logger.error("Error in auto-sleep job", error=str(e))
 
 
 async def cleanup_old_media_job(context: ContextTypes.DEFAULT_TYPE) -> None:

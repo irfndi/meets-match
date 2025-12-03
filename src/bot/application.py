@@ -40,7 +40,7 @@ from src.bot.handlers import (
     start_profile_setup,
     view_profile_callback,
 )
-from src.bot.jobs import cleanup_old_media_job, inactive_user_reminder_job
+from src.bot.jobs import auto_sleep_inactive_users_job, cleanup_old_media_job, inactive_user_reminder_job
 from src.config import settings
 from src.utils.errors import MeetMatchError
 from src.utils.logging import get_logger
@@ -103,6 +103,15 @@ class BotApplication:
                 name="cleanup_old_media",
             )
             logger.info("Old media cleanup job registered")
+
+            # Auto-sleep job - runs every minute to check for inactive users
+            application.job_queue.run_repeating(
+                auto_sleep_inactive_users_job,
+                interval=60,  # Run every minute
+                first=30,  # Start after 30 seconds
+                name="auto_sleep_inactive_users",
+            )
+            logger.info("Auto-sleep inactive users job registered")
 
         try:
             await application.bot.set_my_commands(
