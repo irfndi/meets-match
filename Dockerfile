@@ -26,5 +26,8 @@ RUN uv sync --frozen
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONUNBUFFERED=1
 
+# Expose the API port
+EXPOSE 8000
+
 # Run the application
 CMD ["uv", "run", "python", "main.py"]

@@ -336,6 +336,29 @@ class BotApplication:
             raise
         logger.info("Bot stopped")
 
+    async def start(self) -> None:
+        """Start the bot application in background mode (for API integration)."""
+        if not self.application:
+            await self.setup()
+
+        assert self.application is not None
+
+        logger.info("Bot starting in background mode...")
+        await self.application.initialize()
+        await self.application.start()
+        if self.application.updater:
+            await self.application.updater.start_polling(drop_pending_updates=True, bootstrap_retries=5)
+
+    async def stop(self) -> None:
+        """Stop the bot application."""
+        if self.application:
+            logger.info("Bot stopping...")
+            if self.application.updater:
+                await self.application.updater.stop()
+            await self.application.stop()
+            await self.application.shutdown()
+            logger.info("Bot stopped")
+
 
 def start_bot() -> None:
     """Start the bot application."""
