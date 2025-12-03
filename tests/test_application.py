@@ -153,3 +153,40 @@ async def test_error_handler_does_not_capture_conflict_error_in_sentry(mock_appl
 
         # Verify Sentry did NOT capture the conflict exception
         mock_capture.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_error_handler_sets_sentry_user_context(mock_application, mock_context):
+    """Test that Sentry user context is set when user info is available."""
+    from unittest.mock import MagicMock
+
+    from telegram import Update, User
+
+    app = BotApplication()
+    app.application = mock_application
+
+    # Create a proper Update mock with spec
+    mock_update = MagicMock(spec=Update)
+    mock_user = MagicMock(spec=User)
+    mock_user.id = 123456
+    mock_user.username = "test_user"
+    mock_update.effective_user = mock_user
+    mock_update.effective_chat = None
+
+    # Create an error
+    mock_context.error = ValueError("Some error")
+
+    # Mock sentry_sdk functions
+    with (
+        patch("src.bot.application.sentry_sdk.capture_exception"),
+        patch("src.bot.application.sentry_sdk.set_user") as mock_set_user,
+    ):
+        await app._error_handler(mock_update, mock_context)
+
+        # Verify Sentry user context was set
+        mock_set_user.assert_called_once_with(
+            {
+                "id": "123456",
+                "username": "test_user",
+            }
+        )
