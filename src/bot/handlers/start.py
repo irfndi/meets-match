@@ -1,16 +1,11 @@
 """Start command handlers for the MeetMatch bot."""
 
-# TODO: Post-Cloudflare Migration Review
-# These handlers rely on the service layer (e.g., user_service).
-# After the service layer is refactored to use Cloudflare D1/KV/R2:
-# 1. Review how Cloudflare bindings/context ('env') are passed to service calls, if needed.
-# 2. Update error handling if D1/KV/R2 exceptions differ from previous DB/cache exceptions.
-# 3. Check if data structures returned by service calls have changed.
-
-from telegram import ReplyKeyboardMarkup, Update
+from telegram import Update
 from telegram.ext import ContextTypes
 
 from src.bot.middleware import user_command_limiter
+from src.bot.ui.keyboards import main_menu
+from src.models.user import User
 from src.services.user_service import create_user, get_user, update_user
 from src.utils.errors import NotFoundError
 from src.utils.logging import get_logger
@@ -31,20 +26,6 @@ To get started:
 Need help? Just type /help anytime.
 """
 
-# Registration message template
-REGISTRATION_MESSAGE = """
-Great! Let's set up your profile. Please tell me:
-
-1️⃣ Your name (use /name Your Name)
-2️⃣ Your age (use /age 25)
-3️⃣ Your gender (use /gender Male/Female/Other)
-4️⃣ A brief bio (use /bio Your bio here)
-5️⃣ Your interests (use /interests comma,separated,list)
-6️⃣ Your location (use /location or share your location)
-
-You can update any of these later using the same commands.
-"""
-
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle the /start command.
@@ -55,6 +36,9 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     """
     # Apply rate limiting
     await user_command_limiter()(update, context)
+
+    if not update.effective_user or not update.message:
+        return
 
     user_id = str(update.effective_user.id)
     username = update.effective_user.username
@@ -67,55 +51,89 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
         # Update user data if needed
         if (username and username != user.username) or (first_name and first_name != user.first_name):
-            update_user(
-                user_id,
-                {
-                    "username": username or user.username,
-                    "first_name": first_name or user.first_name,
-                    "last_active": "now()",
-                },
+            from typing import Any, Dict
+
+            update_data: Dict[str, Any] = {
+                "username": username or user.username or "",
+                "first_name": first_name or user.first_name or "",
+                "last_active": "now()",
+            }
+            update_user(user_id, update_data)
+
+        # Check for missing region or language
+        prefs = getattr(user, "preferences", None)
+        logger.info(
+            "Checking user preferences in start_command",
+            user_id=user_id,
+            preferences=prefs.model_dump() if prefs else None,
+        )
+
+        missing_region = not (prefs and getattr(prefs, "preferred_country", None))
+        missing_language = not (prefs and getattr(prefs, "preferred_language", None))
+
+        if missing_region or missing_language:
+            await update.message.reply_text("👋 Welcome back! Please set your region and language to continue.")
+            # Import here to avoid circular dependency
+            from src.bot.handlers.settings import settings_command
+
+            await settings_command(update, context)
+            return
+
+        # Check for missing profile fields (casual prompt)
+        # This handles both required fields (always prompted) and recommended fields (prompted if cooldown passed)
+        # We do this BEFORE matching to ensure profile quality, but respect the cooldown for skipped fields.
+        from src.bot.handlers.profile import prompt_for_next_missing_field
+
+        has_missing = await prompt_for_next_missing_field(update, context, user_id, silent_if_complete=True)
+        if has_missing:
+            return
+
+        # Check if user is eligible for matching
+        if user.is_match_eligible():
+            from src.bot.handlers.match import get_and_show_match
+
+            match_shown = await get_and_show_match(update, context, user_id)
+            if match_shown:
+                return
+
+            # If no matches, show main menu with specific message
+            await update.message.reply_text(
+                "Wait until someone sees you... 🕰️",
+                reply_markup=main_menu(),
             )
+            return
+
+        # If not eligible, show main menu
+        # Note: We already attempted to prompt for missing fields above.
+        # If we are here, it means the user is ineligible AND we are in cooldown (or user explicitly skipped).
 
         # Send welcome message with main menu
         await update.message.reply_text(
             f"Welcome back, {user.first_name or 'there'}! {WELCOME_MESSAGE}",
-            reply_markup=ReplyKeyboardMarkup(
-                [
-                    ["/profile", "/match"],
-                    ["/matches", "/settings"],
-                    ["/help"],
-                ],
-                resize_keyboard=True,
-            ),
+            reply_markup=main_menu(),
         )
 
     except NotFoundError:
         # Create new user
         logger.info("New user registration", user_id=user_id, username=username)
 
-        user_data = {
-            "id": user_id,
-            "username": username,
-            "first_name": first_name,
-            "last_name": update.effective_user.last_name,
-            "is_active": True,
-        }
+        user_data = User(
+            id=user_id,
+            username=username,
+            first_name=first_name or "User",
+            last_name=update.effective_user.last_name,
+            is_active=True,
+        )
 
         create_user(user_data)
 
-        # Send welcome and registration messages
-        await update.message.reply_text(WELCOME_MESSAGE)
-        await update.message.reply_text(
-            REGISTRATION_MESSAGE,
-            reply_markup=ReplyKeyboardMarkup(
-                [
-                    ["/name", "/age", "/gender"],
-                    ["/bio", "/interests"],
-                    ["/location", "/help"],
-                ],
-                resize_keyboard=True,
-            ),
-        )
+        # For new users, force region/language setup immediately
+        await update.message.reply_text("👋 Welcome to MeetMatch! To get started, please set your region and language.")
+
+        # Import here to avoid circular dependency
+        from src.bot.handlers.settings import settings_command
+
+        await settings_command(update, context)
 
     except Exception as e:
         logger.error(

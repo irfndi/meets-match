@@ -1,16 +1,9 @@
 """Matching service for the MeetMatch bot."""
 
-# TODO: Cloudflare Migration (D1/KV)
-# This service likely contains logic interacting with the database (Supabase/PostgreSQL)
-# to fetch user data for matching and potentially caching results (Redis).
-# All database read operations must be rewritten to use the Cloudflare D1 client API (via bindings).
-# All caching logic needs to be updated to use Cloudflare KV (via bindings).
-# Review all methods for persistence and caching logic.
-
 import uuid
-from typing import List, Optional
+from typing import Any, List, Optional
 
-from geopy.distance import geodesic
+from geopy.distance import geodesic  # type: ignore
 
 from src.config import settings
 from src.models.match import Match, MatchAction, MatchScore, MatchStatus, UserMatch
@@ -221,12 +214,13 @@ def get_potential_matches(user_id: str, limit: int = 10) -> List[User]:
 
     # Check if user is eligible for matching
     if not user.is_match_eligible():
-        logger.warning("User not eligible for matching", user_id=user_id)
+        logger.debug("0 match found (user not eligible)", user_id=user_id)
         return []
 
     # Check cache
     cache_key = POTENTIAL_MATCHES_CACHE_KEY.format(user_id=user_id)
-    cached_ids = get_cache(cache_key)
+    # Extend TTL to keep the match list fresh while the user is active
+    cached_ids = get_cache(cache_key, extend_ttl=3600)
     if cached_ids:
         # Get users from cache
         potential_match_ids = cached_ids.split(",")
@@ -247,13 +241,75 @@ def get_potential_matches(user_id: str, limit: int = 10) -> List[User]:
 
     # Get existing matches
     existing_matches = get_user_matches(user_id)
-    existing_match_ids = {match.user1_id if match.user2_id == user_id else match.user2_id for match in existing_matches}
+
+    # Filter out old rejections and matches
+    # Matches: Recycle after 30 days
+    # Rejections: Recycle after 7 days (shorter period)
+    from datetime import datetime, timedelta, timezone
+
+    now = datetime.now(timezone.utc)
+    recycle_threshold_matched = now - timedelta(days=30)
+    recycle_threshold_rejected = now - timedelta(days=7)
+
+    existing_match_ids = set()
+    for match in existing_matches:
+        # specific logic: if (rejected or matched) and old enough, don't add to exclusion list
+        is_old_matched = match.status == MatchStatus.MATCHED and match.updated_at < recycle_threshold_matched
+        is_old_rejected = match.status == MatchStatus.REJECTED and match.updated_at < recycle_threshold_rejected
+
+        if is_old_matched or is_old_rejected:
+            continue
+
+        # Add to exclusion list
+        existing_match_ids.add(match.user1_id if match.user2_id == user_id else match.user2_id)
+
+    # Prepare database filters
+    filters = {
+        "is_active": True,
+        "is_profile_complete": True,
+        "last_active__gte": recycle_threshold_matched,  # Only active users in last 30 days
+    }
+
+    # 1. Age Range Filter
+    if user.preferences.min_age:
+        filters["age__gte"] = user.preferences.min_age
+    if user.preferences.max_age:
+        filters["age__lte"] = user.preferences.max_age
+
+    # 2. Gender Filter
+    if user.preferences.gender_preference:
+        filters["gender__in"] = user.preferences.gender_preference
+
+    # 3. Location Bounding Box Filter
+    # 1 degree of latitude is ~111km
+    # 1 degree of longitude varies (approx 111km * cos(lat))
+    if user.location and user.preferences.max_distance:
+        max_dist_km = user.preferences.max_distance
+        lat = user.location.latitude
+        lon = user.location.longitude
+
+        # Crude approximation for bounding box (safe side: larger box than needed)
+        # 1 degree lat ~= 111km
+        lat_delta = max_dist_km / 111.0
+
+        # 1 degree lon ~= 111km * cos(lat)
+        import math
+
+        # Avoid division by zero at poles, and ensure positive
+        cos_lat = max(0.1, math.cos(math.radians(lat)))
+        lon_delta = max_dist_km / (111.0 * cos_lat)
+
+        filters["location_latitude__gte"] = lat - lat_delta
+        filters["location_latitude__lte"] = lat + lat_delta
+        filters["location_longitude__gte"] = lon - lon_delta
+        filters["location_longitude__lte"] = lon + lon_delta
 
     # Query database for potential matches
     result = execute_query(
         table="users",
         query_type="select",
-        filters={"is_active": True, "is_profile_complete": True},
+        filters=filters,
+        limit=limit * 5,  # Fetch more candidates than needed for scoring
     )
 
     if not result.data:
@@ -315,6 +371,63 @@ def create_match(user1_id: str, user2_id: str) -> Match:
     # Get users
     user1 = get_user(user1_id)
     user2 = get_user(user2_id)
+
+    # Check for existing match
+    existing_match_query = execute_query(
+        table="matches",
+        query_type="select",
+        filters={
+            "$or": [
+                {"user1_id": user1_id, "user2_id": user2_id},
+                {"user1_id": user2_id, "user2_id": user1_id},
+            ]
+        },
+    )
+
+    if existing_match_query.data:
+        existing_match = Match.model_validate(existing_match_query.data[0])
+
+        # Check if we should recycle this match
+        from datetime import datetime, timedelta, timezone
+
+        now = datetime.now(timezone.utc)
+        recycle_threshold_matched = now - timedelta(days=30)
+        recycle_threshold_rejected = now - timedelta(days=7)
+
+        is_old_matched = (
+            existing_match.status == MatchStatus.MATCHED and existing_match.updated_at < recycle_threshold_matched
+        )
+        is_old_rejected = (
+            existing_match.status == MatchStatus.REJECTED and existing_match.updated_at < recycle_threshold_rejected
+        )
+
+        if is_old_matched or is_old_rejected:
+            logger.info("Recycling existing match", match_id=existing_match.id)
+
+            # Reset match to PENDING state
+            existing_match.status = MatchStatus.PENDING
+            existing_match.user1_action = None
+            existing_match.user2_action = None
+            existing_match.matched_at = None
+            existing_match.updated_at = datetime.now(timezone.utc)
+
+            # Update in database
+            execute_query(
+                table="matches",
+                query_type="update",
+                filters={"id": existing_match.id},
+                data=existing_match.model_dump(),
+            )
+
+            return existing_match
+
+        logger.info(
+            "Match already exists",
+            match_id=existing_match.id,
+            user1_id=user1_id,
+            user2_id=user2_id,
+        )
+        return existing_match
 
     # Calculate match score
     score = calculate_match_score(user1, user2)
@@ -483,12 +596,19 @@ def update_match(match_id: str, user_id: str, action: MatchAction) -> Match:
     return match
 
 
-def get_user_matches(user_id: str, status: Optional[MatchStatus] = None) -> List[Match]:
+def get_user_matches(
+    user_id: str,
+    status: Optional[MatchStatus] = None,
+    limit: int = 10,
+    offset: int = 0,
+) -> List[Match]:
     """Get matches for a user.
 
     Args:
         user_id: User ID
         status: Optional match status filter
+        limit: Max number of matches to return
+        offset: Number of matches to skip
 
     Returns:
         List of matches
@@ -500,7 +620,7 @@ def get_user_matches(user_id: str, status: Optional[MatchStatus] = None) -> List
     get_user(user_id)
 
     # Query database
-    filters = {
+    filters: dict[str, Any] = {
         "$or": [
             {"user1_id": user_id},
             {"user2_id": user_id},
@@ -514,6 +634,9 @@ def get_user_matches(user_id: str, status: Optional[MatchStatus] = None) -> List
         table="matches",
         query_type="select",
         filters=filters,
+        limit=limit,
+        offset=offset,
+        order_by="updated_at desc",
     )
 
     if not result.data:
@@ -574,12 +697,19 @@ def get_user_match_view(match: Match, user_id: str) -> UserMatch:
     )
 
 
-def get_user_match_views(user_id: str, status: Optional[MatchStatus] = None) -> List[UserMatch]:
+def get_user_match_views(
+    user_id: str,
+    status: Optional[MatchStatus] = None,
+    limit: int = 10,
+    offset: int = 0,
+) -> List[UserMatch]:
     """Get user-friendly views of matches for a user.
 
     Args:
         user_id: User ID
         status: Optional match status filter
+        limit: Max number of matches to return
+        offset: Number of matches to skip
 
     Returns:
         List of UserMatch views
@@ -588,7 +718,7 @@ def get_user_match_views(user_id: str, status: Optional[MatchStatus] = None) -> 
         NotFoundError: If user not found
     """
     # Get matches
-    matches = get_user_matches(user_id, status)
+    matches = get_user_matches(user_id, status, limit, offset)
 
     # Create views
     views = []
@@ -631,3 +761,160 @@ def clear_user_matches_cache(user_id: str) -> None:
     cache_key = USER_MATCHES_CACHE_KEY.format(user_id=user_id)
     delete_cache(cache_key)
     logger.debug("User matches cache cleared", user_id=user_id)
+
+
+def get_match_by_id(match_id: str) -> Match:
+    """Get a match by ID (alias for get_match).
+
+    Args:
+        match_id: Match ID
+
+    Returns:
+        Match object
+
+    Raises:
+        NotFoundError: If match not found
+    """
+    return get_match(match_id)
+
+
+def like_match(match_id: str, user_id: Optional[str] = None) -> bool:
+    """Like a match.
+
+    Args:
+        match_id: Match ID
+        user_id: User ID (optional, will be determined from match)
+
+    Returns:
+        True if mutual match, False otherwise
+    """
+    match = get_match(match_id)
+
+    if user_id:
+        updated_match = update_match(match_id, user_id, MatchAction.LIKE)
+    else:
+        updated_match = update_match(match_id, match.user1_id, MatchAction.LIKE)
+
+    return updated_match.status == MatchStatus.MATCHED
+
+
+def dislike_match(match_id: str, user_id: Optional[str] = None) -> None:
+    """Dislike a match.
+
+    Args:
+        match_id: Match ID
+        user_id: User ID (optional, will be determined from match)
+    """
+    match = get_match(match_id)
+
+    if user_id:
+        update_match(match_id, user_id, MatchAction.DISLIKE)
+    else:
+        update_match(match_id, match.user1_id, MatchAction.DISLIKE)
+
+
+def skip_match(match_id: str, user_id: Optional[str] = None) -> None:
+    """Skip a match (save for later).
+
+    Args:
+        match_id: Match ID
+        user_id: User ID (optional, will be determined from match)
+    """
+    match = get_match(match_id)
+
+    if user_id:
+        update_match(match_id, user_id, MatchAction.SKIP)
+    else:
+        update_match(match_id, match.user1_id, MatchAction.SKIP)
+
+
+def get_active_matches(
+    user_id: str,
+    limit: int = 10,
+    offset: int = 0,
+) -> List[Match]:
+    """Get active matches for a user.
+
+    Args:
+        user_id: User ID
+        limit: Max number of matches to return
+        offset: Number of matches to skip
+
+    Returns:
+        List of active matches
+    """
+    return get_user_matches(user_id, status=MatchStatus.MATCHED, limit=limit, offset=offset)
+
+
+def get_saved_matches(
+    user_id: str,
+    limit: int = 10,
+    offset: int = 0,
+) -> List[Match]:
+    """Get saved (skipped) matches for a user.
+
+    Args:
+        user_id: User ID
+        limit: Max number of matches to return
+        offset: Number of matches to skip
+
+    Returns:
+        List of saved matches
+    """
+    # Check if user exists
+    get_user(user_id)
+
+    # Query database for matches where the user action is SKIP
+    filters: dict[str, Any] = {
+        "$or": [
+            {"user1_id": user_id, "user1_action": MatchAction.SKIP},
+            {"user2_id": user_id, "user2_action": MatchAction.SKIP},
+        ]
+    }
+
+    result = execute_query(
+        table="matches",
+        query_type="select",
+        filters=filters,
+        limit=limit,
+        offset=offset,
+        order_by="updated_at desc",
+    )
+
+    if not result.data:
+        return []
+
+    return [Match.model_validate(match_data) for match_data in result.data]
+
+
+def get_pending_incoming_likes_count(user_id: str) -> int:
+    """Get count of pending incoming likes for a user.
+
+    Args:
+        user_id: User ID
+
+    Returns:
+        Count of pending incoming likes
+    """
+    # Check if user exists
+    get_user(user_id)
+
+    # Query database for matches where the other user has LIKED and current user hasn't acted
+    filters: dict[str, Any] = {
+        "status": MatchStatus.PENDING,
+        "$or": [
+            {"user1_id": user_id, "user2_action": MatchAction.LIKE, "user1_action": None},
+            {"user2_id": user_id, "user1_action": MatchAction.LIKE, "user2_action": None},
+        ],
+    }
+
+    result = execute_query(
+        table="matches",
+        query_type="count",
+        filters=filters,
+    )
+
+    if not result.data:
+        return 0
+
+    return int(result.data[0]["count"])

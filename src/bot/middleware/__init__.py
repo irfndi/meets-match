@@ -8,12 +8,10 @@ from src.bot.middleware.rate_limiter import (
 )
 
 __all__ = [
-    # Authentication middleware
-    "authenticated",
     "admin_only",
+    "authenticated",
+    "global_user_limiter",
     "profile_required",
-    # Rate limiting middleware
     "rate_limiter",
     "user_command_limiter",
-    "global_user_limiter",
 ]

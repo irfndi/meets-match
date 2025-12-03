@@ -2,120 +2,149 @@
 
 ## Project Overview
 
-MeetMatch is an AI-powered Telegram matchmaking bot that helps users find and schedule meetups. The bot is built with Python and deployed as a Cloudflare Worker.
+MeetMatch is an AI-powered Telegram matchmaking bot built with Python 3.13+ that helps users find and connect with compatible matches based on interests, location, and preferences.
 
 ## Tech Stack
 
-- **Language**: Python 3.10+
-- **Framework**: python-telegram-bot v20.3+
-- **Database**: Cloudflare D1 (SQLite-compatible)
-- **Cache/Session**: Cloudflare KV
-- **Object Storage**: Cloudflare R2 (optional)
-- **Deployment**: Cloudflare Workers
-- **Package Manager**: uv
+- **Python 3.13+** with type hints
+- **uv** - Fast Python package installer and resolver (use `uv sync`, `uv run`, `uv add`)
+- **python-telegram-bot v21+** - Telegram Bot API with async handlers
+- **SQLAlchemy 2.0+** - ORM for PostgreSQL
+- **Pydantic 2.x** - Data validation and models
+- **Redis** - Caching and session management
+- **FastAPI** - API endpoints
+- **Alembic** - Database migrations
+- **structlog** - Structured logging
+
+## Code Style and Conventions
+
+### Python Standards
+- Use Python 3.13+ features and type hints throughout
+- Follow PEP 8 style guidelines
+- Use Ruff for linting (`uv run ruff check .`) and formatting (`uv run ruff format .`)
+- Line length: 120 characters
+- Use docstrings in Google style format for all public functions and classes
+
+### Imports
+- Use absolute imports from `src` package (e.g., `from src.models.user import User`)
+- Group imports: standard library, third-party, local (handled by Ruff isort)
+- Known first-party package: `meetsmatch`
+
+### Error Handling
+- Use custom exceptions from `src.utils.errors` (ValidationError, NotFoundError)
+- Always add explanatory comments to empty except blocks
+- Log errors using structlog logger from `src.utils.logging`
+
+### Models
+- Define data models using Pydantic BaseModel in `src/models/`
+- Use Pydantic field validators for validation logic
+- Use Enum classes for predefined choices (Gender, RelationshipType)
+
+### Services
+- Business logic lives in `src/services/`
+- Services are functions, not classes
+- Use caching utilities from `src.utils.cache` for Redis operations
+
+### Bot Handlers
+- Telegram handlers go in `src/bot/handlers/`
+- Use async/await for all handler functions
+- Use conversation handlers for multi-step flows
 
 ## Project Structure
 
 ```
 src/
-├── bot/               # Telegram bot handlers and application logic
-│   ├── handlers/      # Command and conversation handlers
-│   └── middleware/    # Bot middleware
-├── models/            # Database models and schemas
-├── services/          # Business logic and service layer
-├── utils/             # Helper functions and utilities
-└── config.py          # Configuration loader using Pydantic
-
-tests/                 # Unit and integration tests
-scripts/               # Deployment and maintenance scripts
-_docs_/                # Project documentation
+├── bot/               # Telegram bot handlers and application
+│   ├── handlers/      # Command and message handlers
+│   ├── middleware/    # Request processing middleware
+│   └── ui/            # Keyboard and UI components
+├── models/            # Pydantic data models
+├── services/          # Business logic layer
+├── utils/             # Helper utilities (cache, database, errors, logging)
+├── api/               # FastAPI endpoints
+└── config.py          # Environment configuration
+tests/
+├── mocks/             # Mock modules for testing
+├── bot/               # Bot handler tests
+├── models/            # Model tests
+├── services/          # Service tests
+└── utils/             # Utility tests
 ```
 
 ## Development Commands
 
 ```bash
-# Install dependencies (use uv)
-uv venv .venv
-source .venv/bin/activate
-uv pip install -e ".[dev]"
+# Install dependencies
+uv sync
 
-# Linting
-ruff check .
+# Run the bot
+uv run python main.py
 
-# Formatting
-ruff format .
+# Run tests
+uv run pytest
 
-# Run tests with coverage (minimum 95% required)
-pytest --cov=src --cov-report=term-missing --cov-fail-under=95
+# Lint code
+uv run ruff check .
 
-# Run specific tests
-pytest tests/test_file.py -v
+# Format code
+uv run ruff format .
 
-# Type checking
-mypy src/
+# Type check
+uv run ty check
+
+# Database migrations
+uv run alembic upgrade head
+uv run alembic revision --autogenerate -m "message"
 ```
 
-## Code Conventions
+## Testing Conventions
 
-### Type Annotations
-- Use Python 3.10+ type annotation syntax
-- All functions must have type hints for parameters and return values
-- Use `Optional[T]` for nullable values
-- Strict mypy validation is enforced
+- Test files should be named `test_*.py`
+- Test functions should be named `test_*`
+- Use pytest fixtures from `tests/conftest.py`
+- Use mocks from `tests/mocks/` for external dependencies
+- Use `pytest-asyncio` for async tests (asyncio_mode = "auto")
+- Target 95% code coverage
 
-### Error Handling
-- Use custom exceptions defined in the project
-- Log errors with context using structlog
-- Always provide meaningful error messages
+## Key Patterns
 
-### Telegram Bot Specific
-- Use PTB's (python-telegram-bot) ContextTypes
-- Isolate handler logic in `/src/bot/handlers`
-- Follow async/await patterns for all handlers
+### Caching Pattern
+```python
+from src.utils.cache import get_cache_model, set_cache, delete_cache
 
-### Code Style
-- Line length: 120 characters (configured in ruff)
-- Use `ruff` for linting and formatting
-- Follow PEP 8 conventions
-- Imports are sorted using isort (via ruff)
+# Use cache keys with format: "entity:field:{id}"
+CACHE_KEY = "user:{user_id}"
+cached = get_cache_model(cache_key, User, extend_ttl=3600)
+set_cache(cache_key, user, expiration=3600)
+```
 
-## Testing Requirements
+### Logging Pattern
+```python
+from src.utils.logging import get_logger
 
-- Maintain >95% code coverage (enforced by CI)
-- Use pytest for all tests
-- Use pytest-asyncio for async test functions
-- Place tests in the `tests/` directory
-- Follow existing test patterns in the repository
-- Mock external services (Telegram API, Cloudflare services)
+logger = get_logger(__name__)
+logger.debug("Message", user_id=user_id)
+logger.error("Error occurred", error=str(e))
+```
+
+### Database Pattern
+```python
+from src.utils.database import execute_query
+
+result = execute_query(
+    table="users",
+    query_type="select",
+    filters={"id": user_id},
+)
+```
+
+## File Handling
+
+- Always use context managers (`with` statement) when opening files
+- For temporary files, use proper cleanup patterns
 
 ## Configuration
 
-- Environment variables are loaded via Pydantic Settings
-- Use `.env` file for local development
-- Use `.dev.vars` for local Cloudflare Worker secrets (gitignored)
-- Never commit secrets or tokens
-
-## Commit Guidelines
-
-- Follow [Conventional Commits](https://www.conventionalcommits.org) specification
-- Example formats:
-  - `feat: add new matching algorithm`
-  - `fix: resolve race condition in profile update`
-  - `docs: update API documentation`
-  - `test: add unit tests for matching service`
-
-## CI/CD
-
-- GitHub Actions runs on all pushes and pull requests
-- Tests run on Python 3.10, 3.11, and 3.12
-- Codecov tracks coverage reports
-- Deployment to Cloudflare Workers happens on push to main branch
-
-## Key Dependencies
-
-- `python-telegram-bot>=20.3`: Telegram Bot API wrapper
-- `pydantic>=2.4.2`: Data validation and settings management
-- `pydantic-settings>=2.0.3`: Environment settings
-- `structlog>=23.1.0`: Structured logging
-- `pytest>=7.4.0`: Testing framework
-- `ruff>=0.1.5`: Linter and formatter
+- Environment variables are loaded via `src/config.py` using pydantic-settings
+- Required variables: `TELEGRAM_TOKEN`, `REDIS_URL`
+- Use `.env` file for local development (copy from `.env.example`)

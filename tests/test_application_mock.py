@@ -31,7 +31,7 @@ async def test_application_setup():
     # Spy on _register_handlers method
     original_register = app._register_handlers
     register_spy = AsyncMock(wraps=original_register)
-    app._register_handlers = register_spy
+    app._register_handlers = register_spy  # type: ignore
 
     # Setup the application
     await app.setup()
@@ -50,7 +50,7 @@ async def test_application_run():
     # Spy on setup method
     original_setup = app.setup
     setup_spy = AsyncMock(wraps=original_setup)
-    app.setup = setup_spy
+    app.setup = setup_spy  # type: ignore
 
     # Run the application
     await app.run()
@@ -88,7 +88,7 @@ async def test_error_handler():
     # Spy on error_handler method
     original_handler = app.error_handler
     handler_spy = AsyncMock(wraps=original_handler)
-    app.error_handler = handler_spy
+    app.error_handler = handler_spy  # type: ignore
 
     # Call error handler
     await app.error_handler(update, context, Exception("Test error"))

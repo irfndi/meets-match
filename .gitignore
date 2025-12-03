@@ -35,5 +35,10 @@ coverage.xml
 # UV cache
 .uv/
 
+# Logs
+log/
+*.log
+
 # Misc
 .DS_Store
+coolify.env

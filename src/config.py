@@ -1,8 +1,8 @@
 """Configuration management for the MeetMatch bot."""
 
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
-from pydantic import Field, validator
+from pydantic import Field, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -11,36 +11,30 @@ class Settings(BaseSettings):
 
     # Telegram Bot Configuration
     TELEGRAM_TOKEN: str
+    ADMIN_IDS: Optional[str] = None
 
-    # Supabase Configuration
-    SUPABASE_URL: str
-    SUPABASE_KEY: str
+    @property
+    def TELEGRAM_BOT_TOKEN(self) -> str:
+        """Alias for TELEGRAM_TOKEN for compatibility."""
+        return self.TELEGRAM_TOKEN
 
-    # Redis/KV Configuration
-    REDIS_URL: Optional[str] = None
-    KV_URL: Optional[str] = None
-    KV_REST_API_URL: Optional[str] = None
-    KV_REST_API_TOKEN: Optional[str] = None
-    KV_REST_API_READ_ONLY_TOKEN: Optional[str] = None
+    # Database Configuration
+    DATABASE_URL: str
 
-    # TODO: Refactor Database/KV/Storage Configuration for Cloudflare Bindings
-    # Cloudflare Workers access D1, KV, R2, etc., via bindings defined in wrangler.toml
-    # and passed through the execution context/environment, not typically via URLs/keys
-    # in environment variables. This section needs revision.
-    # Consider how to handle local development vs. production environments.
-    # Option 1: Define placeholder fields here and populate them from the env context at runtime.
-    # Option 2: Remove these fields and access bindings directly where needed (e.g., in service layers)
-    #           passing the 'env' object down.
-    # Option 3: Use a dependency injection framework to manage access to bindings.
+    # Redis Configuration
+    REDIS_URL: str
 
     # Sentry Configuration
     SENTRY_DSN: Optional[str] = None
     ENABLE_SENTRY: bool = Field(default=False)
 
     # Application Configuration
+    APP_NAME: str = "MeetsMatch Bot"
     LOG_LEVEL: str = "INFO"
     ENVIRONMENT: str = "development"
     DEBUG: bool = Field(default=False)
+    STORAGE_PATH: str = "media"
+    MAX_MEDIA_COUNT: int = 3
 
     # API Configuration
     API_HOST: str = "0.0.0.0"
@@ -52,21 +46,23 @@ class Settings(BaseSettings):
     INTERESTS_WEIGHT: float = 0.5
     PREFERENCES_WEIGHT: float = 0.2
 
-    @validator("ENABLE_SENTRY", pre=True)
-    def set_enable_sentry(cls, v: Any, values: Dict[str, Any]) -> bool:
+    @field_validator("ENABLE_SENTRY", mode="before")
+    @classmethod
+    def set_enable_sentry(cls, v: Any, info: ValidationInfo) -> bool:
         """Enable Sentry if DSN is provided and explicitly enabled."""
         if isinstance(v, bool):
-            return v and values.get("SENTRY_DSN") is not None
-        return values.get("SENTRY_DSN") is not None and str(v).lower() == "true"
+            return v and info.data.get("SENTRY_DSN") is not None
+        return info.data.get("SENTRY_DSN") is not None and str(v).lower() == "true"
 
-    @validator("DEBUG", pre=True)
-    def set_debug(cls, v: Any, values: Dict[str, Any]) -> bool:
-        """Set debug mode based on environment."""
+    @field_validator("DEBUG", mode="before")
+    @classmethod
+    def set_debug(cls, v: Any, info: ValidationInfo) -> bool:
+        """Enable debug mode if ENVIRONMENT is development."""
         if isinstance(v, bool):
             return v
-        return values.get("ENVIRONMENT", "").lower() == "development"
+        return bool(info.data.get("ENVIRONMENT", "").lower() == "development")
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", case_sensitive=True)
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", case_sensitive=True, extra="ignore")
 
 
 # Create a global settings instance

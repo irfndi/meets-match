@@ -1,12 +1,5 @@
 """Match model for the MeetMatch bot."""
 
-# TODO: Cloudflare D1 Migration
-# These Pydantic models define the data structure and validation.
-# They are generally compatible with Cloudflare D1 which uses JSON objects.
-# However, the persistence logic (CRUD operations) that uses these models
-# (likely located in the 'src/services/' directory) needs to be rewritten
-# to use the Cloudflare D1 client API instead of Supabase/SQLAlchemy.
-
 from datetime import datetime
 from enum import Enum
 from typing import Optional

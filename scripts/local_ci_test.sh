@@ -46,16 +46,7 @@ if [ -d "version-3/tests/mocks" ]; then
   if [ ! -f "version-3/tests/mocks/models.py" ]; then
     echo "Creating missing models.py file in tests/mocks"
     echo 'from .base import Model
-
-class Conversation(Model):
-    """Mock conversation model"""
-    def __init__(self, **kwargs):
-        self.__dict__.update(kwargs)
-
-class Message(Model):
-    """Mock message model"""
-    def __init__(self, **kwargs):
-        self.__dict__.update(kwargs)' > version-3/tests/mocks/models.py
+' > version-3/tests/mocks/models.py
   fi
 fi
 
