@@ -16,17 +16,20 @@ logger = get_logger(__name__)
 
 # Initialize Sentry if enabled
 if settings.ENABLE_SENTRY and settings.SENTRY_DSN:
-    logger.info("Initializing Sentry...")
-    sentry_sdk.init(
-        dsn=settings.SENTRY_DSN,
-        environment=settings.ENVIRONMENT,
-        traces_sample_rate=1.0,
-        profiles_sample_rate=1.0,
-        integrations=[
-            FastApiIntegration(transaction_style="url"),
-            SqlalchemyIntegration(),
-        ],
-    )
+    try:
+        logger.info("Initializing Sentry...")
+        sentry_sdk.init(
+            dsn=settings.SENTRY_DSN,
+            environment=settings.ENVIRONMENT,
+            traces_sample_rate=1.0,
+            profiles_sample_rate=1.0,
+            integrations=[
+                FastApiIntegration(transaction_style="url"),
+                SqlalchemyIntegration(),
+            ],
+        )
+    except Exception as e:
+        logger.error(f"Failed to initialize Sentry: {e}")
 
 # Global bot instance
 bot_app = BotApplication()
