@@ -48,14 +48,17 @@ def _safe_get_preferences(user) -> Preferences:
                         # Not the expected type (likely a Mock), return None
                         return None
 
+                    # Handle notifications_enabled separately to preserve False values
+                    notif_val = _clean_value(getattr(user.preferences, "notifications_enabled", None), bool)
+                    notifications = notif_val if notif_val is not None else True
+
                     return Preferences(
                         preferred_country=_clean_value(getattr(user.preferences, "preferred_country", None), str),
                         preferred_language=_clean_value(getattr(user.preferences, "preferred_language", None), str),
                         min_age=_clean_value(getattr(user.preferences, "min_age", None), int),
                         max_age=_clean_value(getattr(user.preferences, "max_age", None), int),
                         max_distance=_clean_value(getattr(user.preferences, "max_distance", None), int),
-                        notifications_enabled=_clean_value(getattr(user.preferences, "notifications_enabled", None), bool)
-                        or True,
+                        notifications_enabled=notifications,
                         premium_tier=_clean_value(getattr(user.preferences, "premium_tier", None), str),
                     )
                 except Exception:
