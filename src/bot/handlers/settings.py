@@ -414,14 +414,21 @@ async def handle_language(update: Update, context: ContextTypes.DEFAULT_TYPE, la
                 ),
             )
         else:
-            await query.edit_message_text(
-                f"✅ Language updated to: {code}",
-                reply_markup=None,
-            )
             # Both set, continue to profile setup if needed
             from src.bot.handlers.profile import prompt_for_next_missing_field
 
-            await prompt_for_next_missing_field(update, context, user_id)
+            prompted = await prompt_for_next_missing_field(update, context, user_id)
+
+            reply_markup = None
+            if not prompted:
+                reply_markup = InlineKeyboardMarkup(
+                    [[InlineKeyboardButton("« Back to Settings", callback_data="back_to_settings")]]
+                )
+
+            await query.edit_message_text(
+                f"✅ Language updated to: {code}",
+                reply_markup=reply_markup,
+            )
 
     except Exception as e:
         logger.error("Error updating language", user_id=user_id, language=language_code, error=str(e), exc_info=e)
