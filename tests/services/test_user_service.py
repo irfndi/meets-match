@@ -60,7 +60,6 @@ def restore_real_modules():
         importlib.reload(src.services.user_service)
     except ImportError as e:
         print(f"Error reloading modules: {e}")
-        pass
 
     yield
 

@@ -1,0 +1,48 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.13"]
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install uv
+      uses: astral-sh/setup-uv@v5
+      with:
+        version: "latest"
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      run: uv python install ${{ matrix.python-version }}
+
+    - name: Install dependencies
+      run: uv sync --all-extras --dev
+
+    - name: Lint with Ruff
+      run: uv run ruff check .
+
+    - name: Check Formatting with Ruff
+      run: uv run ruff format --check .
+
+    - name: Run tests with coverage
+      env:
+        TELEGRAM_TOKEN: mock_token_for_ci_tests
+        DATABASE_URL: postgresql://user:pass@localhost:5432/test_db
+        REDIS_URL: redis://localhost:6379/0
+      run: |
+        uv run pytest tests --cov=src --cov-report=xml -v
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v4
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        files: ./coverage.xml
+        flags: unittests
+        verbose: true
+        name: codecov-umbrella
+        fail_ci_if_error: false

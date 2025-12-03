@@ -253,9 +253,9 @@ class BotApplication:
                         if _asyncio.iscoroutine(res):
                             await res
                     except Exception:
-                        pass
+                        pass  # Silently ignore errors during graceful shutdown
             except Exception:
-                pass
+                pass  # Silently ignore errors during graceful shutdown
             try:
                 stop_fn = getattr(app, "stop", None)
                 if callable(stop_fn):
@@ -266,9 +266,9 @@ class BotApplication:
                         if _asyncio.iscoroutine(result):
                             await result
                     except Exception:
-                        pass
+                        pass  # Silently ignore errors during graceful shutdown
             except Exception:
-                pass
+                pass  # Silently ignore errors during graceful shutdown
             return
 
         # Get chat ID for error response
@@ -380,8 +380,7 @@ class BotApplication:
                 )
             except Conflict as e:
                 logger.error("Polling conflict detected during startup", error=str(e))
-                # We don't raise here, we just let it be.
-                pass
+                # We don't raise here, we just let it be (conflict is handled by not re-raising)
 
     async def stop(self) -> None:
         """Stop the bot application."""

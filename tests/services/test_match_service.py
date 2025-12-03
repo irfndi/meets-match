@@ -69,7 +69,6 @@ def restore_real_modules():
 
     except ImportError as e:
         print(f"Error reloading modules: {e}")
-        pass
 
     yield
 

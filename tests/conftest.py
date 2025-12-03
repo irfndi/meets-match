@@ -6,17 +6,18 @@ import sys
 
 import pytest
 
+# Set environment variables at import time (before test collection)
+# This is necessary because some modules read settings at import time
+os.environ.setdefault("TELEGRAM_TOKEN", "test_token")
+os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
+os.environ.setdefault("DATABASE_URL", "postgresql://user:pass@localhost:5432/test_db")
+os.environ.setdefault("DEBUG", "True")
+os.environ.setdefault("ENABLE_SENTRY", "False")
+os.environ.setdefault("ADMIN_IDS", "123456,789012")
+os.environ.setdefault("TELEGRAM_BOT_TOKEN", "test_bot_token")
+
 # Add pytest configuration for asyncio
 pytest_plugins = ["pytest_asyncio"]
-
-
-# Configure asyncio for pytest
-# @pytest.fixture(scope="session")
-# def event_loop_policy():
-#     """Configure event loop policy for pytest-asyncio."""
-#     import asyncio
-#
-#     return asyncio.get_event_loop_policy()
 
 
 # Set environment variables for testing
@@ -26,6 +27,7 @@ def set_test_env():
     env_vars = {
         "TELEGRAM_TOKEN": "test_token",
         "REDIS_URL": "redis://localhost:6379/0",
+        "DATABASE_URL": "postgresql://user:pass@localhost:5432/test_db",
         "DEBUG": "True",
         "ENABLE_SENTRY": "False",
         "ADMIN_IDS": "123456,789012",
