@@ -144,3 +144,55 @@ async def test_inactive_user_reminder_skip_recently_reminded():
         # Verify NO message sent
         context.bot.send_message.assert_not_called()
         mock_update_user.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_inactive_user_reminder_job_captures_user_exception_in_sentry():
+    """Test that inactive_user_reminder_job captures user-level exceptions in Sentry."""
+    context = MagicMock()
+    context.bot.send_message = AsyncMock(side_effect=Exception("Failed to send message"))
+
+    user = MagicMock(spec=User)
+    user.id = "123"
+    user.last_reminded_at = None
+    user.location = Location(city="New York", country="USA", latitude=0, longitude=0)
+    user.preferences = Preferences(gender_preference=[Gender.FEMALE])
+
+    with (
+        patch("src.bot.jobs.get_inactive_users") as mock_get_users,
+        patch("src.bot.jobs.update_user"),
+        patch("src.bot.jobs.get_pending_incoming_likes_count") as mock_get_pending,
+        patch("src.bot.jobs.sentry_sdk.capture_exception") as mock_capture,
+        patch("src.bot.jobs.INACTIVITY_DAYS", [1]),
+    ):
+        mock_get_users.return_value = [user]
+        mock_get_pending.return_value = 5
+
+        await inactive_user_reminder_job(context)
+
+        # Verify Sentry captured the exception
+        mock_capture.assert_called_once()
+        # Verify the captured exception is the correct type
+        captured_exception = mock_capture.call_args[0][0]
+        assert isinstance(captured_exception, Exception)
+        assert "Failed to send message" in str(captured_exception)
+
+
+@pytest.mark.asyncio
+async def test_inactive_user_reminder_job_captures_day_exception_in_sentry():
+    """Test that inactive_user_reminder_job captures day-level exceptions in Sentry."""
+    context = MagicMock()
+
+    db_error = Exception("Database connection failed")
+
+    with (
+        patch("src.bot.jobs.get_inactive_users") as mock_get_users,
+        patch("src.bot.jobs.sentry_sdk.capture_exception") as mock_capture,
+        patch("src.bot.jobs.INACTIVITY_DAYS", [1]),
+    ):
+        mock_get_users.side_effect = db_error
+
+        await inactive_user_reminder_job(context)
+
+        # Verify Sentry captured the exception
+        mock_capture.assert_called_once_with(db_error)
