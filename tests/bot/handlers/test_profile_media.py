@@ -9,6 +9,7 @@ from src.bot.handlers.profile import (
     STATE_PENDING_MEDIA,
     STATE_PROFILE_SETUP,
     _next_profile_step,
+    handle_text_message,
     prompt_for_next_missing_field,
 )
 from src.models.user import User as DbUser
@@ -19,6 +20,7 @@ def mock_update():
     update = MagicMock(spec=Update)
     update.message = MagicMock(spec=Message)
     update.message.reply_text = AsyncMock()
+    update.message.reply_media_group = AsyncMock()
     update.effective_user = MagicMock(spec=User)
     update.effective_user.id = 12345
     update.effective_message = update.message
@@ -50,6 +52,8 @@ def mock_user():
 
     user.photos = []
     user.is_profile_complete = False
+    user.is_sleeping = False
+    user.is_active = True
     return user
 
 
@@ -84,7 +88,7 @@ async def test_next_profile_step_photos_empty(mock_update, mock_context, mock_us
 
 @pytest.mark.asyncio
 async def test_next_profile_step_photos_existing(mock_update, mock_context, mock_user):
-    """Test that _next_profile_step prompts with skip option when user has photos."""
+    """Test that _next_profile_step prompts with replacement option when user has photos."""
 
     mock_user.photos = ["photo1.jpg"]
 
@@ -93,6 +97,7 @@ async def test_next_profile_step_photos_existing(mock_update, mock_context, mock
         patch("src.bot.handlers.profile.get_settings") as mock_settings,
         patch("src.bot.handlers.profile.media_upload_keyboard") as mock_keyboard,
         patch("src.bot.handlers.profile.set_user_editing_state"),
+        patch("src.bot.handlers.profile.send_media_group_safe", new_callable=AsyncMock) as mock_send_media,
     ):
         mock_settings.return_value.MAX_MEDIA_COUNT = 3
         # Set current step to 5 (Location), so next step is 6 (Photos)
@@ -100,11 +105,15 @@ async def test_next_profile_step_photos_existing(mock_update, mock_context, mock
 
         await _next_profile_step(mock_update, mock_context)
 
+        # Verify media sent
+        mock_send_media.assert_called_once_with(mock_update.message.reply_media_group, mock_user.photos)
+
         # Verify prompt
         args, _ = mock_update.message.reply_text.call_args
         assert "You have 1 photos/videos" in args[0]
-        assert "Skip" in args[0]
-        mock_keyboard.assert_called_with(1, 3)
+        assert "REPLACE" in args[0]
+        # Keyboard should start at 0 for replacement flow
+        mock_keyboard.assert_called_with(0, 3)
 
 
 @pytest.mark.asyncio
@@ -129,3 +138,65 @@ async def test_prompt_for_next_missing_field_photos(mock_update, mock_context, m
         args, _ = mock_update.effective_message.reply_text.call_args
         assert "upload at least one photo" in args[0]
         mock_keyboard.assert_called_with(0, 3)
+
+
+@pytest.mark.asyncio
+async def test_handle_done_button_keep_existing(mock_update, mock_context, mock_user):
+    """Test Done button when user has existing photos but no new uploads (Keep Existing)."""
+
+    mock_update.message.text = "✅ Done"
+    mock_user.photos = ["photo1.jpg"]
+    mock_context.user_data[STATE_PENDING_MEDIA] = []  # Empty pending
+
+    with (
+        patch("src.bot.handlers.profile.get_user", return_value=mock_user),
+        patch("src.bot.middleware.auth.get_user", return_value=mock_user),
+        patch("src.bot.middleware.auth.update_last_active"),
+        patch("src.bot.handlers.profile._next_profile_step", new_callable=AsyncMock) as mock_next_step,
+        patch("src.bot.handlers.profile.get_settings") as mock_settings,
+        patch("src.bot.handlers.profile.media_upload_keyboard"),
+    ):
+        mock_settings.return_value.MAX_MEDIA_COUNT = 3
+
+        # Case 1: In Profile Setup
+        mock_context.user_data[STATE_PROFILE_SETUP] = 6  # Photos step
+
+        await handle_text_message(mock_update, mock_context)
+
+        # Verify success message
+        args, _ = mock_update.message.reply_text.call_args
+        assert "Keeping existing" in args[0]
+
+        # Verify next step called
+        mock_next_step.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_handle_done_button_error_no_media(mock_update, mock_context, mock_user):
+    """Test Done button when user has NO photos and NO new uploads (Error)."""
+
+    mock_update.message.text = "✅ Done"
+    mock_user.photos = []  # No photos
+    mock_context.user_data[STATE_PENDING_MEDIA] = []  # Empty pending
+
+    with (
+        patch("src.bot.handlers.profile.get_user", return_value=mock_user),
+        patch("src.bot.middleware.auth.get_user", return_value=mock_user),
+        patch("src.bot.middleware.auth.update_last_active"),
+        patch("src.bot.handlers.profile._next_profile_step", new_callable=AsyncMock) as mock_next_step,
+        patch("src.bot.handlers.profile.get_settings") as mock_settings,
+        patch("src.bot.handlers.profile.media_upload_keyboard"),
+    ):
+        mock_settings.return_value.MAX_MEDIA_COUNT = 3
+
+        # In Profile Setup
+        mock_context.user_data[STATE_PROFILE_SETUP] = 6
+
+        await handle_text_message(mock_update, mock_context)
+
+        # Verify Error message
+        args, _ = mock_update.message.reply_text.call_args
+        assert "No media uploaded yet" in args[0]
+
+        # Verify next step NOT called
+        mock_next_step.assert_not_called()

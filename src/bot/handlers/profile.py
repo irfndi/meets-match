@@ -1107,12 +1107,16 @@ async def _next_profile_step(update: Update, context: ContextTypes.DEFAULT_TYPE)
             )
             reply_markup = media_upload_keyboard(0, settings.MAX_MEDIA_COUNT)
         else:
+            # Show existing media first
+            await send_media_group_safe(update.message.reply_media_group, cur_photos)
+
             prompt = (
-                f"📸 You have {len(cur_photos)} photos/videos.\n"
-                f"Send more media to add, or type 'Skip' to keep existing.\n\n"
+                f"📸 You have {len(cur_photos)} photos/videos (shown above).\n"
+                f"Send new media to REPLACE them, or press '✅ Done' to keep current photos.\n\n"
                 f"Press '✅ Done' when finished."
             )
-            reply_markup = media_upload_keyboard(len(cur_photos), settings.MAX_MEDIA_COUNT)
+            # Start keyboard count at 0 for new upload session (replace logic)
+            reply_markup = media_upload_keyboard(0, settings.MAX_MEDIA_COUNT)
 
         await update.message.reply_text(prompt, reply_markup=reply_markup)
 
@@ -1245,9 +1249,10 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     # Handle Done button for media upload
     if text.startswith("✅ Done"):
         pending_media = context.user_data.get(STATE_PENDING_MEDIA, [])
+        user_id = str(update.effective_user.id)
+        user = get_user(user_id)
+
         if pending_media:
-            user_id = str(update.effective_user.id)
-            user = get_user(user_id)
             old_photos = list(user.photos or [])
 
             # Replace behavior: Delete all existing photos and track them for 365-day retention
@@ -1288,6 +1293,33 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             # Check if profile is now complete
             if context.user_data.get(STATE_ADHOC_CONTINUE):
                 await prompt_for_next_missing_field(update, context, user_id)
+
+        # Case: No new media, but user has existing photos (Keep Existing)
+        elif user.photos and len(user.photos) > 0:
+            context.user_data.pop(STATE_AWAITING_PHOTO, None)
+            context.user_data.pop(STATE_PENDING_MEDIA, None)
+
+            media_count = len(user.photos)
+
+            # Check if in setup flow
+            if context.user_data.get(STATE_PROFILE_SETUP) is not None:
+                await update.message.reply_text(f"✅ Keeping existing {media_count} photos/videos.")
+                await _next_profile_step(update, context)
+                return
+
+            context.user_data[STATE_PROFILE_MENU] = True
+            # Refresh user data in context if needed
+            context.user_data["user"] = get_user(user_id)
+
+            await update.message.reply_text(
+                f"✅ Photos unchanged ({media_count} file{'s' if media_count > 1 else ''}).",
+                reply_markup=main_menu(),
+            )
+
+            # Check if profile is now complete
+            if context.user_data.get(STATE_ADHOC_CONTINUE):
+                await prompt_for_next_missing_field(update, context, user_id)
+
         else:
             await update.message.reply_text(
                 "❌ No media uploaded yet. Please send at least one photo or video.",
