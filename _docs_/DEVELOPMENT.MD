@@ -49,7 +49,7 @@ uv pip install -e ".[dev]"
 
 ### Development Tools
 ```bash
-# Development tools (like ruff, pytest, pylyzer) are installed via pyproject.toml's [dev] extra
+# Development tools (like ruff, pytest, ty) are installed via pyproject.toml's [dev] extra
 
 # Setup pre-commit hooks (if using pre-commit)
 pre-commit install
@@ -87,7 +87,7 @@ scripts/               # Deployment/maintenance scripts
 ## Coding Conventions
 1. **Type Annotations**:
    - Use Python 3.10+ syntax
-   - Strict mypy validation
+   - Strict type validation with ty
 
 2. **Error Handling**:
    - Use custom exceptions from `errors.py`
@@ -108,7 +108,7 @@ ruff check .
 ruff format .
 
 # Type checking
-pylyzer src/
+ty check
 ```
 
 ## Deployment
