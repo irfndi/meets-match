@@ -340,7 +340,10 @@ async def handle_region(update: Update, context: ContextTypes.DEFAULT_TYPE, coun
 
     # Answer callback query to prevent loading indicator
     if update.callback_query:
-        await update.callback_query.answer()
+        try:
+            await update.callback_query.answer()
+        except BadRequest:
+            pass  # Callback query may have already been answered or timed out
 
     user_id = str(update.effective_user.id)
 
@@ -410,7 +413,10 @@ async def handle_language(update: Update, context: ContextTypes.DEFAULT_TYPE, la
 
     # Answer callback query to prevent loading indicator
     if update.callback_query:
-        await update.callback_query.answer()
+        try:
+            await update.callback_query.answer()
+        except BadRequest:
+            pass  # Callback query may have already been answered or timed out
 
     user_id = str(update.effective_user.id)
 
