@@ -314,8 +314,6 @@ async def test_handle_region_does_not_send_confirmation_when_profile_prompt_show
     mock_user.is_profile_complete = True
     mock_deps["get_user"].return_value = mock_user
 
-    update.effective_message = AsyncMock()
-    update.effective_message.reply_text = AsyncMock()
     update.callback_query = None  # Simulate text input, not callback
 
     # Mock prompt_for_next_missing_field to return True (meaning it prompted for a field)
@@ -332,7 +330,8 @@ async def test_handle_region_does_not_send_confirmation_when_profile_prompt_show
 
         # The key assertion: if prompt returned True, we should return early
         # and not send the "Region updated to: Indonesia" message
-        call_args_list = update.effective_message.reply_text.call_args_list
+        # Note: _reply_or_edit uses update.message.reply_text, not update.effective_message
+        call_args_list = update.message.reply_text.call_args_list
         confirmation_sent = any("Region updated to: Indonesia" in str(call) for call in call_args_list)
         assert not confirmation_sent, "Confirmation message should not be sent when profile prompt is shown"
 
@@ -363,8 +362,6 @@ async def test_handle_language_does_not_send_confirmation_when_profile_prompt_sh
     mock_user.is_profile_complete = True
     mock_deps["get_user"].return_value = mock_user
 
-    update.effective_message = AsyncMock()
-    update.effective_message.reply_text = AsyncMock()
     update.callback_query = None  # Simulate text input, not callback
 
     # Mock prompt_for_next_missing_field to return True (meaning it prompted for a field)
@@ -381,6 +378,7 @@ async def test_handle_language_does_not_send_confirmation_when_profile_prompt_sh
 
         # The key assertion: if prompt returned True, we should return early
         # and not send the "Language updated to: en" message
-        call_args_list = update.effective_message.reply_text.call_args_list
+        # Note: _reply_or_edit uses update.message.reply_text, not update.effective_message
+        call_args_list = update.message.reply_text.call_args_list
         confirmation_sent = any("Language updated to: en" in str(call) for call in call_args_list)
         assert not confirmation_sent, "Confirmation message should not be sent when profile prompt is shown"
