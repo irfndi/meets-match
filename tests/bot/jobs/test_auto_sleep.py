@@ -117,3 +117,28 @@ async def test_auto_sleep_inactive_users_job_set_sleeping_failure():
         mock_set_sleeping.assert_called_once()
         # But notification should not be sent due to failure
         context.bot.send_message.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_auto_sleep_job_captures_errors_in_sentry():
+    """Test that auto-sleep job captures errors in Sentry."""
+    context = MagicMock()
+    context.bot.send_message = AsyncMock()
+
+    user = MagicMock(spec=User)
+    user.id = "123"
+
+    db_error = Exception("Database connection failed")
+
+    with (
+        patch("src.bot.jobs.get_users_for_auto_sleep") as mock_get_users,
+        patch("src.bot.jobs.set_user_sleeping") as mock_set_sleeping,
+        patch("src.bot.jobs.sentry_sdk.capture_exception") as mock_capture,
+    ):
+        mock_get_users.return_value = [user]
+        mock_set_sleeping.side_effect = db_error
+
+        await auto_sleep_inactive_users_job(context)
+
+        # Verify Sentry captured the exception
+        mock_capture.assert_called_once_with(db_error)

@@ -5,6 +5,7 @@ import sentry_sdk
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from sentry_sdk.integrations.fastapi import FastApiIntegration
+from sentry_sdk.integrations.redis import RedisIntegration
 from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
 
 from src.bot.application import BotApplication
@@ -26,6 +27,7 @@ if settings.ENABLE_SENTRY and settings.SENTRY_DSN:
             integrations=[
                 FastApiIntegration(transaction_style="url"),
                 SqlalchemyIntegration(),
+                RedisIntegration(),
             ],
         )
     except Exception as e:

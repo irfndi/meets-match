@@ -1,6 +1,7 @@
 import random
 from datetime import datetime, timezone
 
+import sentry_sdk
 from telegram.ext import ContextTypes
 
 from src.bot.ui.keyboards import reengagement_keyboard
@@ -62,9 +63,11 @@ async def auto_sleep_inactive_users_job(context: ContextTypes.DEFAULT_TYPE) -> N
                 logger.info("Auto-slept user", user_id=user.id)
 
             except Exception as e:
+                sentry_sdk.capture_exception(e)
                 logger.warning("Failed to auto-sleep user", user_id=user.id, error=str(e))
 
     except Exception as e:
+        sentry_sdk.capture_exception(e)
         logger.error("Error in auto-sleep job", error=str(e))
 
 
@@ -117,11 +120,13 @@ async def cleanup_old_media_job(context: ContextTypes.DEFAULT_TYPE) -> None:
                         file_path.unlink()
                         count += 1
                     except Exception as e:
+                        sentry_sdk.capture_exception(e)
                         logger.error(f"Failed to delete old file {file_path}: {e}")
 
         logger.info(f"Cleanup complete. Deleted {count} old media files.")
 
     except Exception as e:
+        sentry_sdk.capture_exception(e)
         logger.error(f"Error in media cleanup job: {e}")
 
 
@@ -206,7 +211,9 @@ async def inactive_user_reminder_job(context: ContextTypes.DEFAULT_TYPE) -> None
                     logger.info(f"Sent reminder to user {user.id} (inactive {days} days)")
 
                 except Exception as e:
+                    sentry_sdk.capture_exception(e)
                     logger.warning(f"Failed to send reminder to user {user.id}: {e}")
 
         except Exception as e:
+            sentry_sdk.capture_exception(e)
             logger.error(f"Error processing inactivity for {days} days: {e}")

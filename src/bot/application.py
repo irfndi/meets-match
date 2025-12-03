@@ -2,6 +2,7 @@
 
 from typing import Optional, Set
 
+import sentry_sdk
 from telegram import BotCommand, Update
 from telegram.error import Conflict
 from telegram.ext import (
@@ -243,6 +244,19 @@ class BotApplication:
             )
             # Exit gracefully and let the outer exception handler deal with it
             return
+
+        # Set Sentry user context for better debugging
+        if update_obj and update_obj.effective_user:
+            sentry_sdk.set_user(
+                {
+                    "id": str(update_obj.effective_user.id),
+                    "username": update_obj.effective_user.username,
+                }
+            )
+
+        # Capture error in Sentry (including database and other custom errors)
+        if error is not None:
+            sentry_sdk.capture_exception(error)
 
         # Get chat ID for error response
         chat_id = None

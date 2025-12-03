@@ -4,6 +4,7 @@ import pytest
 
 # Import application after mocks are set up in conftest.py
 from src.bot.application import BotApplication
+from src.utils.errors import DatabaseError, MeetMatchError
 
 
 @pytest.mark.asyncio
@@ -78,3 +79,114 @@ async def test_register_handlers(mock_application):
 
     # Verify handlers were added
     assert mock_application.add_handler.call_count > 0
+
+
+@pytest.mark.asyncio
+async def test_error_handler_captures_database_error_in_sentry(mock_application, mock_update, mock_context):
+    """Test that database errors are captured by Sentry."""
+    app = BotApplication()
+    app.application = mock_application
+
+    # Create a database error
+    db_error = DatabaseError("Database connection failed", details={"table": "users"})
+    mock_context.error = db_error
+
+    # Mock sentry_sdk.capture_exception
+    with patch("src.bot.application.sentry_sdk.capture_exception") as mock_capture:
+        await app._error_handler(mock_update, mock_context)
+
+        # Verify Sentry captured the exception
+        mock_capture.assert_called_once_with(db_error)
+
+
+@pytest.mark.asyncio
+async def test_error_handler_captures_meetmatch_error_in_sentry(mock_application, mock_update, mock_context):
+    """Test that MeetMatch errors are captured by Sentry."""
+    app = BotApplication()
+    app.application = mock_application
+
+    # Create a custom MeetMatchError
+    custom_error = MeetMatchError("Custom error occurred")
+    mock_context.error = custom_error
+
+    # Mock sentry_sdk.capture_exception
+    with patch("src.bot.application.sentry_sdk.capture_exception") as mock_capture:
+        await app._error_handler(mock_update, mock_context)
+
+        # Verify Sentry captured the exception
+        mock_capture.assert_called_once_with(custom_error)
+
+
+@pytest.mark.asyncio
+async def test_error_handler_captures_unexpected_error_in_sentry(mock_application, mock_update, mock_context):
+    """Test that unexpected errors are captured by Sentry."""
+    app = BotApplication()
+    app.application = mock_application
+
+    # Create an unexpected error
+    unexpected_error = ValueError("Unexpected value error")
+    mock_context.error = unexpected_error
+
+    # Mock sentry_sdk.capture_exception
+    with patch("src.bot.application.sentry_sdk.capture_exception") as mock_capture:
+        await app._error_handler(mock_update, mock_context)
+
+        # Verify Sentry captured the exception
+        mock_capture.assert_called_once_with(unexpected_error)
+
+
+@pytest.mark.asyncio
+async def test_error_handler_does_not_capture_conflict_error_in_sentry(mock_application, mock_update, mock_context):
+    """Test that polling conflict errors are not captured by Sentry."""
+    from telegram.error import Conflict
+
+    app = BotApplication()
+    app.application = mock_application
+
+    # Create a conflict error
+    conflict_error = Conflict("Conflict: another bot instance is running")
+    mock_context.error = conflict_error
+
+    # Mock sentry_sdk.capture_exception
+    with patch("src.bot.application.sentry_sdk.capture_exception") as mock_capture:
+        await app._error_handler(mock_update, mock_context)
+
+        # Verify Sentry did NOT capture the conflict exception
+        mock_capture.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_error_handler_sets_sentry_user_context(mock_application, mock_context):
+    """Test that Sentry user context is set when user info is available."""
+    from unittest.mock import MagicMock
+
+    from telegram import Update, User
+
+    app = BotApplication()
+    app.application = mock_application
+
+    # Create a proper Update mock with spec
+    mock_update = MagicMock(spec=Update)
+    mock_user = MagicMock(spec=User)
+    mock_user.id = 123456
+    mock_user.username = "test_user"
+    mock_update.effective_user = mock_user
+    mock_update.effective_chat = None
+
+    # Create an error
+    mock_context.error = ValueError("Some error")
+
+    # Mock sentry_sdk functions
+    with (
+        patch("src.bot.application.sentry_sdk.capture_exception"),
+        patch("src.bot.application.sentry_sdk.set_user") as mock_set_user,
+    ):
+        await app._error_handler(mock_update, mock_context)
+
+        # Verify Sentry user context was set
+        mock_set_user.assert_called_once_with(
+            {
+                "id": "123456",
+                "username": "test_user",
+            }
+        )
