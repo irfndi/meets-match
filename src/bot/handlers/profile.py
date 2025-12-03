@@ -184,6 +184,34 @@ def check_and_update_profile_complete(user_id: str, context: ContextTypes.DEFAUL
 STATE_ADHOC_CONTINUE = "adhoc_continue_profile"
 
 
+def _get_chat_id_from_update(update: Update) -> int | None:
+    """Extract chat_id from an update, trying multiple sources.
+
+    This handles the case where effective_message is None (e.g., callback queries
+    with inaccessible messages).
+
+    Args:
+        update: The update object
+
+    Returns:
+        Chat ID if found, None otherwise
+    """
+    if update.effective_chat:
+        return update.effective_chat.id
+    if update.effective_user:
+        # For private chats, user_id == chat_id
+        return update.effective_user.id
+    if update.callback_query and update.callback_query.message:
+        # Try to get chat_id from callback_query.message even if it's InaccessibleMessage
+        # InaccessibleMessage still has a valid chat attribute
+        try:
+            if update.callback_query.message.chat:
+                return update.callback_query.message.chat.id
+        except AttributeError:
+            pass
+    return None
+
+
 async def _send_message_safe(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, reply_markup=None) -> bool:
     """Send a message safely, handling both message and callback query contexts.
 
@@ -205,18 +233,7 @@ async def _send_message_safe(update: Update, context: ContextTypes.DEFAULT_TYPE,
         return True
 
     # Fallback: try to get chat_id from various sources
-    chat_id = None
-    if update.effective_chat:
-        chat_id = update.effective_chat.id
-    elif update.effective_user:
-        # For private chats, user_id == chat_id
-        chat_id = update.effective_user.id
-    elif update.callback_query and update.callback_query.message:
-        # Try to get chat_id from callback_query.message even if it's InaccessibleMessage
-        try:
-            chat_id = update.callback_query.message.chat.id
-        except AttributeError:
-            pass
+    chat_id = _get_chat_id_from_update(update)
 
     if chat_id:
         await context.bot.send_message(chat_id=chat_id, text=text, reply_markup=reply_markup)
@@ -246,12 +263,7 @@ async def prompt_for_next_missing_field(
 
     # Get a reliable way to send messages (handles both message and callback contexts)
     # We check this early and fail fast if we can't send messages
-    can_send = update.effective_message or update.effective_chat or update.effective_user
-    if not can_send and update.callback_query and update.callback_query.message:
-        try:
-            can_send = update.callback_query.message.chat.id is not None
-        except AttributeError:
-            pass
+    can_send = update.effective_message or _get_chat_id_from_update(update) is not None
 
     if not can_send:
         logger.error("Cannot send messages: no effective_message, effective_chat, or effective_user")
