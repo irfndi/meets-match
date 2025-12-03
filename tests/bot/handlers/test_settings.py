@@ -286,3 +286,99 @@ async def test_settings_callback_region_with_space_in_name(
     args, _ = mock_deps["update_user"].call_args
     assert args[0] == "12345"
     assert args[1]["preferences"]["preferred_country"] == "United States"
+
+
+@pytest.mark.asyncio
+async def test_handle_region_does_not_send_confirmation_when_profile_prompt_shown(
+    settings_handler_module, mock_dependencies, mock_update_context, user_model_classes
+):
+    """Test that handle_region returns early when prompt_for_next_missing_field returns True.
+
+    This prevents the "Region updated to: X" message from overwriting the profile prompt
+    (e.g., "What are your interests?") when the user has missing profile fields.
+    """
+    update, context = mock_update_context
+    mock_deps = mock_dependencies
+    Preferences = user_model_classes["Preferences"]
+
+    # Mock user with language set but no interests (a recommended field)
+    mock_user = MagicMock()
+    mock_user.preferences = Preferences(preferred_language="en", preferred_country=None)
+    mock_user.location = None
+    mock_user.first_name = "Test"
+    mock_user.age = 25
+    mock_user.photos = ["photo1.jpg"]
+    mock_user.gender = None
+    mock_user.bio = None
+    mock_user.interests = []
+    mock_user.is_profile_complete = True
+    mock_deps["get_user"].return_value = mock_user
+
+    update.callback_query = None  # Simulate text input, not callback
+
+    # Mock prompt_for_next_missing_field to return True (meaning it prompted for a field)
+    with patch("src.bot.handlers.profile.prompt_for_next_missing_field", new_callable=AsyncMock) as mock_prompt:
+        mock_prompt.return_value = True
+
+        await settings_handler_module.handle_region(update, context, "Indonesia")
+
+        # Verify prompt_for_next_missing_field was called
+        mock_prompt.assert_called_once()
+
+        # Verify update_user was called to set the region
+        mock_deps["update_user"].assert_called()
+
+        # The key assertion: if prompt returned True, we should return early
+        # and not send the "Region updated to: Indonesia" message
+        # Note: _reply_or_edit uses update.message.reply_text, not update.effective_message
+        call_args_list = update.message.reply_text.call_args_list
+        confirmation_sent = any("Region updated to: Indonesia" in str(call) for call in call_args_list)
+        assert not confirmation_sent, "Confirmation message should not be sent when profile prompt is shown"
+
+
+@pytest.mark.asyncio
+async def test_handle_language_does_not_send_confirmation_when_profile_prompt_shown(
+    settings_handler_module, mock_dependencies, mock_update_context, user_model_classes
+):
+    """Test that handle_language returns early when prompt_for_next_missing_field returns True.
+
+    This prevents the "Language updated to: X" message from overwriting the profile prompt
+    (e.g., "What are your interests?") when the user has missing profile fields.
+    """
+    update, context = mock_update_context
+    mock_deps = mock_dependencies
+    Preferences = user_model_classes["Preferences"]
+
+    # Mock user with region set but no interests (a recommended field)
+    mock_user = MagicMock()
+    mock_user.preferences = Preferences(preferred_country="Indonesia", preferred_language=None)
+    mock_user.location = None
+    mock_user.first_name = "Test"
+    mock_user.age = 25
+    mock_user.photos = ["photo1.jpg"]
+    mock_user.gender = None
+    mock_user.bio = None
+    mock_user.interests = []
+    mock_user.is_profile_complete = True
+    mock_deps["get_user"].return_value = mock_user
+
+    update.callback_query = None  # Simulate text input, not callback
+
+    # Mock prompt_for_next_missing_field to return True (meaning it prompted for a field)
+    with patch("src.bot.handlers.profile.prompt_for_next_missing_field", new_callable=AsyncMock) as mock_prompt:
+        mock_prompt.return_value = True
+
+        await settings_handler_module.handle_language(update, context, "en")
+
+        # Verify prompt_for_next_missing_field was called
+        mock_prompt.assert_called_once()
+
+        # Verify update_user_preferences was called to set the language
+        mock_deps["update_user_preferences"].assert_called()
+
+        # The key assertion: if prompt returned True, we should return early
+        # and not send the "Language updated to: en" message
+        # Note: _reply_or_edit uses update.message.reply_text, not update.effective_message
+        call_args_list = update.message.reply_text.call_args_list
+        confirmation_sent = any("Language updated to: en" in str(call) for call in call_args_list)
+        assert not confirmation_sent, "Confirmation message should not be sent when profile prompt is shown"

@@ -388,18 +388,18 @@ async def handle_region(update: Update, context: ContextTypes.DEFAULT_TYPE, coun
 
             prompted = await prompt_for_next_missing_field(update, context, user_id)
 
-            # If we prompted for a missing field, we don't need a Back button (focus on new prompt)
-            # If we didn't prompt (profile complete or cooldown), show Back button so user isn't stuck
-            reply_markup = None
-            if not prompted:
-                reply_markup = InlineKeyboardMarkup(
-                    [[InlineKeyboardButton("« Back to Settings", callback_data="back_to_settings")]]
-                )
+            # If we prompted for a missing field, don't send another message
+            # The profile prompt is already showing, so we should not overwrite it
+            if prompted:
+                return
 
+            # Profile is complete or cooldown active, show confirmation with Back button
             await _reply_or_edit(
                 update,
                 f"✅ Region updated to: {country}",
-                reply_markup=reply_markup,
+                reply_markup=InlineKeyboardMarkup(
+                    [[InlineKeyboardButton("« Back to Settings", callback_data="back_to_settings")]]
+                ),
             )
 
     except Exception as e:
@@ -454,16 +454,18 @@ async def handle_language(update: Update, context: ContextTypes.DEFAULT_TYPE, la
 
             prompted = await prompt_for_next_missing_field(update, context, user_id)
 
-            reply_markup = None
-            if not prompted:
-                reply_markup = InlineKeyboardMarkup(
-                    [[InlineKeyboardButton("« Back to Settings", callback_data="back_to_settings")]]
-                )
+            # If we prompted for a missing field, don't send another message
+            # The profile prompt is already showing, so we should not overwrite it
+            if prompted:
+                return
 
+            # Profile is complete or cooldown active, show confirmation with Back button
             await _reply_or_edit(
                 update,
                 f"✅ Language updated to: {code}",
-                reply_markup=reply_markup,
+                reply_markup=InlineKeyboardMarkup(
+                    [[InlineKeyboardButton("« Back to Settings", callback_data="back_to_settings")]]
+                ),
             )
 
     except Exception as e:
