@@ -41,6 +41,7 @@ def restore_real_modules():
 
         importlib.reload(src.utils.media)
     except ImportError:
+        # Ignore ImportError during test setup; some modules may not be present in all test environments.
         pass
 
     yield

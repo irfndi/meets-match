@@ -36,7 +36,7 @@ from src.bot.ui.keyboards import (
 from src.config import get_settings
 from src.models.user import Gender, User
 from src.services.geocoding_service import geocode_city, reverse_geocode_coordinates
-from src.services.user_service import get_user, get_user_location_text, set_user_sleeping, update_user
+from src.services.user_service import get_user, get_user_location_text, update_user
 from src.utils.cache import delete_cache, set_cache
 from src.utils.logging import get_logger
 from src.utils.media import delete_media, get_storage_path, save_media
@@ -1511,22 +1511,18 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     file_obj: PhotoSize | Video | None = None
     file_ext = "jpg"
     file_type = "image"
-    file_name = "upload.jpg"
 
     if update.message.photo:
         file_obj = update.message.photo[-1]
-        file_name = "photo.jpg"
     elif update.message.video:
         video_obj = update.message.video
         file_obj = video_obj
         file_ext = "mp4"
         file_type = "video"
-        file_name = "video.mp4"
         if video_obj.mime_type:
             ext = video_obj.mime_type.split("/")[-1]
             if ext:
                 file_ext = ext
-                file_name = f"video.{ext}"
     else:
         return
 
@@ -1552,9 +1548,7 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         byte_array = await new_file.download_as_bytearray()
         file_data = bytes(byte_array)
 
-        saved_path = save_media(bytes(byte_array), user_id, file_ext)
-
-        # Validate file size
+        # Validate file size first (before saving)
         is_valid_size, size_result = await media_validator.validate_file_size(len(file_data), file_type)
         if not is_valid_size:
             await update.message.reply_text(
@@ -1563,7 +1557,7 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             )
             return
 
-        # Validate image dimensions (only for images)
+        # Validate image dimensions (only for images, before saving)
         if file_type == "image":
             is_valid_image, image_result = await media_validator.validate_image(file_data)
             if not is_valid_image:
@@ -1573,7 +1567,7 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
                 )
                 return
 
-        # Save the media file (use file_data which is the validated bytes)
+        # Save the media file only after all validations pass
         saved_path = save_media(file_data, user_id, file_ext)
         pending_media.append(saved_path)
         context.user_data[STATE_PENDING_MEDIA] = pending_media

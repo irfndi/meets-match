@@ -207,7 +207,7 @@ def purge_expired_media_records() -> int:
 
         cutoff_date = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=RETENTION_DAYS)
 
-        # Get records to purge
+        # Get count of records to be purged first
         result = execute_query(
             table="deleted_media",
             query_type="select",
@@ -220,21 +220,24 @@ def purge_expired_media_records() -> int:
         if not result.data:
             return 0
 
-        purged_count = 0
-        for record in result.data:
-            try:
-                execute_query(
-                    table="deleted_media",
-                    query_type="update",
-                    filters={"id": record["id"]},
-                    data={"is_purged": True},
-                )
-                purged_count += 1
-            except Exception as e:
-                logger.warning("Failed to purge record", record_id=record["id"], error=str(e))
+        purged_count = len(result.data)
 
-        logger.info("Purged expired media records", count=purged_count)
-        return purged_count
+        # Bulk update all matching records
+        try:
+            execute_query(
+                table="deleted_media",
+                query_type="update",
+                filters={
+                    "is_purged": False,
+                    "deleted_at__lt": cutoff_date,
+                },
+                data={"is_purged": True},
+            )
+            logger.info("Purged expired media records", count=purged_count)
+            return purged_count
+        except Exception as e:
+            logger.warning("Failed to bulk purge records", error=str(e))
+            return 0
     except Exception as e:
         logger.error("Error purging expired media records", error=str(e))
         return 0

@@ -23,7 +23,7 @@ def mock_profile_module():
         patch("src.bot.middleware.auth.get_user") as mock_auth_get_user,
         patch("src.bot.handlers.profile.update_user") as mock_update_user,
         patch("src.bot.handlers.profile.save_media") as mock_save_media,
-        patch("src.bot.handlers.profile.delete_media"),
+        patch("src.bot.handlers.profile.delete_media") as mock_delete_media,
         patch("src.bot.handlers.profile.send_media_group_safe"),
         patch("src.bot.middleware.auth.update_last_active"),
         patch("src.bot.middleware.auth.get_cache"),
@@ -38,13 +38,13 @@ def mock_profile_module():
         mock_validator.validate_file_size = AsyncMock(return_value=(True, "Valid size"))
         mock_validator.validate_image = AsyncMock(return_value=(True, "Valid image"))
 
-        yield mock_get_user, mock_update_user, mock_save_media
+        yield mock_get_user, mock_update_user, mock_save_media, mock_validator, mock_delete_media
 
 
 @pytest.mark.asyncio
 async def test_photo_upload_adds_to_pending_media(mock_profile_module):
     """Test that photo uploads add files to pending media list (multi-file upload flow)."""
-    mock_get_user, _, mock_save_media = mock_profile_module
+    mock_get_user, _, mock_save_media, _, _ = mock_profile_module
 
     # Setup
     user_id = "12345"
@@ -80,7 +80,7 @@ async def test_photo_upload_adds_to_pending_media(mock_profile_module):
 @pytest.mark.asyncio
 async def test_done_button_saves_and_clears_state(mock_profile_module):
     """Test that pressing Done saves pending media and clears state."""
-    mock_get_user, mock_update_user, _ = mock_profile_module
+    mock_get_user, mock_update_user, _, _, _ = mock_profile_module
 
     user_id = "12345"
     user = User(id=user_id, first_name="Test", age=25, gender=Gender.MALE, photos=["old.jpg"])
@@ -111,9 +111,122 @@ async def test_done_button_saves_and_clears_state(mock_profile_module):
 
 
 @pytest.mark.asyncio
+async def test_cancel_cleans_up_pending_media(mock_profile_module):
+    """Test that pressing Cancel deletes all pending media files with reason 'cancelled'."""
+    mock_get_user, _, _, _, mock_delete_media = mock_profile_module
+
+    user_id = "12345"
+    user = User(id=user_id, first_name="Test", age=25, gender=Gender.MALE, photos=[])
+    mock_get_user.return_value = user
+
+    update = MagicMock(spec=Update)
+    update.effective_user = TelegramUser(id=int(user_id), first_name="Test", is_bot=False)
+    update.message = MagicMock(spec=Message)
+    update.message.text = "Cancel"
+    update.message.reply_text = AsyncMock()
+    update.effective_message = update.message
+
+    context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
+    context.user_data = {
+        STATE_AWAITING_PHOTO: True,
+        STATE_PENDING_MEDIA: ["pending1.jpg", "pending2.jpg"],
+    }
+
+    # Execute handle_text_message (which handles Cancel)
+    await handle_text_message(update, context)
+
+    # Assertions - pending media should be cleaned up
+    assert STATE_PENDING_MEDIA not in context.user_data
+    # delete_media should be called for each pending file with reason "cancelled"
+    assert mock_delete_media.call_count == 2
+    calls = mock_delete_media.call_args_list
+    assert calls[0][0][0] == "pending1.jpg"
+    assert calls[0][1]["reason"] == "cancelled"
+    assert calls[1][0][0] == "pending2.jpg"
+    assert calls[1][1]["reason"] == "cancelled"
+
+
+@pytest.mark.asyncio
+async def test_file_size_validation_failure_no_orphaned_files(mock_profile_module):
+    """Test that when file size validation fails, no orphaned files are created."""
+    mock_get_user, _, mock_save_media, mock_validator, _ = mock_profile_module
+
+    # Configure validator to fail size validation
+    mock_validator.validate_file_size = AsyncMock(return_value=(False, "Image too large. Maximum size: 5MB"))
+
+    user_id = "12345"
+    user = User(id=user_id, first_name="Test", age=25, gender=Gender.MALE, photos=[])
+    mock_get_user.return_value = user
+
+    update = MagicMock(spec=Update)
+    update.effective_user = TelegramUser(id=int(user_id), first_name="Test", is_bot=False)
+    update.message = MagicMock(spec=Message)
+    update.message.photo = [MagicMock(spec=PhotoSize)]
+    update.message.photo[-1].get_file = AsyncMock()
+    update.message.photo[-1].get_file.return_value.download_as_bytearray = AsyncMock(return_value=b"data")
+    update.message.video = None
+    update.message.reply_text = AsyncMock()
+    update.effective_message = update.message
+
+    context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
+    context.user_data = {STATE_AWAITING_PHOTO: True, STATE_PENDING_MEDIA: []}
+
+    # Execute photo_handler
+    await photo_handler(update, context)
+
+    # Assertions - save_media should NOT be called when validation fails
+    mock_save_media.assert_not_called()
+    # Pending media should remain empty
+    assert context.user_data[STATE_PENDING_MEDIA] == []
+    # User should get error message
+    update.message.reply_text.assert_called()
+    call_args = update.message.reply_text.call_args[0][0]
+    assert "too large" in call_args.lower() or "5mb" in call_args.lower()
+
+
+@pytest.mark.asyncio
+async def test_image_dimension_validation_failure_no_orphaned_files(mock_profile_module):
+    """Test that when image dimension validation fails, no orphaned files are created."""
+    mock_get_user, _, mock_save_media, mock_validator, _ = mock_profile_module
+
+    # Configure validator to pass size but fail dimension validation
+    mock_validator.validate_file_size = AsyncMock(return_value=(True, "Valid size"))
+    mock_validator.validate_image = AsyncMock(return_value=(False, "Image too small. Minimum dimensions: (200, 200)"))
+
+    user_id = "12345"
+    user = User(id=user_id, first_name="Test", age=25, gender=Gender.MALE, photos=[])
+    mock_get_user.return_value = user
+
+    update = MagicMock(spec=Update)
+    update.effective_user = TelegramUser(id=int(user_id), first_name="Test", is_bot=False)
+    update.message = MagicMock(spec=Message)
+    update.message.photo = [MagicMock(spec=PhotoSize)]
+    update.message.photo[-1].get_file = AsyncMock()
+    update.message.photo[-1].get_file.return_value.download_as_bytearray = AsyncMock(return_value=b"data")
+    update.message.video = None
+    update.message.reply_text = AsyncMock()
+    update.effective_message = update.message
+
+    context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
+    context.user_data = {STATE_AWAITING_PHOTO: True, STATE_PENDING_MEDIA: []}
+
+    # Execute photo_handler
+    await photo_handler(update, context)
+
+    # Assertions - save_media should NOT be called when validation fails
+    mock_save_media.assert_not_called()
+    # Pending media should remain empty
+    assert context.user_data[STATE_PENDING_MEDIA] == []
+    # User should get error message
+    update.message.reply_text.assert_called()
+    call_args = update.message.reply_text.call_args[0][0]
+    assert "too small" in call_args.lower() or "200" in call_args
+
+
+@pytest.mark.asyncio
 async def test_view_profile_after_photo_update_success(mock_profile_module):
     # This test simulates the sequence where the bug occurs, but with the FIX applied (state present)
-    mock_get_user, _, _ = mock_profile_module
+    mock_get_user, _, _, _, _ = mock_profile_module
 
     user_id = "12345"
     user = User(id=user_id, first_name="Test", age=25, gender=Gender.MALE, photos=["p.jpg"])
