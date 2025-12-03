@@ -1,6 +1,6 @@
 """Settings handlers for the MeetMatch bot."""
 
-from typing import Any, Dict, cast
+from typing import Any, Dict
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.error import BadRequest
@@ -338,7 +338,7 @@ async def handle_region(update: Update, context: ContextTypes.DEFAULT_TYPE, coun
         # Update user with both preferences and location
         update_data: Dict[str, Any] = {"preferences": prefs.model_dump(), "location": user.location.model_dump()}
         logger.info("Updating user region in handle_region", user_id=user_id, country=country, update_data=update_data)
-        update_user(user_id, cast(Dict[str, Any], update_data))
+        update_user(user_id, update_data)
 
         # Clear awaiting state if it exists
         if context.user_data:

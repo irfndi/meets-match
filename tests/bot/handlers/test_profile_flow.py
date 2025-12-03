@@ -269,6 +269,16 @@ async def test_full_profile_creation_flow(
     # Verify location updated
     assert mock_user_state.location.city == "New York"
 
+    # Verify moved to Photos step
+    assert context.user_data["profile_setup_step"] == 6
+    assert context.user_data["awaiting_photo"] is True
+    # The prompt should be about photos
+    assert "photos" in update.message.reply_text.call_args[0][0].lower()
+
+    # 8. Skip Photos (since we injected dummy.jpg)
+    update.message.text = "Skip"
+    await profile_handler_module.handle_text_message(update, context)
+
     # Verify Profile Complete
     # The flow should end, cleanup state
     assert "profile_setup_step" not in context.user_data

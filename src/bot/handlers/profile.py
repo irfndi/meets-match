@@ -298,9 +298,11 @@ async def prompt_for_next_missing_field(
         )
     elif next_field == "photos":
         context.user_data[STATE_AWAITING_PHOTO] = True
+        context.user_data[STATE_PENDING_MEDIA] = []
+        settings = get_settings()
         await update.effective_message.reply_text(
-            "Please upload at least one photo or video to complete your profile! 📸",
-            reply_markup=ReplyKeyboardMarkup([["Cancel"]], resize_keyboard=True),
+            f"Please upload at least one photo or video to complete your profile! 📸 (up to {settings.MAX_MEDIA_COUNT})",
+            reply_markup=media_upload_keyboard(0, settings.MAX_MEDIA_COUNT),
         )
 
     return True
@@ -790,8 +792,6 @@ async def location_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             prompt,
             reply_markup=(location_optional_keyboard() if cur else location_keyboard()),
         )
-        context.user_data["awaiting_location"] = True
-        return
 
 
 @authenticated
@@ -963,7 +963,7 @@ def clear_conversation_state(context: ContextTypes.DEFAULT_TYPE, user_id: str | 
         set_user_editing_state(user_id, False)
 
 
-PROFILE_STEPS = ["name", "age", "gender", "bio", "interests", "location"]
+PROFILE_STEPS = ["name", "age", "gender", "bio", "interests", "location", "photos"]
 
 
 async def _next_profile_step(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1089,6 +1089,32 @@ async def _next_profile_step(update: Update, context: ContextTypes.DEFAULT_TYPE)
             prompt,
             reply_markup=(location_optional_keyboard() if cur else location_keyboard()),
         )
+    elif step_name == "photos":
+        context.user_data[STATE_AWAITING_PHOTO] = True
+        context.user_data[STATE_PENDING_MEDIA] = []  # Start fresh upload session
+        user_id = str(update.effective_user.id)
+        user = get_user(user_id)
+        cur_photos = getattr(user, "photos", []) or []
+        settings = get_settings()
+
+        if not cur_photos:
+            prompt = (
+                f"📸 Send photos or videos for your profile (up to {settings.MAX_MEDIA_COUNT}).\n\n"
+                f"📏 Limits:\n"
+                f"• Images: max 5MB, min 200x200px\n"
+                f"• Videos: max 20MB\n\n"
+                f"Press '✅ Done' when finished."
+            )
+            reply_markup = media_upload_keyboard(0, settings.MAX_MEDIA_COUNT)
+        else:
+            prompt = (
+                f"📸 You have {len(cur_photos)} photos/videos.\n"
+                f"Send more media to add, or type 'Skip' to keep existing.\n\n"
+                f"Press '✅ Done' when finished."
+            )
+            reply_markup = media_upload_keyboard(len(cur_photos), settings.MAX_MEDIA_COUNT)
+
+        await update.message.reply_text(prompt, reply_markup=reply_markup)
 
 
 async def start_profile_setup(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1234,10 +1260,20 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             # Clear state
             context.user_data.pop(STATE_AWAITING_PHOTO, None)
             context.user_data.pop(STATE_PENDING_MEDIA, None)
+
+            media_count = len(pending_media)
+
+            # Check if in setup flow
+            if context.user_data.get(STATE_PROFILE_SETUP) is not None:
+                await update.message.reply_text(
+                    f"✅ Profile media saved! ({media_count} file{'s' if media_count > 1 else ''})"
+                )
+                await _next_profile_step(update, context)
+                return
+
             context.user_data[STATE_PROFILE_MENU] = True
             context.user_data["user"] = get_user(user_id)
 
-            media_count = len(pending_media)
             if old_photos:
                 await update.message.reply_text(
                     f"✅ Profile media replaced! ({media_count} file{'s' if media_count > 1 else ''})",
@@ -1320,6 +1356,18 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
                     await _next_profile_step(update, context)
                     return
                 await update.message.reply_text("This field is required and cannot be skipped. Please enter a value:")
+                return
+            if step_name == "photos":
+                user_id = str(update.effective_user.id)
+                user = get_user(user_id)
+                if getattr(user, "photos", None) and len(user.photos) > 0:
+                    context.user_data.pop(STATE_AWAITING_PHOTO, None)
+                    context.user_data.pop(STATE_PENDING_MEDIA, None)
+                    await _next_profile_step(update, context)
+                    return
+                await update.message.reply_text(
+                    "You need at least one photo/video for your profile. Please upload one."
+                )
                 return
 
             skipped = context.user_data.get("skipped_profile_fields", {})

@@ -127,6 +127,8 @@ You must now update the bot's environment variables in the Coolify UI to switch 
 | `REDIS_HOST` | `wc4g00ook8ck08css8c40ksk` | Use this exact container name |
 | `REDIS_PORT` | `6379` | |
 | `REDIS_PASSWORD` | *(Copy from Coolify UI)* | Go to Project -> Redis Resource to find this |
+| `DATABASE_URL` | `postgresql://postgres:<password>@ow484s4kw8kg0wwk8kkgcogw:5432/postgres` | |
+| `REDIS_URL` | `redis://wc4g00ook8ck08css8c40ksk:6379/0` | |
 
 *Note: `REDIS_URL` might also need updating if you use it, e.g., `redis://:PASSWORD@wc4g00ook8ck08css8c40ksk:6379/0`*
 

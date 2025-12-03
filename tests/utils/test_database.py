@@ -1,8 +1,6 @@
-import os
 from unittest.mock import MagicMock, patch
 
 import pytest
-from sqlalchemy import create_engine
 
 from src.config import Settings
 from src.utils.database import Database, DatabaseError
