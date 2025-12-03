@@ -10,7 +10,7 @@ logger = get_logger(__name__)
 
 if __name__ == "__main__":
     logger.info(f"Starting MeetMatch Service on {settings.API_HOST}:{settings.API_PORT}")
-    
+
     # Run the FastAPI app using Uvicorn
     # This will start the bot as part of the FastAPI lifespan
     uvicorn.run(

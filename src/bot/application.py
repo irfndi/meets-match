@@ -352,7 +352,7 @@ class BotApplication:
 
         logger.info("Bot starting in background mode...")
         await self.application.initialize()
-        
+
         # Delete webhook before polling to avoid conflict
         try:
             logger.info("Ensuring webhook is deleted before polling...")
@@ -365,9 +365,9 @@ class BotApplication:
             try:
                 # Use allowed_updates to filter updates if needed, but None gets all defaults
                 await self.application.updater.start_polling(
-                    drop_pending_updates=True, 
-                    bootstrap_retries=-1, # Infinite retries to handle temporary connection issues
-                    timeout=20, # Increase timeout slightly
+                    drop_pending_updates=True,
+                    bootstrap_retries=-1,  # Infinite retries to handle temporary connection issues
+                    timeout=20,  # Increase timeout slightly
                 )
             except Conflict as e:
                 logger.error("Polling conflict detected during startup", error=str(e))

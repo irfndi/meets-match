@@ -40,15 +40,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Manage application lifespan."""
     # Startup
     logger.info("Starting API and Bot...")
-    
+
     # Initialize database
     init_database()
-    
+
     # Start bot in background
     await bot_app.start()
-    
+
     yield
-    
+
     # Shutdown
     logger.info("Shutting down API and Bot...")
     await bot_app.stop()
@@ -67,7 +67,7 @@ async def health_check() -> JSONResponse:
     """Health check endpoint."""
     is_running = bot_app.is_running
     status_code = 200 if is_running else 503
-    
+
     return JSONResponse(
         status_code=status_code,
         content={
@@ -75,7 +75,7 @@ async def health_check() -> JSONResponse:
             "bot_running": is_running,
             "app": settings.APP_NAME,
             "environment": settings.ENVIRONMENT,
-        }
+        },
     )
 
 
