@@ -4,6 +4,7 @@ import time
 from typing import Any, List, Union, cast
 
 from telegram import (
+    ForceReply,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     InputMediaPhoto,
@@ -201,18 +202,17 @@ def _get_chat_id_from_update(update: Update) -> int | None:
     if update.effective_user:
         # For private chats, user_id == chat_id
         return update.effective_user.id
-    if update.callback_query and update.callback_query.message:
-        # Try to get chat_id from callback_query.message even if it's InaccessibleMessage
-        # InaccessibleMessage still has a valid chat attribute
-        try:
-            if update.callback_query.message.chat:
-                return update.callback_query.message.chat.id
-        except AttributeError:
-            pass
+    if update.callback_query and update.callback_query.message and update.callback_query.message.chat:
+        return update.callback_query.message.chat.id
     return None
 
 
-async def _send_message_safe(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, reply_markup=None) -> bool:
+async def _send_message_safe(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    text: str,
+    reply_markup: InlineKeyboardMarkup | ReplyKeyboardMarkup | ReplyKeyboardRemove | ForceReply | None = None,
+) -> bool:
     """Send a message safely, handling both message and callback query contexts.
 
     Tries update.effective_message.reply_text() first, then falls back to
