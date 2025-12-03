@@ -177,6 +177,244 @@ async def test_authenticated_missing_setup(auth_middleware_module, mock_dependen
 
 
 @pytest.mark.asyncio
+async def test_authenticated_bypass_when_fixing_region(auth_middleware_module, mock_dependencies, mock_update_context):
+    """Test authenticated allows bypass when user is fixing region."""
+    update, context = mock_update_context
+    mock_deps = mock_dependencies
+
+    mock_user = MagicMock()
+    mock_user.is_sleeping = False
+    mock_user.preferences = None  # Missing preferences (region and language not set)
+    mock_deps["get_user"].return_value = mock_user
+    mock_deps["get_cache"].return_value = True
+
+    # Set awaiting_region flag - user is in the process of typing their region
+    context.user_data["awaiting_region"] = True
+
+    handler = AsyncMock(return_value="success")
+    decorated_handler = auth_middleware_module.authenticated(handler)
+
+    result = await decorated_handler(update, context)
+
+    # Should allow the handler to run because user is fixing their region
+    assert result == "success"
+    handler.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_authenticated_bypass_when_fixing_language(
+    auth_middleware_module, mock_dependencies, mock_update_context
+):
+    """Test authenticated allows bypass when user is fixing language."""
+    update, context = mock_update_context
+    mock_deps = mock_dependencies
+
+    mock_user = MagicMock()
+    mock_user.is_sleeping = False
+    mock_user.preferences = None  # Missing preferences (region and language not set)
+    mock_deps["get_user"].return_value = mock_user
+    mock_deps["get_cache"].return_value = True
+
+    # Set awaiting_language flag - user is in the process of typing their language
+    context.user_data["awaiting_language"] = True
+
+    handler = AsyncMock(return_value="success")
+    decorated_handler = auth_middleware_module.authenticated(handler)
+
+    result = await decorated_handler(update, context)
+
+    # Should allow the handler to run because user is fixing their language
+    assert result == "success"
+    handler.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_authenticated_bypass_for_callback_query(auth_middleware_module, mock_dependencies, mock_update_context):
+    """Test authenticated allows callbacks when setup is missing."""
+    update, context = mock_update_context
+    mock_deps = mock_dependencies
+
+    mock_user = MagicMock()
+    mock_user.is_sleeping = False
+    mock_user.preferences = None  # Missing preferences
+    mock_deps["get_user"].return_value = mock_user
+    mock_deps["get_cache"].return_value = True
+
+    # Make this a callback query (not a text message)
+    update.callback_query = MagicMock()
+    update.callback_query.data = "settings_region"
+
+    handler = AsyncMock(return_value="callback_success")
+    decorated_handler = auth_middleware_module.authenticated(handler)
+
+    result = await decorated_handler(update, context)
+
+    # Should allow callback queries to pass through
+    assert result == "callback_success"
+    handler.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_authenticated_bypass_for_start_command(auth_middleware_module, mock_dependencies, mock_update_context):
+    """Test authenticated allows /start command when setup is missing."""
+    update, context = mock_update_context
+    mock_deps = mock_dependencies
+
+    mock_user = MagicMock()
+    mock_user.is_sleeping = False
+    mock_user.preferences = None  # Missing preferences
+    mock_deps["get_user"].return_value = mock_user
+    mock_deps["get_cache"].return_value = True
+
+    # Set message to /start command
+    update.message.text = "/start"
+
+    handler = AsyncMock(return_value="start_success")
+    decorated_handler = auth_middleware_module.authenticated(handler)
+
+    result = await decorated_handler(update, context)
+
+    # Should allow /start command to pass through
+    assert result == "start_success"
+    handler.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_authenticated_bypass_for_settings_command(
+    auth_middleware_module, mock_dependencies, mock_update_context
+):
+    """Test authenticated allows /settings command when setup is missing."""
+    update, context = mock_update_context
+    mock_deps = mock_dependencies
+
+    mock_user = MagicMock()
+    mock_user.is_sleeping = False
+    mock_user.preferences = None  # Missing preferences
+    mock_deps["get_user"].return_value = mock_user
+    mock_deps["get_cache"].return_value = True
+
+    # Set message to /settings command
+    update.message.text = "/settings"
+
+    handler = AsyncMock(return_value="settings_success")
+    decorated_handler = auth_middleware_module.authenticated(handler)
+
+    result = await decorated_handler(update, context)
+
+    # Should allow /settings command to pass through
+    assert result == "settings_success"
+    handler.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_authenticated_blocks_other_commands_missing_setup(
+    auth_middleware_module, mock_dependencies, mock_update_context
+):
+    """Test authenticated blocks other commands when setup is missing."""
+    update, context = mock_update_context
+    mock_deps = mock_dependencies
+
+    mock_user = MagicMock()
+    mock_user.is_sleeping = False
+    mock_user.preferences = None  # Missing preferences
+    mock_deps["get_user"].return_value = mock_user
+    mock_deps["get_cache"].return_value = True
+
+    # Set message to /profile command (not in allowed list)
+    update.message.text = "/profile"
+
+    handler = AsyncMock()
+    decorated_handler = auth_middleware_module.authenticated(handler)
+
+    await decorated_handler(update, context)
+
+    # Should block and show setup message
+    handler.assert_not_called()
+    args, _ = update.effective_message.reply_text.call_args
+    assert "Please complete your setup" in args[0]
+
+
+@pytest.mark.asyncio
+async def test_authenticated_missing_region_only(auth_middleware_module, mock_dependencies, mock_update_context):
+    """Test authenticated shows setup message when only region is missing."""
+    update, context = mock_update_context
+    mock_deps = mock_dependencies
+
+    mock_user = MagicMock()
+    mock_user.is_sleeping = False
+    mock_user.preferences = MagicMock()
+    mock_user.preferences.preferred_country = None  # Missing region
+    mock_user.preferences.preferred_language = "en"  # Language is set
+    mock_deps["get_user"].return_value = mock_user
+    mock_deps["get_cache"].return_value = True
+
+    handler = AsyncMock()
+    decorated_handler = auth_middleware_module.authenticated(handler)
+
+    await decorated_handler(update, context)
+
+    handler.assert_not_called()
+    args, _ = update.effective_message.reply_text.call_args
+    assert "Region is not set" in args[0]
+    assert "Language is not set" not in args[0]
+
+
+@pytest.mark.asyncio
+async def test_authenticated_missing_language_only(auth_middleware_module, mock_dependencies, mock_update_context):
+    """Test authenticated shows setup message when only language is missing."""
+    update, context = mock_update_context
+    mock_deps = mock_dependencies
+
+    mock_user = MagicMock()
+    mock_user.is_sleeping = False
+    mock_user.preferences = MagicMock()
+    mock_user.preferences.preferred_country = "USA"  # Region is set
+    mock_user.preferences.preferred_language = None  # Missing language
+    mock_deps["get_user"].return_value = mock_user
+    mock_deps["get_cache"].return_value = True
+
+    handler = AsyncMock()
+    decorated_handler = auth_middleware_module.authenticated(handler)
+
+    await decorated_handler(update, context)
+
+    handler.assert_not_called()
+    args, _ = update.effective_message.reply_text.call_args
+    assert "Language is not set" in args[0]
+    assert "Region is not set" not in args[0]
+
+
+@pytest.mark.asyncio
+async def test_authenticated_sleeping_user_wakeup(auth_middleware_module, mock_dependencies, mock_update_context):
+    """Test authenticated wakes up sleeping user."""
+    update, context = mock_update_context
+    mock_deps = mock_dependencies
+
+    mock_sleeping_user = MagicMock()
+    mock_sleeping_user.is_sleeping = True
+    mock_deps["get_user"].return_value = mock_sleeping_user
+
+    mock_awake_user = MagicMock()
+    mock_awake_user.is_sleeping = False
+    mock_deps["wake_user"].return_value = mock_awake_user
+
+    handler = AsyncMock()
+    decorated_handler = auth_middleware_module.authenticated(handler)
+
+    await decorated_handler(update, context)
+
+    # Should call wake_user
+    mock_deps["wake_user"].assert_called_with("12345")
+    # Should send wake up message
+    args, _ = update.effective_message.reply_text.call_args
+    assert "Welcome back" in args[0]
+    # Handler should NOT be called after wakeup (let them start fresh)
+    handler.assert_not_called()
+    # User should be stored in context
+    assert context.user_data["user"] == mock_awake_user
+
+
+@pytest.mark.asyncio
 async def test_admin_only_success(auth_middleware_module, mock_dependencies, mock_update_context):
     """Test admin_only success."""
     update, context = mock_update_context
