@@ -152,12 +152,38 @@ You mentioned setting up Bugsink. Since Bugsink is Sentry-compatible, the bot is
     *   Click **Redeploy** to apply the changes.
     *   The bot will now send errors to your Bugsink instance.
 
-    **Troubleshooting Bugsink DSN:**
-    If Coolify doesn't auto-inject the variable (you see `$SERVICE_PASSWORD...` in logs), use this value (found from your Bugsink instance):
+**Troubleshooting Bugsink:**
+
+*   **DSN Issue:** If Coolify doesn't auto-inject the variable (you see `$SERVICE_PASSWORD...` in logs), use this value (found from your Bugsink instance):
     ```
     https://VqZrDaF5RjM303IGUq6A1OOynrQMRpn2YTDUTKqn3bHjaMAy60rALkCeSnDekwXz@bugsink-ek8g8scs8c0w0k08gwos0wc4.217.216.35.77.sslip.io:8000/1
     ```
     *(Copy this entire URL into `SENTRY_DSN`)*
+
+*   **404 Not Found on Public URL:**
+    If `http://bugsink-....sslip.io` returns a 404, but the service is running:
+    1. Go to your **Bugsink Resource** in Coolify.
+    2. Go to **Settings (General)**.
+    3. Look for **Ports Exposes**.
+    4. Ensure it is set to `8000`. (Bugsink listens on port 8000 by default).
+    5. Click **Save** and **Redeploy**.
+
+---
+
+## 10. Migration to Coolify Managed Database & Redis
+Since you have created dedicated Postgres and Redis resources in Coolify, you should switch the bot to use them. This keeps everything inside the Coolify network (more secure and faster).
+
+**Update these Environment Variables in your Bot Resource:**
+
+| Variable | New Value |
+| :--- | :--- |
+| `DB_HOST` | `postgresql-database-ow484s4kw8kg0wwk8kkgcogw` |
+| `DB_PORT` | `5432` |
+| `REDIS_HOST` | `redis-database-wc4g00ook8ck08css8c40ksk` |
+| `REDIS_PORT` | `6379` |
+| `REDIS_URL` | `redis://redis-database-wc4g00ook8ck08css8c40ksk:6379/0` |
+
+*Note: `DB_NAME`, `DB_USER`, and `DB_PASSWORD` should match what you set in the new Postgres resource.*
 
 ## Legacy (Systemd)
 If you prefer to run without Docker (not managed by Coolify), refer to `DEPLOYMENT.MD` for the systemd service configuration.
