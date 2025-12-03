@@ -1,6 +1,5 @@
 """Telegram bot application for the MeetMatch bot."""
 
-import sys
 from typing import Optional, Set
 
 from telegram import BotCommand, Update
@@ -243,7 +242,7 @@ class BotApplication:
                 update_id=getattr(update_obj, "update_id", None),
             )
             # Exit with code 2 for polling conflict; let the process manager (systemd/Docker) handle the restart
-            sys.exit(2)
+            raise SystemExit(2)
 
         # Get chat ID for error response
         chat_id = None
