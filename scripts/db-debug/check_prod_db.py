@@ -1,6 +1,6 @@
-import sqlalchemy
-from sqlalchemy import create_engine, text
 import os
+
+from sqlalchemy import create_engine, text
 
 try:
     url = os.environ["DATABASE_URL"].replace("postgres://", "postgresql://")
@@ -13,7 +13,11 @@ try:
             print("Error checking alembic_version:", e)
 
         try:
-            result = conn.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='users' AND column_name='is_sleeping'"))
+            result = conn.execute(
+                text(
+                    "SELECT column_name FROM information_schema.columns WHERE table_name='users' AND column_name='is_sleeping'"
+                )
+            )
             exists = bool(result.fetchall())
             print("is_sleeping exists:", exists)
         except Exception as e:

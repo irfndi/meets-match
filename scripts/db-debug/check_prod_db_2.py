@@ -1,13 +1,15 @@
-import sqlalchemy
-from sqlalchemy import create_engine, text
 import os
+
+from sqlalchemy import create_engine, text
 
 try:
     url = os.environ["DATABASE_URL"].replace("postgres://", "postgresql://")
     engine = create_engine(url)
     with engine.connect() as conn:
         try:
-            result = conn.execute(text("SELECT table_name FROM information_schema.tables WHERE table_name='deleted_media'"))
+            result = conn.execute(
+                text("SELECT table_name FROM information_schema.tables WHERE table_name='deleted_media'")
+            )
             exists = bool(result.fetchall())
             print("deleted_media exists:", exists)
         except Exception as e:
