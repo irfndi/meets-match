@@ -197,3 +197,90 @@ async def test_settings_callback_update_language(settings_handler_module, mock_d
     update.callback_query.edit_message_text.assert_called()
     args, _ = update.callback_query.edit_message_text.call_args
     assert "Language updated to: id" in args[0]
+
+
+@pytest.mark.asyncio
+async def test_settings_callback_region_type_prompts_for_text_input(
+    settings_handler_module, mock_dependencies, mock_update_context
+):
+    """Test that region_type callback prompts user to type their country.
+
+    This test ensures the callback handler correctly processes 'region_type'
+    before the 'region_' prefix match, fixing the issue where clicking
+    'Type Country' incorrectly set the region to 'type'.
+    """
+    update, context = mock_update_context
+    mock_deps = mock_dependencies
+
+    update.callback_query.data = "region_type"
+
+    await settings_handler_module.settings_callback(update, context)
+
+    # Should NOT call update_user (we're just prompting for input, not setting region)
+    mock_deps["update_user"].assert_not_called()
+
+    # Should set awaiting_region flag
+    assert context.user_data.get("awaiting_region") is True
+
+    # Verify prompt message
+    update.callback_query.edit_message_text.assert_called()
+    args, _ = update.callback_query.edit_message_text.call_args
+    assert "type your country name" in args[0].lower()
+
+
+@pytest.mark.asyncio
+async def test_settings_callback_language_type_prompts_for_text_input(
+    settings_handler_module, mock_dependencies, mock_update_context
+):
+    """Test that language_type callback prompts user to type their language code.
+
+    This test ensures the callback handler correctly processes 'language_type'
+    before the 'language_' prefix match, fixing the issue where clicking
+    'Type Language Code' incorrectly set the language to 'type'.
+    """
+    update, context = mock_update_context
+    mock_deps = mock_dependencies
+
+    update.callback_query.data = "language_type"
+
+    await settings_handler_module.settings_callback(update, context)
+
+    # Should NOT call update_user_preferences (we're just prompting for input)
+    mock_deps["update_user_preferences"].assert_not_called()
+
+    # Should set awaiting_language flag
+    assert context.user_data.get("awaiting_language") is True
+
+    # Verify prompt message
+    update.callback_query.edit_message_text.assert_called()
+    args, _ = update.callback_query.edit_message_text.call_args
+    assert "type your language code" in args[0].lower()
+
+
+@pytest.mark.asyncio
+async def test_settings_callback_region_with_space_in_name(
+    settings_handler_module, mock_dependencies, mock_update_context
+):
+    """Test settings callback correctly handles country names with spaces."""
+    update, context = mock_update_context
+    mock_deps = mock_dependencies
+
+    # Get real Preferences class
+    user_model = importlib.import_module("src.models.user")
+    Preferences = user_model.Preferences
+
+    update.callback_query.data = "region_United States"
+
+    # Mock user with real Preferences
+    mock_user = MagicMock()
+    mock_user.preferences = Preferences()
+    mock_user.location = None
+    mock_deps["get_user"].return_value = mock_user
+
+    await settings_handler_module.settings_callback(update, context)
+
+    # Verify update_user called with correct country name
+    mock_deps["update_user"].assert_called()
+    args, _ = mock_deps["update_user"].call_args
+    assert args[0] == "12345"
+    assert args[1]["preferences"]["preferred_country"] == "United States"
