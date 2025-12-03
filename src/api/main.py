@@ -1,8 +1,11 @@
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
+import sentry_sdk
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
+from sentry_sdk.integrations.fastapi import FastApiIntegration
+from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
 
 from src.bot.application import BotApplication
 from src.config import settings
@@ -10,6 +13,20 @@ from src.utils.database import init_database
 from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
+
+# Initialize Sentry if enabled
+if settings.ENABLE_SENTRY and settings.SENTRY_DSN:
+    logger.info("Initializing Sentry...")
+    sentry_sdk.init(
+        dsn=settings.SENTRY_DSN,
+        environment=settings.ENVIRONMENT,
+        traces_sample_rate=1.0,
+        profiles_sample_rate=1.0,
+        integrations=[
+            FastApiIntegration(transaction_style="url"),
+            SqlalchemyIntegration(),
+        ],
+    )
 
 # Global bot instance
 bot_app = BotApplication()

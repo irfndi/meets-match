@@ -130,8 +130,27 @@ You must now update the bot's environment variables in the Coolify UI to switch 
 
 *Note: `REDIS_URL` might also need updating if you use it, e.g., `redis://:PASSWORD@wc4g00ook8ck08css8c40ksk:6379/0`*
 
-### Step 4: Redeploy
+### Step 5: Redeploy
 Click **"Redeploy"** on the bot resource.
+
+## 9. Configuring Error Tracking (Bugsink)
+You mentioned setting up Bugsink. Since Bugsink is Sentry-compatible, the bot is already configured to use it.
+
+1.  **Get your DSN:**
+    *   In Bugsink, create a new project (select "Python" or "Sentry").
+    *   Copy the **DSN** (Client Key). It looks like `https://key@bugsink.domain/1`.
+
+2.  **Update Environment Variables:**
+    *   Go to Coolify -> Bot Resource -> Environment Variables.
+    *   Add the following:
+        ```env
+        ENABLE_SENTRY=true
+        SENTRY_DSN=https://your-bugsink-dsn-here
+        ```
+
+3.  **Redeploy:**
+    *   Click **Redeploy** to apply the changes.
+    *   The bot will now send errors to your Bugsink instance.
 
 ## Legacy (Systemd)
 If you prefer to run without Docker (not managed by Coolify), refer to `DEPLOYMENT.MD` for the systemd service configuration.
