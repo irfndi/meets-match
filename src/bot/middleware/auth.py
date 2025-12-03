@@ -114,7 +114,12 @@ def authenticated(func: HandlerType) -> HandlerType:
             command = update.message.text.split()[0] if update.message and update.message.text else ""
             allowed = ["/start", "/settings"]
 
-            if (missing_region or missing_language) and not is_callback and command not in allowed:
+            # Check if we are in a flow that fixes the missing fields
+            is_fixing_region = context.user_data and context.user_data.get("awaiting_region")
+            is_fixing_language = context.user_data and context.user_data.get("awaiting_language")
+            is_fixing = is_fixing_region or is_fixing_language
+
+            if (missing_region or missing_language) and not is_callback and command not in allowed and not is_fixing:
                 msg = "Please complete your setup before continuing:"
                 buttons = []
                 if missing_region:

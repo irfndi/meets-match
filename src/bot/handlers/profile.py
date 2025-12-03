@@ -240,6 +240,8 @@ async def prompt_for_next_missing_field(
         # Filter out fields that have been explicitly skipped in this session
         remaining_recommended = [f for f in missing_recommended if f not in skipped_fields]
 
+        logger.info("Checking recommended fields", remaining=remaining_recommended)
+
         if remaining_recommended:
             next_field = remaining_recommended[0]
 
@@ -247,6 +249,7 @@ async def prompt_for_next_missing_field(
             # But let's prompt for it as part of the flow.
 
             context.user_data[STATE_ADHOC_CONTINUE] = True
+            logger.info("Prompting for recommended field", field=next_field)
 
             if next_field == "gender":
                 context.user_data["awaiting_gender"] = True
@@ -270,6 +273,7 @@ async def prompt_for_next_missing_field(
                 return True
 
         # All fields (required + recommended) are done or skipped
+        logger.info("All fields complete or skipped", silent=silent_if_complete)
         if not silent_if_complete:
             await update.effective_message.reply_text(
                 "🎉 Your profile is fully complete! You can start matching with /match!",
@@ -280,6 +284,7 @@ async def prompt_for_next_missing_field(
     context.user_data[STATE_ADHOC_CONTINUE] = True
 
     next_field = missing_required[0]
+    logger.info("Prompting for required field", field=next_field)
     field_label = next_field.capitalize()
     await update.effective_message.reply_text(
         f"Your profile still needs: {field_label}\n\nLet's complete it now!",
@@ -1346,6 +1351,20 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             "Cancelled. Use /profile to see your profile or continue editing.",
             reply_markup=main_menu(),
         )
+        return
+
+    # Handle region/language input (required settings that cannot be skipped)
+    # These checks are placed before skip handling since region/language are required
+    if context.user_data.get("awaiting_region"):
+        from src.bot.handlers.settings import handle_region
+
+        await handle_region(update, context, text)
+        return
+
+    if context.user_data.get("awaiting_language"):
+        from src.bot.handlers.settings import handle_language
+
+        await handle_language(update, context, text)
         return
 
     # Handle skip (for optional fields in profile setup or adhoc continue mode)
