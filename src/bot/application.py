@@ -241,8 +241,8 @@ class BotApplication:
                 error=str(error),
                 update_id=getattr(update_obj, "update_id", None),
             )
-            # Exit with code 2 for polling conflict; let the process manager (systemd/Docker) handle the restart
-            raise SystemExit(2)
+            # Exit gracefully and let the outer exception handler deal with it
+            return
 
         # Get chat ID for error response
         chat_id = None

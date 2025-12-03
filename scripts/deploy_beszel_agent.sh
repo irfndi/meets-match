@@ -4,8 +4,8 @@ set -e
 
 # Configuration - can be overridden via environment variables
 SERVER_IP="${SERVER_IP:-217.216.35.77}"
-USER="${USER:-root}"
-PORT="${PORT:-45876}"
+SSH_USER="${SSH_USER:-root}"
+BESZEL_PORT="${BESZEL_PORT:-45876}"
 
 # The SSH public key must be provided as the first argument or via BESZEL_KEY environment variable
 KEY="${1:-$BESZEL_KEY}"
@@ -18,13 +18,13 @@ fi
 
 echo "Deploying Beszel Agent to $SERVER_IP..."
 
-ssh "$USER@$SERVER_IP" "docker rm -f beszel-agent 2>/dev/null || true && \
+ssh "$SSH_USER@$SERVER_IP" "docker rm -f beszel-agent 2>/dev/null || true && \
 docker run -d \
   --name beszel-agent \
   --restart unless-stopped \
   --network host \
   -v /var/run/docker.sock:/var/run/docker.sock:ro \
-  -e PORT=$PORT \
+  -e PORT=$BESZEL_PORT \
   -e KEY=\"$KEY\" \
   henrygd/beszel-agent"
 
