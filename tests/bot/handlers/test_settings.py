@@ -382,3 +382,127 @@ async def test_handle_language_does_not_send_confirmation_when_profile_prompt_sh
         call_args_list = update.message.reply_text.call_args_list
         confirmation_sent = any("Language updated to: en" in str(call) for call in call_args_list)
         assert not confirmation_sent, "Confirmation message should not be sent when profile prompt is shown"
+
+
+@pytest.mark.asyncio
+async def test_settings_command_user_not_found(settings_handler_module, mock_dependencies, mock_update_context):
+    """Test settings command when user is not found (NotFoundError)."""
+    from src.utils.errors import NotFoundError
+
+    update, context = mock_update_context
+    mock_deps = mock_dependencies
+
+    # Mock get_user to raise NotFoundError
+    mock_deps["get_user"].side_effect = NotFoundError("User not found")
+
+    await settings_handler_module.settings_command(update, context)
+
+    # Verify error message with recovery instructions
+    update.message.reply_text.assert_called()
+    args, _ = update.message.reply_text.call_args
+    assert "couldn't find your profile" in args[0]
+    assert "/start" in args[0]
+
+
+@pytest.mark.asyncio
+async def test_settings_callback_empty_callback_data(settings_handler_module, mock_dependencies, mock_update_context):
+    """Test settings callback handles empty callback_data gracefully."""
+    update, context = mock_update_context
+    _ = mock_dependencies  # Not used but required by fixture
+
+    # Set callback_data to None
+    update.callback_query.data = None
+
+    await settings_handler_module.settings_callback(update, context)
+
+    # Verify feedback is provided instead of silent return
+    update.callback_query.edit_message_text.assert_called()
+    args, _ = update.callback_query.edit_message_text.call_args
+    assert "Something went wrong" in args[0]
+
+
+@pytest.mark.asyncio
+async def test_handle_region_user_not_found(
+    settings_handler_module, mock_dependencies, mock_update_context, user_model_classes
+):
+    """Test handle_region when user is not found."""
+    from src.utils.errors import NotFoundError
+
+    update, context = mock_update_context
+    mock_deps = mock_dependencies
+
+    # Mock get_user to raise NotFoundError
+    mock_deps["get_user"].side_effect = NotFoundError("User not found")
+
+    await settings_handler_module.handle_region(update, context, "Indonesia")
+
+    # Verify error message with recovery instructions
+    update.callback_query.edit_message_text.assert_called()
+    args, _ = update.callback_query.edit_message_text.call_args
+    assert "couldn't find your profile" in args[0]
+    assert "/start" in args[0]
+
+
+@pytest.mark.asyncio
+async def test_handle_language_user_not_found(
+    settings_handler_module, mock_dependencies, mock_update_context, user_model_classes
+):
+    """Test handle_language when user is not found."""
+    from src.utils.errors import NotFoundError
+
+    update, context = mock_update_context
+    mock_deps = mock_dependencies
+
+    # Mock get_user to raise NotFoundError
+    mock_deps["get_user"].side_effect = NotFoundError("User not found")
+
+    await settings_handler_module.handle_language(update, context, "en")
+
+    # Verify error message with recovery instructions
+    update.callback_query.edit_message_text.assert_called()
+    args, _ = update.callback_query.edit_message_text.call_args
+    assert "couldn't find your profile" in args[0]
+    assert "/start" in args[0]
+
+
+@pytest.mark.asyncio
+async def test_settings_command_with_none_preferences(
+    settings_handler_module, mock_dependencies, mock_update_context
+):
+    """Test settings command handles user with None preferences gracefully."""
+    update, context = mock_update_context
+    mock_deps = mock_dependencies
+
+    # Mock user with None preferences
+    mock_user = MagicMock()
+    mock_user.preferences = None
+    mock_deps["get_user"].return_value = mock_user
+
+    await settings_handler_module.settings_command(update, context)
+
+    # Should still send settings message with defaults
+    update.message.reply_text.assert_called()
+    args, _ = update.message.reply_text.call_args
+    assert "Settings" in args[0]
+    assert "Region: Not set" in args[0]
+
+
+@pytest.mark.asyncio
+async def test_settings_command_with_corrupt_preferences(
+    settings_handler_module, mock_dependencies, mock_update_context
+):
+    """Test settings command handles corrupt preferences data gracefully."""
+    update, context = mock_update_context
+    mock_deps = mock_dependencies
+
+    # Mock user with corrupt preferences (not a Preferences object, not a dict)
+    mock_user = MagicMock()
+    mock_user.preferences = "invalid_preferences"  # String instead of Preferences
+    mock_deps["get_user"].return_value = mock_user
+
+    await settings_handler_module.settings_command(update, context)
+
+    # Should still send settings message with defaults (fallback)
+    update.message.reply_text.assert_called()
+    args, _ = update.message.reply_text.call_args
+    assert "Settings" in args[0]

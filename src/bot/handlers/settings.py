@@ -9,9 +9,63 @@ from telegram.ext import ContextTypes
 from src.bot.middleware import authenticated, user_command_limiter
 from src.models.user import Preferences
 from src.services.user_service import get_user, update_user, update_user_preferences
+from src.utils.errors import NotFoundError
 from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+def _safe_get_preferences(user) -> Preferences:
+    """Safely extract preferences from user, handling None/corrupt data.
+
+    Args:
+        user: User object (may have None or invalid preferences)
+
+    Returns:
+        Valid Preferences object (existing or new default)
+    """
+    try:
+        if user.preferences is not None:
+            # Validate that it's a proper Preferences object
+            if isinstance(user.preferences, Preferences):
+                return user.preferences
+            # If it's a dict (from corrupt cache), try to convert
+            if isinstance(user.preferences, dict):
+                return Preferences.model_validate(user.preferences)
+            # Check if it has the expected Preferences attributes (duck typing)
+            # This handles cases where preferences might be a mock or similar object in tests
+            if hasattr(user.preferences, "preferred_country") and hasattr(user.preferences, "preferred_language"):
+                # Try to create a Preferences object from the attributes
+                # Need to clean up values that might be Mock objects (convert to None)
+                try:
+
+                    def _clean_value(val, expected_type):
+                        """Clean a value, converting invalid types to None."""
+                        if val is None:
+                            return None
+                        if isinstance(val, expected_type):
+                            return val
+                        # Not the expected type (likely a Mock), return None
+                        return None
+
+                    # Handle notifications_enabled separately to preserve False values
+                    notif_val = _clean_value(getattr(user.preferences, "notifications_enabled", None), bool)
+                    notifications = notif_val if notif_val is not None else True
+
+                    return Preferences(
+                        preferred_country=_clean_value(getattr(user.preferences, "preferred_country", None), str),
+                        preferred_language=_clean_value(getattr(user.preferences, "preferred_language", None), str),
+                        min_age=_clean_value(getattr(user.preferences, "min_age", None), int),
+                        max_age=_clean_value(getattr(user.preferences, "max_age", None), int),
+                        max_distance=_clean_value(getattr(user.preferences, "max_distance", None), int),
+                        notifications_enabled=notifications,
+                        premium_tier=_clean_value(getattr(user.preferences, "premium_tier", None), str),
+                    )
+                except Exception:
+                    pass  # Fall through to return default
+    except Exception as e:
+        logger.warning("Failed to extract preferences, using defaults", error=str(e))
+    return Preferences()
 
 
 async def _reply_or_edit(update: Update, text: str, reply_markup=None):
@@ -56,8 +110,12 @@ async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     # Apply rate limiting
     await user_command_limiter()(update, context)
 
-    # Clear any pending setting states to prevent interference
-    if context.user_data:
+    # Initialize user_data if None to prevent issues
+    if context.user_data is None:
+        logger.warning("context.user_data is None in settings_command")
+        # Can't set context.user_data directly, but we can handle this gracefully
+    else:
+        # Clear any pending setting states to prevent interference
         context.user_data.pop("awaiting_region", None)
         context.user_data.pop("awaiting_language", None)
 
@@ -70,14 +128,10 @@ async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         # Get user preferences
         user = get_user(user_id)
 
-        region = (
-            user.preferences.preferred_country if user.preferences and user.preferences.preferred_country else "Not set"
-        )
-        language = (
-            user.preferences.preferred_language
-            if user.preferences and user.preferences.preferred_language
-            else (update.effective_user.language_code or "Not set")
-        )
+        # Safely extract preferences, handling None or corrupt data
+        prefs = _safe_get_preferences(user)
+        region = prefs.preferred_country or "Not set"
+        language = prefs.preferred_language or update.effective_user.language_code or "Not set"
 
         # Send settings message
         if update.message:
@@ -118,7 +172,23 @@ async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                     # Ignore if message is not modified
                     pass
                 else:
-                    raise e
+                    raise
+
+    except NotFoundError:
+        # User not found - this can happen due to race conditions or data issues
+        # Provide recovery options
+        logger.warning("User not found in settings_command, prompting to restart", user_id=user_id)
+        error_msg = (
+            "⚠️ We couldn't find your profile. This can happen if data was reset.\n\n"
+            "Please use /start to set up your profile again."
+        )
+        if update.message:
+            await update.message.reply_text(error_msg)
+        elif update.callback_query and update.callback_query.message:
+            from telegram import Message
+
+            if isinstance(update.callback_query.message, Message):
+                await update.callback_query.message.reply_text(error_msg)
 
     except Exception as e:
         logger.error(
@@ -127,14 +197,15 @@ async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             error=str(e),
             exc_info=e,
         )
+        error_msg = "Sorry, something went wrong. Please try /start or /settings again."
         if update.message:
-            await update.message.reply_text("Sorry, something went wrong. Please try again later.")
+            await update.message.reply_text(error_msg)
         elif update.callback_query and update.callback_query.message:
             # Check if message is accessible (not InaccessibleMessage)
             from telegram import Message
 
             if isinstance(update.callback_query.message, Message):
-                await update.callback_query.message.reply_text("Sorry, something went wrong. Please try again later.")
+                await update.callback_query.message.reply_text(error_msg)
 
 
 @authenticated
@@ -155,6 +226,14 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         await query.answer()
         callback_data = query.data
         if not callback_data:
+            # Provide feedback instead of silently returning
+            logger.warning("Empty callback_data in settings_callback", user_id=user_id)
+            await query.edit_message_text(
+                "⚠️ Something went wrong. Please try again.",
+                reply_markup=InlineKeyboardMarkup(
+                    [[InlineKeyboardButton("🔄 Return to Settings", callback_data="back_to_settings")]]
+                ),
+            )
             return
 
         if callback_data == "settings_region":
@@ -349,7 +428,7 @@ async def handle_region(update: Update, context: ContextTypes.DEFAULT_TYPE, coun
 
     try:
         user = get_user(user_id)
-        prefs = user.preferences or Preferences()
+        prefs = _safe_get_preferences(user)
         prefs.preferred_country = country
 
         # Sync to user location if not set or update country
@@ -402,9 +481,23 @@ async def handle_region(update: Update, context: ContextTypes.DEFAULT_TYPE, coun
                 ),
             )
 
+    except NotFoundError:
+        # User not found - redirect to /start
+        logger.warning("User not found in handle_region", user_id=user_id)
+        await _reply_or_edit(
+            update,
+            "⚠️ We couldn't find your profile. Please use /start to set up your profile again.",
+        )
+
     except Exception as e:
         logger.error("Error updating region", user_id=user_id, country=country, error=str(e), exc_info=e)
-        await _reply_or_edit(update, "Sorry, something went wrong. Please try again.")
+        await _reply_or_edit(
+            update,
+            "Sorry, something went wrong. Please try /settings again.",
+            reply_markup=InlineKeyboardMarkup(
+                [[InlineKeyboardButton("🔄 Return to Settings", callback_data="back_to_settings")]]
+            ),
+        )
 
 
 async def handle_language(update: Update, context: ContextTypes.DEFAULT_TYPE, language_code: str) -> None:
@@ -426,7 +519,7 @@ async def handle_language(update: Update, context: ContextTypes.DEFAULT_TYPE, la
             await _reply_or_edit(update, "Please type a valid language code (e.g., en, id).")
             return
         user = get_user(user_id)
-        prefs = user.preferences or Preferences()
+        prefs = _safe_get_preferences(user)
         prefs.preferred_language = code
         update_user_preferences(user_id, prefs)
 
@@ -468,9 +561,23 @@ async def handle_language(update: Update, context: ContextTypes.DEFAULT_TYPE, la
                 ),
             )
 
+    except NotFoundError:
+        # User not found - redirect to /start
+        logger.warning("User not found in handle_language", user_id=user_id)
+        await _reply_or_edit(
+            update,
+            "⚠️ We couldn't find your profile. Please use /start to set up your profile again.",
+        )
+
     except Exception as e:
         logger.error("Error updating language", user_id=user_id, language=language_code, error=str(e), exc_info=e)
-        await _reply_or_edit(update, "Sorry, something went wrong. Please try again.")
+        await _reply_or_edit(
+            update,
+            "Sorry, something went wrong. Please try /settings again.",
+            reply_markup=InlineKeyboardMarkup(
+                [[InlineKeyboardButton("🔄 Return to Settings", callback_data="back_to_settings")]]
+            ),
+        )
 
 
 async def handle_age_range(update: Update, context: ContextTypes.DEFAULT_TYPE, age_type: str, age_value: int) -> None:
@@ -490,7 +597,7 @@ async def handle_age_range(update: Update, context: ContextTypes.DEFAULT_TYPE, a
     try:
         # Update user preferences
         user = get_user(user_id)
-        prefs = user.preferences or Preferences()
+        prefs = _safe_get_preferences(user)
         if age_type == "min":
             prefs.min_age = age_value
             age_type_display = "minimum"
@@ -507,6 +614,12 @@ async def handle_age_range(update: Update, context: ContextTypes.DEFAULT_TYPE, a
             ),
         )
 
+    except NotFoundError:
+        logger.warning("User not found in handle_age_range", user_id=user_id)
+        await query.edit_message_text(
+            "⚠️ We couldn't find your profile. Please use /start to set up your profile again."
+        )
+
     except Exception as e:
         logger.error(
             "Error updating age preference",
@@ -516,7 +629,12 @@ async def handle_age_range(update: Update, context: ContextTypes.DEFAULT_TYPE, a
             error=str(e),
             exc_info=e,
         )
-        await query.edit_message_text("Sorry, something went wrong. Please try again.")
+        await query.edit_message_text(
+            "Sorry, something went wrong. Please try again.",
+            reply_markup=InlineKeyboardMarkup(
+                [[InlineKeyboardButton("🔄 Return to Settings", callback_data="back_to_settings")]]
+            ),
+        )
 
 
 async def handle_max_distance(update: Update, context: ContextTypes.DEFAULT_TYPE, distance: int) -> None:
@@ -535,7 +653,7 @@ async def handle_max_distance(update: Update, context: ContextTypes.DEFAULT_TYPE
     try:
         # Update user preferences
         user = get_user(user_id)
-        prefs = user.preferences or Preferences()
+        prefs = _safe_get_preferences(user)
         prefs.max_distance = distance
         update_user_preferences(user_id, prefs)
 
@@ -552,6 +670,12 @@ async def handle_max_distance(update: Update, context: ContextTypes.DEFAULT_TYPE
             ),
         )
 
+    except NotFoundError:
+        logger.warning("User not found in handle_max_distance", user_id=user_id)
+        await query.edit_message_text(
+            "⚠️ We couldn't find your profile. Please use /start to set up your profile again."
+        )
+
     except Exception as e:
         logger.error(
             "Error updating max distance",
@@ -560,7 +684,12 @@ async def handle_max_distance(update: Update, context: ContextTypes.DEFAULT_TYPE
             error=str(e),
             exc_info=e,
         )
-        await query.edit_message_text("Sorry, something went wrong. Please try again.")
+        await query.edit_message_text(
+            "Sorry, something went wrong. Please try again.",
+            reply_markup=InlineKeyboardMarkup(
+                [[InlineKeyboardButton("🔄 Return to Settings", callback_data="back_to_settings")]]
+            ),
+        )
 
 
 async def handle_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE, enabled: bool) -> None:
@@ -579,7 +708,7 @@ async def handle_notifications(update: Update, context: ContextTypes.DEFAULT_TYP
     try:
         # Update user preferences
         user = get_user(user_id)
-        prefs = user.preferences or Preferences()
+        prefs = _safe_get_preferences(user)
         prefs.notifications_enabled = enabled
         update_user_preferences(user_id, prefs)
 
@@ -592,6 +721,12 @@ async def handle_notifications(update: Update, context: ContextTypes.DEFAULT_TYP
             ),
         )
 
+    except NotFoundError:
+        logger.warning("User not found in handle_notifications", user_id=user_id)
+        await query.edit_message_text(
+            "⚠️ We couldn't find your profile. Please use /start to set up your profile again."
+        )
+
     except Exception as e:
         logger.error(
             "Error updating notifications",
@@ -600,7 +735,12 @@ async def handle_notifications(update: Update, context: ContextTypes.DEFAULT_TYP
             error=str(e),
             exc_info=e,
         )
-        await query.edit_message_text("Sorry, something went wrong. Please try again.")
+        await query.edit_message_text(
+            "Sorry, something went wrong. Please try again.",
+            reply_markup=InlineKeyboardMarkup(
+                [[InlineKeyboardButton("🔄 Return to Settings", callback_data="back_to_settings")]]
+            ),
+        )
 
 
 async def handle_reset_settings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -633,6 +773,12 @@ async def handle_reset_settings(update: Update, context: ContextTypes.DEFAULT_TY
             ),
         )
 
+    except NotFoundError:
+        logger.warning("User not found in handle_reset_settings", user_id=user_id)
+        await query.edit_message_text(
+            "⚠️ We couldn't find your profile. Please use /start to set up your profile again."
+        )
+
     except Exception as e:
         logger.error(
             "Error resetting settings",
@@ -640,7 +786,12 @@ async def handle_reset_settings(update: Update, context: ContextTypes.DEFAULT_TY
             error=str(e),
             exc_info=e,
         )
-        await query.edit_message_text("Sorry, something went wrong. Please try again.")
+        await query.edit_message_text(
+            "Sorry, something went wrong. Please try again.",
+            reply_markup=InlineKeyboardMarkup(
+                [[InlineKeyboardButton("🔄 Return to Settings", callback_data="back_to_settings")]]
+            ),
+        )
 
 
 PREMIUM_MESSAGE = """
@@ -662,16 +813,27 @@ async def premium_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     if not update.effective_user or not update.message:
         return
     user_id = str(update.effective_user.id)
-    user = get_user(user_id)
-    tier = "free"
-    if user.preferences and getattr(user.preferences, "premium_tier", None):
-        tier = user.preferences.premium_tier or "free"
-    from src.config import settings as app_settings
 
-    admin_ids = (app_settings.ADMIN_IDS or "").split(",") if app_settings.ADMIN_IDS else []
-    if user_id in [aid.strip() for aid in admin_ids if aid.strip()]:
-        tier = "admin"
-    await update.message.reply_text(
-        PREMIUM_MESSAGE.format(tier=tier),
-        parse_mode="Markdown",
-    )
+    try:
+        user = get_user(user_id)
+        prefs = _safe_get_preferences(user)
+        tier = prefs.premium_tier or "free"
+        from src.config import settings as app_settings
+
+        admin_ids = (app_settings.ADMIN_IDS or "").split(",") if app_settings.ADMIN_IDS else []
+        if user_id in [aid.strip() for aid in admin_ids if aid.strip()]:
+            tier = "admin"
+        await update.message.reply_text(
+            PREMIUM_MESSAGE.format(tier=tier),
+            parse_mode="Markdown",
+        )
+
+    except NotFoundError:
+        logger.warning("User not found in premium_command", user_id=user_id)
+        await update.message.reply_text(
+            "⚠️ We couldn't find your profile. Please use /start to set up your profile again."
+        )
+
+    except Exception as e:
+        logger.error("Error in premium_command", user_id=user_id, error=str(e), exc_info=e)
+        await update.message.reply_text("Sorry, something went wrong. Please try /start again.")

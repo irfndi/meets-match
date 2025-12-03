@@ -223,8 +223,10 @@ async def test_settings_message_not_modified_ignored(settings_handler_module, mo
 
     await settings_handler_module.settings_command(update, context)
 
-    # Verify error message sent
-    update.callback_query.message.reply_text.assert_called_with("Sorry, something went wrong. Please try again later.")
+    # Verify error message sent (now includes recovery instructions)
+    update.callback_query.message.reply_text.assert_called_with(
+        "Sorry, something went wrong. Please try /start or /settings again."
+    )
 
 
 @pytest.mark.asyncio
