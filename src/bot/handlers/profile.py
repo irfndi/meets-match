@@ -36,7 +36,7 @@ from src.bot.ui.keyboards import (
 from src.config import get_settings
 from src.models.user import Gender, User
 from src.services.geocoding_service import geocode_city, reverse_geocode_coordinates
-from src.services.user_service import get_user, get_user_location_text, update_user
+from src.services.user_service import get_user, get_user_location_text, set_user_sleeping, update_user
 from src.utils.cache import delete_cache, set_cache
 from src.utils.logging import get_logger
 from src.utils.media import delete_media, get_storage_path, save_media
@@ -1552,15 +1552,7 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         byte_array = await new_file.download_as_bytearray()
         file_data = bytes(byte_array)
 
-        # Validate file type
-        is_valid_type, type_result = await media_validator.validate_file_type(file_data, file_name)
-        if not is_valid_type:
-            await update.message.reply_text(
-                f"❌ {type_result}\n\nPlease send a valid image (JPEG, PNG, WebP, GIF) or video (MP4, MOV, WebM).",
-                reply_markup=media_upload_keyboard(len(pending_media), settings.MAX_MEDIA_COUNT),
-            )
-            return
-        file_type = type_result  # 'image' or 'video'
+        saved_path = save_media(bytes(byte_array), user_id, file_ext)
 
         # Validate file size
         is_valid_size, size_result = await media_validator.validate_file_size(len(file_data), file_type)

@@ -1,4 +1,4 @@
-from unittest.mock import AsyncMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -33,24 +33,16 @@ async def test_application_run(mock_application):
     # Mock necessary methods to avoid actual API calls
     with patch.object(app, "setup"), patch.object(app, "application") as mock_app:
         # Setup mocks for application methods
-        mock_app.initialize = AsyncMock()
-        mock_app.start = AsyncMock()
-        mock_app.updater.start_polling = AsyncMock()
-        mock_app.updater.idle = AsyncMock(side_effect=Exception("Test exit"))
-        mock_app.stop = AsyncMock()
-        mock_app.shutdown = AsyncMock()
+        mock_app.run_polling = MagicMock(side_effect=Exception("Test exit"))
 
         # Run should call setup if application is None
         try:
-            await app.run()
+            app.run()
         except Exception as e:
             assert str(e) == "Test exit"
 
         # Verify the methods were called
-        mock_app.initialize.assert_called_once()
-        mock_app.start.assert_called_once()
-        mock_app.updater.start_polling.assert_called_once()
-        mock_app.updater.idle.assert_called_once()
+        mock_app.run_polling.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -63,10 +55,10 @@ async def test_error_handler(mock_application, mock_update, mock_context):
     app.application = mock_application
 
     # Create a test error
-    test_error = Exception("Test error")
+    mock_context.error = Exception("Test error")
 
     # Call the error handler
-    await app.error_handler(mock_update, mock_context, test_error)
+    await app._error_handler(mock_update, mock_context)
 
     # Verify error was handled (no exception raised)
     assert True
@@ -82,7 +74,7 @@ async def test_register_handlers(mock_application):
     app.application = mock_application
 
     # Register handlers
-    await app._register_handlers()
+    app._register_handlers()
 
     # Verify handlers were added
     assert mock_application.add_handler.call_count > 0

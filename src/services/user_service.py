@@ -381,3 +381,73 @@ def get_inactive_users(days_inactive: int) -> List[User]:
         return []
 
     return [User.model_validate(u) for u in result.data]
+
+
+def set_user_sleeping(user_id: str, is_sleeping: bool) -> User:
+    """Set a user's sleeping/paused status.
+
+    Args:
+        user_id: User ID
+        is_sleeping: Whether the user is sleeping/paused
+
+    Returns:
+        Updated user object
+
+    Raises:
+        NotFoundError: If user not found
+    """
+    user = update_user(user_id, {"is_sleeping": is_sleeping})
+    logger.info("User sleeping status updated", user_id=user_id, is_sleeping=is_sleeping)
+    return user
+
+
+def wake_user(user_id: str) -> User:
+    """Wake up a sleeping user and update their last_active timestamp.
+
+    Args:
+        user_id: User ID
+
+    Returns:
+        Updated user object
+
+    Raises:
+        NotFoundError: If user not found
+    """
+    now = datetime.now()
+    user = update_user(user_id, {"is_sleeping": False, "last_active": now})
+    logger.info("User woken up", user_id=user_id)
+    return user
+
+
+def get_users_for_auto_sleep(inactivity_minutes: int = 15) -> List[User]:
+    """Get active, non-sleeping users who have been inactive for the specified minutes.
+
+    Args:
+        inactivity_minutes: Number of minutes of inactivity before auto-sleep
+
+    Returns:
+        List of users eligible for auto-sleep
+    """
+    from datetime import timedelta, timezone
+
+    now = datetime.now(timezone.utc)
+    threshold = now - timedelta(minutes=inactivity_minutes)
+
+    # Get users who:
+    # - Are active (is_active=True)
+    # - Are NOT sleeping (is_sleeping=False)
+    # - Have last_active before the threshold
+    result = execute_query(
+        table="users",
+        query_type="select",
+        filters={
+            "last_active__lt": threshold,
+            "is_active": True,
+            "is_sleeping": False,
+        },
+    )
+
+    if not result.data:
+        return []
+
+    return [User.model_validate(u) for u in result.data]

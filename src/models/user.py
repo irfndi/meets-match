@@ -122,6 +122,7 @@ class User(BaseModel):
     location: Optional[Location] = None
     preferences: Preferences = Field(default_factory=Preferences)
     is_active: bool = True
+    is_sleeping: bool = False  # True when user is in sleep/pause mode (manual or auto)
     is_profile_complete: bool = False
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)

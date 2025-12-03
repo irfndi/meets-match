@@ -14,9 +14,11 @@ def mock_auth_dependencies():
         patch("src.bot.middleware.auth.get_user") as mock_get_user,
         patch("src.bot.middleware.auth.update_last_active"),
         patch("src.bot.middleware.auth.get_cache"),
+        patch("src.bot.middleware.auth.wake_user"),
     ):
         # Setup default user
         user = MagicMock()
+        user.is_sleeping = False  # Not sleeping
         user.preferences = MagicMock()
         user.preferences.preferred_country = "US"
         user.preferences.preferred_language = "en"
@@ -78,6 +80,7 @@ async def test_view_profile_in_menu_state(mock_auth_dependencies):
     user.photos = []
     user.bio = "Bio"
     user.interests = ["Coding"]
+    user.is_sleeping = False  # Not sleeping
 
     # Mock the user returned by auth middleware
     mock_auth_dependencies.return_value = user

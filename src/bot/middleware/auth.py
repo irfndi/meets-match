@@ -7,9 +7,9 @@ from typing import Any, Callable, List, Optional, TypeVar, cast
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
-from src.bot.ui.keyboards import setup_profile_prompt_keyboard
+from src.bot.ui.keyboards import main_menu, setup_profile_prompt_keyboard
 from src.services.matching_service import POTENTIAL_MATCHES_CACHE_KEY, get_potential_matches
-from src.services.user_service import get_user, update_last_active
+from src.services.user_service import get_user, update_last_active, wake_user
 from src.utils.cache import get_cache
 from src.utils.errors import NotFoundError
 from src.utils.logging import get_logger
@@ -18,6 +18,15 @@ logger = get_logger(__name__)
 
 # Type variable for handler functions
 HandlerType = TypeVar("HandlerType", bound=Callable[..., Any])
+
+# Message shown when a sleeping user wakes up
+WAKE_UP_MESSAGE = """
+👋 Welcome back!
+
+You're now active again and visible to potential matches.
+
+What would you like to do?
+"""
 
 
 async def warm_up_matches(user_id: str) -> None:
@@ -55,6 +64,23 @@ def authenticated(func: HandlerType) -> HandlerType:
             # Try to get user from database
             # Run blocking DB call in a separate thread
             user = await asyncio.to_thread(get_user, user_id)
+
+            # Check if user is sleeping - wake them up on any interaction
+            if user.is_sleeping:
+                logger.info("Waking up sleeping user", user_id=user_id)
+                user = await asyncio.to_thread(wake_user, user_id)
+
+                # Send wake up message
+                if update.effective_message:
+                    await update.effective_message.reply_text(
+                        WAKE_UP_MESSAGE,
+                        reply_markup=main_menu(),
+                    )
+
+                # Store updated user in context and return (let them start fresh)
+                if context.user_data is not None:
+                    context.user_data["user"] = user
+                return
 
             # Update last active timestamp
             # Run blocking DB call in a separate thread

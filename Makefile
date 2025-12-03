@@ -6,12 +6,13 @@ help:
 	@echo "  make run             Run the bot (using uv)"
 	@echo "  make install         Install/Update dependencies (usage: make install pkg=\"package_name\")"
 	@echo "  make test            Run tests"
-	@echo "  make lint            Run linters (ruff, mypy)"
+	@echo "  make lint            Run linters (ruff, ty)"
 	@echo "  make format          Format code (ruff)"
 	@echo "  make migrate         Apply database migrations"
 	@echo "  make makemigrations  Create a new migration (usage: make makemigrations msg=\"message\")"
 	@echo "  make lock            Update uv.lock"
 	@echo "  make clean           Remove temporary files"
+	@echo "  make deploy-monitor  Deploy Beszel Agent to VPS"
 
 run:
 	uv run python main.py
@@ -28,7 +29,7 @@ test:
 
 lint:
 	uv run ruff check .
-	uv run mypy src
+	uv run ty check
 
 format:
 	uv run ruff format .
@@ -47,4 +48,7 @@ clean:
 	find . -type d -name "__pycache__" -exec rm -rf {} +
 	find . -type d -name ".pytest_cache" -exec rm -rf {} +
 	find . -type d -name ".ruff_cache" -exec rm -rf {} +
-	find . -type d -name ".mypy_cache" -exec rm -rf {} +
+
+deploy-monitor:
+	./scripts/deploy_beszel_agent.sh
+

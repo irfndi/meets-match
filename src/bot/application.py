@@ -2,7 +2,7 @@
 
 from typing import Optional, Set
 
-from telegram import BotCommand
+from telegram import BotCommand, Update
 from telegram.error import Conflict
 from telegram.ext import (
     Application,
@@ -40,7 +40,7 @@ from src.bot.handlers import (
     start_profile_setup,
     view_profile_callback,
 )
-from src.bot.jobs import cleanup_old_media_job, inactive_user_reminder_job
+from src.bot.jobs import auto_sleep_inactive_users_job, cleanup_old_media_job, inactive_user_reminder_job
 from src.config import settings
 from src.utils.errors import MeetMatchError
 from src.utils.logging import get_logger
@@ -103,6 +103,15 @@ class BotApplication:
                 name="cleanup_old_media",
             )
             logger.info("Old media cleanup job registered")
+
+            # Auto-sleep job - runs every minute to check for inactive users
+            application.job_queue.run_repeating(
+                auto_sleep_inactive_users_job,
+                interval=60,  # Run every minute
+                first=30,  # Start after 30 seconds
+                name="auto_sleep_inactive_users",
+            )
+            logger.info("Auto-sleep inactive users job registered")
 
         try:
             await application.bot.set_my_commands(
@@ -223,7 +232,7 @@ class BotApplication:
         error = context.error
 
         # Cast update to Update if possible for type checking, though it can be None
-        update_obj = update if isinstance(update, object) else None
+        update_obj: Optional[Update] = update if isinstance(update, Update) else None
 
         # Handle polling conflict explicitly to avoid repeated error spam
         if isinstance(error, Conflict):
@@ -324,7 +333,7 @@ class BotApplication:
 
         logger.info("Bot starting...")
         try:
-            self.application.run_polling(drop_pending_updates=True, bootstrap_retries=5)
+            self.application.run_polling(drop_pending_updates=True, bootstrap_retries=-1)
         except Conflict as ce:
             logger.error(
                 "Polling conflict detected: another bot instance is running for this token.",
@@ -335,6 +344,54 @@ class BotApplication:
             logger.error("Bot failed to start", error=str(e))
             raise
         logger.info("Bot stopped")
+
+    @property
+    def is_running(self) -> bool:
+        """Check if the bot is running and polling."""
+        if not self.application or not self.application.updater:
+            return False
+        return self.application.updater.running
+
+    async def start(self) -> None:
+        """Start the bot application in background mode (for API integration)."""
+        if not self.application:
+            await self.setup()
+
+        assert self.application is not None
+
+        logger.info("Bot starting in background mode...")
+        await self.application.initialize()
+
+        # Delete webhook before polling to avoid conflict
+        try:
+            logger.info("Ensuring webhook is deleted before polling...")
+            await self.application.bot.delete_webhook(drop_pending_updates=True)
+        except Exception as e:
+            logger.warning(f"Failed to delete webhook: {e}")
+
+        await self.application.start()
+        if self.application.updater:
+            try:
+                # Use allowed_updates to filter updates if needed, but None gets all defaults
+                await self.application.updater.start_polling(
+                    drop_pending_updates=True,
+                    bootstrap_retries=-1,  # Infinite retries to handle temporary connection issues
+                    timeout=20,  # Increase timeout slightly
+                )
+            except Conflict as e:
+                logger.error("Polling conflict detected during startup", error=str(e))
+                # We don't raise here, we just let it be.
+                pass
+
+    async def stop(self) -> None:
+        """Stop the bot application."""
+        if self.application:
+            logger.info("Bot stopping...")
+            if self.application.updater:
+                await self.application.updater.stop()
+            await self.application.stop()
+            await self.application.shutdown()
+            logger.info("Bot stopped")
 
 
 def start_bot() -> None:

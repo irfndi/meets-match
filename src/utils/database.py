@@ -102,6 +102,10 @@ class Database:
             if not database_url:
                 raise DatabaseError("DATABASE_URL is not configured")
 
+            # Fix for SQLAlchemy 1.4+ which requires postgresql:// instead of postgres://
+            if database_url and database_url.startswith("postgres://"):
+                database_url = database_url.replace("postgres://", "postgresql://", 1)
+
             try:
                 cls._engine = create_engine(database_url, pool_recycle=300, pool_pre_ping=True, echo=settings.DEBUG)
                 logger.info("Database engine created")
