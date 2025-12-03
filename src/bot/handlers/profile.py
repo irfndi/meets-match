@@ -1353,6 +1353,20 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
         return
 
+    # Handle region/language input (required settings that cannot be skipped)
+    # These checks are placed before skip handling since region/language are required
+    if context.user_data.get("awaiting_region"):
+        from src.bot.handlers.settings import handle_region
+
+        await handle_region(update, context, text)
+        return
+
+    if context.user_data.get("awaiting_language"):
+        from src.bot.handlers.settings import handle_language
+
+        await handle_language(update, context, text)
+        return
+
     # Handle skip (for optional fields in profile setup or adhoc continue mode)
     if text.lower() == "skip":
         logger.info(
@@ -1473,18 +1487,6 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     user_id = str(update.effective_user.id)
 
     # Check conversation states and process accordingly
-    if context.user_data.get("awaiting_region"):
-        from src.bot.handlers.settings import handle_region
-
-        await handle_region(update, context, text)
-        return
-
-    if context.user_data.get("awaiting_language"):
-        from src.bot.handlers.settings import handle_language
-
-        await handle_language(update, context, text)
-        return
-
     if context.user_data.get(STATE_AWAITING_NAME):
         if text.lower() == "skip":
             user = get_user(str(update.effective_user.id))
