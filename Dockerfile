@@ -8,6 +8,7 @@ WORKDIR /app
 # libmagic1 is required for python-magic
 RUN apt-get update && apt-get install -y \
     curl \
+    wget \
     git \
     libmagic1 \
     && rm -rf /var/lib/apt/lists/*
