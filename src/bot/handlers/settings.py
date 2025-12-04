@@ -66,7 +66,7 @@ def _safe_get_preferences(user) -> Preferences:
     return Preferences()
 
 
-async def _reply_or_edit(update: Update, text: str, reply_markup=None):
+async def _reply_or_edit(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, reply_markup=None):
     """Helper function to reply or edit message based on update type.
 
     If the update is from a callback query, edits the original message.
@@ -78,37 +78,31 @@ async def _reply_or_edit(update: Update, text: str, reply_markup=None):
         reply_markup: Optional keyboard markup
     """
     if update.callback_query:
+        logger.debug("_reply_or_edit: callback detected, attempting edit")
         try:
             await update.callback_query.edit_message_text(text, reply_markup=reply_markup)
+            logger.debug("_reply_or_edit: edit_message_text succeeded")
             return
         except BadRequest as e:
             if "Message is not modified" in str(e):
-                # Some clients re-send the same callback repeatedly; ignore
                 return
-            # Fallback: send a new message to the same chat
-            try:
-                from telegram import Message
+            logger.warning("_reply_or_edit: edit_message_text BadRequest, falling back", error=str(e))
+        except Exception:
+            logger.warning("_reply_or_edit: edit_message_text failed, falling back")
 
-                msg = update.callback_query.message
-                if isinstance(msg, Message):
-                    await msg.reply_text(text, reply_markup=reply_markup)
-                    return
-            except Exception:
-                pass
-            # As a last resort, try bot.send_message with chat_id
-            try:
-                msg = update.callback_query.message
-                chat_id = getattr(msg, "chat_id", None)
-                if chat_id and update.callback_query:
-                    await update.callback_query.from_user.get_bot().send_message(
-                        chat_id=chat_id, text=text, reply_markup=reply_markup
-                    )  # type: ignore[attr-defined]
-                    return
-            except Exception:
-                # Give up silently; upstream will handle user experience
+        # Fallback: send a new message using the effective chat
+        try:
+            chat_id = update.effective_chat.id if update.effective_chat else None
+            if chat_id:
+                await context.bot.send_message(chat_id=chat_id, text=text, reply_markup=reply_markup)
+                logger.debug("_reply_or_edit: sent message via context.bot", chat_id=chat_id)
                 return
-    elif update.message:
+        except Exception:
+            logger.warning("_reply_or_edit: failed to send via context.bot")
+
+    if update.message:
         await update.message.reply_text(text, reply_markup=reply_markup)
+        logger.debug("_reply_or_edit: reply_text succeeded")
 
 
 # Settings messages
@@ -266,6 +260,7 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         if callback_data == "settings_region":
             await _reply_or_edit(
                 update,
+                context,
                 "Select your region (country):",
                 reply_markup=InlineKeyboardMarkup(
                     [
@@ -281,7 +276,7 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             )
 
         elif callback_data == "region_type":
-            await _reply_or_edit(update, "Please type your country name (e.g., Indonesia):")
+            await _reply_or_edit(update, context, "Please type your country name (e.g., Indonesia):")
             if context.user_data is not None:
                 context.user_data["awaiting_region"] = True
 
@@ -292,6 +287,7 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         elif callback_data == "settings_language":
             await _reply_or_edit(
                 update,
+                context,
                 "Select your language:",
                 reply_markup=InlineKeyboardMarkup(
                     [
@@ -304,7 +300,7 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             )
 
         elif callback_data == "language_type":
-            await _reply_or_edit(update, "Please type your language code (e.g., en, id):")
+            await _reply_or_edit(update, context, "Please type your language code (e.g., en, id):")
             if context.user_data is not None:
                 context.user_data["awaiting_language"] = True
 
@@ -315,6 +311,7 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         elif callback_data == "settings_age_range":
             await _reply_or_edit(
                 update,
+                context,
                 "Select minimum and maximum age range:",
                 reply_markup=InlineKeyboardMarkup(
                     [
@@ -359,6 +356,7 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         elif callback_data == "settings_max_distance":
             await _reply_or_edit(
                 update,
+                context,
                 "Select maximum distance for matches:",
                 reply_markup=InlineKeyboardMarkup(
                     [
@@ -387,6 +385,7 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         elif callback_data == "settings_notifications":
             await _reply_or_edit(
                 update,
+                context,
                 "Notification settings:",
                 reply_markup=InlineKeyboardMarkup(
                     [
@@ -417,6 +416,7 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
             await _reply_or_edit(
                 update,
+                context,
                 PREMIUM_MESSAGE.format(tier=tier),
                 reply_markup=InlineKeyboardMarkup(
                     [[InlineKeyboardButton("« Back to Settings", callback_data="back_to_settings")]]
@@ -433,6 +433,7 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             logger.warning("Unknown settings callback", user_id=user_id, data=callback_data)
             await _reply_or_edit(
                 update,
+                context,
                 "⚠️ Unknown action. Returning to Settings.",
                 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("« Back", callback_data="back_to_settings")]]),
             )
@@ -445,7 +446,7 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             error=str(e),
             exc_info=e,
         )
-        await _reply_or_edit(update, "Sorry, something went wrong. Please try again with /settings.")
+        await _reply_or_edit(update, context, "Sorry, something went wrong. Please try again with /settings.")
 
 
 async def handle_region(update: Update, context: ContextTypes.DEFAULT_TYPE, country: str) -> None:
@@ -489,6 +490,7 @@ async def handle_region(update: Update, context: ContextTypes.DEFAULT_TYPE, coun
         if not prefs.preferred_language:
             await _reply_or_edit(
                 update,
+                context,
                 f"✅ Region updated to: {country}\n\nNow, please select your language:",
                 reply_markup=InlineKeyboardMarkup(
                     [
@@ -512,6 +514,7 @@ async def handle_region(update: Update, context: ContextTypes.DEFAULT_TYPE, coun
             # Profile is complete or cooldown active, show confirmation with Back button
             await _reply_or_edit(
                 update,
+                context,
                 f"✅ Region updated to: {country}",
                 reply_markup=InlineKeyboardMarkup(
                     [[InlineKeyboardButton("« Back to Settings", callback_data="back_to_settings")]]
@@ -523,6 +526,7 @@ async def handle_region(update: Update, context: ContextTypes.DEFAULT_TYPE, coun
         logger.warning("User not found in handle_region", user_id=user_id)
         await _reply_or_edit(
             update,
+            context,
             "⚠️ We couldn't find your profile. Please use /start to set up your profile again.",
         )
 
@@ -530,6 +534,7 @@ async def handle_region(update: Update, context: ContextTypes.DEFAULT_TYPE, coun
         logger.error("Error updating region", user_id=user_id, country=country, error=str(e), exc_info=e)
         await _reply_or_edit(
             update,
+            context,
             "Sorry, something went wrong. Please try /settings again.",
             reply_markup=InlineKeyboardMarkup(
                 [[InlineKeyboardButton("🔄 Return to Settings", callback_data="back_to_settings")]]
@@ -553,7 +558,7 @@ async def handle_language(update: Update, context: ContextTypes.DEFAULT_TYPE, la
     try:
         code = (language_code or "").strip().lower()
         if not code:
-            await _reply_or_edit(update, "Please type a valid language code (e.g., en, id).")
+            await _reply_or_edit(update, context, "Please type a valid language code (e.g., en, id).")
             return
         user = get_user(user_id)
         prefs = _safe_get_preferences(user)
@@ -568,6 +573,7 @@ async def handle_language(update: Update, context: ContextTypes.DEFAULT_TYPE, la
         if not prefs.preferred_country:
             await _reply_or_edit(
                 update,
+                context,
                 f"✅ Language updated to: {code}\n\nNow, please select your region:",
                 reply_markup=InlineKeyboardMarkup(
                     [
@@ -592,6 +598,7 @@ async def handle_language(update: Update, context: ContextTypes.DEFAULT_TYPE, la
             # Profile is complete or cooldown active, show confirmation with Back button
             await _reply_or_edit(
                 update,
+                context,
                 f"✅ Language updated to: {code}",
                 reply_markup=InlineKeyboardMarkup(
                     [[InlineKeyboardButton("« Back to Settings", callback_data="back_to_settings")]]
@@ -603,6 +610,7 @@ async def handle_language(update: Update, context: ContextTypes.DEFAULT_TYPE, la
         logger.warning("User not found in handle_language", user_id=user_id)
         await _reply_or_edit(
             update,
+            context,
             "⚠️ We couldn't find your profile. Please use /start to set up your profile again.",
         )
 
@@ -610,6 +618,7 @@ async def handle_language(update: Update, context: ContextTypes.DEFAULT_TYPE, la
         logger.error("Error updating language", user_id=user_id, language=language_code, error=str(e), exc_info=e)
         await _reply_or_edit(
             update,
+            context,
             "Sorry, something went wrong. Please try /settings again.",
             reply_markup=InlineKeyboardMarkup(
                 [[InlineKeyboardButton("🔄 Return to Settings", callback_data="back_to_settings")]]
@@ -644,6 +653,7 @@ async def handle_age_range(update: Update, context: ContextTypes.DEFAULT_TYPE, a
 
         await _reply_or_edit(
             update,
+            context,
             f"✅ {age_type_display.capitalize()} age preference updated to: {age_value}",
             reply_markup=InlineKeyboardMarkup(
                 [[InlineKeyboardButton("« Back to Settings", callback_data="back_to_settings")]]
@@ -652,7 +662,7 @@ async def handle_age_range(update: Update, context: ContextTypes.DEFAULT_TYPE, a
 
     except NotFoundError:
         logger.warning("User not found in handle_age_range", user_id=user_id)
-        await _reply_or_edit(update, "⚠️ We couldn't find your profile. Please use /start to set up your profile again.")
+        await _reply_or_edit(update, context, "⚠️ We couldn't find your profile. Please use /start to set up your profile again.")
 
     except Exception as e:
         logger.error(
@@ -665,6 +675,7 @@ async def handle_age_range(update: Update, context: ContextTypes.DEFAULT_TYPE, a
         )
         await _reply_or_edit(
             update,
+            context,
             "Sorry, something went wrong. Please try again.",
             reply_markup=InlineKeyboardMarkup(
                 [[InlineKeyboardButton("🔄 Return to Settings", callback_data="back_to_settings")]]
@@ -698,6 +709,7 @@ async def handle_max_distance(update: Update, context: ContextTypes.DEFAULT_TYPE
 
         await _reply_or_edit(
             update,
+            context,
             f"✅ Maximum distance updated to: {display_text}",
             reply_markup=InlineKeyboardMarkup(
                 [[InlineKeyboardButton("« Back to Settings", callback_data="back_to_settings")]]
@@ -706,7 +718,7 @@ async def handle_max_distance(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     except NotFoundError:
         logger.warning("User not found in handle_max_distance", user_id=user_id)
-        await _reply_or_edit(update, "⚠️ We couldn't find your profile. Please use /start to set up your profile again.")
+        await _reply_or_edit(update, context, "⚠️ We couldn't find your profile. Please use /start to set up your profile again.")
 
     except Exception as e:
         logger.error(
@@ -718,6 +730,7 @@ async def handle_max_distance(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
         await _reply_or_edit(
             update,
+            context,
             "Sorry, something went wrong. Please try again.",
             reply_markup=InlineKeyboardMarkup(
                 [[InlineKeyboardButton("🔄 Return to Settings", callback_data="back_to_settings")]]
@@ -747,6 +760,7 @@ async def handle_notifications(update: Update, context: ContextTypes.DEFAULT_TYP
         status = "enabled" if enabled else "disabled"
         await _reply_or_edit(
             update,
+            context,
             f"✅ Notifications {status}",
             reply_markup=InlineKeyboardMarkup(
                 [[InlineKeyboardButton("« Back to Settings", callback_data="back_to_settings")]]
@@ -755,7 +769,7 @@ async def handle_notifications(update: Update, context: ContextTypes.DEFAULT_TYP
 
     except NotFoundError:
         logger.warning("User not found in handle_notifications", user_id=user_id)
-        await _reply_or_edit(update, "⚠️ We couldn't find your profile. Please use /start to set up your profile again.")
+        await _reply_or_edit(update, context, "⚠️ We couldn't find your profile. Please use /start to set up your profile again.")
 
     except Exception as e:
         logger.error(
@@ -767,6 +781,7 @@ async def handle_notifications(update: Update, context: ContextTypes.DEFAULT_TYP
         )
         await _reply_or_edit(
             update,
+            context,
             "Sorry, something went wrong. Please try again.",
             reply_markup=InlineKeyboardMarkup(
                 [[InlineKeyboardButton("🔄 Return to Settings", callback_data="back_to_settings")]]
@@ -799,6 +814,7 @@ async def handle_reset_settings(update: Update, context: ContextTypes.DEFAULT_TY
         # Show confirmation
         await _reply_or_edit(
             update,
+            context,
             "✅ Settings reset to defaults",
             reply_markup=InlineKeyboardMarkup(
                 [[InlineKeyboardButton("« Back to Settings", callback_data="back_to_settings")]]
@@ -807,7 +823,7 @@ async def handle_reset_settings(update: Update, context: ContextTypes.DEFAULT_TY
 
     except NotFoundError:
         logger.warning("User not found in handle_reset_settings", user_id=user_id)
-        await _reply_or_edit(update, "⚠️ We couldn't find your profile. Please use /start to set up your profile again.")
+        await _reply_or_edit(update, context, "⚠️ We couldn't find your profile. Please use /start to set up your profile again.")
 
     except Exception as e:
         logger.error(
@@ -818,6 +834,7 @@ async def handle_reset_settings(update: Update, context: ContextTypes.DEFAULT_TY
         )
         await _reply_or_edit(
             update,
+            context,
             "Sorry, something went wrong. Please try again.",
             reply_markup=InlineKeyboardMarkup(
                 [[InlineKeyboardButton("🔄 Return to Settings", callback_data="back_to_settings")]]
