@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from opentelemetry.trace import StatusCode
 
 from src.bot.jobs import AUTO_SLEEP_INACTIVITY_MINUTES, auto_sleep_inactive_users_job
 from src.models.user import User
@@ -147,3 +148,7 @@ async def test_auto_sleep_job_captures_errors_in_otel():
 
         # Verify OpenTelemetry captured the exception on child span
         mock_child_span.record_exception.assert_called_once_with(db_error)
+        # Verify set_status was called with ERROR status
+        mock_child_span.set_status.assert_called_once()
+        status_arg = mock_child_span.set_status.call_args[0][0]
+        assert status_arg.status_code == StatusCode.ERROR
