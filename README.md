@@ -87,7 +87,7 @@ MeetMatch is an AI-powered Telegram bot built with Python 3.13+ that facilitates
 
 ## Project Structure
 
-```
+```text
 src/
 ├── bot/               # Telegram bot handlers and application
 ├── models/            # Pydantic data models

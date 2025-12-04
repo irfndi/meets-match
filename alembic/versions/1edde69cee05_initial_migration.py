@@ -36,12 +36,10 @@ def upgrade() -> None:
         sa.Column("location", sa.JSON(), nullable=True),
         sa.Column("preferences", sa.JSON(), nullable=True),
         sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.true()),
-        sa.Column("is_sleeping", sa.Boolean(), nullable=False, server_default=sa.false()),
         sa.Column("is_profile_complete", sa.Boolean(), nullable=False, server_default=sa.false()),
         sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.text("now()")),
         sa.Column("updated_at", sa.DateTime(), nullable=False, server_default=sa.text("now()")),
         sa.Column("last_active", sa.DateTime(), nullable=False, server_default=sa.text("now()")),
-        sa.Column("last_reminded_at", sa.DateTime(), nullable=True),
     )
 
     # Create matches table

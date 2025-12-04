@@ -670,7 +670,9 @@ async def handle_age_range(update: Update, context: ContextTypes.DEFAULT_TYPE, a
 
     except NotFoundError:
         logger.warning("User not found in handle_age_range", user_id=user_id)
-        await _reply_or_edit(update, context, "⚠️ We couldn't find your profile. Please use /start to set up your profile again.")
+        await _reply_or_edit(
+            update, context, "⚠️ We couldn't find your profile. Please use /start to set up your profile again."
+        )
 
     except Exception as e:
         logger.error(
@@ -731,7 +733,9 @@ async def handle_max_distance(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     except NotFoundError:
         logger.warning("User not found in handle_max_distance", user_id=user_id)
-        await _reply_or_edit(update, context, "⚠️ We couldn't find your profile. Please use /start to set up your profile again.")
+        await _reply_or_edit(
+            update, context, "⚠️ We couldn't find your profile. Please use /start to set up your profile again."
+        )
 
     except Exception as e:
         logger.error(
@@ -787,7 +791,9 @@ async def handle_notifications(update: Update, context: ContextTypes.DEFAULT_TYP
 
     except NotFoundError:
         logger.warning("User not found in handle_notifications", user_id=user_id)
-        await _reply_or_edit(update, context, "⚠️ We couldn't find your profile. Please use /start to set up your profile again.")
+        await _reply_or_edit(
+            update, context, "⚠️ We couldn't find your profile. Please use /start to set up your profile again."
+        )
 
     except Exception as e:
         logger.error(
@@ -841,7 +847,9 @@ async def handle_reset_settings(update: Update, context: ContextTypes.DEFAULT_TY
 
     except NotFoundError:
         logger.warning("User not found in handle_reset_settings", user_id=user_id)
-        await _reply_or_edit(update, context, "⚠️ We couldn't find your profile. Please use /start to set up your profile again.")
+        await _reply_or_edit(
+            update, context, "⚠️ We couldn't find your profile. Please use /start to set up your profile again."
+        )
 
     except Exception as e:
         logger.error(
