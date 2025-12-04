@@ -80,7 +80,12 @@ async def _reply_or_edit(update: Update, text: str, reply_markup=None):
         reply_markup: Optional keyboard markup
     """
     if update.callback_query:
-        await update.callback_query.edit_message_text(text, reply_markup=reply_markup)
+        try:
+            await update.callback_query.edit_message_text(text, reply_markup=reply_markup)
+        except BadRequest as e:
+            if "Message is not modified" in str(e):
+                return
+            raise
     elif update.message:
         await update.message.reply_text(text, reply_markup=reply_markup)
 
@@ -237,7 +242,8 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             return
 
         if callback_data == "settings_region":
-            await query.edit_message_text(
+            await _reply_or_edit(
+                update,
                 "Select your region (country):",
                 reply_markup=InlineKeyboardMarkup(
                     [
@@ -262,7 +268,8 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             await handle_region(update, context, country)
 
         elif callback_data == "settings_language":
-            await query.edit_message_text(
+            await _reply_or_edit(
+                update,
                 "Select your language:",
                 reply_markup=InlineKeyboardMarkup(
                     [
@@ -284,8 +291,8 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             await handle_language(update, context, code)
 
         elif callback_data == "settings_age_range":
-            # Show age range options
-            await query.edit_message_text(
+            await _reply_or_edit(
+                update,
                 "Select minimum and maximum age range:",
                 reply_markup=InlineKeyboardMarkup(
                     [
@@ -328,8 +335,8 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             await handle_age_range(update, context, age_type, age_value)
 
         elif callback_data == "settings_max_distance":
-            # Show max distance options
-            await query.edit_message_text(
+            await _reply_or_edit(
+                update,
                 "Select maximum distance for matches:",
                 reply_markup=InlineKeyboardMarkup(
                     [
@@ -356,8 +363,8 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             await handle_max_distance(update, context, distance)
 
         elif callback_data == "settings_notifications":
-            # Show notifications options
-            await query.edit_message_text(
+            await _reply_or_edit(
+                update,
                 "Notification settings:",
                 reply_markup=InlineKeyboardMarkup(
                     [
@@ -386,9 +393,9 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             if user_id in [aid.strip() for aid in admin_ids if aid.strip()]:
                 tier = "admin"
 
-            await query.edit_message_text(
+            await _reply_or_edit(
+                update,
                 PREMIUM_MESSAGE.format(tier=tier),
-                parse_mode="Markdown",
                 reply_markup=InlineKeyboardMarkup(
                     [[InlineKeyboardButton("« Back to Settings", callback_data="back_to_settings")]]
                 ),
