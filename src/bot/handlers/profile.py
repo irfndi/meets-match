@@ -1724,7 +1724,8 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             context.user_data.pop(STATE_AWAITING_GENDER_PREF, None)
             await update.message.reply_text(GENDER_PREF_UPDATED_MESSAGE)
             await prompt_for_next_missing_field(update, context, user_id)
-        except Exception:
+        except Exception as e:
+            logger.error("Error updating gender preference", user_id=user_id, error=str(e), exc_info=True)
             await update.message.reply_text("Sorry, something went wrong. Please try again.")
     elif context.user_data.get(STATE_AWAITING_PHOTO):
         await update.message.reply_text("Please send a photo.")
