@@ -314,7 +314,7 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE, match_
         target_user = get_user(target_user_id)
 
         # Like the match
-        is_mutual = like_match(match_id)
+        is_mutual = like_match(match_id, user_id)
 
         if is_mutual:
             # Mutual match
@@ -414,7 +414,7 @@ async def handle_dislike(update: Update, context: ContextTypes.DEFAULT_TYPE, mat
         target_user = get_user(target_user_id)
 
         # Dislike the match
-        dislike_match(match_id)
+        dislike_match(match_id, user_id)
 
         await query.edit_message_text(
             MATCH_DISLIKED_MESSAGE.format(name=target_user.first_name),

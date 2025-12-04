@@ -201,7 +201,7 @@ async def test_like_flow(match_handler_module, mock_dependencies, mock_update_co
 
     # Verify service called
     # like_match(match_id)
-    mock_dependencies["like_match"].assert_called_with("match_abc123")
+    mock_dependencies["like_match"].assert_called_with("match_abc123", "12345")
 
     # Verify response
     update.callback_query.edit_message_text.assert_called()
@@ -221,7 +221,7 @@ async def test_dislike_flow(match_handler_module, mock_dependencies, mock_update
 
     # Verify service called
     # dislike_match(match_id)
-    mock_dependencies["dislike_match"].assert_called_with("match_abc123")
+    mock_dependencies["dislike_match"].assert_called_with("match_abc123", "12345")
 
     # Verify response
     update.callback_query.edit_message_text.assert_called()

@@ -280,7 +280,7 @@ async def test_handle_like_match(match_handler_module, mock_dependencies, mock_u
     await match_handler_module.match_callback(update, context)
 
     # Verify like_match called
-    mock_deps["like_match"].assert_called_with("match_123")
+    mock_deps["like_match"].assert_called_with("match_123", "12345")
 
     # Verify confirmation message
     update.callback_query.edit_message_text.assert_called()
