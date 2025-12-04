@@ -1,7 +1,5 @@
 """Settings handlers for the MeetMatch bot."""
 
-from typing import Any, Dict
-
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
@@ -283,7 +281,7 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             )
 
         elif callback_data == "region_type":
-            await query.edit_message_text("Please type your country name (e.g., Indonesia):")
+            await _reply_or_edit(update, "Please type your country name (e.g., Indonesia):")
             if context.user_data is not None:
                 context.user_data["awaiting_region"] = True
 
@@ -306,7 +304,7 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             )
 
         elif callback_data == "language_type":
-            await query.edit_message_text("Please type your language code (e.g., en, id):")
+            await _reply_or_edit(update, "Please type your language code (e.g., en, id):")
             if context.user_data is not None:
                 context.user_data["awaiting_language"] = True
 
@@ -447,7 +445,7 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             error=str(e),
             exc_info=e,
         )
-        await query.edit_message_text("Sorry, something went wrong. Please try again with /settings.")
+        await _reply_or_edit(update, "Sorry, something went wrong. Please try again with /settings.")
 
 
 async def handle_region(update: Update, context: ContextTypes.DEFAULT_TYPE, country: str) -> None:
@@ -476,10 +474,12 @@ async def handle_region(update: Update, context: ContextTypes.DEFAULT_TYPE, coun
         else:
             user.location.country = country
 
-        # Update user with both preferences and location
-        update_data: Dict[str, Any] = {"preferences": prefs.model_dump(), "location": user.location.model_dump()}
-        logger.info("Updating user region in handle_region", user_id=user_id, country=country, update_data=update_data)
-        update_user(user_id, update_data)
+        # Update preferences (merge) and location
+        logger.info("Updating user region in handle_region", user_id=user_id, country=country)
+        # Merge preferences inline to avoid wiping other settings
+        existing_prefs = _safe_get_preferences(user).model_dump()
+        merged_prefs = {**existing_prefs, **{"preferred_country": country}}
+        update_user(user_id, {"preferences": merged_prefs, "location": user.location.model_dump()})
 
         # Clear awaiting state if it exists
         if context.user_data:
@@ -628,7 +628,6 @@ async def handle_age_range(update: Update, context: ContextTypes.DEFAULT_TYPE, a
     """
     if not update.callback_query or not update.effective_user:
         return
-    query = update.callback_query
     user_id = str(update.effective_user.id)
 
     try:
@@ -643,8 +642,8 @@ async def handle_age_range(update: Update, context: ContextTypes.DEFAULT_TYPE, a
             age_type_display = "maximum"
         update_user_preferences(user_id, prefs)
 
-        # Show confirmation
-        await query.edit_message_text(
+        await _reply_or_edit(
+            update,
             f"✅ {age_type_display.capitalize()} age preference updated to: {age_value}",
             reply_markup=InlineKeyboardMarkup(
                 [[InlineKeyboardButton("« Back to Settings", callback_data="back_to_settings")]]
@@ -653,9 +652,7 @@ async def handle_age_range(update: Update, context: ContextTypes.DEFAULT_TYPE, a
 
     except NotFoundError:
         logger.warning("User not found in handle_age_range", user_id=user_id)
-        await query.edit_message_text(
-            "⚠️ We couldn't find your profile. Please use /start to set up your profile again."
-        )
+        await _reply_or_edit(update, "⚠️ We couldn't find your profile. Please use /start to set up your profile again.")
 
     except Exception as e:
         logger.error(
@@ -666,7 +663,8 @@ async def handle_age_range(update: Update, context: ContextTypes.DEFAULT_TYPE, a
             error=str(e),
             exc_info=e,
         )
-        await query.edit_message_text(
+        await _reply_or_edit(
+            update,
             "Sorry, something went wrong. Please try again.",
             reply_markup=InlineKeyboardMarkup(
                 [[InlineKeyboardButton("🔄 Return to Settings", callback_data="back_to_settings")]]
@@ -684,7 +682,6 @@ async def handle_max_distance(update: Update, context: ContextTypes.DEFAULT_TYPE
     """
     if not update.callback_query or not update.effective_user:
         return
-    query = update.callback_query
     user_id = str(update.effective_user.id)
 
     try:
@@ -699,8 +696,8 @@ async def handle_max_distance(update: Update, context: ContextTypes.DEFAULT_TYPE
         if distance >= 1000:
             display_text = "Anywhere"
 
-        # Show confirmation
-        await query.edit_message_text(
+        await _reply_or_edit(
+            update,
             f"✅ Maximum distance updated to: {display_text}",
             reply_markup=InlineKeyboardMarkup(
                 [[InlineKeyboardButton("« Back to Settings", callback_data="back_to_settings")]]
@@ -709,9 +706,7 @@ async def handle_max_distance(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     except NotFoundError:
         logger.warning("User not found in handle_max_distance", user_id=user_id)
-        await query.edit_message_text(
-            "⚠️ We couldn't find your profile. Please use /start to set up your profile again."
-        )
+        await _reply_or_edit(update, "⚠️ We couldn't find your profile. Please use /start to set up your profile again.")
 
     except Exception as e:
         logger.error(
@@ -721,7 +716,8 @@ async def handle_max_distance(update: Update, context: ContextTypes.DEFAULT_TYPE
             error=str(e),
             exc_info=e,
         )
-        await query.edit_message_text(
+        await _reply_or_edit(
+            update,
             "Sorry, something went wrong. Please try again.",
             reply_markup=InlineKeyboardMarkup(
                 [[InlineKeyboardButton("🔄 Return to Settings", callback_data="back_to_settings")]]
@@ -739,7 +735,6 @@ async def handle_notifications(update: Update, context: ContextTypes.DEFAULT_TYP
     """
     if not update.callback_query or not update.effective_user:
         return
-    query = update.callback_query
     user_id = str(update.effective_user.id)
 
     try:
@@ -749,9 +744,9 @@ async def handle_notifications(update: Update, context: ContextTypes.DEFAULT_TYP
         prefs.notifications_enabled = enabled
         update_user_preferences(user_id, prefs)
 
-        # Show confirmation
         status = "enabled" if enabled else "disabled"
-        await query.edit_message_text(
+        await _reply_or_edit(
+            update,
             f"✅ Notifications {status}",
             reply_markup=InlineKeyboardMarkup(
                 [[InlineKeyboardButton("« Back to Settings", callback_data="back_to_settings")]]
@@ -760,9 +755,7 @@ async def handle_notifications(update: Update, context: ContextTypes.DEFAULT_TYP
 
     except NotFoundError:
         logger.warning("User not found in handle_notifications", user_id=user_id)
-        await query.edit_message_text(
-            "⚠️ We couldn't find your profile. Please use /start to set up your profile again."
-        )
+        await _reply_or_edit(update, "⚠️ We couldn't find your profile. Please use /start to set up your profile again.")
 
     except Exception as e:
         logger.error(
@@ -772,7 +765,8 @@ async def handle_notifications(update: Update, context: ContextTypes.DEFAULT_TYP
             error=str(e),
             exc_info=e,
         )
-        await query.edit_message_text(
+        await _reply_or_edit(
+            update,
             "Sorry, something went wrong. Please try again.",
             reply_markup=InlineKeyboardMarkup(
                 [[InlineKeyboardButton("🔄 Return to Settings", callback_data="back_to_settings")]]
@@ -799,7 +793,8 @@ async def handle_reset_settings(update: Update, context: ContextTypes.DEFAULT_TY
         prefs.max_distance = 20
         prefs.gender_preference = None
         prefs.notifications_enabled = True
-        update_user_preferences(user_id, prefs)
+        # Reset should replace the entire preferences object
+        update_user(user_id, {"preferences": prefs.model_dump()})
 
         # Show confirmation
         await _reply_or_edit(

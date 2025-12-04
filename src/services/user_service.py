@@ -255,7 +255,7 @@ def get_user_location_text(user_id: str) -> Optional[str]:
 
 
 def update_user_preferences(user_id: str, preferences: Preferences) -> User:
-    """Update a user's preferences.
+    """Update a user's preferences by merging with existing values.
 
     Args:
         user_id: User ID
@@ -267,8 +267,16 @@ def update_user_preferences(user_id: str, preferences: Preferences) -> User:
     Raises:
         NotFoundError: If user not found
     """
-    # Update user
-    user = update_user(user_id, {"preferences": preferences.model_dump()})
+    # Load existing preferences
+    existing_user = get_user(user_id)
+    existing_prefs = existing_user.preferences.model_dump() if existing_user.preferences else {}
+
+    # Only apply non-None fields to avoid wiping existing settings unintentionally
+    new_prefs_partial = preferences.model_dump(exclude_none=True)
+    merged = {**existing_prefs, **new_prefs_partial}
+
+    # Persist merged preferences
+    user = update_user(user_id, {"preferences": merged})
 
     logger.info("User preferences updated", user_id=user_id)
     return user
