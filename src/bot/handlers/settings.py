@@ -85,8 +85,9 @@ async def _reply_or_edit(update: Update, context: ContextTypes.DEFAULT_TYPE, tex
             return
         except BadRequest as e:
             if "Message is not modified" in str(e):
-                return
-            logger.warning("_reply_or_edit: edit_message_text BadRequest, falling back", error=str(e))
+                pass
+            else:
+                logger.warning("_reply_or_edit: edit_message_text BadRequest, falling back", error=str(e))
         except Exception:
             logger.warning("_reply_or_edit: edit_message_text failed, falling back")
 
@@ -640,6 +641,11 @@ async def handle_age_range(update: Update, context: ContextTypes.DEFAULT_TYPE, a
     user_id = str(update.effective_user.id)
 
     try:
+        if update.callback_query:
+            try:
+                await update.callback_query.answer()
+            except BadRequest:
+                pass
         # Update user preferences
         user = get_user(user_id)
         prefs = _safe_get_preferences(user)
@@ -696,6 +702,11 @@ async def handle_max_distance(update: Update, context: ContextTypes.DEFAULT_TYPE
     user_id = str(update.effective_user.id)
 
     try:
+        if update.callback_query:
+            try:
+                await update.callback_query.answer()
+            except BadRequest:
+                pass
         # Update user preferences
         user = get_user(user_id)
         prefs = _safe_get_preferences(user)
@@ -751,6 +762,11 @@ async def handle_notifications(update: Update, context: ContextTypes.DEFAULT_TYP
     user_id = str(update.effective_user.id)
 
     try:
+        if update.callback_query:
+            try:
+                await update.callback_query.answer()
+            except BadRequest:
+                pass
         # Update user preferences
         user = get_user(user_id)
         prefs = _safe_get_preferences(user)
