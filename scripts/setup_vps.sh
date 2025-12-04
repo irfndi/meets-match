@@ -29,8 +29,9 @@ DB_PASSWORD=$(openssl rand -base64 32 | tr -d '/+=' | cut -c1-32)
 if ! sudo -u postgres psql -t -c '\du' | cut -d \| -f 1 | grep -qw meetsmatch; then
     sudo -u postgres psql -c "CREATE USER meetsmatch WITH PASSWORD '$DB_PASSWORD';"
     sudo -u postgres psql -c "CREATE DATABASE meetsmatch OWNER meetsmatch;"
-    echo "Database created. Add this to your .env file:"
-    echo "DATABASE_URL=postgresql://meetsmatch:$DB_PASSWORD@localhost/meetsmatch"
+    umask 077
+    printf "DATABASE_URL=postgresql://meetsmatch:%s@localhost/meetsmatch\n" "$DB_PASSWORD" > /opt/meetsmatch/.env
+    echo "Database created. DATABASE_URL written to /opt/meetsmatch/.env; keep this file secure."
 else
     echo "Database user already exists."
 fi

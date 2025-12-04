@@ -77,7 +77,7 @@ def cleanup_soft_deleted_media() -> None:
                 table="deleted_media",
                 query_type="update",
                 filters={"id": record_id},
-                data={"is_purged": True, "purged_at": datetime.now()},
+                data={"is_purged": True},
             )
             deleted_count += 1
         except Exception as e:

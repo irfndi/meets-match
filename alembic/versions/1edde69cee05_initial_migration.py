@@ -9,6 +9,7 @@ Create Date: 2025-11-27 07:52:07.367112
 from typing import Sequence, Union
 
 import sqlalchemy as sa
+
 from alembic import op
 
 # revision identifiers, used by Alembic.
@@ -30,13 +31,13 @@ def upgrade() -> None:
         sa.Column("bio", sa.Text(), nullable=True),
         sa.Column("age", sa.Integer(), nullable=True),
         sa.Column("gender", sa.String(50), nullable=True),
-        sa.Column("interests", sa.JSON(), nullable=True, server_default="[]"),
-        sa.Column("photos", sa.JSON(), nullable=True, server_default="[]"),
+        sa.Column("interests", sa.JSON(), nullable=True, server_default=sa.text("'[]'")),
+        sa.Column("photos", sa.JSON(), nullable=True, server_default=sa.text("'[]'")),
         sa.Column("location", sa.JSON(), nullable=True),
         sa.Column("preferences", sa.JSON(), nullable=True),
-        sa.Column("is_active", sa.Boolean(), nullable=False, server_default="true"),
-        sa.Column("is_sleeping", sa.Boolean(), nullable=False, server_default="false"),
-        sa.Column("is_profile_complete", sa.Boolean(), nullable=False, server_default="false"),
+        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.true()),
+        sa.Column("is_sleeping", sa.Boolean(), nullable=False, server_default=sa.false()),
+        sa.Column("is_profile_complete", sa.Boolean(), nullable=False, server_default=sa.false()),
         sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.text("now()")),
         sa.Column("updated_at", sa.DateTime(), nullable=False, server_default=sa.text("now()")),
         sa.Column("last_active", sa.DateTime(), nullable=False, server_default=sa.text("now()")),
@@ -51,7 +52,7 @@ def upgrade() -> None:
         sa.Column("user2_id", sa.String(255), sa.ForeignKey("users.id"), nullable=False),
         sa.Column("user1_action", sa.String(50), nullable=True),
         sa.Column("user2_action", sa.String(50), nullable=True),
-        sa.Column("status", sa.String(50), nullable=False, server_default="pending"),
+        sa.Column("status", sa.String(50), nullable=False, server_default=sa.text("'pending'")),
         sa.Column("compatibility_score", sa.Float(), nullable=True),
         sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.text("now()")),
         sa.Column("updated_at", sa.DateTime(), nullable=False, server_default=sa.text("now()")),
