@@ -323,10 +323,10 @@ async def test_reset_settings_flow(settings_handler_module, mock_dependencies, m
     await settings_handler_module.settings_callback(update, context)
 
     # Verify preferences reset to defaults
-    # Defaults: min_age=10, max_age=65, max_distance=50, notifications_enabled=True
+    # Defaults: min_age=10, max_age=65, max_distance=20, notifications_enabled=True
     assert mock_user_state.preferences.min_age == 10
     assert mock_user_state.preferences.max_age == 65
-    assert mock_user_state.preferences.max_distance == 50
+    assert mock_user_state.preferences.max_distance == 20
     assert mock_user_state.preferences.notifications_enabled is True
 
     # Verify success message

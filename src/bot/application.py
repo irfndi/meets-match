@@ -178,7 +178,7 @@ class BotApplication:
         self.application.add_handler(
             CallbackQueryHandler(
                 settings_callback,
-                pattern=r"^(settings_|region_|language_|min_age_|max_age_|max_distance_|notifications_|back_to_settings)",
+                pattern=r"^(settings.*|region_.*|language_.*|min_age_.*|max_age_.*|max_distance_.*|notifications_.*|back_to_settings)$",
             )
         )
 

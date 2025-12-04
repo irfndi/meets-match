@@ -796,7 +796,7 @@ async def handle_reset_settings(update: Update, context: ContextTypes.DEFAULT_TY
         prefs = Preferences()
         prefs.min_age = 10
         prefs.max_age = 65
-        prefs.max_distance = 50
+        prefs.max_distance = 20
         prefs.gender_preference = None
         prefs.notifications_enabled = True
         update_user_preferences(user_id, prefs)

@@ -26,6 +26,7 @@ from src.bot.ui.keyboards import (
     cancel_keyboard,
     gender_keyboard,
     gender_optional_keyboard,
+    gender_preference_keyboard,
     location_keyboard,
     location_optional_keyboard,
     main_menu,
@@ -35,9 +36,9 @@ from src.bot.ui.keyboards import (
     skip_keyboard,
 )
 from src.config import get_settings
-from src.models.user import Gender, User
+from src.models.user import Gender, Preferences, User
 from src.services.geocoding_service import geocode_city, reverse_geocode_coordinates
-from src.services.user_service import get_user, get_user_location_text, update_user
+from src.services.user_service import get_user, get_user_location_text, update_user, update_user_preferences
 from src.utils.cache import delete_cache, set_cache
 from src.utils.logging import get_logger
 from src.utils.media import delete_media, get_storage_path, save_media
@@ -94,6 +95,7 @@ PROFILE_MENU_MESSAGE = """
 NAME_UPDATE_MESSAGE = "What's your name? Just type it below:"
 AGE_UPDATE_MESSAGE = "How old are you? (must be between 10-65)"
 GENDER_UPDATE_MESSAGE = "Please select your gender:"
+GENDER_PREF_UPDATE_MESSAGE = "Please select your gender preference:"
 BIO_UPDATE_MESSAGE = "Tell us a bit about yourself (max 300 characters):"
 INTERESTS_UPDATE_MESSAGE = "What are your interests? List them separated by commas (e.g., music, travel, cooking):"
 LOCATION_UPDATE_MESSAGE = (
@@ -105,6 +107,7 @@ STATE_AWAITING_NAME = "awaiting_name"
 STATE_AWAITING_AGE = "awaiting_age"
 STATE_AWAITING_BIO = "awaiting_bio"
 STATE_AWAITING_INTERESTS = "awaiting_interests"
+STATE_AWAITING_GENDER_PREF = "awaiting_gender_preference"
 STATE_PROFILE_SETUP = "profile_setup_step"
 STATE_PROFILE_MENU = "profile_menu"
 STATE_AWAITING_PHOTO = "awaiting_photo"
@@ -114,6 +117,7 @@ STATE_PENDING_MEDIA = "pending_media"  # List of media paths being uploaded in c
 NAME_UPDATED_MESSAGE = "✅ Name updated to: {name}"
 AGE_UPDATED_MESSAGE = "✅ Age updated to: {age}"
 GENDER_UPDATED_MESSAGE = "✅ Gender updated to: {gender}"
+GENDER_PREF_UPDATED_MESSAGE = "✅ Preference updated"
 BIO_UPDATED_MESSAGE = "✅ Bio updated"
 INTERESTS_UPDATED_MESSAGE = "✅ Interests updated"
 LOCATION_UPDATED_MESSAGE = "✅ Location updated to: {location}"
@@ -121,7 +125,7 @@ LOCATION_UPDATED_MESSAGE = "✅ Location updated to: {location}"
 # Required fields for profile completion (users cannot match without these)
 REQUIRED_FIELDS = ["name", "age"]
 # Recommended fields for better matching
-RECOMMENDED_FIELDS = ["gender", "bio", "interests", "location"]
+RECOMMENDED_FIELDS = ["gender", "bio", "interests", "location", "gender_preference"]
 
 
 def get_missing_required_fields(user: User) -> list[str]:
@@ -147,6 +151,10 @@ def get_missing_recommended_fields(user: User) -> list[str]:
         missing.append("interests")
     if not user.location or not user.location.city:
         missing.append("location")
+    prefs = getattr(user, "preferences", None)
+    gp = getattr(prefs, "gender_preference", None) if prefs is not None else None
+    if not gp:
+        missing.append("gender_preference")
     return missing
 
 
@@ -318,6 +326,15 @@ async def prompt_for_next_missing_field(
             if next_field == "gender":
                 context.user_data["awaiting_gender"] = True
                 await _send_message_safe(update, context, GENDER_UPDATE_MESSAGE, reply_markup=gender_keyboard())
+                return True
+            elif next_field == "gender_preference":
+                context.user_data[STATE_AWAITING_GENDER_PREF] = True
+                await _send_message_safe(
+                    update,
+                    context,
+                    GENDER_PREF_UPDATE_MESSAGE,
+                    reply_markup=gender_preference_keyboard(),
+                )
                 return True
             elif next_field == "bio":
                 context.user_data[STATE_AWAITING_BIO] = True
@@ -1570,6 +1587,9 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             elif context.user_data.get("awaiting_location"):
                 skipped["location"] = time.time()
                 field_skipped = True
+            elif context.user_data.get(STATE_AWAITING_GENDER_PREF):
+                skipped["gender_preference"] = time.time()
+                field_skipped = True
 
             if not field_skipped:
                 logger.warning("Adhoc skip triggered but no matching state found!", user_id=user_id)
@@ -1583,6 +1603,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             context.user_data.pop(STATE_AWAITING_BIO, None)
             context.user_data.pop(STATE_AWAITING_INTERESTS, None)
             context.user_data.pop("awaiting_location", None)
+            context.user_data.pop(STATE_AWAITING_GENDER_PREF, None)
             context.user_data.pop(STATE_ADHOC_CONTINUE, None)
             await prompt_for_next_missing_field(update, context, user_id)
             return
@@ -1672,6 +1693,37 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         success = await _save_interests(update, context, text)
         if success:
             context.user_data.pop(STATE_AWAITING_INTERESTS, None)
+    elif context.user_data.get(STATE_AWAITING_GENDER_PREF):
+        choice = text.strip().lower()
+        if choice == "skip":
+            context.user_data.pop(STATE_AWAITING_GENDER_PREF, None)
+            skipped = context.user_data.get("skipped_profile_fields", {})
+            if isinstance(skipped, list):
+                skipped = {f: time.time() for f in skipped}
+            skipped["gender_preference"] = time.time()
+            context.user_data["skipped_profile_fields"] = skipped
+            await prompt_for_next_missing_field(update, context, user_id)
+            return
+        mapping = {
+            "men": [Gender.MALE],
+            "women": [Gender.FEMALE],
+            "both": [Gender.MALE, Gender.FEMALE],
+        }
+        if choice not in mapping:
+            await update.message.reply_text("Please choose Men, Women, or Both, or type Skip.")
+            return
+        try:
+            u = get_user(user_id)
+            prefs = getattr(u, "preferences", None)
+            if not isinstance(prefs, Preferences):
+                prefs = Preferences()
+            prefs.gender_preference = mapping[choice]
+            update_user_preferences(user_id, prefs)
+            context.user_data.pop(STATE_AWAITING_GENDER_PREF, None)
+            await update.message.reply_text(GENDER_PREF_UPDATED_MESSAGE)
+            await prompt_for_next_missing_field(update, context, user_id)
+        except Exception:
+            await update.message.reply_text("Sorry, something went wrong. Please try again.")
     elif context.user_data.get(STATE_AWAITING_PHOTO):
         await update.message.reply_text("Please send a photo.")
 

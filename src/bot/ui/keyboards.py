@@ -61,6 +61,14 @@ def gender_optional_keyboard() -> ReplyKeyboardMarkup:
     )
 
 
+def gender_preference_keyboard() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        [["Men", "Women"], ["Skip"]],
+        resize_keyboard=True,
+        one_time_keyboard=True,
+    )
+
+
 def location_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         [[KeyboardButton(text="Share Location", request_location=True)], ["Cancel"]],

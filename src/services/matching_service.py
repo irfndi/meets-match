@@ -44,10 +44,10 @@ def calculate_match_score(user1: User, user2: User) -> MatchScore:
             user2_coords = (user2.location.latitude, user2.location.longitude)
             distance = geodesic(user1_coords, user2_coords).kilometers
 
-            # Get max distance from preferences (default to 50km)
-            max_distance = 50
-            if user1.preferences.max_distance:
-                max_distance = user1.preferences.max_distance
+        # Get max distance from preferences (default to 20km)
+        max_distance = 20
+        if user1.preferences.max_distance:
+            max_distance = user1.preferences.max_distance
 
             # Score decreases linearly with distance
             if distance <= max_distance:
@@ -270,11 +270,12 @@ def get_potential_matches(user_id: str, limit: int = 10) -> List[User]:
         "last_active__gte": recycle_threshold_matched,  # Only active users in last 30 days
     }
 
-    # 1. Age Range Filter
-    if user.preferences.min_age:
-        filters["age__gte"] = user.preferences.min_age
-    if user.preferences.max_age:
-        filters["age__lte"] = user.preferences.max_age
+    # 1. Age Range Filter (-4/+4 around user's age)
+    if user.age:
+        min_bound = max(10, user.age - 4)
+        max_bound = min(65, user.age + 4)
+        filters["age__gte"] = min_bound
+        filters["age__lte"] = max_bound
 
     # 2. Gender Filter
     if user.preferences.gender_preference:
@@ -333,14 +334,19 @@ def get_potential_matches(user_id: str, limit: int = 10) -> List[User]:
         if is_potential_match(user, potential_user):
             potential_matches.append(potential_user)
 
-    # Sort by match score
-    scored_matches = [
-        (potential_user, calculate_match_score(user, potential_user).total) for potential_user in potential_matches
-    ]
-    scored_matches.sort(key=lambda x: x[1], reverse=True)
+    # Prioritize by age proximity: same age, then ±1, ±2, ±3, ±4
+    age = user.age or 0
+    priority_order = [0, 1, 2, 3, 4]
+    ordered: list[User] = []
+    for d in priority_order:
+        group = [u for u in potential_matches if u.age is not None and abs(int(u.age) - int(age)) == d]
+        group_scored = [(u, calculate_match_score(user, u).total) for u in group]
+        group_scored.sort(key=lambda x: x[1], reverse=True)
+        ordered.extend([u for u, _ in group_scored])
+        if len(ordered) >= limit:
+            break
 
-    # Get top matches
-    top_matches = [match[0] for match in scored_matches[:limit]]
+    top_matches = ordered[:limit]
 
     # Cache potential match IDs
     potential_match_ids = [match.id for match in top_matches]

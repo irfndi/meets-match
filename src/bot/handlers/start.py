@@ -136,7 +136,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         from src.services.user_service import update_user_preferences
 
         # Set default preferences
-        prefs = Preferences(preferred_language="en")
+        prefs = Preferences(preferred_language="en", max_distance=20)
         update_user_preferences(user_id, prefs)
 
         await update.message.reply_text("👋 Welcome to MeetMatch! Let's set up your profile.")
