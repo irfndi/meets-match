@@ -43,6 +43,7 @@ def mock_dependencies(start_handler_module):
     mock_limiter = MagicMock(return_value=AsyncMock())  # Returns an async function
     mock_main_menu = MagicMock()
     mock_prompt_missing = AsyncMock(return_value=False)
+    mock_update_prefs = MagicMock()
 
     with (
         patch.object(start_handler_module, "get_user", mock_get_user),
@@ -51,6 +52,7 @@ def mock_dependencies(start_handler_module):
         patch.object(start_handler_module, "user_command_limiter", mock_limiter),
         patch.object(start_handler_module, "main_menu", mock_main_menu),
         patch("src.bot.handlers.profile.prompt_for_next_missing_field", mock_prompt_missing),
+        patch("src.services.user_service.update_user_preferences", mock_update_prefs),
     ):
         yield {
             "get_user": mock_get_user,
@@ -59,6 +61,7 @@ def mock_dependencies(start_handler_module):
             "limiter": mock_limiter,
             "main_menu": mock_main_menu,
             "prompt_missing": mock_prompt_missing,
+            "update_prefs": mock_update_prefs,
         }
 
 
@@ -201,13 +204,18 @@ async def test_start_new_user(start_handler_module, mock_dependencies, mock_upda
     # Verify create_user called
     mock_deps["create_user"].assert_called()
 
-    # Verify settings command called
-    mock_settings_module.assert_called_with(update, context)
+    # Verify default language set to 'en'
+    mock_deps["update_prefs"].assert_called()
+    args, _ = mock_deps["update_prefs"].call_args
+    assert args[1].preferred_language == "en"
+
+    # Verify profile setup called
+    mock_deps["prompt_missing"].assert_called_with(update, context, "12345")
 
     # Verify welcome message
     update.message.reply_text.assert_called()
     args, _ = update.message.reply_text.call_args
-    assert "Welcome to MeetMatch" in args[0]
+    assert "Let's set up your profile" in args[0]
 
 
 @pytest.mark.asyncio
@@ -244,21 +252,23 @@ async def test_start_existing_user_update_info(
 async def test_start_existing_user_missing_settings(
     start_handler_module, mock_dependencies, mock_update_context, mock_settings_module
 ):
-    """Test start command redirects to settings if missing preferences."""
+    """Test start command sets default language if missing."""
     update, context = mock_update_context
     mock_deps = mock_dependencies
 
     mock_user = MagicMock()
+    mock_user.id = "12345"
     mock_user.preferences = None  # Missing preferences
+    mock_user.is_match_eligible.return_value = False
 
     mock_deps["get_user"].return_value = mock_user
 
     await start_handler_module.start_command(update, context)
 
-    # Verify settings command called
-    mock_settings_module.assert_called_with(update, context)
+    # Verify default language set to 'en'
+    mock_deps["update_prefs"].assert_called()
+    args, _ = mock_deps["update_prefs"].call_args
+    assert args[1].preferred_language == "en"
 
-    # Verify message
-    update.message.reply_text.assert_called()
-    args, _ = update.message.reply_text.call_args
-    assert "Please set your region and language" in args[0]
+    # Verify profile setup called
+    mock_deps["prompt_missing"].assert_called()

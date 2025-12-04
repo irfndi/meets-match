@@ -68,22 +68,26 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             preferences=prefs.model_dump() if prefs else None,
         )
 
-        missing_region = not (prefs and getattr(prefs, "preferred_country", None))
-        missing_language = not (prefs and getattr(prefs, "preferred_language", None))
+        # STRATEGY CHANGE: Default to English if language is missing.
+        # Do NOT block on missing region/language. Let profile setup handle it.
+        if not prefs or not getattr(prefs, "preferred_language", None):
+            from src.models.user import Preferences
+            from src.services.user_service import update_user_preferences
 
-        if missing_region or missing_language:
-            await update.message.reply_text("👋 Welcome back! Please set your region and language to continue.")
-            # Import here to avoid circular dependency
-            from src.bot.handlers.settings import settings_command
+            # Create new prefs or use existing
+            new_prefs = prefs or Preferences()
+            new_prefs.preferred_language = "en"
 
-            await settings_command(update, context)
-            return
+            # Update user
+            update_user_preferences(user_id, new_prefs)
+            logger.info("Set default language to 'en' for user", user_id=user_id)
 
         # Check for missing profile fields (casual prompt)
         # This handles both required fields (always prompted) and recommended fields (prompted if cooldown passed)
         # We do this BEFORE matching to ensure profile quality, but respect the cooldown for skipped fields.
         from src.bot.handlers.profile import prompt_for_next_missing_field
 
+        # If we're missing region, it will be handled when user sets location in profile
         has_missing = await prompt_for_next_missing_field(update, context, user_id, silent_if_complete=True)
         if has_missing:
             return
@@ -127,13 +131,20 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
         create_user(user_data)
 
-        # For new users, force region/language setup immediately
-        await update.message.reply_text("👋 Welcome to MeetMatch! To get started, please set your region and language.")
+        # STRATEGY CHANGE: Set default language to EN and start profile setup directly
+        from src.models.user import Preferences
+        from src.services.user_service import update_user_preferences
+
+        # Set default preferences
+        prefs = Preferences(preferred_language="en")
+        update_user_preferences(user_id, prefs)
+
+        await update.message.reply_text("👋 Welcome to MeetMatch! Let's set up your profile.")
 
         # Import here to avoid circular dependency
-        from src.bot.handlers.settings import settings_command
+        from src.bot.handlers.profile import prompt_for_next_missing_field
 
-        await settings_command(update, context)
+        await prompt_for_next_missing_field(update, context, user_id)
 
     except Exception as e:
         logger.error(

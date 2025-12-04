@@ -890,15 +890,33 @@ async def location_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         longitude = location.longitude
 
         geo = await reverse_geocode_coordinates(latitude, longitude)
+        country = (geo or {}).get("country")
 
         location_data: dict[str, Any] = {
             "location_latitude": latitude,
             "location_longitude": longitude,
             "location_city": (geo or {}).get("city") or "Unknown City",
-            "location_country": (geo or {}).get("country") or "Unknown Country",
+            "location_country": country or "Unknown Country",
         }
 
-        update_user(user_id, location_data)
+        # Update preferences with country if found
+        update_data = location_data.copy()
+        if country:
+            from src.models.user import Preferences
+
+            # We need to get the user to access current preferences,
+            # but we might have it in context.user_data already?
+            # Safer to fetch or check context.user_data["user"]
+            user_obj = context.user_data.get("user") if context.user_data else None
+            if not user_obj:
+                user_obj = get_user(user_id)
+
+            prefs = getattr(user_obj, "preferences", None) or Preferences()
+            prefs.preferred_country = country
+            update_data["preferences"] = prefs.model_dump()
+            logger.info("Auto-updating preferred_country from location", user_id=user_id, country=country)
+
+        update_user(user_id, update_data)
         user = get_user(user_id)
         context.user_data["user"] = user
 
@@ -988,7 +1006,22 @@ async def process_manual_location(update: Update, context: ContextTypes.DEFAULT_
             "location_country": geo["country"],
         }
 
-        update_user(user_id, location_data)
+        # Update preferences with country if found
+        update_data = location_data.copy()
+        country = geo.get("country")
+        if country:
+            from src.models.user import Preferences
+
+            user_obj = context.user_data.get("user") if context.user_data else None
+            if not user_obj:
+                user_obj = get_user(user_id)
+
+            prefs = getattr(user_obj, "preferences", None) or Preferences()
+            prefs.preferred_country = country
+            update_data["preferences"] = prefs.model_dump()
+            logger.info("Auto-updating preferred_country from manual location", user_id=user_id, country=country)
+
+        update_user(user_id, update_data)
         user = get_user(user_id)
         context.user_data["user"] = user
         await update.message.reply_text(

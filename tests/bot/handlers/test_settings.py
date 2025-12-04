@@ -466,9 +466,7 @@ async def test_handle_language_user_not_found(
 
 
 @pytest.mark.asyncio
-async def test_settings_command_with_none_preferences(
-    settings_handler_module, mock_dependencies, mock_update_context
-):
+async def test_settings_command_with_none_preferences(settings_handler_module, mock_dependencies, mock_update_context):
     """Test settings command handles user with None preferences gracefully."""
     update, context = mock_update_context
     mock_deps = mock_dependencies
