@@ -132,7 +132,11 @@ def update_user(user_id: str, data: Dict[str, Union[str, int, bool, datetime, Li
     data["updated_at"] = datetime.now()
 
     # Update user in database
-    logger.debug("Executing update_user query", user_id=user_id, data=data)
+    if "preferences" in data:
+        logger.debug("Updating user preferences", user_id=user_id, preferences=data["preferences"])
+    else:
+        logger.debug("Executing update_user query", user_id=user_id, data_keys=list(data.keys()))
+
     result = execute_query(
         table="users",
         query_type="update",
@@ -141,15 +145,18 @@ def update_user(user_id: str, data: Dict[str, Union[str, int, bool, datetime, Li
     )
 
     if not result.data or len(result.data) == 0:
-        logger.error("Failed to update user", user_id=user_id)
+        logger.error("Failed to update user in DB", user_id=user_id, data=data)
         raise ValidationError(
             f"Failed to update user: {user_id}",
             details={"user_id": user_id},
         )
 
+    logger.debug("Database update successful", user_id=user_id)
+
     # Invalidate caches to avoid stale reads
     cache_key = USER_CACHE_KEY.format(user_id=user_id)
     delete_cache(cache_key)
+    logger.debug("Invalidated user cache", key=cache_key)
     location_cache_key = USER_LOCATION_CACHE_KEY.format(user_id=user_id)
     if (
         "location" in data

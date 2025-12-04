@@ -4,7 +4,7 @@ import asyncio
 from functools import wraps
 from typing import Any, Callable, List, Optional, TypeVar, cast
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import Update
 from telegram.ext import ContextTypes
 
 from src.bot.ui.keyboards import main_menu, setup_profile_prompt_keyboard
@@ -104,37 +104,62 @@ def authenticated(func: HandlerType) -> HandlerType:
             if context.user_data is not None:
                 context.user_data["user"] = user
 
-            missing_region = not (
-                getattr(user, "preferences", None) and getattr(user.preferences, "preferred_country", None)
-            )
-            missing_language = not (
-                getattr(user, "preferences", None) and getattr(user.preferences, "preferred_language", None)
-            )
-            is_callback = getattr(update, "callback_query", None) is not None
-            command = update.message.text.split()[0] if update.message and update.message.text else ""
-            allowed = ["/start", "/settings"]
+            # missing_region = not (
+            #     getattr(user, "preferences", None) and getattr(user.preferences, "preferred_country", None)
+            # )
+            # missing_language = not (
+            #     getattr(user, "preferences", None) and getattr(user.preferences, "preferred_language", None)
+            # )
+            # is_callback = getattr(update, "callback_query", None) is not None
+            # command = update.message.text.split()[0] if update.message and update.message.text else ""
+            # allowed = ["/start", "/settings"]
+
+            # Check for specific text buttons that should be allowed
+            # message_text = update.message.text if update.message else ""
+            # allowed_text = ["⚙️ Settings", "Setup Profile"]
+            # is_allowed_text = message_text in allowed_text
 
             # Check if we are in a flow that fixes the missing fields
-            is_fixing_region = context.user_data and context.user_data.get("awaiting_region")
-            is_fixing_language = context.user_data and context.user_data.get("awaiting_language")
-            is_fixing = is_fixing_region or is_fixing_language
+            # is_fixing_region = context.user_data and context.user_data.get("awaiting_region")
+            # is_fixing_language = context.user_data and context.user_data.get("awaiting_language")
 
-            if (missing_region or missing_language) and not is_callback and command not in allowed and not is_fixing:
-                msg = "Please complete your setup before continuing:"
-                buttons = []
-                if missing_region:
-                    msg += "\n• Region is not set"
-                    buttons.append([InlineKeyboardButton("🌍 Set Region", callback_data="settings_region")])
-                if missing_language:
-                    msg += "\n• Language is not set"
-                    buttons.append([InlineKeyboardButton("🗣 Set Language", callback_data="settings_language")])
+            # Also allow profile setup flows to proceed without region/language
+            # This is crucial because we now ask for location (which sets region) later in the flow
+            # is_profile_setup = context.user_data and (
+            #     context.user_data.get("profile_setup_step") is not None
+            #     or context.user_data.get("adhoc_continue_profile")
+            #     or context.user_data.get("awaiting_name")
+            #     or context.user_data.get("awaiting_age")
+            #     or context.user_data.get("awaiting_gender")
+            #     or context.user_data.get("awaiting_bio")
+            #     or context.user_data.get("awaiting_interests")
+            #     or context.user_data.get("awaiting_location")
+            #     or context.user_data.get("awaiting_photo")
+            # )
 
-                if update.effective_message:
-                    await update.effective_message.reply_text(
-                        msg,
-                        reply_markup=InlineKeyboardMarkup(buttons),
-                    )
-                return
+            # STRATEGY CHANGE: Do NOT block on missing region/language.
+            # We now derive region from location in the profile flow, and default language to EN.
+            # If users skip location, they just won't have a region set (and might not find matches),
+            # but they shouldn't be blocked from using the bot.
+
+            # is_fixing = is_fixing_region or is_fixing_language or is_profile_setup
+
+            # if (missing_region or missing_language) and not is_callback and command not in allowed and not is_allowed_text and not is_fixing:
+            #     msg = "Please complete your setup before continuing:"
+            #     buttons = []
+            #     if missing_region:
+            #         msg += "\n• Region is not set"
+            #         buttons.append([InlineKeyboardButton("🌍 Set Region", callback_data="settings_region")])
+            #     if missing_language:
+            #         msg += "\n• Language is not set"
+            #         buttons.append([InlineKeyboardButton("🗣 Set Language", callback_data="settings_language")])
+            #
+            #     if update.effective_message:
+            #         await update.effective_message.reply_text(
+            #             msg,
+            #             reply_markup=InlineKeyboardMarkup(buttons),
+            #         )
+            #     return
 
             return await func(update, context, *args, **kwargs)
 

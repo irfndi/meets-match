@@ -155,7 +155,7 @@ async def test_authenticated_warmup_triggered(auth_middleware_module, mock_depen
 
 @pytest.mark.asyncio
 async def test_authenticated_missing_setup(auth_middleware_module, mock_dependencies, mock_update_context):
-    """Test authenticated blocks when setup is missing."""
+    """Test authenticated allows execution even when setup is missing (legacy check removed)."""
     update, context = mock_update_context
     mock_deps = mock_dependencies
 
@@ -165,15 +165,14 @@ async def test_authenticated_missing_setup(auth_middleware_module, mock_dependen
     mock_deps["get_user"].return_value = mock_user
     mock_deps["get_cache"].return_value = True
 
-    handler = AsyncMock()
+    handler = AsyncMock(return_value="success")
     decorated_handler = auth_middleware_module.authenticated(handler)
 
-    await decorated_handler(update, context)
+    result = await decorated_handler(update, context)
 
-    handler.assert_not_called()
-    # Should reply with setup message
-    args, _ = update.effective_message.reply_text.call_args
-    assert "Please complete your setup" in args[0]
+    # Should NOT block anymore
+    handler.assert_called_once()
+    assert result == "success"
 
 
 @pytest.mark.asyncio
@@ -310,7 +309,7 @@ async def test_authenticated_bypass_for_settings_command(
 async def test_authenticated_blocks_other_commands_missing_setup(
     auth_middleware_module, mock_dependencies, mock_update_context
 ):
-    """Test authenticated blocks other commands when setup is missing."""
+    """Test authenticated allows other commands when setup is missing (legacy check removed)."""
     update, context = mock_update_context
     mock_deps = mock_dependencies
 
@@ -323,20 +322,19 @@ async def test_authenticated_blocks_other_commands_missing_setup(
     # Set message to /profile command (not in allowed list)
     update.message.text = "/profile"
 
-    handler = AsyncMock()
+    handler = AsyncMock(return_value="success")
     decorated_handler = auth_middleware_module.authenticated(handler)
 
-    await decorated_handler(update, context)
+    result = await decorated_handler(update, context)
 
-    # Should block and show setup message
-    handler.assert_not_called()
-    args, _ = update.effective_message.reply_text.call_args
-    assert "Please complete your setup" in args[0]
+    # Should NOT block anymore
+    handler.assert_called_once()
+    assert result == "success"
 
 
 @pytest.mark.asyncio
 async def test_authenticated_missing_region_only(auth_middleware_module, mock_dependencies, mock_update_context):
-    """Test authenticated shows setup message when only region is missing."""
+    """Test authenticated allows execution when only region is missing (legacy check removed)."""
     update, context = mock_update_context
     mock_deps = mock_dependencies
 
@@ -348,20 +346,19 @@ async def test_authenticated_missing_region_only(auth_middleware_module, mock_de
     mock_deps["get_user"].return_value = mock_user
     mock_deps["get_cache"].return_value = True
 
-    handler = AsyncMock()
+    handler = AsyncMock(return_value="success")
     decorated_handler = auth_middleware_module.authenticated(handler)
 
-    await decorated_handler(update, context)
+    result = await decorated_handler(update, context)
 
-    handler.assert_not_called()
-    args, _ = update.effective_message.reply_text.call_args
-    assert "Region is not set" in args[0]
-    assert "Language is not set" not in args[0]
+    # Should NOT block anymore
+    handler.assert_called_once()
+    assert result == "success"
 
 
 @pytest.mark.asyncio
 async def test_authenticated_missing_language_only(auth_middleware_module, mock_dependencies, mock_update_context):
-    """Test authenticated shows setup message when only language is missing."""
+    """Test authenticated allows execution when only language is missing (legacy check removed)."""
     update, context = mock_update_context
     mock_deps = mock_dependencies
 
@@ -373,15 +370,14 @@ async def test_authenticated_missing_language_only(auth_middleware_module, mock_
     mock_deps["get_user"].return_value = mock_user
     mock_deps["get_cache"].return_value = True
 
-    handler = AsyncMock()
+    handler = AsyncMock(return_value="success")
     decorated_handler = auth_middleware_module.authenticated(handler)
 
-    await decorated_handler(update, context)
+    result = await decorated_handler(update, context)
 
-    handler.assert_not_called()
-    args, _ = update.effective_message.reply_text.call_args
-    assert "Language is not set" in args[0]
-    assert "Region is not set" not in args[0]
+    # Should NOT block anymore
+    handler.assert_called_once()
+    assert result == "success"
 
 
 @pytest.mark.asyncio

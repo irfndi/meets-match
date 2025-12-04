@@ -257,16 +257,33 @@ def execute_query(
             return type("Result", (), {"data": [result]})()
 
         elif query_type == "update":
+            if table == "users" and "preferences" in data:
+                logger.debug("Updating users table with preferences", data_preferences=data["preferences"])
+
             query = session.query(model)
             for key, value in filters.items():
                 query = query.filter(getattr(model, key) == value)
-            query.update(data)  # type: ignore
+
+            # Check if record exists before update
+            exists = query.first()
+            if not exists:
+                logger.error("Record not found for update", table=table, filters=filters)
+                session.close()
+                return type("Result", (), {"data": []})()
+
+            updated_count = query.update(data)  # type: ignore
+            logger.debug("Update count", count=updated_count, table=table)
+
             session.commit()
             # Fetch updated records
             updated_query = session.query(model)
             for key, value in filters.items():
                 updated_query = updated_query.filter(getattr(model, key) == value)
             results = updated_query.all()
+
+            if table == "users" and results:
+                logger.debug("Updated user record", user_preferences=getattr(results[0], "preferences", None))
+
             session.close()
             return type("Result", (), {"data": [_model_to_dict(r) for r in results]})()
 
