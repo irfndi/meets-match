@@ -1,5 +1,7 @@
 """Settings handlers for the MeetMatch bot."""
 
+from typing import Any
+
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
@@ -13,7 +15,7 @@ from src.utils.logging import get_logger
 logger = get_logger(__name__)
 
 
-def _safe_get_preferences(user) -> Preferences:
+def _safe_get_preferences(user: Any) -> Preferences:
     """Safely extract preferences from user, handling None/corrupt data.
 
     Args:
@@ -37,7 +39,7 @@ def _safe_get_preferences(user) -> Preferences:
                 # Need to clean up values that might be Mock objects (convert to None)
                 try:
 
-                    def _clean_value(val, expected_type):
+                    def _clean_value(val: Any, expected_type: type) -> Any:
                         """Clean a value, converting invalid types to None."""
                         if val is None:
                             return None
@@ -860,6 +862,12 @@ async def handle_reset_settings(update: Update, context: ContextTypes.DEFAULT_TY
 
 @authenticated
 async def settings_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Route text commands to appropriate settings handlers.
+
+    Args:
+        update: The update object
+        context: The context object
+    """
     await user_command_limiter()(update, context)
     if not update.message or not update.message.text or not update.effective_user:
         return
@@ -916,6 +924,12 @@ Your current tier: {tier}
 
 @authenticated
 async def premium_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle the /premium command and display the user's current premium tier.
+
+    Args:
+        update: The update object
+        context: The context object
+    """
     await user_command_limiter()(update, context)
     if not update.effective_user or not update.message:
         return

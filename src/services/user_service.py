@@ -145,7 +145,7 @@ def update_user(user_id: str, data: Dict[str, Union[str, int, bool, datetime, Li
     )
 
     if not result.data or len(result.data) == 0:
-        logger.error("Failed to update user in DB", user_id=user_id, data=data)
+        logger.error("Failed to update user in DB", user_id=user_id, data_keys=list(data.keys()))
         raise ValidationError(
             f"Failed to update user: {user_id}",
             details={"user_id": user_id},
@@ -218,13 +218,18 @@ def get_user_location_text(user_id: str) -> Optional[str]:
 
     Falls back to flat DB fields if nested location isn't present.
     """
+
+    def _format_location(city: str, country: str) -> Optional[str]:
+        """Format city and country into a single string, handling empty values."""
+        parts = [p for p in (city, country) if p]
+        return ", ".join(parts) if parts else None
+
     try:
         user = get_user(user_id)
-        if user.location and user.location.city:
+        if user.location and (user.location.city or user.location.country):
             city = user.location.city or ""
             country = user.location.country or ""
-            text = f"{city}, {country}".strip().rstrip(",")
-            return text if text else None
+            return _format_location(city, country)
     except Exception:
         pass  # Fall through to try DB query fallback
 
@@ -241,13 +246,12 @@ def get_user_location_text(user_id: str) -> Optional[str]:
             if loc and isinstance(loc, dict):
                 city = loc.get("city") or ""
                 country = loc.get("country") or ""
-                text = f"{city}, {country}".strip().rstrip(",")
+                text = _format_location(city, country)
                 if text:
                     return text
             city = row.get("location_city") or ""
             country = row.get("location_country") or ""
-            text = f"{city}, {country}".strip().rstrip(",")
-            return text if text else None
+            return _format_location(city, country)
     except Exception:
         pass  # Return None if location cannot be determined
 
@@ -366,7 +370,7 @@ def update_last_active(user_id: str) -> None:
 
 def get_inactive_users(days_inactive: int) -> List[User]:
     """Get users who have been inactive for exactly the specified number of days."""
-    from datetime import datetime, timedelta, timezone
+    from datetime import timedelta
 
     # Calculate the time range for "exact" match (e.g., between X and X+1 days ago)
     # We want users where (now - last_active) is close to days_inactive.
@@ -376,7 +380,8 @@ def get_inactive_users(days_inactive: int) -> List[User]:
     # We want users active between 48h ago and 24h ago?
     # Or simply: last_active < (now - days) AND last_active >= (now - days - 1)
 
-    now = datetime.now(timezone.utc)
+    # Use naive UTC consistently with the rest of the codebase
+    now = datetime.now()
     end_date = now - timedelta(days=days_inactive)
     start_date = end_date - timedelta(days=1)
 
@@ -443,9 +448,10 @@ def get_users_for_auto_sleep(inactivity_minutes: int = 15) -> List[User]:
     Returns:
         List of users eligible for auto-sleep
     """
-    from datetime import timedelta, timezone
+    from datetime import timedelta
 
-    now = datetime.now(timezone.utc)
+    # Use naive UTC consistently with the rest of the codebase
+    now = datetime.now()
     threshold = now - timedelta(minutes=inactivity_minutes)
 
     # Get users who:

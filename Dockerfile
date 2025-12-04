@@ -30,6 +30,10 @@ COPY . .
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONUNBUFFERED=1
 
+# Create a non-root user and switch to it for security
+RUN addgroup --system app && adduser --system --ingroup app app && chown -R app:app /app
+USER app
+
 # Expose the API port
 EXPOSE 8000
 

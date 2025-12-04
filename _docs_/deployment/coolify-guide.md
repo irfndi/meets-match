@@ -65,7 +65,7 @@ ssh root@217.216.35.77 "systemctl status meetsmatch.service"
 ### 7. Deploy
 Click **"Deploy"** in Coolify.
 
-### 6. Configure Backups (Important)
+### 8. Configure Backups (Important)
 You mentioned using an R2 bucket for backups. Here is how to configure it in Coolify:
 
 1.  **Add S3/R2 Storage:**
@@ -95,21 +95,21 @@ You mentioned using an R2 bucket for backups. Here is how to configure it in Coo
         *   **Destination Path:** `/app/media`
     *   Save and **Redeploy**.
 
-### 7. Troubleshooting
+### 9. Troubleshooting
 - **Logs:** View logs in the Coolify UI under the specific resource.
 - **Shell:** Use the "Terminal" tab in Coolify to exec into the container.
 - **Connection Refused:** Ensure `pg_hba.conf` allows `0.0.0.0/0` (or docker subnet) and `redis.conf` binds to `10.0.0.1` or `0.0.0.0`.
 
-## 8. Migrating to Coolify Managed Resources (Recommended)
+## 10. Migrating to Coolify Managed Resources (Recommended)
 Using Coolify-managed Postgres and Redis provides better isolation, automated backups, and easier management.
 
 ### Step 1: Identify New Resources
-- **Postgres:** `ow484s4kw8kg0wwk8kkgcogw` (Verified)
+- **Postgres:** `postgresql-database-ow484s4kw8kg0wwk8kkgcogw` (Verified)
 - **Redis:** `wc4g00ook8ck08css8c40ksk` (Verified)
 
 ### Step 2: Data Migration (Completed)
 **Status:** ✅ DONE by Assistant.
-- Old data from host (port 5433) has been dumped and restored into the new Coolify Postgres container (`ow484s4kw8kg0wwk8kkgcogw`).
+- Old data from host (port 5433) has been dumped and restored into the new Coolify Postgres container.
 - Tables `users`, `matches`, `alembic_version` are verified to exist in the new database.
 
 ### Step 3: Update Bot Environment Variables (Action Required)
@@ -119,7 +119,7 @@ You must now update the bot's environment variables in the Coolify UI to switch 
 
 | Variable | New Value | Notes |
 | :--- | :--- | :--- |
-| `DB_HOST` | `ow484s4kw8kg0wwk8kkgcogw` | Use this exact container name |
+| `DB_HOST` | `postgresql-database-ow484s4kw8kg0wwk8kkgcogw` | Use this exact container name |
 | `DB_PORT` | `5432` | **Important:** Use 5432 (internal port), not 5433 |
 | `DB_USER` | `postgres` | |
 | `DB_PASSWORD` | *(Copy from Coolify UI)* | Go to Project -> Postgres Resource to find this |
@@ -127,15 +127,15 @@ You must now update the bot's environment variables in the Coolify UI to switch 
 | `REDIS_HOST` | `wc4g00ook8ck08css8c40ksk` | Use this exact container name |
 | `REDIS_PORT` | `6379` | |
 | `REDIS_PASSWORD` | *(Copy from Coolify UI)* | Go to Project -> Redis Resource to find this |
-| `DATABASE_URL` | `postgresql://postgres:<password>@ow484s4kw8kg0wwk8kkgcogw:5432/postgres` | |
+| `DATABASE_URL` | `postgresql://postgres:<password>@postgresql-database-ow484s4kw8kg0wwk8kkgcogw:5432/postgres` | |
 | `REDIS_URL` | `redis://wc4g00ook8ck08css8c40ksk:6379/0` | |
 
 *Note: `REDIS_URL` might also need updating if you use it, e.g., `redis://:PASSWORD@wc4g00ook8ck08css8c40ksk:6379/0`*
 
-### Step 5: Redeploy
+### Step 4: Redeploy
 Click **"Redeploy"** on the bot resource.
 
-## 9. Configuring Error Tracking (GlitchTip)
+## 11. Configuring Error Tracking (GlitchTip)
 We have switched to **GlitchTip** (an open-source Sentry alternative) for error tracking.
 
 1.  **Get your DSN:**
