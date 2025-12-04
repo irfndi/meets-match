@@ -82,10 +82,33 @@ async def _reply_or_edit(update: Update, text: str, reply_markup=None):
     if update.callback_query:
         try:
             await update.callback_query.edit_message_text(text, reply_markup=reply_markup)
+            return
         except BadRequest as e:
             if "Message is not modified" in str(e):
+                # Some clients re-send the same callback repeatedly; ignore
                 return
-            raise
+            # Fallback: send a new message to the same chat
+            try:
+                from telegram import Message
+
+                msg = update.callback_query.message
+                if isinstance(msg, Message):
+                    await msg.reply_text(text, reply_markup=reply_markup)
+                    return
+            except Exception:
+                pass
+            # As a last resort, try bot.send_message with chat_id
+            try:
+                msg = update.callback_query.message
+                chat_id = getattr(msg, "chat_id", None)
+                if chat_id and update.callback_query:
+                    await update.callback_query.from_user.get_bot().send_message(
+                        chat_id=chat_id, text=text, reply_markup=reply_markup
+                    )  # type: ignore[attr-defined]
+                    return
+            except Exception:
+                # Give up silently; upstream will handle user experience
+                return
     elif update.message:
         await update.message.reply_text(text, reply_markup=reply_markup)
 
@@ -230,6 +253,7 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     try:
         await query.answer()
         callback_data = query.data
+        logger.info("settings_callback received", user_id=user_id, data=callback_data)
         if not callback_data:
             # Provide feedback instead of silently returning
             logger.warning("Empty callback_data in settings_callback", user_id=user_id)
@@ -404,10 +428,16 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         elif callback_data == "settings_reset":
             # Reset settings to defaults
             await handle_reset_settings(update, context)
-
         elif callback_data == "back_to_settings":
             # Go back to settings
             await settings_command(update, context)
+        else:
+            logger.warning("Unknown settings callback", user_id=user_id, data=callback_data)
+            await _reply_or_edit(
+                update,
+                "⚠️ Unknown action. Returning to Settings.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("« Back", callback_data="back_to_settings")]]),
+            )
 
     except Exception as e:
         logger.error(
