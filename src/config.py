@@ -24,9 +24,11 @@ class Settings(BaseSettings):
     # Redis Configuration
     REDIS_URL: str
 
-    # Sentry Configuration
-    SENTRY_DSN: Optional[str] = None
-    ENABLE_SENTRY: bool = Field(default=False)
+    # OpenTelemetry Configuration
+    OTEL_EXPORTER_OTLP_ENDPOINT: Optional[str] = None
+    OTEL_EXPORTER_OTLP_HEADERS: Optional[str] = None
+    OTEL_SERVICE_NAME: str = "meetsmatch-bot"
+    ENABLE_TELEMETRY: bool = Field(default=False)
 
     # Application Configuration
     APP_NAME: str = "MeetsMatch Bot"
@@ -46,13 +48,13 @@ class Settings(BaseSettings):
     INTERESTS_WEIGHT: float = 0.5
     PREFERENCES_WEIGHT: float = 0.2
 
-    @field_validator("ENABLE_SENTRY", mode="before")
+    @field_validator("ENABLE_TELEMETRY", mode="before")
     @classmethod
-    def set_enable_sentry(cls, v: Any, info: ValidationInfo) -> bool:
-        """Enable Sentry if DSN is provided and explicitly enabled."""
+    def set_enable_telemetry(cls, v: Any, info: ValidationInfo) -> bool:
+        """Enable Telemetry if Endpoint is provided and explicitly enabled."""
         if isinstance(v, bool):
-            return v and info.data.get("SENTRY_DSN") is not None
-        return info.data.get("SENTRY_DSN") is not None and str(v).lower() == "true"
+            return v and info.data.get("OTEL_EXPORTER_OTLP_ENDPOINT") is not None
+        return info.data.get("OTEL_EXPORTER_OTLP_ENDPOINT") is not None and str(v).lower() == "true"
 
     @field_validator("DEBUG", mode="before")
     @classmethod

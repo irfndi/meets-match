@@ -120,8 +120,8 @@ async def test_auto_sleep_inactive_users_job_set_sleeping_failure():
 
 
 @pytest.mark.asyncio
-async def test_auto_sleep_job_captures_errors_in_sentry():
-    """Test that auto-sleep job captures errors in Sentry."""
+async def test_auto_sleep_job_captures_errors_in_otel():
+    """Test that auto-sleep job captures errors in OpenTelemetry."""
     context = MagicMock()
     context.bot.send_message = AsyncMock()
 
@@ -133,12 +133,15 @@ async def test_auto_sleep_job_captures_errors_in_sentry():
     with (
         patch("src.bot.jobs.get_users_for_auto_sleep") as mock_get_users,
         patch("src.bot.jobs.set_user_sleeping") as mock_set_sleeping,
-        patch("src.bot.jobs.sentry_sdk.capture_exception") as mock_capture,
+        patch("src.bot.jobs.tracer") as mock_tracer,
     ):
         mock_get_users.return_value = [user]
         mock_set_sleeping.side_effect = db_error
 
+        mock_span = MagicMock()
+        mock_tracer.start_as_current_span.return_value.__enter__.return_value = mock_span
+
         await auto_sleep_inactive_users_job(context)
 
-        # Verify Sentry captured the exception
-        mock_capture.assert_called_once_with(db_error)
+        # Verify OpenTelemetry captured the exception
+        mock_span.record_exception.assert_called_once_with(db_error)

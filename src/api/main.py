@@ -1,12 +1,16 @@
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
-import sentry_sdk
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
-from sentry_sdk.integrations.fastapi import FastApiIntegration
-from sentry_sdk.integrations.redis import RedisIntegration
-from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
+from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from opentelemetry.instrumentation.redis import RedisInstrumentor
+from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
+from opentelemetry.sdk.resources import SERVICE_NAME, Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
 from src.bot.application import BotApplication
 from src.config import settings
@@ -15,23 +19,41 @@ from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
-# Initialize Sentry if enabled
-if settings.ENABLE_SENTRY and settings.SENTRY_DSN:
+# Initialize OpenTelemetry if enabled
+if settings.ENABLE_TELEMETRY and settings.OTEL_EXPORTER_OTLP_ENDPOINT:
     try:
-        logger.info("Initializing Sentry...")
-        sentry_sdk.init(
-            dsn=settings.SENTRY_DSN,
-            environment=settings.ENVIRONMENT,
-            traces_sample_rate=1.0,
-            profiles_sample_rate=1.0,
-            integrations=[
-                FastApiIntegration(transaction_style="url"),
-                SqlalchemyIntegration(),
-                RedisIntegration(),
-            ],
+        logger.info("Initializing OpenTelemetry...")
+        resource = Resource(
+            attributes={
+                SERVICE_NAME: settings.OTEL_SERVICE_NAME,
+                "environment": settings.ENVIRONMENT,
+            }
         )
+
+        headers = {}
+        if settings.OTEL_EXPORTER_OTLP_HEADERS:
+            try:
+                for header in settings.OTEL_EXPORTER_OTLP_HEADERS.split(","):
+                    if "=" in header:
+                        key, value = header.split("=", 1)
+                        headers[key.strip()] = value.strip()
+            except Exception as e:
+                logger.warning(f"Failed to parse OTEL headers: {e}")
+
+        trace_provider = TracerProvider(resource=resource)
+        processor = BatchSpanProcessor(
+            OTLPSpanExporter(endpoint=settings.OTEL_EXPORTER_OTLP_ENDPOINT, insecure=True, headers=headers)
+        )
+        trace_provider.add_span_processor(processor)
+        trace.set_tracer_provider(trace_provider)
+
+        # Instrument libraries
+        SQLAlchemyInstrumentor().instrument()
+        RedisInstrumentor().instrument()
+
+        logger.info("OpenTelemetry initialized")
     except Exception as e:
-        logger.error(f"Failed to initialize Sentry: {e}")
+        logger.error(f"Failed to initialize OpenTelemetry: {e}")
 
 # Global bot instance
 bot_app = BotApplication()
@@ -45,6 +67,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # Initialize database
     init_database()
+
+    # Instrument FastAPI
+    if settings.ENABLE_TELEMETRY:
+        FastAPIInstrumentor.instrument_app(app)
 
     # Start bot in background
     await bot_app.start()
@@ -62,6 +88,9 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+if settings.ENABLE_TELEMETRY:
+    FastAPIInstrumentor.instrument_app(app)
 
 
 @app.get("/health")
