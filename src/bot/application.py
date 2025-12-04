@@ -37,6 +37,7 @@ from src.bot.handlers import (
     reengagement_response,
     settings_callback,
     settings_command,
+    settings_text_router,
     start_command,
     start_profile_setup,
     view_profile_callback,
@@ -204,6 +205,15 @@ class BotApplication:
             MessageHandler(
                 filters.Regex(r"^Setup Profile$") & filters.ChatType.PRIVATE,
                 start_profile_setup,
+            )
+        )
+
+        # Settings text options handler
+        self.application.add_handler(
+            MessageHandler(
+                filters.Regex(r"^(🌍 Region|🗣 Language|💠 Premium|🔄 Reset.*|Region|Language|Premium|Reset.*)$")
+                & filters.ChatType.PRIVATE,
+                settings_text_router,
             )
         )
 

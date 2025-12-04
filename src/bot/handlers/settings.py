@@ -750,9 +750,8 @@ async def handle_reset_settings(update: Update, context: ContextTypes.DEFAULT_TY
         update: The update object
         context: The context object
     """
-    if not update.callback_query or not update.effective_user:
+    if not update.effective_user:
         return
-    query = update.callback_query
     user_id = str(update.effective_user.id)
 
     try:
@@ -766,7 +765,8 @@ async def handle_reset_settings(update: Update, context: ContextTypes.DEFAULT_TY
         update_user_preferences(user_id, prefs)
 
         # Show confirmation
-        await query.edit_message_text(
+        await _reply_or_edit(
+            update,
             "✅ Settings reset to defaults",
             reply_markup=InlineKeyboardMarkup(
                 [[InlineKeyboardButton("« Back to Settings", callback_data="back_to_settings")]]
@@ -775,9 +775,7 @@ async def handle_reset_settings(update: Update, context: ContextTypes.DEFAULT_TY
 
     except NotFoundError:
         logger.warning("User not found in handle_reset_settings", user_id=user_id)
-        await query.edit_message_text(
-            "⚠️ We couldn't find your profile. Please use /start to set up your profile again."
-        )
+        await _reply_or_edit(update, "⚠️ We couldn't find your profile. Please use /start to set up your profile again.")
 
     except Exception as e:
         logger.error(
@@ -786,12 +784,56 @@ async def handle_reset_settings(update: Update, context: ContextTypes.DEFAULT_TY
             error=str(e),
             exc_info=e,
         )
-        await query.edit_message_text(
+        await _reply_or_edit(
+            update,
             "Sorry, something went wrong. Please try again.",
             reply_markup=InlineKeyboardMarkup(
                 [[InlineKeyboardButton("🔄 Return to Settings", callback_data="back_to_settings")]]
             ),
         )
+
+
+@authenticated
+async def settings_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await user_command_limiter()(update, context)
+    if not update.message or not update.message.text or not update.effective_user:
+        return
+    text = update.message.text.strip()
+    if text in ["🌍 Region", "Region"]:
+        await update.message.reply_text(
+            "Select your region (country):",
+            reply_markup=InlineKeyboardMarkup(
+                [
+                    [InlineKeyboardButton("Indonesia", callback_data="region_Indonesia")],
+                    [InlineKeyboardButton("Singapore", callback_data="region_Singapore")],
+                    [InlineKeyboardButton("Malaysia", callback_data="region_Malaysia")],
+                    [InlineKeyboardButton("United States", callback_data="region_United States")],
+                    [InlineKeyboardButton("India", callback_data="region_India")],
+                    [InlineKeyboardButton("Type Country", callback_data="region_type")],
+                    [InlineKeyboardButton("« Back", callback_data="back_to_settings")],
+                ]
+            ),
+        )
+        return
+    if text in ["🗣 Language", "Language"]:
+        await update.message.reply_text(
+            "Select your language:",
+            reply_markup=InlineKeyboardMarkup(
+                [
+                    [InlineKeyboardButton("English (en)", callback_data="language_en")],
+                    [InlineKeyboardButton("Bahasa Indonesia (id)", callback_data="language_id")],
+                    [InlineKeyboardButton("Type Language Code", callback_data="language_type")],
+                    [InlineKeyboardButton("« Back", callback_data="back_to_settings")],
+                ]
+            ),
+        )
+        return
+    if text in ["💠 Premium", "Premium"]:
+        await premium_command(update, context)
+        return
+    if text.startswith("🔄 Reset") or text in ["Reset", "Reset to defaults"]:
+        await handle_reset_settings(update, context)
+        return
 
 
 PREMIUM_MESSAGE = """
