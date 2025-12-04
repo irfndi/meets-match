@@ -138,10 +138,12 @@ async def test_auto_sleep_job_captures_errors_in_otel():
         mock_get_users.return_value = [user]
         mock_set_sleeping.side_effect = db_error
 
-        mock_span = MagicMock()
-        mock_tracer.start_as_current_span.return_value.__enter__.return_value = mock_span
+        mock_parent_span = MagicMock()
+        mock_child_span = MagicMock()
+        # First call returns parent span, second call returns child span
+        mock_tracer.start_as_current_span.return_value.__enter__.side_effect = [mock_parent_span, mock_child_span]
 
         await auto_sleep_inactive_users_job(context)
 
-        # Verify OpenTelemetry captured the exception
-        mock_span.record_exception.assert_called_once_with(db_error)
+        # Verify OpenTelemetry captured the exception on child span
+        mock_child_span.record_exception.assert_called_once_with(db_error)
