@@ -51,12 +51,13 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
         # Update user data if needed
         if (username and username != user.username) or (first_name and first_name != user.first_name):
+            from datetime import datetime
             from typing import Any, Dict
 
             update_data: Dict[str, Any] = {
                 "username": username or user.username or "",
                 "first_name": first_name or user.first_name or "",
-                "last_active": "now()",
+                "last_active": datetime.now(),
             }
             update_user(user_id, update_data)
 

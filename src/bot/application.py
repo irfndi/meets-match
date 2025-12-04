@@ -377,7 +377,7 @@ class BotApplication:
                 )
             except Conflict as e:
                 logger.error("Polling conflict detected during startup", error=str(e))
-                # We don't raise here, we just let it be (conflict is handled by not re-raising)
+                raise  # Let caller handle the conflict
 
     async def stop(self) -> None:
         """Stop the bot application."""

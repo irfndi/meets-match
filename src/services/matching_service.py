@@ -784,54 +784,39 @@ def get_match_by_id(match_id: str) -> Match:
     return get_match(match_id)
 
 
-def like_match(match_id: str, user_id: Optional[str] = None) -> bool:
+def like_match(match_id: str, user_id: str) -> bool:
     """Like a match.
 
     Args:
         match_id: Match ID
-        user_id: User ID (optional, will be determined from match)
+        user_id: User ID performing the action
 
     Returns:
         True if mutual match, False otherwise
     """
-    match = get_match(match_id)
-
-    if user_id:
-        updated_match = update_match(match_id, user_id, MatchAction.LIKE)
-    else:
-        updated_match = update_match(match_id, match.user1_id, MatchAction.LIKE)
+    updated_match = update_match(match_id, user_id, MatchAction.LIKE)
 
     return updated_match.status == MatchStatus.MATCHED
 
 
-def dislike_match(match_id: str, user_id: Optional[str] = None) -> None:
+def dislike_match(match_id: str, user_id: str) -> None:
     """Dislike a match.
 
     Args:
         match_id: Match ID
-        user_id: User ID (optional, will be determined from match)
+        user_id: User ID performing the action
     """
-    match = get_match(match_id)
-
-    if user_id:
-        update_match(match_id, user_id, MatchAction.DISLIKE)
-    else:
-        update_match(match_id, match.user1_id, MatchAction.DISLIKE)
+    update_match(match_id, user_id, MatchAction.DISLIKE)
 
 
-def skip_match(match_id: str, user_id: Optional[str] = None) -> None:
+def skip_match(match_id: str, user_id: str) -> None:
     """Skip a match (save for later).
 
     Args:
         match_id: Match ID
-        user_id: User ID (optional, will be determined from match)
+        user_id: User ID performing the action
     """
-    match = get_match(match_id)
-
-    if user_id:
-        update_match(match_id, user_id, MatchAction.SKIP)
-    else:
-        update_match(match_id, match.user1_id, MatchAction.SKIP)
+    update_match(match_id, user_id, MatchAction.SKIP)
 
 
 def get_active_matches(
@@ -914,13 +899,14 @@ def get_pending_incoming_likes_count(user_id: str) -> int:
         ],
     }
 
+    # Use select and count results in Python since execute_query doesn't support count query_type
     result = execute_query(
         table="matches",
-        query_type="count",
+        query_type="select",
         filters=filters,
     )
 
     if not result.data:
         return 0
 
-    return int(result.data[0]["count"])
+    return len(result.data)

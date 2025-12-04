@@ -1,20 +1,25 @@
+import getpass
+import os
 import sys
 
 import psycopg2
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 
 
-def setup_local_db():
+def setup_local_db() -> None:
+    """Set up local PostgreSQL database for MeetsMatch."""
     print("Setting up local database...")
 
     # Connect to default 'postgres' database with current user
-    # Assuming 'irfandi' is the superuser based on previous check
+    # Use environment variable or current system user
+    db_user = os.environ.get("PGUSER", getpass.getuser())
     try:
-        conn = psycopg2.connect(dbname="postgres", user="irfandi", host="localhost")
+        conn = psycopg2.connect(dbname="postgres", user=db_user, host="localhost")
         conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
         cur = conn.cursor()
     except Exception as e:
-        print(f"Failed to connect to postgres: {e}")
+        print(f"Failed to connect to postgres as '{db_user}': {e}")
+        print("Hint: Set PGUSER environment variable to specify a different user.")
         sys.exit(1)
 
     # 1. Create User 'meetsmatch'

@@ -4,14 +4,14 @@ A Telegram-based matchmaking bot that helps users find and connect with compatib
 
 ## Overview
 
-MeetMatch is an AI-powered Telegram bot built with Python 3.12+ that facilitates user matching based on:
+MeetMatch is an AI-powered Telegram bot built with Python 3.13+ that facilitates user matching based on:
 - Location proximity
 - Shared interests
 - User preferences (age, gender, relationship type)
 
 ## Tech Stack
 
-- **Python 3.12+**
+- **Python 3.13+**
 - **uv** - Fast Python package installer and resolver
 - **python-telegram-bot v21+** - Telegram Bot API
 - **SQLAlchemy** - ORM for PostgreSQL
