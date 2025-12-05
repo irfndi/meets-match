@@ -1,7 +1,5 @@
 """Telegram bot application for the MeetMatch bot."""
 
-from typing import Optional, Set
-
 import sentry_sdk
 from telegram import BotCommand, Update
 from telegram.error import Conflict
@@ -55,8 +53,8 @@ class BotApplication:
 
     def __init__(self) -> None:
         """Initialize the bot application."""
-        self.application: Optional[Application] = None
-        self.admin_ids: Set[str] = set(settings.ADMIN_IDS.split(",") if settings.ADMIN_IDS else [])
+        self.application: Application | None = None
+        self.admin_ids: set[str] = set(settings.ADMIN_IDS.split(",") if settings.ADMIN_IDS else [])
 
         logger.info("Initializing bot application", admin_ids=self.admin_ids)
 
@@ -87,7 +85,11 @@ class BotApplication:
         logger.info("Bot application setup complete")
 
     async def _post_init(self, application: Application) -> None:
-        """Set bot slash commands after application initialization."""
+        """Set bot slash commands after application initialization.
+
+        Args:
+            application: The initialized Telegram Application instance.
+        """
         # Register scheduled jobs
         if application.job_queue:
             application.job_queue.run_repeating(
@@ -243,7 +245,7 @@ class BotApplication:
         error = context.error
 
         # Cast update to Update if possible for type checking, though it can be None
-        update_obj: Optional[Update] = update if isinstance(update, Update) else None
+        update_obj: Update | None = update if isinstance(update, Update) else None
 
         # Handle polling conflict explicitly to avoid repeated error spam
         if isinstance(error, Conflict):
@@ -365,7 +367,7 @@ class BotApplication:
             logger.info("Ensuring webhook is deleted before polling...")
             await self.application.bot.delete_webhook(drop_pending_updates=True)
         except Exception as e:
-            logger.warning(f"Failed to delete webhook: {e}")
+            logger.warning("Failed to delete webhook", error=str(e))
 
         await self.application.start()
         if self.application.updater:

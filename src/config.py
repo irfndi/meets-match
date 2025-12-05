@@ -1,6 +1,6 @@
 """Configuration management for the MeetMatch bot."""
 
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import Field, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -11,7 +11,7 @@ class Settings(BaseSettings):
 
     # Telegram Bot Configuration
     TELEGRAM_TOKEN: str
-    ADMIN_IDS: Optional[str] = None
+    ADMIN_IDS: str | None = None
 
     @property
     def TELEGRAM_BOT_TOKEN(self) -> str:
@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     REDIS_URL: str
 
     # Sentry Configuration
-    SENTRY_DSN: Optional[str] = None
+    SENTRY_DSN: str | None = None
 
     # Application Configuration
     APP_NAME: str = "MeetsMatch Bot"

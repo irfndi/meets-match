@@ -15,6 +15,25 @@ from src.utils.logging import get_logger
 logger = get_logger(__name__)
 
 
+def _get_effective_premium_tier(user_id: str, prefs: Preferences) -> str:
+    """Return the user's effective premium tier, including admin overrides.
+
+    Args:
+        user_id: The user's ID
+        prefs: The user's Preferences object
+
+    Returns:
+        The effective tier string: 'free', 'pro', or 'admin'
+    """
+    from src.config import settings as app_settings
+
+    tier = prefs.premium_tier or "free"
+    admin_ids = (app_settings.ADMIN_IDS or "").split(",") if app_settings.ADMIN_IDS else []
+    if user_id in [aid.strip() for aid in admin_ids if aid.strip()]:
+        tier = "admin"
+    return tier
+
+
 def _safe_get_preferences(user: Any) -> Preferences:
     """Safely extract preferences from user, handling None/corrupt data.
 
@@ -72,10 +91,10 @@ async def _reply_or_edit(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
     text: str,
-    reply_markup=None,
+    reply_markup: InlineKeyboardMarkup | None = None,
     parse_mode: str | None = None,
     error_fallback_text: str | None = None,
-):
+) -> None:
     """Helper function to reply or edit message based on update type.
 
     If the update is from a callback query, edits the original message.
@@ -83,6 +102,7 @@ async def _reply_or_edit(
 
     Args:
         update: The update object
+        context: The context object
         text: Text content to send
         reply_markup: Optional keyboard markup
         parse_mode: Optional parse mode for markdown/HTML formatting
@@ -424,17 +444,10 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             await handle_notifications(update, context, enabled)
 
         elif callback_data == "settings_premium":
-            # Reuse logic from premium_command
+            # Use shared helper for premium tier determination
             user = get_user(user_id)
-            tier = "free"
-            if user.preferences and getattr(user.preferences, "premium_tier", None):
-                tier = user.preferences.premium_tier or "free"
-
-            from src.config import settings as app_settings
-
-            admin_ids = (app_settings.ADMIN_IDS or "").split(",") if app_settings.ADMIN_IDS else []
-            if user_id in [aid.strip() for aid in admin_ids if aid.strip()]:
-                tier = "admin"
+            prefs = _safe_get_preferences(user)
+            tier = _get_effective_premium_tier(user_id, prefs)
 
             await _reply_or_edit(
                 update,
@@ -443,6 +456,7 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                 reply_markup=InlineKeyboardMarkup(
                     [[InlineKeyboardButton("« Back to Settings", callback_data="back_to_settings")]]
                 ),
+                parse_mode="Markdown",
             )
 
         elif callback_data == "settings_reset":
@@ -662,11 +676,10 @@ async def handle_age_range(update: Update, context: ContextTypes.DEFAULT_TYPE, a
     user_id = str(update.effective_user.id)
 
     try:
-        if update.callback_query:
-            try:
-                await update.callback_query.answer()
-            except BadRequest:
-                pass
+        try:
+            await update.callback_query.answer()
+        except BadRequest:
+            pass
         # Update user preferences
         user = get_user(user_id)
         prefs = _safe_get_preferences(user)
@@ -725,11 +738,10 @@ async def handle_max_distance(update: Update, context: ContextTypes.DEFAULT_TYPE
     user_id = str(update.effective_user.id)
 
     try:
-        if update.callback_query:
-            try:
-                await update.callback_query.answer()
-            except BadRequest:
-                pass
+        try:
+            await update.callback_query.answer()
+        except BadRequest:
+            pass
         # Update user preferences
         user = get_user(user_id)
         prefs = _safe_get_preferences(user)
@@ -787,11 +799,10 @@ async def handle_notifications(update: Update, context: ContextTypes.DEFAULT_TYP
     user_id = str(update.effective_user.id)
 
     try:
-        if update.callback_query:
-            try:
-                await update.callback_query.answer()
-            except BadRequest:
-                pass
+        try:
+            await update.callback_query.answer()
+        except BadRequest:
+            pass
         # Update user preferences
         user = get_user(user_id)
         prefs = _safe_get_preferences(user)
@@ -965,12 +976,7 @@ async def premium_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     try:
         user = get_user(user_id)
         prefs = _safe_get_preferences(user)
-        tier = prefs.premium_tier or "free"
-        from src.config import settings as app_settings
-
-        admin_ids = (app_settings.ADMIN_IDS or "").split(",") if app_settings.ADMIN_IDS else []
-        if user_id in [aid.strip() for aid in admin_ids if aid.strip()]:
-            tier = "admin"
+        tier = _get_effective_premium_tier(user_id, prefs)
         await update.message.reply_text(
             PREMIUM_MESSAGE.format(tier=tier),
             parse_mode="Markdown",
