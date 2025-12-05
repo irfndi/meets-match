@@ -36,7 +36,7 @@ if settings.ENABLE_TELEMETRY and settings.OTEL_EXPORTER_OTLP_ENDPOINT:
                 for header in settings.OTEL_EXPORTER_OTLP_HEADERS.split(","):
                     if "=" in header:
                         key, value = header.split("=", 1)
-                        headers[key.strip()] = value.strip()
+                        headers[key.strip().lower()] = value.strip()
             except Exception as e:
                 logger.warning(f"Failed to parse OTEL headers: {e}")
 
