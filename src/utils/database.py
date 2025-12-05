@@ -186,16 +186,15 @@ def execute_query(
     if not model:
         raise ValueError(f"Unknown table: {table}")
 
-    # Trace database operation
-    span = None
-    if settings.SENTRY_DSN:
-        span = sentry_sdk.start_span(op="db.query", name=f"{query_type.upper()} {table}")
-        span.set_data("table", table)
-        span.set_data("query_type", query_type)
-        if filters:
-            span.set_data("filters", str(filters))
-
     try:
+        # Trace database operation
+        span = None
+        if settings.SENTRY_DSN:
+            span = sentry_sdk.start_span(op="db.query", name=f"{query_type.upper()} {table}")
+            span.set_data("table", table)
+            span.set_data("query_type", query_type)
+            if filters:
+                span.set_data("filters", str(filters))
         # Transform user data if needed
         if table == "users" and data:
             data = _transform_user_data(data)
@@ -260,7 +259,6 @@ def execute_query(
 
             if span:
                 span.set_data("row_count", len(results))
-                span.finish()
 
             return type("Result", (), {"data": [_model_to_dict(r) for r in results]})()
 
@@ -270,9 +268,6 @@ def execute_query(
             session.commit()
             result = _model_to_dict(instance)
             session.close()
-
-            if span:
-                span.finish()
 
             return type("Result", (), {"data": [result]})()
 
@@ -292,7 +287,6 @@ def execute_query(
 
                 if span:
                     span.set_status("not_found")
-                    span.finish()
 
                 return type("Result", (), {"data": []})()
 
@@ -313,7 +307,6 @@ def execute_query(
 
             if span:
                 span.set_data("updated_count", updated_count)
-                span.finish()
 
             return type("Result", (), {"data": [_model_to_dict(r) for r in results]})()
 
@@ -325,9 +318,6 @@ def execute_query(
             session.commit()
             session.close()
 
-            if span:
-                span.finish()
-
             return type("Result", (), {"data": []})()
 
         else:
@@ -336,7 +326,6 @@ def execute_query(
     except Exception as e:
         if span:
             span.set_status("internal_error")
-            span.finish()
 
         session.rollback()
         session.close()

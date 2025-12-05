@@ -46,8 +46,7 @@ def calculate_match_score(user1: User, user2: User) -> MatchScore:
                 user2_coords = (user2.location.latitude, user2.location.longitude)
                 distance = geodesic(user1_coords, user2_coords).kilometers
 
-            # Get max distance from preferences (default to 20km)
-            max_distance = 20
+            # Get max distance from preferences
             if user1.preferences.max_distance:
                 max_distance = user1.preferences.max_distance
 
