@@ -2,7 +2,8 @@
 
 from typing import Optional, Set
 
-import sentry_sdk
+from opentelemetry import trace
+from opentelemetry.trace import Status, StatusCode
 from telegram import BotCommand, Update
 from telegram.error import Conflict
 from telegram.ext import (
@@ -48,6 +49,7 @@ from src.utils.errors import MeetMatchError
 from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
+tracer = trace.get_tracer(__name__)
 
 
 class BotApplication:
@@ -255,18 +257,16 @@ class BotApplication:
             # Exit gracefully and let the outer exception handler deal with it
             return
 
-        # Set Sentry user context for better debugging
-        if update_obj and update_obj.effective_user:
-            sentry_sdk.set_user(
-                {
-                    "id": str(update_obj.effective_user.id),
-                    "username": update_obj.effective_user.username,
-                }
-            )
+        # Set OpenTelemetry attributes and record exception
+        with tracer.start_as_current_span("error_handler") as span:
+            if update_obj and update_obj.effective_user:
+                span.set_attribute("user.id", str(update_obj.effective_user.id))
+                if update_obj.effective_user.username:
+                    span.set_attribute("user.username", update_obj.effective_user.username)
 
-        # Capture error in Sentry (including database and other custom errors)
-        if error is not None:
-            sentry_sdk.capture_exception(error)
+            if error is not None:
+                span.record_exception(error)
+                span.set_status(Status(StatusCode.ERROR))
 
         # Get chat ID for error response
         chat_id = None

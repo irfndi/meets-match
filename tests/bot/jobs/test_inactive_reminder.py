@@ -147,8 +147,8 @@ async def test_inactive_user_reminder_skip_recently_reminded():
 
 
 @pytest.mark.asyncio
-async def test_inactive_user_reminder_job_captures_user_exception_in_sentry():
-    """Test that inactive_user_reminder_job captures user-level exceptions in Sentry."""
+async def test_inactive_user_reminder_job_captures_user_exception_in_otel():
+    """Test that inactive_user_reminder_job captures user-level exceptions in OpenTelemetry."""
     context = MagicMock()
     context.bot.send_message = AsyncMock(side_effect=Exception("Failed to send message"))
 
@@ -162,37 +162,43 @@ async def test_inactive_user_reminder_job_captures_user_exception_in_sentry():
         patch("src.bot.jobs.get_inactive_users") as mock_get_users,
         patch("src.bot.jobs.update_user"),
         patch("src.bot.jobs.get_pending_incoming_likes_count") as mock_get_pending,
-        patch("src.bot.jobs.sentry_sdk.capture_exception") as mock_capture,
+        patch("src.bot.jobs.tracer") as mock_tracer,
         patch("src.bot.jobs.INACTIVITY_DAYS", [1]),
     ):
         mock_get_users.return_value = [user]
         mock_get_pending.return_value = 5
 
+        mock_span = MagicMock()
+        mock_tracer.start_as_current_span.return_value.__enter__.return_value = mock_span
+
         await inactive_user_reminder_job(context)
 
-        # Verify Sentry captured the exception
-        mock_capture.assert_called_once()
+        # Verify OpenTelemetry captured the exception
+        mock_span.record_exception.assert_called_once()
         # Verify the captured exception is the correct type
-        captured_exception = mock_capture.call_args[0][0]
+        captured_exception = mock_span.record_exception.call_args[0][0]
         assert isinstance(captured_exception, Exception)
         assert "Failed to send message" in str(captured_exception)
 
 
 @pytest.mark.asyncio
-async def test_inactive_user_reminder_job_captures_day_exception_in_sentry():
-    """Test that inactive_user_reminder_job captures day-level exceptions in Sentry."""
+async def test_inactive_user_reminder_job_captures_day_exception_in_otel():
+    """Test that inactive_user_reminder_job captures day-level exceptions in OpenTelemetry."""
     context = MagicMock()
 
     db_error = Exception("Database connection failed")
 
     with (
         patch("src.bot.jobs.get_inactive_users") as mock_get_users,
-        patch("src.bot.jobs.sentry_sdk.capture_exception") as mock_capture,
+        patch("src.bot.jobs.tracer") as mock_tracer,
         patch("src.bot.jobs.INACTIVITY_DAYS", [1]),
     ):
         mock_get_users.side_effect = db_error
 
+        mock_span = MagicMock()
+        mock_tracer.start_as_current_span.return_value.__enter__.return_value = mock_span
+
         await inactive_user_reminder_job(context)
 
-        # Verify Sentry captured the exception
-        mock_capture.assert_called_once_with(db_error)
+        # Verify OpenTelemetry captured the exception
+        mock_span.record_exception.assert_called_once_with(db_error)

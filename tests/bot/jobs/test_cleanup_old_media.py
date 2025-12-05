@@ -5,6 +5,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+from opentelemetry.trace import StatusCode
 
 from src.bot.jobs import cleanup_old_media_job
 
@@ -123,8 +124,8 @@ async def test_cleanup_old_media_job_handles_file_delete_error():
 
 
 @pytest.mark.asyncio
-async def test_cleanup_old_media_job_captures_file_error_in_sentry():
-    """Test that cleanup_old_media_job captures file deletion errors in Sentry."""
+async def test_cleanup_old_media_job_captures_file_error_in_otel():
+    """Test that cleanup_old_media_job captures file deletion errors in OpenTelemetry."""
     context = MagicMock()
 
     mock_storage_path = MagicMock(spec=Path)
@@ -146,30 +147,42 @@ async def test_cleanup_old_media_job_captures_file_error_in_sentry():
 
     with (
         patch("src.utils.media.get_storage_path") as mock_get_path,
-        patch("src.bot.jobs.sentry_sdk.capture_exception") as mock_capture,
+        patch("src.bot.jobs.tracer") as mock_tracer,
     ):
         mock_get_path.return_value = mock_storage_path
 
+        mock_parent_span = MagicMock()
+        mock_child_span = MagicMock()
+        # First call returns parent span, second call returns child span for file deletion
+        mock_tracer.start_as_current_span.return_value.__enter__.side_effect = [mock_parent_span, mock_child_span]
+
         await cleanup_old_media_job(context)
 
-        # Verify Sentry captured the exception
-        mock_capture.assert_called_once_with(file_error)
+        # Verify OpenTelemetry recorded the exception on child span
+        mock_child_span.record_exception.assert_called_once_with(file_error)
+        # Verify set_status was called with ERROR status
+        mock_child_span.set_status.assert_called_once()
+        status_arg = mock_child_span.set_status.call_args[0][0]
+        assert status_arg.status_code == StatusCode.ERROR
 
 
 @pytest.mark.asyncio
-async def test_cleanup_old_media_job_captures_general_error_in_sentry():
-    """Test that cleanup_old_media_job captures general errors in Sentry."""
+async def test_cleanup_old_media_job_captures_general_error_in_otel():
+    """Test that cleanup_old_media_job captures general errors in OpenTelemetry."""
     context = MagicMock()
 
     general_error = Exception("Storage path error")
 
     with (
         patch("src.utils.media.get_storage_path") as mock_get_path,
-        patch("src.bot.jobs.sentry_sdk.capture_exception") as mock_capture,
+        patch("src.bot.jobs.tracer") as mock_tracer,
     ):
         mock_get_path.side_effect = general_error
 
+        mock_span = MagicMock()
+        mock_tracer.start_as_current_span.return_value.__enter__.return_value = mock_span
+
         await cleanup_old_media_job(context)
 
-        # Verify Sentry captured the exception
-        mock_capture.assert_called_once_with(general_error)
+        # Verify OpenTelemetry recorded the exception
+        mock_span.record_exception.assert_called_once_with(general_error)

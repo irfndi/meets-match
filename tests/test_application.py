@@ -82,8 +82,8 @@ async def test_register_handlers(mock_application):
 
 
 @pytest.mark.asyncio
-async def test_error_handler_captures_database_error_in_sentry(mock_application, mock_update, mock_context):
-    """Test that database errors are captured by Sentry."""
+async def test_error_handler_captures_database_error_in_otel(mock_application, mock_update, mock_context):
+    """Test that database errors are captured by OpenTelemetry."""
     app = BotApplication()
     app.application = mock_application
 
@@ -91,17 +91,21 @@ async def test_error_handler_captures_database_error_in_sentry(mock_application,
     db_error = DatabaseError("Database connection failed", details={"table": "users"})
     mock_context.error = db_error
 
-    # Mock sentry_sdk.capture_exception
-    with patch("src.bot.application.sentry_sdk.capture_exception") as mock_capture:
+    # Mock tracer
+    mock_span = MagicMock()
+    with patch("src.bot.application.tracer") as mock_tracer:
+        mock_tracer.start_as_current_span.return_value.__enter__.return_value = mock_span
+
         await app._error_handler(mock_update, mock_context)
 
-        # Verify Sentry captured the exception
-        mock_capture.assert_called_once_with(db_error)
+        # Verify OpenTelemetry captured the exception
+        mock_span.record_exception.assert_called_once_with(db_error)
+        mock_span.set_status.assert_called_once()
 
 
 @pytest.mark.asyncio
-async def test_error_handler_captures_meetmatch_error_in_sentry(mock_application, mock_update, mock_context):
-    """Test that MeetMatch errors are captured by Sentry."""
+async def test_error_handler_captures_meetmatch_error_in_otel(mock_application, mock_update, mock_context):
+    """Test that MeetMatch errors are captured by OpenTelemetry."""
     app = BotApplication()
     app.application = mock_application
 
@@ -109,17 +113,20 @@ async def test_error_handler_captures_meetmatch_error_in_sentry(mock_application
     custom_error = MeetMatchError("Custom error occurred")
     mock_context.error = custom_error
 
-    # Mock sentry_sdk.capture_exception
-    with patch("src.bot.application.sentry_sdk.capture_exception") as mock_capture:
+    # Mock tracer
+    mock_span = MagicMock()
+    with patch("src.bot.application.tracer") as mock_tracer:
+        mock_tracer.start_as_current_span.return_value.__enter__.return_value = mock_span
+
         await app._error_handler(mock_update, mock_context)
 
-        # Verify Sentry captured the exception
-        mock_capture.assert_called_once_with(custom_error)
+        # Verify OpenTelemetry captured the exception
+        mock_span.record_exception.assert_called_once_with(custom_error)
 
 
 @pytest.mark.asyncio
-async def test_error_handler_captures_unexpected_error_in_sentry(mock_application, mock_update, mock_context):
-    """Test that unexpected errors are captured by Sentry."""
+async def test_error_handler_captures_unexpected_error_in_otel(mock_application, mock_update, mock_context):
+    """Test that unexpected errors are captured by OpenTelemetry."""
     app = BotApplication()
     app.application = mock_application
 
@@ -127,17 +134,20 @@ async def test_error_handler_captures_unexpected_error_in_sentry(mock_applicatio
     unexpected_error = ValueError("Unexpected value error")
     mock_context.error = unexpected_error
 
-    # Mock sentry_sdk.capture_exception
-    with patch("src.bot.application.sentry_sdk.capture_exception") as mock_capture:
+    # Mock tracer
+    mock_span = MagicMock()
+    with patch("src.bot.application.tracer") as mock_tracer:
+        mock_tracer.start_as_current_span.return_value.__enter__.return_value = mock_span
+
         await app._error_handler(mock_update, mock_context)
 
-        # Verify Sentry captured the exception
-        mock_capture.assert_called_once_with(unexpected_error)
+        # Verify OpenTelemetry captured the exception
+        mock_span.record_exception.assert_called_once_with(unexpected_error)
 
 
 @pytest.mark.asyncio
-async def test_error_handler_does_not_capture_conflict_error_in_sentry(mock_application, mock_update, mock_context):
-    """Test that polling conflict errors are not captured by Sentry."""
+async def test_error_handler_does_not_capture_conflict_error_in_otel(mock_application, mock_update, mock_context):
+    """Test that polling conflict errors are not captured by OpenTelemetry."""
     from telegram.error import Conflict
 
     app = BotApplication()
@@ -147,17 +157,20 @@ async def test_error_handler_does_not_capture_conflict_error_in_sentry(mock_appl
     conflict_error = Conflict("Conflict: another bot instance is running")
     mock_context.error = conflict_error
 
-    # Mock sentry_sdk.capture_exception
-    with patch("src.bot.application.sentry_sdk.capture_exception") as mock_capture:
+    # Mock tracer
+    mock_span = MagicMock()
+    with patch("src.bot.application.tracer") as mock_tracer:
+        mock_tracer.start_as_current_span.return_value.__enter__.return_value = mock_span
+
         await app._error_handler(mock_update, mock_context)
 
-        # Verify Sentry did NOT capture the conflict exception
-        mock_capture.assert_not_called()
+        # Verify OpenTelemetry did NOT capture the conflict exception (because it returns early)
+        mock_tracer.start_as_current_span.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_error_handler_sets_sentry_user_context(mock_application, mock_context):
-    """Test that Sentry user context is set when user info is available."""
+async def test_error_handler_sets_otel_user_attributes(mock_application, mock_context):
+    """Test that OpenTelemetry user attributes are set when user info is available."""
     from unittest.mock import MagicMock
 
     from telegram import Update, User
@@ -176,17 +189,13 @@ async def test_error_handler_sets_sentry_user_context(mock_application, mock_con
     # Create an error
     mock_context.error = ValueError("Some error")
 
-    # Mock sentry_sdk functions
-    with (
-        patch("src.bot.application.sentry_sdk.capture_exception"),
-        patch("src.bot.application.sentry_sdk.set_user") as mock_set_user,
-    ):
+    # Mock tracer
+    mock_span = MagicMock()
+    with patch("src.bot.application.tracer") as mock_tracer:
+        mock_tracer.start_as_current_span.return_value.__enter__.return_value = mock_span
+
         await app._error_handler(mock_update, mock_context)
 
-        # Verify Sentry user context was set
-        mock_set_user.assert_called_once_with(
-            {
-                "id": "123456",
-                "username": "test_user",
-            }
-        )
+        # Verify OpenTelemetry attributes were set
+        mock_span.set_attribute.assert_any_call("user.id", "123456")
+        mock_span.set_attribute.assert_any_call("user.username", "test_user")
