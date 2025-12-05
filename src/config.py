@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     # OpenTelemetry Configuration
     OTEL_EXPORTER_OTLP_ENDPOINT: Optional[str] = None
     OTEL_EXPORTER_OTLP_HEADERS: Optional[str] = None
+    OTEL_EXPORTER_OTLP_CERTIFICATE: Optional[str] = None
     OTEL_EXPORTER_OTLP_INSECURE: bool = Field(default=False)
     OTEL_SERVICE_NAME: str = "meetsmatch_bot"
     ENABLE_TELEMETRY: bool = Field(default=False)

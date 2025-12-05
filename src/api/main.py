@@ -3,6 +3,7 @@ from typing import AsyncGenerator
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
+import grpc
 from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
@@ -41,10 +42,23 @@ if settings.ENABLE_TELEMETRY and settings.OTEL_EXPORTER_OTLP_ENDPOINT:
                 logger.warning(f"Failed to parse OTEL headers: {e}")
 
         trace_provider = TracerProvider(resource=resource)
+        
+        # Configure credentials if needed
+        credentials = None
+        if not settings.OTEL_EXPORTER_OTLP_INSECURE and settings.OTEL_EXPORTER_OTLP_CERTIFICATE:
+            try:
+                with open(settings.OTEL_EXPORTER_OTLP_CERTIFICATE, "rb") as f:
+                    trusted_certs = f.read()
+                credentials = grpc.ssl_channel_credentials(root_certificates=trusted_certs)
+                logger.info(f"Loaded custom OTEL certificate from {settings.OTEL_EXPORTER_OTLP_CERTIFICATE}")
+            except Exception as e:
+                logger.error(f"Failed to load OTEL certificate: {e}")
+
         processor = BatchSpanProcessor(
             OTLPSpanExporter(
                 endpoint=settings.OTEL_EXPORTER_OTLP_ENDPOINT,
                 insecure=settings.OTEL_EXPORTER_OTLP_INSECURE,
+                credentials=credentials,
                 headers=headers,
             )
         )
