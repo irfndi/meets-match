@@ -130,7 +130,9 @@ async def test_settings_command(settings_handler_module, mock_dependencies, mock
 
 
 @pytest.mark.asyncio
-async def test_settings_command_callback_skips_rate_limit(settings_handler_module, mock_dependencies, mock_update_context):
+async def test_settings_command_callback_skips_rate_limit(
+    settings_handler_module, mock_dependencies, mock_update_context
+):
     """Settings invoked via callback should not trigger the command rate limiter."""
     update, context = mock_update_context
     mock_deps = mock_dependencies

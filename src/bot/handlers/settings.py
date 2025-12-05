@@ -74,6 +74,7 @@ async def _reply_or_edit(
     text: str,
     reply_markup=None,
     parse_mode: str | None = None,
+    error_fallback_text: str | None = None,
 ):
     """Helper function to reply or edit message based on update type.
 
@@ -85,6 +86,7 @@ async def _reply_or_edit(
         text: Text content to send
         reply_markup: Optional keyboard markup
         parse_mode: Optional parse mode for markdown/HTML formatting
+        error_fallback_text: Optional text to send if editing fails with an error
     """
     if update.callback_query:
         logger.debug("_reply_or_edit: callback detected, attempting edit")
@@ -94,19 +96,21 @@ async def _reply_or_edit(
             return
         except BadRequest as e:
             if "Message is not modified" in str(e):
-                pass
+                logger.debug("_reply_or_edit: message not modified, skipping send")
+                return
             else:
                 logger.warning("_reply_or_edit: edit_message_text BadRequest, falling back", error=str(e))
         except Exception:
             logger.warning("_reply_or_edit: edit_message_text failed, falling back")
 
         # Fallback: send a new message using the effective chat
+        fallback_text = error_fallback_text or text
         try:
             chat_id = update.effective_chat.id if update.effective_chat else None
-            if chat_id:
+            if chat_id and context.bot:
                 await context.bot.send_message(
                     chat_id=chat_id,
-                    text=text,
+                    text=fallback_text,
                     reply_markup=reply_markup,
                     parse_mode=parse_mode,
                 )
@@ -114,6 +118,19 @@ async def _reply_or_edit(
                 return
         except Exception:
             logger.warning("_reply_or_edit: failed to send via context.bot")
+        # Final fallback: use the original callback message if available (avoid extra kwargs for error text)
+        try:
+            if update.callback_query.message:
+                if error_fallback_text:
+                    await update.callback_query.message.reply_text(fallback_text)
+                else:
+                    await update.callback_query.message.reply_text(
+                        fallback_text, reply_markup=reply_markup, parse_mode=parse_mode
+                    )
+                logger.debug("_reply_or_edit: sent message via callback_query.message")
+                return
+        except Exception:
+            logger.warning("_reply_or_edit: failed to send via callback_query.message")
 
     if update.message:
         await update.message.reply_text(text, reply_markup=reply_markup, parse_mode=parse_mode)
@@ -196,6 +213,7 @@ async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 settings_text,
                 reply_markup=settings_keyboard,
                 parse_mode="Markdown",
+                error_fallback_text="Sorry, something went wrong. Please try /start or /settings again.",
             )
 
     except NotFoundError:
