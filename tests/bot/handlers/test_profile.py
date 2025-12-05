@@ -94,6 +94,7 @@ def mock_update_context():
     update.message = AsyncMock(spec=Message)
     update.message.text = "/profile"
     update.message.reply_text = AsyncMock()
+    update.effective_message = update.message
 
     context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
     context.user_data = {}
@@ -191,6 +192,52 @@ async def test_age_command_prompt(profile_handler_module, mock_dependencies, moc
 
     # Verify state set
     assert context.user_data.get("awaiting_age") is True
+
+
+@pytest.mark.asyncio
+async def test_save_age_sets_default_range(profile_handler_module, mock_dependencies, mock_update_context):
+    """Age save should set default min/max when none are configured."""
+    update, context = mock_update_context
+    update.message.text = "30"
+
+    prefs = profile_handler_module.Preferences()
+    existing_user = MagicMock()
+    existing_user.preferences = prefs
+    updated_user = MagicMock()
+    updated_user.preferences = prefs
+
+    mock_dependencies["get_user"].side_effect = [existing_user, updated_user, updated_user, updated_user]
+
+    with patch.object(profile_handler_module, "update_user_preferences") as mock_update_prefs:
+        success = await profile_handler_module._save_age(update, context, "30")
+
+    assert success is True
+    mock_dependencies["update_user"].assert_called()
+    mock_update_prefs.assert_called_once()
+    called_prefs = mock_update_prefs.call_args[0][1]
+    assert called_prefs.min_age == 26
+    assert called_prefs.max_age == 34
+
+
+@pytest.mark.asyncio
+async def test_save_age_respects_existing_range(profile_handler_module, mock_dependencies, mock_update_context):
+    """Age save should not override manual age range preferences."""
+    update, context = mock_update_context
+    update.message.text = "30"
+
+    prefs = profile_handler_module.Preferences(min_age=20, max_age=25)
+    existing_user = MagicMock()
+    existing_user.preferences = prefs
+    updated_user = MagicMock()
+    updated_user.preferences = prefs
+
+    mock_dependencies["get_user"].side_effect = [existing_user, updated_user, updated_user, updated_user]
+
+    with patch.object(profile_handler_module, "update_user_preferences") as mock_update_prefs:
+        success = await profile_handler_module._save_age(update, context, "30")
+
+    assert success is True
+    mock_update_prefs.assert_not_called()
 
 
 @pytest.mark.asyncio

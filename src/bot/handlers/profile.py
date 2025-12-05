@@ -26,7 +26,7 @@ from src.bot.ui.keyboards import (
     cancel_keyboard,
     gender_keyboard,
     gender_optional_keyboard,
-    gender_preference_keyboard,
+    gender_preference_required_keyboard,
     location_keyboard,
     location_optional_keyboard,
     main_menu,
@@ -123,9 +123,9 @@ INTERESTS_UPDATED_MESSAGE = "✅ Interests updated"
 LOCATION_UPDATED_MESSAGE = "✅ Location updated to: {location}"
 
 # Required fields for profile completion (users cannot match without these)
-REQUIRED_FIELDS = ["name", "age"]
+REQUIRED_FIELDS = ["name", "age", "gender", "gender_preference", "photos"]
 # Recommended fields for better matching
-RECOMMENDED_FIELDS = ["gender", "bio", "interests", "location", "gender_preference"]
+RECOMMENDED_FIELDS = ["bio", "interests", "location"]
 
 
 def get_missing_required_fields(user: User) -> list[str]:
@@ -135,6 +135,12 @@ def get_missing_required_fields(user: User) -> list[str]:
         missing.append("name")
     if not user.age:
         missing.append("age")
+    if not user.gender:
+        missing.append("gender")
+    prefs = getattr(user, "preferences", None)
+    gp = getattr(prefs, "gender_preference", None) if prefs is not None else None
+    if not gp:
+        missing.append("gender_preference")
     if not user.photos or len(user.photos) < 1:
         missing.append("photos")
     return missing
@@ -143,8 +149,6 @@ def get_missing_required_fields(user: User) -> list[str]:
 def get_missing_recommended_fields(user: User) -> list[str]:
     """Get list of missing recommended fields for a user."""
     missing = []
-    if not user.gender:
-        missing.append("gender")
     if not user.bio:
         missing.append("bio")
     if not getattr(user, "interests", None) or len(user.interests) == 0:
@@ -323,20 +327,7 @@ async def prompt_for_next_missing_field(
             context.user_data[STATE_ADHOC_CONTINUE] = True
             logger.info("Prompting for recommended field", field=next_field)
 
-            if next_field == "gender":
-                context.user_data["awaiting_gender"] = True
-                await _send_message_safe(update, context, GENDER_UPDATE_MESSAGE, reply_markup=gender_keyboard())
-                return True
-            elif next_field == "gender_preference":
-                context.user_data[STATE_AWAITING_GENDER_PREF] = True
-                await _send_message_safe(
-                    update,
-                    context,
-                    GENDER_PREF_UPDATE_MESSAGE,
-                    reply_markup=gender_preference_keyboard(),
-                )
-                return True
-            elif next_field == "bio":
+            if next_field == "bio":
                 context.user_data[STATE_AWAITING_BIO] = True
                 await _send_message_safe(
                     update, context, BIO_UPDATE_MESSAGE, reply_markup=skip_keyboard("Write a short bio")
@@ -385,6 +376,17 @@ async def prompt_for_next_missing_field(
         await _send_message_safe(
             update, context, AGE_UPDATE_MESSAGE, reply_markup=ReplyKeyboardMarkup([["Cancel"]], resize_keyboard=True)
         )
+    elif next_field == "gender_preference":
+        context.user_data[STATE_AWAITING_GENDER_PREF] = True
+        await _send_message_safe(
+            update,
+            context,
+            "Who would you like to match with?",
+            reply_markup=gender_preference_required_keyboard(),
+        )
+    elif next_field == "gender":
+        context.user_data["awaiting_gender"] = True
+        await _send_message_safe(update, context, GENDER_UPDATE_MESSAGE, reply_markup=gender_keyboard())
     elif next_field == "photos":
         context.user_data[STATE_AWAITING_PHOTO] = True
         context.user_data[STATE_PENDING_MEDIA] = []
@@ -532,6 +534,46 @@ async def age_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     )
 
 
+def _coerce_preferences(prefs: Any) -> Preferences:
+    """Return a Preferences object from various persisted shapes."""
+    if isinstance(prefs, Preferences):
+        return prefs
+    if isinstance(prefs, dict):
+        try:
+            return Preferences.model_validate(prefs)
+        except Exception:
+            return Preferences()
+    return Preferences()
+
+
+def _maybe_set_age_range_defaults(user_id: str, age: int, prefs: Any) -> None:
+    """Auto-set min/max age to age±4 when not already set."""
+    try:
+        pref_obj = _coerce_preferences(prefs)
+        needs_min = pref_obj.min_age is None
+        needs_max = pref_obj.max_age is None
+        if not (needs_min or needs_max):
+            return
+
+        default_min = max(10, age - 4)
+        default_max = min(65, age + 4)
+
+        if needs_min:
+            pref_obj.min_age = default_min if pref_obj.max_age is None else min(default_min, pref_obj.max_age)
+        if needs_max:
+            pref_obj.max_age = default_max if pref_obj.min_age is None else max(default_max, pref_obj.min_age)
+
+        update_user_preferences(user_id, pref_obj)
+        logger.debug(
+            "Auto-set age range from age",
+            user_id=user_id,
+            min_age=pref_obj.min_age,
+            max_age=pref_obj.max_age,
+        )
+    except Exception as e:
+        logger.warning("Failed to auto-set age range", user_id=user_id, error=str(e))
+
+
 async def _save_age(update: Update, context: ContextTypes.DEFAULT_TYPE, age_str: str) -> bool:
     """Save the user's age. Returns True if successful."""
     if not update.effective_user or not update.message or context.user_data is None:
@@ -546,7 +588,12 @@ async def _save_age(update: Update, context: ContextTypes.DEFAULT_TYPE, age_str:
             await update.message.reply_text("Age must be between 10 and 65. Please try again:")
             return False
 
+        # Fetch existing prefs before update so we can set defaults without overwriting manual settings
+        existing_user = get_user(user_id)
+
         update_user(user_id, {"age": age})
+        _maybe_set_age_range_defaults(user_id, age, getattr(existing_user, "preferences", None))
+
         user = get_user(user_id)
         context.user_data["user"] = user
         await update.message.reply_text(AGE_UPDATED_MESSAGE.format(age=age))
@@ -636,9 +683,6 @@ async def gender_selection(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     gender_str = update.message.text.strip()
     await process_gender_selection(update, context, gender_str)
 
-    # Clear conversation state
-    context.user_data.pop("awaiting_gender", None)
-
 
 async def process_gender_selection(update: Update, context: ContextTypes.DEFAULT_TYPE, gender_str: str) -> None:
     """Process gender selection.
@@ -667,11 +711,7 @@ async def process_gender_selection(update: Update, context: ContextTypes.DEFAULT
         return
 
     if gender_str.lower() == "skip":
-        context.user_data.pop("awaiting_gender", None)
-        if in_profile_setup:
-            await _next_profile_step(update, context)
-        else:
-            await prompt_for_next_missing_field(update, context, user_id)
+        await update.message.reply_text("Gender is required and cannot be skipped. Please choose an option.")
         return
 
     try:
@@ -1087,7 +1127,7 @@ def clear_conversation_state(context: ContextTypes.DEFAULT_TYPE, user_id: str | 
         set_user_editing_state(user_id, False)
 
 
-PROFILE_STEPS = ["name", "age", "gender", "bio", "interests", "location", "photos"]
+PROFILE_STEPS = ["name", "age", "gender", "gender_preference", "bio", "interests", "location", "photos"]
 
 
 async def _next_profile_step(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1176,6 +1216,12 @@ async def _next_profile_step(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.message.reply_text(
             prompt,
             reply_markup=gender_optional_keyboard(),
+        )
+    elif step_name == "gender_preference":
+        context.user_data[STATE_AWAITING_GENDER_PREF] = True
+        await update.message.reply_text(
+            "Who would you like to match with?",
+            reply_markup=gender_preference_required_keyboard(),
         )
     elif step_name == "bio":
         context.user_data[STATE_AWAITING_BIO] = True
@@ -1550,8 +1596,25 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
                 skipped = {f: time.time() for f in skipped}
 
             if step_name == "gender":
-                context.user_data.pop("awaiting_gender", None)
-                skipped["gender"] = time.time()
+                if getattr(user, "gender", None):
+                    context.user_data.pop("awaiting_gender", None)
+                    await _next_profile_step(update, context)
+                    return
+                await update.message.reply_text(
+                    "This field is required and cannot be skipped. Please select an option:"
+                )
+                return
+            elif step_name == "gender_preference":
+                prefs = getattr(user, "preferences", None)
+                gp = getattr(prefs, "gender_preference", None) if prefs else None
+                if gp:
+                    context.user_data.pop(STATE_AWAITING_GENDER_PREF, None)
+                    await _next_profile_step(update, context)
+                    return
+                await update.message.reply_text(
+                    "This field is required and cannot be skipped. Please choose an option:"
+                )
+                return
             elif step_name == "bio":
                 context.user_data.pop(STATE_AWAITING_BIO, None)
                 skipped["bio"] = time.time()
@@ -1578,8 +1641,13 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
 
             field_skipped = False
             if context.user_data.get("awaiting_gender"):
-                skipped["gender"] = time.time()
-                field_skipped = True
+                await update.message.reply_text("Gender is required and cannot be skipped. Please choose an option.")
+                return
+            elif context.user_data.get(STATE_AWAITING_GENDER_PREF):
+                await update.message.reply_text(
+                    "Gender preference is required and cannot be skipped. Please choose an option."
+                )
+                return
             elif context.user_data.get(STATE_AWAITING_BIO):
                 skipped["bio"] = time.time()
                 field_skipped = True
@@ -1588,9 +1656,6 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
                 field_skipped = True
             elif context.user_data.get("awaiting_location"):
                 skipped["location"] = time.time()
-                field_skipped = True
-            elif context.user_data.get(STATE_AWAITING_GENDER_PREF):
-                skipped["gender_preference"] = time.time()
                 field_skipped = True
 
             if not field_skipped:
@@ -1649,16 +1714,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     elif context.user_data.get("awaiting_gender"):
         if text.lower() == "skip":
-            context.user_data.pop("awaiting_gender", None)
-
-            skipped = context.user_data.get("skipped_profile_fields", {})
-            if isinstance(skipped, list):
-                skipped = {f: time.time() for f in skipped}
-
-            skipped["gender"] = time.time()
-            context.user_data["skipped_profile_fields"] = skipped
-
-            await prompt_for_next_missing_field(update, context, user_id)
+            await update.message.reply_text("Gender is required and cannot be skipped. Please choose an option.")
             return
         await process_gender_selection(update, context, text)
 
@@ -1697,14 +1753,19 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             context.user_data.pop(STATE_AWAITING_INTERESTS, None)
     elif context.user_data.get(STATE_AWAITING_GENDER_PREF):
         choice = text.strip().lower()
+        if choice == "cancel":
+            clear_conversation_state(context)
+            context.user_data.pop(STATE_PROFILE_SETUP, None)
+            context.user_data.pop(STATE_ADHOC_CONTINUE, None)
+            await update.message.reply_text(
+                "Gender preference update canceled.",
+                reply_markup=main_menu(),
+            )
+            return
         if choice == "skip":
-            context.user_data.pop(STATE_AWAITING_GENDER_PREF, None)
-            skipped = context.user_data.get("skipped_profile_fields", {})
-            if isinstance(skipped, list):
-                skipped = {f: time.time() for f in skipped}
-            skipped["gender_preference"] = time.time()
-            context.user_data["skipped_profile_fields"] = skipped
-            await prompt_for_next_missing_field(update, context, user_id)
+            await update.message.reply_text(
+                "Gender preference is required and cannot be skipped. Please choose an option."
+            )
             return
         mapping = {
             "men": [Gender.MALE],
@@ -1712,7 +1773,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             "both": [Gender.MALE, Gender.FEMALE],
         }
         if choice not in mapping:
-            await update.message.reply_text("Please choose Men, Women, or Both, or type Skip.")
+            await update.message.reply_text("Please choose Men, Women, or Both.")
             return
         try:
             u = get_user(user_id)
@@ -1723,7 +1784,11 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             update_user_preferences(user_id, prefs)
             context.user_data.pop(STATE_AWAITING_GENDER_PREF, None)
             await update.message.reply_text(GENDER_PREF_UPDATED_MESSAGE)
-            await prompt_for_next_missing_field(update, context, user_id)
+
+            if context.user_data.get(STATE_PROFILE_SETUP) is not None:
+                await _next_profile_step(update, context)
+            else:
+                await prompt_for_next_missing_field(update, context, user_id)
         except Exception as e:
             logger.error("Error updating gender preference", user_id=user_id, error=str(e), exc_info=e)
             await update.message.reply_text("Sorry, something went wrong. Please try again.")

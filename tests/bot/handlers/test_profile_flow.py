@@ -61,6 +61,7 @@ class MockUser:
         self.interests = []
         self.location = None
         self.photos = []
+        self.preferences = None
         self.is_profile_complete = False
 
 
@@ -74,6 +75,7 @@ def mock_dependencies(profile_handler_module, mock_user_state):
     """Mock external dependencies."""
     mock_get_user = MagicMock()
     mock_update_user = MagicMock()
+    mock_update_prefs = MagicMock()
     mock_limiter = MagicMock(return_value=AsyncMock())
 
     # Mock UI helpers
@@ -91,9 +93,18 @@ def mock_dependencies(profile_handler_module, mock_user_state):
 
     # Setup update_user to update our mock state
     def update_side_effect(user_id, data):
-        print(f"DEBUG: update_user called with {data}")
         for k, v in data.items():
-            if k.startswith("location_"):
+            if k == "preferences" and isinstance(v, dict):
+                # Convert dict back to Preferences object so getattr works
+                import src.models.user as user_mod
+
+                if hasattr(user_mod, "Preferences"):
+                    try:
+                        v = user_mod.Preferences(**v)
+                    except Exception:
+                        pass
+                setattr(mock_user_state, k, v)
+            elif k.startswith("location_"):
                 if not mock_user_state.location:
                     mock_user_state.location = MagicMock()
                 # strip location_ prefix
@@ -103,11 +114,15 @@ def mock_dependencies(profile_handler_module, mock_user_state):
                 setattr(mock_user_state, k, v)
 
     mock_update_user.side_effect = update_side_effect
+    mock_update_prefs.side_effect = (
+        lambda _uid, prefs: setattr(mock_user_state, "preferences", prefs) or mock_user_state
+    )
 
     with (
         patch.object(profile_handler_module, "get_user", mock_get_user),
         patch.object(profile_handler_module, "update_user", mock_update_user),
         patch.object(profile_handler_module, "user_command_limiter", mock_limiter),
+        patch.object(profile_handler_module, "update_user_preferences", mock_update_prefs),
         patch.object(profile_handler_module, "main_menu", mock_main_menu),
         patch.object(profile_handler_module, "profile_main_menu", mock_profile_menu),
         patch.object(profile_handler_module, "cancel_keyboard", mock_cancel_kb),
@@ -123,6 +138,7 @@ def mock_dependencies(profile_handler_module, mock_user_state):
         yield {
             "get_user": mock_get_user,
             "update_user": mock_update_user,
+            "update_user_preferences": mock_update_prefs,
             "limiter": mock_limiter,
             "geocode": mock_geocode,
         }
@@ -137,6 +153,7 @@ def mock_update_context():
     update.message = AsyncMock(spec=Message)
     update.message.text = "/profile"
     update.message.reply_text = AsyncMock()
+    update.effective_message = update.message
 
     context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
     context.user_data = {}
@@ -224,34 +241,43 @@ async def test_full_profile_creation_flow(
 
     # Verify gender updated
     assert mock_user_state.gender == Gender.MALE.value
-    # Verify moved to Bio step
+    # Verify moved to Gender Preference step
     assert context.user_data["profile_setup_step"] == 3
+    assert context.user_data["awaiting_gender_preference"] is True
+    assert "match with" in update.message.reply_text.call_args[0][0].lower()
+
+    # 5. Provide Gender Preference
+    update.message.text = "Both"
+    await profile_handler_module.handle_text_message(update, context)
+
+    assert context.user_data["profile_setup_step"] == 4
+    assert getattr(mock_user_state.preferences, "gender_preference", None)
     assert context.user_data["awaiting_bio"] is True
     assert "Tell us a bit about yourself" in update.message.reply_text.call_args[0][0]
 
-    # 5. Provide Bio
+    # 6. Provide Bio
     update.message.text = "I love coding"
     await profile_handler_module.handle_text_message(update, context)
 
     # Verify bio updated
     assert mock_user_state.bio == "I love coding"
     # Verify moved to Interests step
-    assert context.user_data["profile_setup_step"] == 4
+    assert context.user_data["profile_setup_step"] == 5
     assert context.user_data["awaiting_interests"] is True
     assert "What are your interests" in update.message.reply_text.call_args[0][0]
 
-    # 6. Provide Interests
+    # 7. Provide Interests
     update.message.text = "Coding, AI, Music"
     await profile_handler_module.handle_text_message(update, context)
 
     # Verify interests updated
     assert mock_user_state.interests == ["Coding", "AI", "Music"]
     # Verify moved to Location step
-    assert context.user_data["profile_setup_step"] == 5
+    assert context.user_data["profile_setup_step"] == 6
     assert context.user_data["awaiting_location"] is True
     assert "Where are you located" in update.message.reply_text.call_args[0][0]
 
-    # 7. Provide Location (City)
+    # 8. Provide Location (City)
     update.message.text = "New York, USA"
     # Mock geocode result
     mock_dependencies["geocode"].return_value = {
@@ -271,12 +297,12 @@ async def test_full_profile_creation_flow(
     assert mock_user_state.location.city == "New York"
 
     # Verify moved to Photos step
-    assert context.user_data["profile_setup_step"] == 6
+    assert context.user_data["profile_setup_step"] == 7
     assert context.user_data["awaiting_photo"] is True
     # The prompt should be about photos
     assert "photos" in update.message.reply_text.call_args[0][0].lower()
 
-    # 8. Skip Photos (since we injected dummy.jpg)
+    # 9. Skip Photos (since we injected dummy.jpg)
     update.message.text = "Skip"
     await profile_handler_module.handle_text_message(update, context)
 

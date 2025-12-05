@@ -476,6 +476,30 @@ async def test_settings_callback_empty_callback_data(settings_handler_module, mo
 
 
 @pytest.mark.asyncio
+async def test_settings_callback_router_routes_to_settings(settings_handler_module, mock_update_context):
+    """Router should delegate settings callbacks to settings_callback."""
+    update, context = mock_update_context
+    update.callback_query.data = "settings_region"
+
+    with patch.object(settings_handler_module, "settings_callback", new_callable=AsyncMock) as mock_cb:
+        await settings_handler_module.settings_callback_router(update, context)
+
+    mock_cb.assert_awaited_once_with(update, context)
+
+
+@pytest.mark.asyncio
+async def test_settings_callback_router_ignores_other_callbacks(settings_handler_module, mock_update_context):
+    """Router should ignore unrelated callbacks."""
+    update, context = mock_update_context
+    update.callback_query.data = "like_123"
+
+    with patch.object(settings_handler_module, "settings_callback", new_callable=AsyncMock) as mock_cb:
+        await settings_handler_module.settings_callback_router(update, context)
+
+    mock_cb.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_handle_region_user_not_found(
     settings_handler_module, mock_dependencies, mock_update_context, user_model_classes
 ):

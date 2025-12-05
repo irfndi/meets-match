@@ -33,7 +33,7 @@ from src.bot.handlers import (
     premium_command,
     profile_command,
     reengagement_response,
-    settings_callback,
+    settings_callback_router,
     settings_command,
     settings_text_router,
     start_command,
@@ -179,8 +179,7 @@ class BotApplication:
         )
         self.application.add_handler(
             CallbackQueryHandler(
-                settings_callback,
-                pattern=r"^(settings.*|region_.*|language_.*|min_age_.*|max_age_.*|max_distance_.*|notifications_.*|back_to_settings)$",
+                settings_callback_router,
             )
         )
 

@@ -23,7 +23,13 @@ from src.bot.handlers.profile import (
     start_profile_setup,
     view_profile_callback,
 )
-from src.bot.handlers.settings import premium_command, settings_callback, settings_command, settings_text_router
+from src.bot.handlers.settings import (
+    premium_command,
+    settings_callback,
+    settings_callback_router,
+    settings_command,
+    settings_text_router,
+)
 from src.bot.handlers.start import start_command
 
 __all__ = [
@@ -47,6 +53,7 @@ __all__ = [
     "profile_command",
     "reengagement_response",
     "settings_callback",
+    "settings_callback_router",
     "settings_command",
     "settings_text_router",
     "start_command",

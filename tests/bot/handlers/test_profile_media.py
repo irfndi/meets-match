@@ -70,8 +70,8 @@ async def test_next_profile_step_photos_empty(mock_update, mock_context, mock_us
     ):
         mock_settings.return_value.MAX_MEDIA_COUNT = 3
 
-        # Set current step to 5 (Location), so next step is 6 (Photos)
-        mock_context.user_data[STATE_PROFILE_SETUP] = 5
+        # Set current step to 6 (Location), so next step is 7 (Photos)
+        mock_context.user_data[STATE_PROFILE_SETUP] = 6
 
         await _next_profile_step(mock_update, mock_context)
 
@@ -100,8 +100,8 @@ async def test_next_profile_step_photos_existing(mock_update, mock_context, mock
         patch("src.bot.handlers.profile.send_media_group_safe", new_callable=AsyncMock) as mock_send_media,
     ):
         mock_settings.return_value.MAX_MEDIA_COUNT = 3
-        # Set current step to 5 (Location), so next step is 6 (Photos)
-        mock_context.user_data[STATE_PROFILE_SETUP] = 5
+        # Set current step to 6 (Location), so next step is 7 (Photos)
+        mock_context.user_data[STATE_PROFILE_SETUP] = 6
 
         await _next_profile_step(mock_update, mock_context)
 
@@ -157,7 +157,7 @@ async def test_handle_done_button_keep_existing(mock_update, mock_context, mock_
         patch("src.bot.handlers.profile.media_upload_keyboard"),
     ):
         mock_settings.return_value.MAX_MEDIA_COUNT = 3
-        mock_context.user_data[STATE_PROFILE_SETUP] = 6  # Photos step
+        mock_context.user_data[STATE_PROFILE_SETUP] = 7  # Photos step
 
         await handle_text_message(mock_update, mock_context)
 

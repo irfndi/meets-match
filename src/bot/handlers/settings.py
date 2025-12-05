@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Message, Update
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 
@@ -13,6 +13,17 @@ from src.utils.errors import NotFoundError
 from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
+
+_SETTINGS_CALLBACK_PREFIXES = (
+    "settings",
+    "region_",
+    "language_",
+    "min_age_",
+    "max_age_",
+    "max_distance_",
+    "notifications_",
+    "back_to_settings",
+)
 
 
 def _get_effective_premium_tier(user_id: str, prefs: Preferences) -> str:
@@ -143,7 +154,7 @@ async def _reply_or_edit(
             logger.warning("_reply_or_edit: failed to send via context.bot")
         # Final fallback: use the original callback message if available (avoid extra kwargs for error text)
         try:
-            if update.callback_query.message:
+            if update.callback_query.message and isinstance(update.callback_query.message, Message):
                 if error_fallback_text:
                     await update.callback_query.message.reply_text(fallback_text)
                 else:
@@ -271,6 +282,19 @@ async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
             if isinstance(update.callback_query.message, Message):
                 await update.callback_query.message.reply_text(error_msg)
+
+
+async def settings_callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Route callback queries to settings_callback if they belong to settings flows."""
+
+    if not update.callback_query or not update.callback_query.data:
+        return
+
+    data = update.callback_query.data.strip().lower()
+    if not data.startswith(_SETTINGS_CALLBACK_PREFIXES):
+        return
+
+    await settings_callback(update, context)
 
 
 @authenticated
