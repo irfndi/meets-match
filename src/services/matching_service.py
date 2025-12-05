@@ -8,7 +8,7 @@ from geopy.distance import geodesic  # type: ignore
 
 from src.config import settings
 from src.models.match import Match, MatchAction, MatchScore, MatchStatus, UserMatch
-from src.models.user import User
+from src.models.user import Preferences, User
 from src.services.user_service import get_user
 from src.utils.cache import get_cache, set_cache
 from src.utils.database import execute_query
@@ -137,7 +137,7 @@ def calculate_match_score(user1: User, user2: User) -> MatchScore:
             ) from e
 
 
-def _has_preferences_configured(preferences: Any) -> bool:
+def _has_preferences_configured(preferences: Preferences) -> bool:
     """Check if any preference fields are configured.
 
     Args:
@@ -147,13 +147,13 @@ def _has_preferences_configured(preferences: Any) -> bool:
         True if any preference field is set, False otherwise
     """
     return any(
-        [
+        (
             preferences.min_age is not None,
             preferences.max_age is not None,
             preferences.gender_preference is not None,
             preferences.relationship_type is not None,
             preferences.max_distance is not None,
-        ]
+        )
     )
 
 
