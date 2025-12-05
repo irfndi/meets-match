@@ -167,8 +167,11 @@ async def _reply_or_edit(
             logger.warning("_reply_or_edit: failed to send via callback_query.message")
 
     if update.message:
-        await update.message.reply_text(text, reply_markup=reply_markup, parse_mode=parse_mode)
-        logger.debug("_reply_or_edit: reply_text succeeded")
+        try:
+            await update.message.reply_text(text, reply_markup=reply_markup, parse_mode=parse_mode)
+            logger.debug("_reply_or_edit: reply_text succeeded")
+        except Exception as e:
+            logger.warning("_reply_or_edit: reply_text failed", error=str(e))
 
 
 # Settings messages
