@@ -80,8 +80,11 @@ def _safe_get_preferences(user: Any) -> Preferences:
                         notifications_enabled=notifications,
                         premium_tier=_clean_value(getattr(user.preferences, "premium_tier", None), str),
                     )
-                except Exception:
-                    pass  # Fall through to return default
+                except Exception as inner_e:
+                    logger.debug(
+                        "Failed to reconstruct Preferences from attributes, using defaults",
+                        error=str(inner_e),
+                    )
     except Exception as e:
         logger.warning("Failed to extract preferences, using defaults", error=str(e))
     return Preferences()
