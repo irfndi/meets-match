@@ -161,6 +161,10 @@ def is_potential_match(user1: User, user2: User) -> bool:
     if not user1.location or not user2.location:
         return False
 
+    # Skip preference checks if preferences are not set
+    if not user1.preferences or not user2.preferences:
+        return True  # Allow match if preferences not configured
+
     # Check age preferences
     if user1.preferences.min_age and user1.preferences.max_age:
         if user2.age < user1.preferences.min_age or user2.age > user1.preferences.max_age:
@@ -249,15 +253,17 @@ def get_potential_matches(user_id: str, limit: int = 10) -> List[User]:
                 span.set_data("count", len(potential_matches))
                 return potential_matches
 
-        # Get existing matches
-        existing_matches = get_user_matches(user_id)
+        # Get existing matches (use large limit to ensure comprehensive exclusion)
+        existing_matches = get_user_matches(user_id, limit=1000)
 
         # Filter out old rejections and matches
         # Matches: Recycle after 30 days
         # Rejections: Recycle after 7 days (shorter period)
-        from datetime import datetime, timedelta, timezone
+        from datetime import timedelta
 
-        now = datetime.now(timezone.utc)
+        from src.utils.database import utcnow
+
+        now = utcnow()
         recycle_threshold_matched = now - timedelta(days=30)
         recycle_threshold_rejected = now - timedelta(days=7)
 
@@ -408,9 +414,11 @@ def create_match(user1_id: str, user2_id: str) -> Match:
             existing_match = Match.model_validate(existing_match_query.data[0])
 
             # Check if we should recycle this match
-            from datetime import datetime, timedelta, timezone
+            from datetime import timedelta
 
-            now = datetime.now(timezone.utc)
+            from src.utils.database import utcnow
+
+            now = utcnow()
             recycle_threshold_matched = now - timedelta(days=30)
             recycle_threshold_rejected = now - timedelta(days=7)
 
@@ -429,7 +437,7 @@ def create_match(user1_id: str, user2_id: str) -> Match:
                 existing_match.user1_action = None
                 existing_match.user2_action = None
                 existing_match.matched_at = None
-                existing_match.updated_at = datetime.now(timezone.utc)
+                existing_match.updated_at = utcnow()
 
                 # Update in database
                 execute_query(
@@ -703,8 +711,10 @@ def get_user_match_view(match: Match, user_id: str) -> UserMatch:
     # Get current user
     current_user = get_user(user_id)
 
-    # Find common interests
-    common_interests = list(set(current_user.interests).intersection(set(other_user.interests)))
+    # Find common interests (handle None values)
+    current_interests = current_user.interests or []
+    other_interests = other_user.interests or []
+    common_interests = list(set(current_interests).intersection(set(other_interests)))
 
     # Create user match view
     return UserMatch(

@@ -205,7 +205,16 @@ async def inactive_user_reminder_job(context: ContextTypes.DEFAULT_TYPE) -> None
                                     user_id=user.id,
                                     error=str(keyboard_error),
                                 )
-                                await context.bot.send_message(chat_id=user.id, text=msg)
+                                try:
+                                    await context.bot.send_message(chat_id=user.id, text=msg)
+                                except Exception as fallback_error:
+                                    logger.warning(
+                                        "Fallback send also failed",
+                                        user_id=user.id,
+                                        keyboard_error=str(keyboard_error),
+                                        fallback_error=str(fallback_error),
+                                    )
+                                    raise
 
                             # Update last_reminded_at
                             update_user(user.id, {"last_reminded_at": datetime.now(timezone.utc)})
