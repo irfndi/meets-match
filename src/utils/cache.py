@@ -4,6 +4,7 @@ import json
 from typing import Any, Dict, Optional, Type, TypeVar, Union
 
 import redis
+import sentry_sdk
 from pydantic import BaseModel
 
 from src.config import settings
@@ -73,29 +74,39 @@ def set_cache(key: str, value: Union[str, Dict[str, Any], BaseModel], expiration
     Note:
         Silently skips caching if Redis is not available
     """
-    client = RedisClient.get_client()
-    if client is None:
-        logger.debug("Cache disabled, skipping set operation", key=key)
-        return
+    with sentry_sdk.start_span(op="cache.set", name=key) as span:
+        span.set_data("expiration", expiration)
 
-    try:
-        # Convert value to string if needed
-        if isinstance(value, BaseModel):
-            cache_value = value.model_dump_json()
-        elif isinstance(value, dict):
-            cache_value = json.dumps(value)
-        else:
-            cache_value = str(value)
+        client = RedisClient.get_client()
+        if client is None:
+            logger.debug("Cache disabled, skipping set operation", key=key)
+            span.set_data("status", "disabled")
+            return
 
-        # Enforce expiration
-        if expiration <= 0:
-            logger.warning("Cache set without expiration, forcing default 1h", key=key)
-            expiration = 3600
+        try:
+            # Convert value to string if needed
+            if isinstance(value, BaseModel):
+                cache_value = value.model_dump_json()
+                span.set_data("type", "model")
+            elif isinstance(value, dict):
+                cache_value = json.dumps(value)
+                span.set_data("type", "dict")
+            else:
+                cache_value = str(value)
+                span.set_data("type", "str")
 
-        client.set(key, cache_value, ex=expiration)
-        logger.debug("Cache set", key=key, expiration=expiration)
-    except Exception as e:
-        logger.warning("Failed to set cache, continuing without cache", key=key, error=str(e))
+            # Enforce expiration
+            if expiration <= 0:
+                logger.warning("Cache set without expiration, forcing default 1h", key=key)
+                expiration = 3600
+
+            client.set(key, cache_value, ex=expiration)
+            logger.debug("Cache set", key=key, expiration=expiration)
+            span.set_data("status", "success")
+        except Exception as e:
+            logger.warning("Failed to set cache, continuing without cache", key=key, error=str(e))
+            span.set_status("internal_error")
+            span.set_data("error", str(e))
 
 
 def get_cache(key: str, extend_ttl: Optional[int] = None) -> Optional[str]:
@@ -108,18 +119,28 @@ def get_cache(key: str, extend_ttl: Optional[int] = None) -> Optional[str]:
     Returns:
         Cached value or None if not found or Redis is not available
     """
-    client = RedisClient.get_client()
-    if client is None:
-        return None
+    with sentry_sdk.start_span(op="cache.get", name=key) as span:
+        client = RedisClient.get_client()
+        if client is None:
+            span.set_data("status", "disabled")
+            return None
 
-    try:
-        value: Optional[str] = client.get(key)  # type: ignore
-        if value and extend_ttl:
-            client.expire(key, extend_ttl)
-        return value
-    except Exception as e:
-        logger.warning("Failed to get cache", key=key, error=str(e))
-        return None
+        try:
+            value: Optional[str] = client.get(key)  # type: ignore
+            if value:
+                span.set_data("status", "hit")
+                if extend_ttl:
+                    client.expire(key, extend_ttl)
+                    span.set_data("extended_ttl", extend_ttl)
+                return value
+
+            span.set_data("status", "miss")
+            return None
+        except Exception as e:
+            logger.warning("Failed to get cache", key=key, error=str(e))
+            span.set_status("internal_error")
+            span.set_data("error", str(e))
+            return None
 
 
 def get_cache_model(key: str, model_class: Type[T], extend_ttl: Optional[int] = None) -> Optional[T]:
@@ -136,19 +157,28 @@ def get_cache_model(key: str, model_class: Type[T], extend_ttl: Optional[int] = 
     Raises:
         ConfigurationError: If cache operation fails
     """
-    value = get_cache(key, extend_ttl=extend_ttl)
-    if value:
-        try:
-            return model_class.model_validate_json(value)
-        except Exception as e:
-            logger.error(
-                "Failed to parse cached model",
-                key=key,
-                model=model_class.__name__,
-                error=str(e),
-            )
-            return None
-    return None
+    with sentry_sdk.start_span(op="cache.get_model", name=key) as span:
+        span.set_data("model", model_class.__name__)
+
+        value = get_cache(key, extend_ttl=extend_ttl)
+        if value:
+            try:
+                model = model_class.model_validate_json(value)
+                span.set_data("status", "success")
+                return model
+            except Exception as e:
+                logger.error(
+                    "Failed to parse cached model",
+                    key=key,
+                    model=model_class.__name__,
+                    error=str(e),
+                )
+                span.set_status("data_error")
+                span.set_data("error", str(e))
+                return None
+
+        span.set_data("status", "miss")
+        return None
 
 
 def delete_pattern(pattern: str) -> int:
@@ -160,26 +190,32 @@ def delete_pattern(pattern: str) -> int:
     Returns:
         Number of keys deleted
     """
-    client = RedisClient.get_client()
-    if client is None:
-        return 0
+    with sentry_sdk.start_span(op="cache.delete_pattern", name=pattern) as span:
+        client = RedisClient.get_client()
+        if client is None:
+            span.set_data("status", "disabled")
+            return 0
 
-    count = 0
-    try:
-        # Scan for keys to avoid blocking main thread with KEYS
-        cursor: Any = "0"
-        while True:
-            cursor, keys = client.scan(cursor=cursor, match=pattern, count=100)  # type: ignore
-            if keys:
-                client.delete(*keys)
-                count += len(keys)
+        count = 0
+        try:
+            # Scan for keys to avoid blocking main thread with KEYS
+            cursor: Any = "0"
+            while True:
+                cursor, keys = client.scan(cursor=cursor, match=pattern, count=100)  # type: ignore
+                if keys:
+                    client.delete(*keys)
+                    count += len(keys)
 
-            if str(cursor) == "0":
-                break
-    except Exception as e:
-        logger.warning("Failed to delete pattern", pattern=pattern, error=str(e))
+                if str(cursor) == "0":
+                    break
 
-    return count
+            span.set_data("deleted_count", count)
+            return count
+        except Exception as e:
+            logger.warning("Failed to delete pattern", pattern=pattern, error=str(e))
+            span.set_status("internal_error")
+            span.set_data("error", str(e))
+            return count
 
 
 def delete_cache(key: str) -> None:
@@ -191,13 +227,18 @@ def delete_cache(key: str) -> None:
     Note:
         Silently skips deletion if Redis is not available
     """
-    client = RedisClient.get_client()
-    if client is None:
-        logger.debug("Cache disabled, skipping delete operation", key=key)
-        return
+    with sentry_sdk.start_span(op="cache.delete", name=key) as span:
+        client = RedisClient.get_client()
+        if client is None:
+            logger.debug("Cache disabled, skipping delete operation", key=key)
+            span.set_data("status", "disabled")
+            return
 
-    try:
-        client.delete(key)
-        logger.debug("Cache deleted", key=key)
-    except Exception as e:
-        logger.warning("Failed to delete cache, continuing without cache", key=key, error=str(e))
+        try:
+            client.delete(key)
+            logger.debug("Cache deleted", key=key)
+            span.set_data("status", "success")
+        except Exception as e:
+            logger.warning("Failed to delete cache, continuing without cache", key=key, error=str(e))
+            span.set_status("internal_error")
+            span.set_data("error", str(e))

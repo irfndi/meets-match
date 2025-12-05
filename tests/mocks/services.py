@@ -13,6 +13,10 @@ update_user_location = AsyncMock()
 update_user_preferences = AsyncMock()
 delete_user = AsyncMock()
 get_users = AsyncMock()
+wake_user = AsyncMock()
+get_inactive_users = AsyncMock()
+get_users_for_auto_sleep = AsyncMock()
+set_user_sleeping = AsyncMock()
 
 # Mock match service functions
 # Constants
