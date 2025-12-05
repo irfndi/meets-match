@@ -137,6 +137,26 @@ def calculate_match_score(user1: User, user2: User) -> MatchScore:
             ) from e
 
 
+def _has_preferences_configured(preferences: Any) -> bool:
+    """Check if any preference fields are configured.
+
+    Args:
+        preferences: User preferences object
+
+    Returns:
+        True if any preference field is set, False otherwise
+    """
+    return any(
+        [
+            preferences.min_age is not None,
+            preferences.max_age is not None,
+            preferences.gender_preference is not None,
+            preferences.relationship_type is not None,
+            preferences.max_distance is not None,
+        ]
+    )
+
+
 def is_potential_match(user1: User, user2: User) -> bool:
     """Check if two users are potential matches.
 
@@ -161,8 +181,8 @@ def is_potential_match(user1: User, user2: User) -> bool:
     if not user1.location or not user2.location:
         return False
 
-    # Skip preference checks if preferences are not set
-    if not user1.preferences or not user2.preferences:
+    # Skip preference checks if preferences are not configured
+    if not _has_preferences_configured(user1.preferences) or not _has_preferences_configured(user2.preferences):
         return True  # Allow match if preferences not configured
 
     # Check age preferences
