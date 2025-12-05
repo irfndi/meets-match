@@ -103,21 +103,21 @@ async def cleanup_old_media_job(context: ContextTypes.DEFAULT_TYPE) -> None:
                         continue
 
                     # Check file modification time
-                    mtime = datetime.fromtimestamp(file_path.stat().st_mtime).replace(tzinfo=timezone.utc)
+                    mtime = datetime.fromtimestamp(file_path.stat().st_mtime, tz=timezone.utc)
 
                     if mtime < threshold:
                         try:
                             file_path.unlink()
                             count += 1
                         except Exception as e:
-                            logger.error(f"Failed to delete old file {file_path}: {e}")
+                            logger.error("Failed to delete old file", file_path=str(file_path), error=str(e))
                             span.set_data("error_file", str(file_path))
 
-            logger.info(f"Cleanup complete. Deleted {count} old media files.")
+            logger.info("Cleanup complete", deleted_files=count)
             span.set_data("deleted_files", count)
 
         except Exception as e:
-            logger.error(f"Error in media cleanup job: {e}")
+            logger.error("Error in media cleanup job", error=str(e))
             span.set_status("internal_error")
             span.set_data("error", str(e))
 
@@ -135,7 +135,7 @@ async def inactive_user_reminder_job(context: ContextTypes.DEFAULT_TYPE) -> None
                     if not users:
                         continue
 
-                    logger.info(f"Found {len(users)} users inactive for {days} days")
+                    logger.info("Found inactive users", count=len(users), days_inactive=days)
 
                     for user in users:
                         try:
@@ -198,21 +198,26 @@ async def inactive_user_reminder_job(context: ContextTypes.DEFAULT_TYPE) -> None
                                 await context.bot.send_message(
                                     chat_id=user.id, text=msg, reply_markup=reengagement_keyboard()
                                 )
-                            except Exception:
-                                # Fallback
+                            except Exception as keyboard_error:
+                                # Fallback - log and try without keyboard
+                                logger.debug(
+                                    "Keyboard send failed, trying fallback",
+                                    user_id=user.id,
+                                    error=str(keyboard_error),
+                                )
                                 await context.bot.send_message(chat_id=user.id, text=msg)
 
                             # Update last_reminded_at
                             update_user(user.id, {"last_reminded_at": datetime.now(timezone.utc)})
                             total_reminded += 1
 
-                            logger.info(f"Sent reminder to user {user.id} (inactive {days} days)")
+                            logger.info("Sent reminder to user", user_id=user.id, days_inactive=days)
 
                         except Exception as e:
-                            logger.warning(f"Failed to send reminder to user {user.id}: {e}")
+                            logger.warning("Failed to send reminder to user", user_id=user.id, error=str(e))
 
                 except Exception as e:
-                    logger.error(f"Error processing inactivity for {days} days: {e}")
+                    logger.error("Error processing inactivity bucket", days=days, error=str(e))
 
             span.set_data("total_reminded", total_reminded)
 

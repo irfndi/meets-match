@@ -34,7 +34,7 @@ if settings.SENTRY_DSN:
         )
         logger.info("Sentry initialized")
     except Exception as e:
-        logger.error(f"Failed to initialize Sentry: {e}")
+        logger.error("Failed to initialize Sentry", error=str(e))
 
 # Global bot instance
 bot_app = BotApplication()
@@ -47,10 +47,18 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("Starting API and Bot...")
 
     # Initialize database
-    init_database()
+    try:
+        init_database()
+    except Exception as e:
+        logger.error("Failed to initialize database", error=str(e))
+        raise
 
     # Start bot in background
-    await bot_app.start()
+    try:
+        await bot_app.start()
+    except Exception as e:
+        logger.error("Failed to start bot", error=str(e))
+        raise
 
     yield
 
