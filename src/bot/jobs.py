@@ -1,5 +1,5 @@
 import random
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import sentry_sdk
 from telegram.ext import ContextTypes
@@ -8,6 +8,7 @@ from src.bot.ui.keyboards import reengagement_keyboard
 from src.models.user import Gender
 from src.services.matching_service import get_pending_incoming_likes_count
 from src.services.user_service import get_inactive_users, get_users_for_auto_sleep, set_user_sleeping, update_user
+from src.utils.database import utcnow
 from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -76,8 +77,6 @@ async def auto_sleep_inactive_users_job(context: ContextTypes.DEFAULT_TYPE) -> N
 
 async def cleanup_old_media_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Job to delete old media files (> 1 year) that are no longer referenced."""
-    from datetime import timedelta
-
     from src.utils.media import get_storage_path
 
     logger.info("Running old media cleanup job")
@@ -205,10 +204,19 @@ async def inactive_user_reminder_job(context: ContextTypes.DEFAULT_TYPE) -> None
                                     user_id=user.id,
                                     error=str(keyboard_error),
                                 )
-                                await context.bot.send_message(chat_id=user.id, text=msg)
+                                try:
+                                    await context.bot.send_message(chat_id=user.id, text=msg)
+                                except Exception as fallback_error:
+                                    logger.warning(
+                                        "Fallback send also failed",
+                                        user_id=user.id,
+                                        keyboard_error=str(keyboard_error),
+                                        fallback_error=str(fallback_error),
+                                    )
+                                    raise
 
                             # Update last_reminded_at
-                            update_user(user.id, {"last_reminded_at": datetime.now(timezone.utc)})
+                            update_user(user.id, {"last_reminded_at": utcnow()})
                             total_reminded += 1
 
                             logger.info("Sent reminder to user", user_id=user.id, days_inactive=days)

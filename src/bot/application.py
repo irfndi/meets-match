@@ -58,20 +58,17 @@ class BotApplication:
 
         logger.info("Initializing bot application", admin_ids=self.admin_ids)
 
-    async def setup(self) -> None:
-        """Set up the bot application.
+    def _build_application(self) -> Application:
+        """Build and return the configured Application instance.
 
         Returns:
-                None
+            Configured Application instance.
         """
-        # Create application with defaults
         defaults = Defaults(
             parse_mode="HTML",
             allow_sending_without_reply=True,
         )
-
-        # Initialize application
-        self.application = (
+        return (
             Application.builder()
             .token(settings.TELEGRAM_BOT_TOKEN)
             .defaults(defaults)
@@ -79,9 +76,14 @@ class BotApplication:
             .build()
         )
 
-        # Register handlers
-        self._register_handlers()
+    async def setup(self) -> None:
+        """Set up the bot application.
 
+        Returns:
+                None
+        """
+        self.application = self._build_application()
+        self._register_handlers()
         logger.info("Bot application setup complete")
 
     async def _post_init(self, application: Application) -> None:
@@ -307,20 +309,8 @@ class BotApplication:
 
     def setup_sync(self) -> None:
         """Set up the bot application synchronously."""
-        defaults = Defaults(
-            parse_mode="HTML",
-            allow_sending_without_reply=True,
-        )
-
-        self.application = (
-            Application.builder()
-            .token(settings.TELEGRAM_BOT_TOKEN)
-            .defaults(defaults)
-            .post_init(self._post_init)
-            .build()
-        )
+        self.application = self._build_application()
         self._register_handlers()
-
         logger.info("Bot application setup complete")
 
     def run(self) -> None:
