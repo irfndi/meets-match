@@ -24,13 +24,8 @@ class Settings(BaseSettings):
     # Redis Configuration
     REDIS_URL: str
 
-    # OpenTelemetry Configuration
-    OTEL_EXPORTER_OTLP_ENDPOINT: Optional[str] = None
-    OTEL_EXPORTER_OTLP_HEADERS: Optional[str] = None
-    OTEL_EXPORTER_OTLP_CERTIFICATE: Optional[str] = None
-    OTEL_EXPORTER_OTLP_INSECURE: bool = Field(default=False)
-    OTEL_SERVICE_NAME: str = "meetsmatch_bot"
-    ENABLE_TELEMETRY: bool = Field(default=False)
+    # Sentry Configuration
+    SENTRY_DSN: Optional[str] = None
 
     # Application Configuration
     APP_NAME: str = "MeetsMatch Bot"
@@ -49,14 +44,6 @@ class Settings(BaseSettings):
     LOCATION_WEIGHT: float = 0.3
     INTERESTS_WEIGHT: float = 0.5
     PREFERENCES_WEIGHT: float = 0.2
-
-    @field_validator("ENABLE_TELEMETRY", mode="before")
-    @classmethod
-    def set_enable_telemetry(cls, v: Any, info: ValidationInfo) -> bool:
-        """Enable Telemetry if Endpoint is provided and ENABLE_TELEMETRY is True or 'true'."""
-        if isinstance(v, bool):
-            return v and info.data.get("OTEL_EXPORTER_OTLP_ENDPOINT") is not None
-        return info.data.get("OTEL_EXPORTER_OTLP_ENDPOINT") is not None and str(v).lower() == "true"
 
     @field_validator("DEBUG", mode="before")
     @classmethod

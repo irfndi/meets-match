@@ -2,8 +2,7 @@
 
 from typing import Optional, Set
 
-from opentelemetry import trace
-from opentelemetry.trace import Status, StatusCode
+import sentry_sdk
 from telegram import BotCommand, Update
 from telegram.error import Conflict
 from telegram.ext import (
@@ -49,7 +48,6 @@ from src.utils.errors import MeetMatchError
 from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
-tracer = trace.get_tracer(__name__)
 
 
 class BotApplication:
@@ -257,17 +255,6 @@ class BotApplication:
             # Exit gracefully and let the outer exception handler deal with it
             return
 
-        # Set OpenTelemetry attributes and record exception
-        with tracer.start_as_current_span("error_handler") as span:
-            if update_obj and update_obj.effective_user:
-                span.set_attribute("user.id", str(update_obj.effective_user.id))
-                if update_obj.effective_user.username:
-                    span.set_attribute("user.username", update_obj.effective_user.username)
-
-            if error is not None:
-                span.record_exception(error)
-                span.set_status(Status(StatusCode.ERROR))
-
         # Get chat ID for error response
         chat_id = None
         if update_obj and hasattr(update_obj, "effective_chat") and update_obj.effective_chat:
@@ -290,6 +277,20 @@ class BotApplication:
                 )
         else:
             # Handle unexpected errors
+            if settings.SENTRY_DSN:
+                with sentry_sdk.push_scope() as scope:
+                    if update_obj and update_obj.effective_user:
+                        scope.set_user(
+                            {"id": update_obj.effective_user.id, "username": update_obj.effective_user.username}
+                        )
+                    if update_obj:
+                        # Avoid circular reference or too large objects if possible, but to_dict() is usually fine for telegram objects
+                        try:
+                            scope.set_extra("update", update_obj.to_dict())
+                        except Exception:
+                            scope.set_extra("update", str(update_obj))
+                    sentry_sdk.capture_exception(error)
+
             logger.error(
                 "Unexpected bot error",
                 error=str(error),

@@ -13,7 +13,6 @@ help:
 	@echo "  make lock            Update uv.lock"
 	@echo "  make clean           Remove temporary files"
 	@echo "  make deploy-monitor  Deploy Beszel Agent to VPS"
-	@echo "  make deploy-otel     Deploy OpenTelemetry Collector to VPS"
 
 run:
 	uv run python main.py
@@ -27,6 +26,9 @@ endif
 
 test:
 	uv run pytest
+
+test-file:
+	uv run pytest $(file)
 
 lint:
 	uv run ruff check .
@@ -57,5 +59,5 @@ clean:
 deploy-monitor:
 	./scripts/deploy_beszel_agent.sh
 
-deploy-otel:
-	./scripts/deploy_otel.sh
+deploy-app:
+	./scripts/deploy_app.sh

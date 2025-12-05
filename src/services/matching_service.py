@@ -3,6 +3,7 @@
 import uuid
 from typing import Any, List, Optional
 
+import sentry_sdk
 from geopy.distance import geodesic  # type: ignore
 
 from src.config import settings
@@ -35,100 +36,107 @@ def calculate_match_score(user1: User, user2: User) -> MatchScore:
     Raises:
         MatchingError: If match score calculation fails
     """
-    try:
-        # Calculate location score (0-1)
-        location_score = 0.0
-        if user1.location and user2.location:
-            # Calculate distance in kilometers
-            user1_coords = (user1.location.latitude, user1.location.longitude)
-            user2_coords = (user2.location.latitude, user2.location.longitude)
-            distance = geodesic(user1_coords, user2_coords).kilometers
+    with sentry_sdk.start_span(op="match.calculate_score", name=f"{user1.id} <-> {user2.id}") as span:
+        try:
+            # Calculate location score (0-1)
+            location_score = 0.0
+            if user1.location and user2.location:
+                # Calculate distance in kilometers
+                user1_coords = (user1.location.latitude, user1.location.longitude)
+                user2_coords = (user2.location.latitude, user2.location.longitude)
+                distance = geodesic(user1_coords, user2_coords).kilometers
 
-        # Get max distance from preferences (default to 20km)
-        max_distance = 20
-        if user1.preferences.max_distance:
-            max_distance = user1.preferences.max_distance
+            # Get max distance from preferences (default to 20km)
+            max_distance = 20
+            if user1.preferences.max_distance:
+                max_distance = user1.preferences.max_distance
 
-            # Score decreases linearly with distance
-            if distance <= max_distance:
-                location_score = 1.0 - (distance / max_distance)
-            else:
-                location_score = 0.0
+                # Score decreases linearly with distance
+                if distance <= max_distance:
+                    location_score = 1.0 - (distance / max_distance)
+                else:
+                    location_score = 0.0
 
-        # Calculate interests score (0-1)
-        interests_score = 0.0
-        if user1.interests and user2.interests:
-            # Find common interests
-            common_interests = set(user1.interests).intersection(set(user2.interests))
-            total_interests = set(user1.interests).union(set(user2.interests))
+            # Calculate interests score (0-1)
+            interests_score = 0.0
+            if user1.interests and user2.interests:
+                # Find common interests
+                common_interests = set(user1.interests).intersection(set(user2.interests))
+                total_interests = set(user1.interests).union(set(user2.interests))
 
-            # Jaccard similarity
-            if total_interests:
-                interests_score = len(common_interests) / len(total_interests)
+                # Jaccard similarity
+                if total_interests:
+                    interests_score = len(common_interests) / len(total_interests)
 
-        # Calculate preferences score (0-1)
-        preferences_score = 0.0
-        preference_checks = 0
-        preference_matches = 0
+            # Calculate preferences score (0-1)
+            preferences_score = 0.0
+            preference_checks = 0
+            preference_matches = 0
 
-        # Check age preferences
-        if user1.preferences.min_age and user1.preferences.max_age and user2.age:
-            preference_checks += 1
-            if user1.preferences.min_age <= user2.age <= user1.preferences.max_age:
-                preference_matches += 1
+            # Check age preferences
+            if user1.preferences.min_age and user1.preferences.max_age and user2.age:
+                preference_checks += 1
+                if user1.preferences.min_age <= user2.age <= user1.preferences.max_age:
+                    preference_matches += 1
 
-        # Check gender preferences
-        if user1.preferences.gender_preference and user2.gender:
-            preference_checks += 1
-            if user2.gender in user1.preferences.gender_preference:
-                preference_matches += 1
+            # Check gender preferences
+            if user1.preferences.gender_preference and user2.gender:
+                preference_checks += 1
+                if user2.gender in user1.preferences.gender_preference:
+                    preference_matches += 1
 
-        # Check relationship type preferences
-        if user1.preferences.relationship_type and user2.preferences.relationship_type:
-            preference_checks += 1
-            # Check if there's any overlap in relationship type preferences
-            common_rel_types = set(user1.preferences.relationship_type).intersection(
-                set(user2.preferences.relationship_type)
+            # Check relationship type preferences
+            if user1.preferences.relationship_type and user2.preferences.relationship_type:
+                preference_checks += 1
+                # Check if there's any overlap in relationship type preferences
+                common_rel_types = set(user1.preferences.relationship_type).intersection(
+                    set(user2.preferences.relationship_type)
+                )
+                if common_rel_types:
+                    preference_matches += 1
+
+            # Calculate preferences score
+            if preference_checks > 0:
+                preferences_score = preference_matches / preference_checks
+
+            # Calculate total score with weights from settings
+            total_score = (
+                settings.LOCATION_WEIGHT * location_score
+                + settings.INTERESTS_WEIGHT * interests_score
+                + settings.PREFERENCES_WEIGHT * preferences_score
             )
-            if common_rel_types:
-                preference_matches += 1
 
-        # Calculate preferences score
-        if preference_checks > 0:
-            preferences_score = preference_matches / preference_checks
+            # Normalize to 0-1 range
+            total_score = max(0.0, min(1.0, total_score))
 
-        # Calculate total score with weights from settings
-        total_score = (
-            settings.LOCATION_WEIGHT * location_score
-            + settings.INTERESTS_WEIGHT * interests_score
-            + settings.PREFERENCES_WEIGHT * preferences_score
-        )
+            span.set_data("score", total_score)
+            span.set_data(
+                "details", {"location": location_score, "interests": interests_score, "preferences": preferences_score}
+            )
 
-        # Normalize to 0-1 range
-        total_score = max(0.0, min(1.0, total_score))
+            return MatchScore(
+                total=total_score,
+                location=location_score,
+                interests=interests_score,
+                preferences=preferences_score,
+            )
 
-        return MatchScore(
-            total=total_score,
-            location=location_score,
-            interests=interests_score,
-            preferences=preferences_score,
-        )
-
-    except Exception as e:
-        logger.error(
-            "Failed to calculate match score",
-            error=str(e),
-            user1_id=user1.id,
-            user2_id=user2.id,
-        )
-        raise MatchingError(
-            "Failed to calculate match score",
-            details={
-                "error": str(e),
-                "user1_id": user1.id,
-                "user2_id": user2.id,
-            },
-        ) from e
+        except Exception as e:
+            span.set_status("internal_error")
+            logger.error(
+                "Failed to calculate match score",
+                error=str(e),
+                user1_id=user1.id,
+                user2_id=user2.id,
+            )
+            raise MatchingError(
+                "Failed to calculate match score",
+                details={
+                    "error": str(e),
+                    "user1_id": user1.id,
+                    "user2_id": user2.id,
+                },
+            ) from e
 
 
 def is_potential_match(user1: User, user2: User) -> bool:
@@ -209,155 +217,162 @@ def get_potential_matches(user_id: str, limit: int = 10) -> List[User]:
         NotFoundError: If user not found
         MatchingError: If matching fails
     """
-    # Get user
-    user = get_user(user_id)
+    with sentry_sdk.start_span(op="match.get_potential", name=user_id) as span:
+        # Get user
+        user = get_user(user_id)
 
-    # Check if user is eligible for matching
-    if not user.is_match_eligible():
-        logger.debug("0 match found (user not eligible)", user_id=user_id)
-        return []
+        # Check if user is eligible for matching
+        if not user.is_match_eligible():
+            logger.debug("0 match found (user not eligible)", user_id=user_id)
+            span.set_data("status", "not_eligible")
+            return []
 
-    # Check cache
-    cache_key = POTENTIAL_MATCHES_CACHE_KEY.format(user_id=user_id)
-    # Extend TTL to keep the match list fresh while the user is active
-    cached_ids = get_cache(cache_key, extend_ttl=3600)
-    if cached_ids:
-        # Get users from cache
-        potential_match_ids = cached_ids.split(",")
-        potential_matches = []
-        for match_id in potential_match_ids[:limit]:
-            try:
-                potential_matches.append(get_user(match_id))
-            except NotFoundError:
+        # Check cache
+        cache_key = POTENTIAL_MATCHES_CACHE_KEY.format(user_id=user_id)
+        # Extend TTL to keep the match list fresh while the user is active
+        cached_ids = get_cache(cache_key, extend_ttl=3600)
+        if cached_ids:
+            # Get users from cache
+            potential_match_ids = cached_ids.split(",")
+            potential_matches = []
+            for match_id in potential_match_ids[:limit]:
+                try:
+                    potential_matches.append(get_user(match_id))
+                except NotFoundError:
+                    continue
+
+            if potential_matches:
+                logger.debug(
+                    "Potential matches retrieved from cache",
+                    user_id=user_id,
+                    count=len(potential_matches),
+                )
+                span.set_data("source", "cache")
+                span.set_data("count", len(potential_matches))
+                return potential_matches
+
+        # Get existing matches
+        existing_matches = get_user_matches(user_id)
+
+        # Filter out old rejections and matches
+        # Matches: Recycle after 30 days
+        # Rejections: Recycle after 7 days (shorter period)
+        from datetime import datetime, timedelta, timezone
+
+        now = datetime.now(timezone.utc)
+        recycle_threshold_matched = now - timedelta(days=30)
+        recycle_threshold_rejected = now - timedelta(days=7)
+
+        existing_match_ids = set()
+        for match in existing_matches:
+            # specific logic: if (rejected or matched) and old enough, don't add to exclusion list
+            is_old_matched = match.status == MatchStatus.MATCHED and match.updated_at < recycle_threshold_matched
+            is_old_rejected = match.status == MatchStatus.REJECTED and match.updated_at < recycle_threshold_rejected
+
+            if is_old_matched or is_old_rejected:
                 continue
 
-        if potential_matches:
-            logger.debug(
-                "Potential matches retrieved from cache",
-                user_id=user_id,
-                count=len(potential_matches),
-            )
-            return potential_matches
+            # Add to exclusion list
+            existing_match_ids.add(match.user1_id if match.user2_id == user_id else match.user2_id)
 
-    # Get existing matches
-    existing_matches = get_user_matches(user_id)
+        # Prepare database filters
+        filters = {
+            "is_active": True,
+            "is_profile_complete": True,
+            "last_active__gte": recycle_threshold_matched,  # Only active users in last 30 days
+        }
 
-    # Filter out old rejections and matches
-    # Matches: Recycle after 30 days
-    # Rejections: Recycle after 7 days (shorter period)
-    from datetime import datetime, timedelta, timezone
+        # 1. Age Range Filter (-4/+4 around user's age)
+        if user.age:
+            min_bound = max(10, user.age - 4)
+            max_bound = min(65, user.age + 4)
+            filters["age__gte"] = min_bound
+            filters["age__lte"] = max_bound
 
-    now = datetime.now(timezone.utc)
-    recycle_threshold_matched = now - timedelta(days=30)
-    recycle_threshold_rejected = now - timedelta(days=7)
+        # 2. Gender Filter
+        if user.preferences.gender_preference:
+            filters["gender__in"] = user.preferences.gender_preference
 
-    existing_match_ids = set()
-    for match in existing_matches:
-        # specific logic: if (rejected or matched) and old enough, don't add to exclusion list
-        is_old_matched = match.status == MatchStatus.MATCHED and match.updated_at < recycle_threshold_matched
-        is_old_rejected = match.status == MatchStatus.REJECTED and match.updated_at < recycle_threshold_rejected
+        # 3. Location Bounding Box Filter
+        # 1 degree of latitude is ~111km
+        # 1 degree of longitude varies (approx 111km * cos(lat))
+        if user.location and user.preferences.max_distance:
+            max_dist_km = user.preferences.max_distance
+            lat = user.location.latitude
+            lon = user.location.longitude
 
-        if is_old_matched or is_old_rejected:
-            continue
+            # Crude approximation for bounding box (safe side: larger box than needed)
+            # 1 degree lat ~= 111km
+            lat_delta = max_dist_km / 111.0
 
-        # Add to exclusion list
-        existing_match_ids.add(match.user1_id if match.user2_id == user_id else match.user2_id)
+            # 1 degree lon ~= 111km * cos(lat)
+            import math
 
-    # Prepare database filters
-    filters = {
-        "is_active": True,
-        "is_profile_complete": True,
-        "last_active__gte": recycle_threshold_matched,  # Only active users in last 30 days
-    }
+            # Avoid division by zero at poles, and ensure positive
+            cos_lat = max(0.1, math.cos(math.radians(lat)))
+            lon_delta = max_dist_km / (111.0 * cos_lat)
 
-    # 1. Age Range Filter (-4/+4 around user's age)
-    if user.age:
-        min_bound = max(10, user.age - 4)
-        max_bound = min(65, user.age + 4)
-        filters["age__gte"] = min_bound
-        filters["age__lte"] = max_bound
+            filters["location_latitude__gte"] = lat - lat_delta
+            filters["location_latitude__lte"] = lat + lat_delta
+            filters["location_longitude__gte"] = lon - lon_delta
+            filters["location_longitude__lte"] = lon + lon_delta
 
-    # 2. Gender Filter
-    if user.preferences.gender_preference:
-        filters["gender__in"] = user.preferences.gender_preference
+        # Query database for potential matches
+        result = execute_query(
+            table="users",
+            query_type="select",
+            filters=filters,
+            limit=limit * 5,  # Fetch more candidates than needed for scoring
+        )
 
-    # 3. Location Bounding Box Filter
-    # 1 degree of latitude is ~111km
-    # 1 degree of longitude varies (approx 111km * cos(lat))
-    if user.location and user.preferences.max_distance:
-        max_dist_km = user.preferences.max_distance
-        lat = user.location.latitude
-        lon = user.location.longitude
+        if not result.data:
+            logger.warning("No potential matches found", user_id=user_id)
+            span.set_data("count", 0)
+            return []
 
-        # Crude approximation for bounding box (safe side: larger box than needed)
-        # 1 degree lat ~= 111km
-        lat_delta = max_dist_km / 111.0
+        # Filter potential matches
+        potential_matches = []
+        for user_data in result.data:
+            potential_user = User.model_validate(user_data)
 
-        # 1 degree lon ~= 111km * cos(lat)
-        import math
+            # Skip self
+            if potential_user.id == user_id:
+                continue
 
-        # Avoid division by zero at poles, and ensure positive
-        cos_lat = max(0.1, math.cos(math.radians(lat)))
-        lon_delta = max_dist_km / (111.0 * cos_lat)
+            # Skip existing matches
+            if potential_user.id in existing_match_ids:
+                continue
 
-        filters["location_latitude__gte"] = lat - lat_delta
-        filters["location_latitude__lte"] = lat + lat_delta
-        filters["location_longitude__gte"] = lon - lon_delta
-        filters["location_longitude__lte"] = lon + lon_delta
+            # Check if potential match
+            if is_potential_match(user, potential_user):
+                potential_matches.append(potential_user)
 
-    # Query database for potential matches
-    result = execute_query(
-        table="users",
-        query_type="select",
-        filters=filters,
-        limit=limit * 5,  # Fetch more candidates than needed for scoring
-    )
+        # Prioritize by age proximity: same age, then ±1, ±2, ±3, ±4
+        age = user.age or 0
+        priority_order = [0, 1, 2, 3, 4]
+        ordered: list[User] = []
+        for d in priority_order:
+            group = [u for u in potential_matches if u.age is not None and abs(int(u.age) - int(age)) == d]
+            group_scored = [(u, calculate_match_score(user, u).total) for u in group]
+            group_scored.sort(key=lambda x: x[1], reverse=True)
+            ordered.extend([u for u, _ in group_scored])
+            if len(ordered) >= limit:
+                break
 
-    if not result.data:
-        logger.warning("No potential matches found", user_id=user_id)
-        return []
+        top_matches = ordered[:limit]
 
-    # Filter potential matches
-    potential_matches = []
-    for user_data in result.data:
-        potential_user = User.model_validate(user_data)
+        # Cache potential match IDs
+        potential_match_ids = [match.id for match in top_matches]
+        set_cache(cache_key, ",".join(potential_match_ids), expiration=3600)  # 1 hour
 
-        # Skip self
-        if potential_user.id == user_id:
-            continue
-
-        # Skip existing matches
-        if potential_user.id in existing_match_ids:
-            continue
-
-        # Check if potential match
-        if is_potential_match(user, potential_user):
-            potential_matches.append(potential_user)
-
-    # Prioritize by age proximity: same age, then ±1, ±2, ±3, ±4
-    age = user.age or 0
-    priority_order = [0, 1, 2, 3, 4]
-    ordered: list[User] = []
-    for d in priority_order:
-        group = [u for u in potential_matches if u.age is not None and abs(int(u.age) - int(age)) == d]
-        group_scored = [(u, calculate_match_score(user, u).total) for u in group]
-        group_scored.sort(key=lambda x: x[1], reverse=True)
-        ordered.extend([u for u, _ in group_scored])
-        if len(ordered) >= limit:
-            break
-
-    top_matches = ordered[:limit]
-
-    # Cache potential match IDs
-    potential_match_ids = [match.id for match in top_matches]
-    set_cache(cache_key, ",".join(potential_match_ids), expiration=3600)  # 1 hour
-
-    logger.info(
-        "Potential matches retrieved",
-        user_id=user_id,
-        count=len(top_matches),
-    )
-    return top_matches
+        logger.info(
+            "Potential matches retrieved",
+            user_id=user_id,
+            count=len(top_matches),
+        )
+        span.set_data("source", "database")
+        span.set_data("count", len(top_matches))
+        return top_matches
 
 
 def create_match(user1_id: str, user2_id: str) -> Match:
@@ -374,114 +389,121 @@ def create_match(user1_id: str, user2_id: str) -> Match:
         NotFoundError: If user not found
         MatchingError: If match creation fails
     """
-    # Get users
-    user1 = get_user(user1_id)
-    user2 = get_user(user2_id)
+    with sentry_sdk.start_span(op="match.create", name=f"{user1_id} <-> {user2_id}") as span:
+        # Get users
+        user1 = get_user(user1_id)
+        user2 = get_user(user2_id)
 
-    # Check for existing match
-    existing_match_query = execute_query(
-        table="matches",
-        query_type="select",
-        filters={
-            "$or": [
-                {"user1_id": user1_id, "user2_id": user2_id},
-                {"user1_id": user2_id, "user2_id": user1_id},
-            ]
-        },
-    )
-
-    if existing_match_query.data:
-        existing_match = Match.model_validate(existing_match_query.data[0])
-
-        # Check if we should recycle this match
-        from datetime import datetime, timedelta, timezone
-
-        now = datetime.now(timezone.utc)
-        recycle_threshold_matched = now - timedelta(days=30)
-        recycle_threshold_rejected = now - timedelta(days=7)
-
-        is_old_matched = (
-            existing_match.status == MatchStatus.MATCHED and existing_match.updated_at < recycle_threshold_matched
-        )
-        is_old_rejected = (
-            existing_match.status == MatchStatus.REJECTED and existing_match.updated_at < recycle_threshold_rejected
+        # Check for existing match
+        existing_match_query = execute_query(
+            table="matches",
+            query_type="select",
+            filters={
+                "$or": [
+                    {"user1_id": user1_id, "user2_id": user2_id},
+                    {"user1_id": user2_id, "user2_id": user1_id},
+                ]
+            },
         )
 
-        if is_old_matched or is_old_rejected:
-            logger.info("Recycling existing match", match_id=existing_match.id)
+        if existing_match_query.data:
+            existing_match = Match.model_validate(existing_match_query.data[0])
 
-            # Reset match to PENDING state
-            existing_match.status = MatchStatus.PENDING
-            existing_match.user1_action = None
-            existing_match.user2_action = None
-            existing_match.matched_at = None
-            existing_match.updated_at = datetime.now(timezone.utc)
+            # Check if we should recycle this match
+            from datetime import datetime, timedelta, timezone
 
-            # Update in database
-            execute_query(
-                table="matches",
-                query_type="update",
-                filters={"id": existing_match.id},
-                data=existing_match.model_dump(),
+            now = datetime.now(timezone.utc)
+            recycle_threshold_matched = now - timedelta(days=30)
+            recycle_threshold_rejected = now - timedelta(days=7)
+
+            is_old_matched = (
+                existing_match.status == MatchStatus.MATCHED and existing_match.updated_at < recycle_threshold_matched
+            )
+            is_old_rejected = (
+                existing_match.status == MatchStatus.REJECTED and existing_match.updated_at < recycle_threshold_rejected
             )
 
+            if is_old_matched or is_old_rejected:
+                logger.info("Recycling existing match", match_id=existing_match.id)
+
+                # Reset match to PENDING state
+                existing_match.status = MatchStatus.PENDING
+                existing_match.user1_action = None
+                existing_match.user2_action = None
+                existing_match.matched_at = None
+                existing_match.updated_at = datetime.now(timezone.utc)
+
+                # Update in database
+                execute_query(
+                    table="matches",
+                    query_type="update",
+                    filters={"id": existing_match.id},
+                    data=existing_match.model_dump(),
+                )
+
+                span.set_data("action", "recycle")
+                return existing_match
+
+            logger.info(
+                "Match already exists",
+                match_id=existing_match.id,
+                user1_id=user1_id,
+                user2_id=user2_id,
+            )
+            span.set_data("action", "existing")
             return existing_match
 
+        # Calculate match score
+        score = calculate_match_score(user1, user2)
+
+        # Create match
+        match_id = str(uuid.uuid4())
+        match = Match(
+            id=match_id,
+            user1_id=user1_id,
+            user2_id=user2_id,
+            status=MatchStatus.PENDING,
+            score=score,
+        )
+
+        # Insert into database
+        result = execute_query(
+            table="matches",
+            query_type="insert",
+            data=match.model_dump(),
+        )
+
+        if not result.data or len(result.data) == 0:
+            logger.error(
+                "Failed to create match",
+                user1_id=user1_id,
+                user2_id=user2_id,
+            )
+            span.set_status("internal_error")
+            raise MatchingError(
+                "Failed to create match",
+                details={"user1_id": user1_id, "user2_id": user2_id},
+            )
+
+        # Cache match
+        cache_key = MATCH_CACHE_KEY.format(match_id=match_id)
+        set_cache(cache_key, match, expiration=86400)  # 24 hours
+
+        # Clear potential matches cache
+        clear_potential_matches_cache(user1_id)
+        clear_potential_matches_cache(user2_id)
+
         logger.info(
-            "Match already exists",
-            match_id=existing_match.id,
+            "Match created",
+            match_id=match_id,
             user1_id=user1_id,
             user2_id=user2_id,
-        )
-        return existing_match
-
-    # Calculate match score
-    score = calculate_match_score(user1, user2)
-
-    # Create match
-    match_id = str(uuid.uuid4())
-    match = Match(
-        id=match_id,
-        user1_id=user1_id,
-        user2_id=user2_id,
-        status=MatchStatus.PENDING,
-        score=score,
-    )
-
-    # Insert into database
-    result = execute_query(
-        table="matches",
-        query_type="insert",
-        data=match.model_dump(),
-    )
-
-    if not result.data or len(result.data) == 0:
-        logger.error(
-            "Failed to create match",
-            user1_id=user1_id,
-            user2_id=user2_id,
-        )
-        raise MatchingError(
-            "Failed to create match",
-            details={"user1_id": user1_id, "user2_id": user2_id},
+            score=score.total,
         )
 
-    # Cache match
-    cache_key = MATCH_CACHE_KEY.format(match_id=match_id)
-    set_cache(cache_key, match, expiration=86400)  # 24 hours
-
-    # Clear potential matches cache
-    clear_potential_matches_cache(user1_id)
-    clear_potential_matches_cache(user2_id)
-
-    logger.info(
-        "Match created",
-        match_id=match_id,
-        user1_id=user1_id,
-        user2_id=user2_id,
-        score=score.total,
-    )
-    return match
+        span.set_data("action", "created")
+        span.set_data("score", score.total)
+        return match
 
 
 def get_match(match_id: str) -> Match:

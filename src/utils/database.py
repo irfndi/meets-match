@@ -3,9 +3,11 @@
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+import sentry_sdk
 from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, create_engine, or_
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
+from src.config import settings
 from src.utils.errors import DatabaseError
 from src.utils.logging import get_logger
 
@@ -184,6 +186,15 @@ def execute_query(
     if not model:
         raise ValueError(f"Unknown table: {table}")
 
+    # Trace database operation
+    span = None
+    if settings.SENTRY_DSN:
+        span = sentry_sdk.start_span(op="db.query", name=f"{query_type.upper()} {table}")
+        span.set_data("table", table)
+        span.set_data("query_type", query_type)
+        if filters:
+            span.set_data("filters", str(filters))
+
     try:
         # Transform user data if needed
         if table == "users" and data:
@@ -246,6 +257,11 @@ def execute_query(
 
             results = query.all()
             session.close()
+
+            if span:
+                span.set_data("row_count", len(results))
+                span.finish()
+
             return type("Result", (), {"data": [_model_to_dict(r) for r in results]})()
 
         elif query_type == "insert":
@@ -254,6 +270,10 @@ def execute_query(
             session.commit()
             result = _model_to_dict(instance)
             session.close()
+
+            if span:
+                span.finish()
+
             return type("Result", (), {"data": [result]})()
 
         elif query_type == "update":
@@ -269,6 +289,11 @@ def execute_query(
             if not exists:
                 logger.error("Record not found for update", table=table, filters=filters)
                 session.close()
+
+                if span:
+                    span.set_status("not_found")
+                    span.finish()
+
                 return type("Result", (), {"data": []})()
 
             updated_count = query.update(data)  # type: ignore
@@ -285,6 +310,11 @@ def execute_query(
                 logger.debug("Updated user record", user_preferences=getattr(results[0], "preferences", None))
 
             session.close()
+
+            if span:
+                span.set_data("updated_count", updated_count)
+                span.finish()
+
             return type("Result", (), {"data": [_model_to_dict(r) for r in results]})()
 
         elif query_type == "delete":
@@ -294,12 +324,20 @@ def execute_query(
             query.delete()
             session.commit()
             session.close()
+
+            if span:
+                span.finish()
+
             return type("Result", (), {"data": []})()
 
         else:
             raise ValueError(f"Invalid query type: {query_type}")
 
     except Exception as e:
+        if span:
+            span.set_status("internal_error")
+            span.finish()
+
         session.rollback()
         session.close()
         logger.error(

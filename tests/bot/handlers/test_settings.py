@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from telegram import CallbackQuery, Message, Update, User
+from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 
 
@@ -126,6 +127,57 @@ async def test_settings_command(settings_handler_module, mock_dependencies, mock
     assert "Region: USA" in args[0]
     assert "Language: en" in args[0]
     assert "reply_markup" in kwargs
+
+
+@pytest.mark.asyncio
+async def test_settings_command_callback_skips_rate_limit(settings_handler_module, mock_dependencies, mock_update_context):
+    """Settings invoked via callback should not trigger the command rate limiter."""
+    update, context = mock_update_context
+    mock_deps = mock_dependencies
+
+    mock_user = MagicMock()
+    mock_user.preferences.preferred_country = "USA"
+    mock_user.preferences.preferred_language = "en"
+    mock_deps["get_user"].return_value = mock_user
+
+    # Simulate a callback-triggered invocation (no message)
+    update.message = None
+
+    await settings_handler_module.settings_command(update, context)
+
+    mock_deps["limiter"].assert_not_called()
+    update.callback_query.edit_message_text.assert_called()
+    _, kwargs = update.callback_query.edit_message_text.call_args
+    assert kwargs["parse_mode"] == "Markdown"
+
+
+@pytest.mark.asyncio
+async def test_settings_command_callback_falls_back_when_edit_fails(
+    settings_handler_module, mock_dependencies, mock_update_context
+):
+    """If editing the settings message fails, we should send a fresh message instead of doing nothing."""
+    update, context = mock_update_context
+    mock_deps = mock_dependencies
+
+    mock_user = MagicMock()
+    mock_user.preferences.preferred_country = "USA"
+    mock_user.preferences.preferred_language = "en"
+    mock_deps["get_user"].return_value = mock_user
+
+    update.message = None
+    update.effective_chat = MagicMock()
+    update.effective_chat.id = 777
+    update.callback_query.edit_message_text.side_effect = BadRequest("Message to edit not found")
+
+    context.bot = AsyncMock()
+    context.bot.send_message = AsyncMock()
+
+    await settings_handler_module.settings_command(update, context)
+
+    context.bot.send_message.assert_called_once()
+    _, kwargs = context.bot.send_message.call_args
+    assert kwargs["chat_id"] == 777
+    assert kwargs["parse_mode"] == "Markdown"
 
 
 @pytest.mark.asyncio

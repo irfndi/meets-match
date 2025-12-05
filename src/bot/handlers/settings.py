@@ -68,7 +68,13 @@ def _safe_get_preferences(user: Any) -> Preferences:
     return Preferences()
 
 
-async def _reply_or_edit(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, reply_markup=None):
+async def _reply_or_edit(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    text: str,
+    reply_markup=None,
+    parse_mode: str | None = None,
+):
     """Helper function to reply or edit message based on update type.
 
     If the update is from a callback query, edits the original message.
@@ -78,11 +84,12 @@ async def _reply_or_edit(update: Update, context: ContextTypes.DEFAULT_TYPE, tex
         update: The update object
         text: Text content to send
         reply_markup: Optional keyboard markup
+        parse_mode: Optional parse mode for markdown/HTML formatting
     """
     if update.callback_query:
         logger.debug("_reply_or_edit: callback detected, attempting edit")
         try:
-            await update.callback_query.edit_message_text(text, reply_markup=reply_markup)
+            await update.callback_query.edit_message_text(text, reply_markup=reply_markup, parse_mode=parse_mode)
             logger.debug("_reply_or_edit: edit_message_text succeeded")
             return
         except BadRequest as e:
@@ -97,14 +104,19 @@ async def _reply_or_edit(update: Update, context: ContextTypes.DEFAULT_TYPE, tex
         try:
             chat_id = update.effective_chat.id if update.effective_chat else None
             if chat_id:
-                await context.bot.send_message(chat_id=chat_id, text=text, reply_markup=reply_markup)
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=text,
+                    reply_markup=reply_markup,
+                    parse_mode=parse_mode,
+                )
                 logger.debug("_reply_or_edit: sent message via context.bot", chat_id=chat_id)
                 return
         except Exception:
             logger.warning("_reply_or_edit: failed to send via context.bot")
 
     if update.message:
-        await update.message.reply_text(text, reply_markup=reply_markup)
+        await update.message.reply_text(text, reply_markup=reply_markup, parse_mode=parse_mode)
         logger.debug("_reply_or_edit: reply_text succeeded")
 
 
@@ -130,8 +142,9 @@ async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         update: The update object
         context: The context object
     """
-    # Apply rate limiting
-    await user_command_limiter()(update, context)
+    # Apply rate limiting only for explicit commands/messages, not callback navigations
+    if update.message:
+        await user_command_limiter()(update, context)
 
     # Initialize user_data if None to prevent issues
     if context.user_data is None:
@@ -156,46 +169,34 @@ async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         region = prefs.preferred_country or "Not set"
         language = prefs.preferred_language or update.effective_user.language_code or "Not set"
 
+        settings_text = SETTINGS_MESSAGE.format(
+            region=region,
+            language=language,
+        )
+        settings_keyboard = InlineKeyboardMarkup(
+            [
+                [InlineKeyboardButton("🌍 Region", callback_data="settings_region")],
+                [InlineKeyboardButton("🗣 Language", callback_data="settings_language")],
+                [InlineKeyboardButton("💠 Premium", callback_data="settings_premium")],
+                [InlineKeyboardButton("🔄 Reset to defaults", callback_data="settings_reset")],
+            ]
+        )
+
         # Send settings message
         if update.message:
             await update.message.reply_text(
-                SETTINGS_MESSAGE.format(
-                    region=region,
-                    language=language,
-                ),
+                settings_text,
                 parse_mode="Markdown",
-                reply_markup=InlineKeyboardMarkup(
-                    [
-                        [InlineKeyboardButton("🌍 Region", callback_data="settings_region")],
-                        [InlineKeyboardButton("🗣 Language", callback_data="settings_language")],
-                        [InlineKeyboardButton("💠 Premium", callback_data="settings_premium")],
-                        [InlineKeyboardButton("🔄 Reset to defaults", callback_data="settings_reset")],
-                    ]
-                ),
+                reply_markup=settings_keyboard,
             )
         elif update.callback_query:
-            try:
-                await update.callback_query.edit_message_text(
-                    SETTINGS_MESSAGE.format(
-                        region=region,
-                        language=language,
-                    ),
-                    parse_mode="Markdown",
-                    reply_markup=InlineKeyboardMarkup(
-                        [
-                            [InlineKeyboardButton("🌍 Region", callback_data="settings_region")],
-                            [InlineKeyboardButton("🗣 Language", callback_data="settings_language")],
-                            [InlineKeyboardButton("💠 Premium", callback_data="settings_premium")],
-                            [InlineKeyboardButton("🔄 Reset to defaults", callback_data="settings_reset")],
-                        ]
-                    ),
-                )
-            except BadRequest as e:
-                if "Message is not modified" in str(e):
-                    # Ignore if message is not modified
-                    pass
-                else:
-                    raise
+            await _reply_or_edit(
+                update,
+                context,
+                settings_text,
+                reply_markup=settings_keyboard,
+                parse_mode="Markdown",
+            )
 
     except NotFoundError:
         # User not found - this can happen due to race conditions or data issues

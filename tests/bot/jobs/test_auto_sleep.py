@@ -4,7 +4,6 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from opentelemetry.trace import StatusCode
 
 from src.bot.jobs import AUTO_SLEEP_INACTIVITY_MINUTES, auto_sleep_inactive_users_job
 from src.models.user import User
@@ -118,37 +117,3 @@ async def test_auto_sleep_inactive_users_job_set_sleeping_failure():
         mock_set_sleeping.assert_called_once()
         # But notification should not be sent due to failure
         context.bot.send_message.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_auto_sleep_job_captures_errors_in_otel():
-    """Test that auto-sleep job captures errors in OpenTelemetry."""
-    context = MagicMock()
-    context.bot.send_message = AsyncMock()
-
-    user = MagicMock(spec=User)
-    user.id = "123"
-
-    db_error = Exception("Database connection failed")
-
-    with (
-        patch("src.bot.jobs.get_users_for_auto_sleep") as mock_get_users,
-        patch("src.bot.jobs.set_user_sleeping") as mock_set_sleeping,
-        patch("src.bot.jobs.tracer") as mock_tracer,
-    ):
-        mock_get_users.return_value = [user]
-        mock_set_sleeping.side_effect = db_error
-
-        mock_parent_span = MagicMock()
-        mock_child_span = MagicMock()
-        # First call returns parent span, second call returns child span
-        mock_tracer.start_as_current_span.return_value.__enter__.side_effect = [mock_parent_span, mock_child_span]
-
-        await auto_sleep_inactive_users_job(context)
-
-        # Verify OpenTelemetry captured the exception on child span
-        mock_child_span.record_exception.assert_called_once_with(db_error)
-        # Verify set_status was called with ERROR status
-        mock_child_span.set_status.assert_called_once()
-        status_arg = mock_child_span.set_status.call_args[0][0]
-        assert status_arg.status_code == StatusCode.ERROR
