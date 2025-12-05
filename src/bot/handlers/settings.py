@@ -489,6 +489,13 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
 
 async def handle_region(update: Update, context: ContextTypes.DEFAULT_TYPE, country: str) -> None:
+    """Handle region (country) selection and update user preferences and location.
+
+    Args:
+        update: Incoming Telegram update.
+        context: Telegram context.
+        country: Selected country name.
+    """
     if not update.effective_user:
         return
 
@@ -582,6 +589,13 @@ async def handle_region(update: Update, context: ContextTypes.DEFAULT_TYPE, coun
 
 
 async def handle_language(update: Update, context: ContextTypes.DEFAULT_TYPE, language_code: str) -> None:
+    """Handle language selection and update user preferences.
+
+    Args:
+        update: Incoming Telegram update.
+        context: Telegram context.
+        language_code: Selected language code (e.g., "en", "id").
+    """
     if not update.effective_user:
         return
 
