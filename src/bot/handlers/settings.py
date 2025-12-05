@@ -80,8 +80,11 @@ def _safe_get_preferences(user: Any) -> Preferences:
                         notifications_enabled=notifications,
                         premium_tier=_clean_value(getattr(user.preferences, "premium_tier", None), str),
                     )
-                except Exception:
-                    pass  # Fall through to return default
+                except Exception as inner_e:
+                    logger.debug(
+                        "Failed to reconstruct Preferences from attributes, using defaults",
+                        error=str(inner_e),
+                    )
     except Exception as e:
         logger.warning("Failed to extract preferences, using defaults", error=str(e))
     return Preferences()
@@ -486,6 +489,13 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
 
 async def handle_region(update: Update, context: ContextTypes.DEFAULT_TYPE, country: str) -> None:
+    """Handle region (country) selection and update user preferences and location.
+
+    Args:
+        update: The update object.
+        context: The context object.
+        country: Selected country name.
+    """
     if not update.effective_user:
         return
 
@@ -579,6 +589,13 @@ async def handle_region(update: Update, context: ContextTypes.DEFAULT_TYPE, coun
 
 
 async def handle_language(update: Update, context: ContextTypes.DEFAULT_TYPE, language_code: str) -> None:
+    """Handle language selection and update user preferences.
+
+    Args:
+        update: The update object.
+        context: The context object.
+        language_code: Selected language code (e.g., "en", "id").
+    """
     if not update.effective_user:
         return
 
