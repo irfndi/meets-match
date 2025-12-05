@@ -492,8 +492,8 @@ async def handle_region(update: Update, context: ContextTypes.DEFAULT_TYPE, coun
     """Handle region (country) selection and update user preferences and location.
 
     Args:
-        update: Incoming Telegram update.
-        context: Telegram context.
+        update: The update object.
+        context: The context object.
         country: Selected country name.
     """
     if not update.effective_user:
@@ -592,8 +592,8 @@ async def handle_language(update: Update, context: ContextTypes.DEFAULT_TYPE, la
     """Handle language selection and update user preferences.
 
     Args:
-        update: Incoming Telegram update.
-        context: Telegram context.
+        update: The update object.
+        context: The context object.
         language_code: Selected language code (e.g., "en", "id").
     """
     if not update.effective_user:
