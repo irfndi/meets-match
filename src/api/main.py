@@ -42,7 +42,11 @@ if settings.ENABLE_TELEMETRY and settings.OTEL_EXPORTER_OTLP_ENDPOINT:
 
         trace_provider = TracerProvider(resource=resource)
         processor = BatchSpanProcessor(
-            OTLPSpanExporter(endpoint=settings.OTEL_EXPORTER_OTLP_ENDPOINT, insecure=True, headers=headers)
+            OTLPSpanExporter(
+                endpoint=settings.OTEL_EXPORTER_OTLP_ENDPOINT,
+                insecure=settings.OTEL_EXPORTER_OTLP_INSECURE,
+                headers=headers,
+            )
         )
         trace_provider.add_span_processor(processor)
         trace.set_tracer_provider(trace_provider)
@@ -88,9 +92,6 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
-
-if settings.ENABLE_TELEMETRY:
-    FastAPIInstrumentor.instrument_app(app)
 
 
 @app.get("/health")

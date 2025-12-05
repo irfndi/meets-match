@@ -27,7 +27,8 @@ class Settings(BaseSettings):
     # OpenTelemetry Configuration
     OTEL_EXPORTER_OTLP_ENDPOINT: Optional[str] = None
     OTEL_EXPORTER_OTLP_HEADERS: Optional[str] = None
-    OTEL_SERVICE_NAME: str = "meetsmatch-bot"
+    OTEL_EXPORTER_OTLP_INSECURE: bool = Field(default=False)
+    OTEL_SERVICE_NAME: str = "meetsmatch_bot"
     ENABLE_TELEMETRY: bool = Field(default=False)
 
     # Application Configuration
@@ -51,7 +52,7 @@ class Settings(BaseSettings):
     @field_validator("ENABLE_TELEMETRY", mode="before")
     @classmethod
     def set_enable_telemetry(cls, v: Any, info: ValidationInfo) -> bool:
-        """Enable Telemetry if Endpoint is provided and explicitly enabled."""
+        """Enable Telemetry if Endpoint is provided and ENABLE_TELEMETRY is True or 'true'."""
         if isinstance(v, bool):
             return v and info.data.get("OTEL_EXPORTER_OTLP_ENDPOINT") is not None
         return info.data.get("OTEL_EXPORTER_OTLP_ENDPOINT") is not None and str(v).lower() == "true"

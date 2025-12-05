@@ -44,31 +44,34 @@ async def auto_sleep_inactive_users_job(context: ContextTypes.DEFAULT_TYPE) -> N
             span.set_attribute("users_count", len(users))
 
             for user in users:
-                try:
-                    # Set user to sleeping
-                    set_user_sleeping(user.id, True)
-
-                    # Send notification to user about auto-sleep
+                with tracer.start_as_current_span("auto_sleep_user") as user_span:
+                    user_span.set_attribute("user_id", user.id)
                     try:
-                        await context.bot.send_message(
-                            chat_id=user.id,
-                            text=(
-                                "💤 *You've been automatically paused due to inactivity.*\n\n"
-                                "Your profile remains visible to others in the match cycle.\n\n"
-                                "We will notify you here if someone likes your profile! 🔔\n\n"
-                                "Type /start to wake up and resume."
-                            ),
-                            parse_mode="Markdown",
-                        )
+                        # Set user to sleeping
+                        set_user_sleeping(user.id, True)
+
+                        # Send notification to user about auto-sleep
+                        try:
+                            await context.bot.send_message(
+                                chat_id=user.id,
+                                text=(
+                                    "💤 *You've been automatically paused due to inactivity.*\n\n"
+                                    "Your profile remains visible to others in the match cycle.\n\n"
+                                    "We will notify you here if someone likes your profile! 🔔\n\n"
+                                    "Type /start to wake up and resume."
+                                ),
+                                parse_mode="Markdown",
+                            )
+                        except Exception as e:
+                            # User might have blocked the bot or other issues
+                            logger.warning("Failed to notify user about auto-sleep", user_id=user.id, error=str(e))
+
+                        logger.info("Auto-slept user", user_id=user.id)
+
                     except Exception as e:
-                        # User might have blocked the bot or other issues
-                        logger.warning("Failed to notify user about auto-sleep", user_id=user.id, error=str(e))
-
-                    logger.info("Auto-slept user", user_id=user.id)
-
-                except Exception as e:
-                    span.record_exception(e)
-                    logger.warning("Failed to auto-sleep user", user_id=user.id, error=str(e))
+                        user_span.record_exception(e)
+                        user_span.set_status(Status(StatusCode.ERROR))
+                        logger.warning("Failed to auto-sleep user", user_id=user.id, error=str(e))
 
         except Exception as e:
             span.record_exception(e)
@@ -107,12 +110,15 @@ async def cleanup_old_media_job(context: ContextTypes.DEFAULT_TYPE) -> None:
                     mtime = datetime.fromtimestamp(file_path.stat().st_mtime).replace(tzinfo=timezone.utc)
 
                     if mtime < threshold:
-                        try:
-                            file_path.unlink()
-                            count += 1
-                        except Exception as e:
-                            span.record_exception(e)
-                            logger.error(f"Failed to delete old file {file_path}: {e}")
+                        with tracer.start_as_current_span("delete_file") as file_span:
+                            file_span.set_attribute("file_path", str(file_path))
+                            try:
+                                file_path.unlink()
+                                count += 1
+                            except Exception as e:
+                                file_span.record_exception(e)
+                                file_span.set_status(Status(StatusCode.ERROR))
+                                logger.error(f"Failed to delete old file {file_path}: {e}")
 
             logger.info(f"Cleanup complete. Deleted {count} old media files.")
             span.set_attribute("deleted_files_count", count)

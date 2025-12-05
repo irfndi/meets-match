@@ -5,6 +5,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+from opentelemetry.trace import StatusCode
 
 from src.bot.jobs import cleanup_old_media_job
 
@@ -150,13 +151,19 @@ async def test_cleanup_old_media_job_captures_file_error_in_otel():
     ):
         mock_get_path.return_value = mock_storage_path
 
-        mock_span = MagicMock()
-        mock_tracer.start_as_current_span.return_value.__enter__.return_value = mock_span
+        mock_parent_span = MagicMock()
+        mock_child_span = MagicMock()
+        # First call returns parent span, second call returns child span for file deletion
+        mock_tracer.start_as_current_span.return_value.__enter__.side_effect = [mock_parent_span, mock_child_span]
 
         await cleanup_old_media_job(context)
 
-        # Verify OpenTelemetry recorded the exception
-        mock_span.record_exception.assert_called_once_with(file_error)
+        # Verify OpenTelemetry recorded the exception on child span
+        mock_child_span.record_exception.assert_called_once_with(file_error)
+        # Verify set_status was called with ERROR status
+        mock_child_span.set_status.assert_called_once()
+        status_arg = mock_child_span.set_status.call_args[0][0]
+        assert status_arg.status_code == StatusCode.ERROR
 
 
 @pytest.mark.asyncio
