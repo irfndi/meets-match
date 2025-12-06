@@ -1,0 +1,33 @@
+name: autofix.ci
+on:
+  pull_request:
+  push:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  autofix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        run: uv python install 3.13
+
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Fix linting issues with Ruff
+        run: uv run ruff check --fix-only .
+
+      - name: Format code with Ruff
+        run: uv run ruff format .
+
+      - uses: autofix-ci/action@635ffb0c9798bd160680f18fd73371e355b85f27
