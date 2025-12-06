@@ -43,8 +43,8 @@ source .venv/bin/activate  # Linux/macOS
 .venv\Scripts\activate     # Windows
 
 # Install project dependencies
-# This installs the project in editable mode and includes dev dependencies from pyproject.toml
-uv pip install -e ".[dev]"
+# This installs all dependencies including dev dependencies from pyproject.toml
+uv sync
 ```
 
 ### Development Tools

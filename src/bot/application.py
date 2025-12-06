@@ -344,7 +344,7 @@ class BotApplication:
                 "Polling conflict detected: another bot instance is running for this token.",
                 error=str(ce),
             )
-            return
+            raise
         except Exception as e:
             logger.error("Bot failed to start", error=str(e))
             raise

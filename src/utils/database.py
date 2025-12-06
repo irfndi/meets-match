@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 import sentry_sdk
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, create_engine, or_
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, and_, create_engine, or_
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
 from src.config import settings
@@ -216,10 +216,17 @@ def execute_query(
                 if key == "$or":
                     # Handle OR condition
                     # Expects value to be a list of dicts: [{"field": value}, {"field": value}]
+                    # Each dict can have multiple fields that are ANDed together
                     or_conditions = []
                     for condition in value:
+                        and_conditions = []
                         for k, v in condition.items():
-                            or_conditions.append(getattr(model, k) == v)
+                            and_conditions.append(getattr(model, k) == v)
+                        if and_conditions:
+                            # AND together all conditions within each OR clause
+                            or_conditions.append(
+                                and_(*and_conditions) if len(and_conditions) > 1 else and_conditions[0]
+                            )
                     if or_conditions:
                         query = query.filter(or_(*or_conditions))
                 elif "__" in key:
