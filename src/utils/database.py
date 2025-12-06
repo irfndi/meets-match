@@ -224,9 +224,7 @@ def execute_query(
                             and_conditions.append(getattr(model, k) == v)
                         if and_conditions:
                             # AND together all conditions within each OR clause
-                            or_conditions.append(
-                                and_(*and_conditions) if len(and_conditions) > 1 else and_conditions[0]
-                            )
+                            or_conditions.append(and_(*and_conditions))
                     if or_conditions:
                         query = query.filter(or_(*or_conditions))
                 elif "__" in key:
