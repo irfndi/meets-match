@@ -23,7 +23,7 @@ MeetMatch is an AI-powered Telegram bot built with Python 3.13+ that facilitates
 
 ### Prerequisites
 
-- Python 3.12+
+- Python 3.13+
 - `uv` (Install: `curl -LsSf https://astral.sh/uv/install.sh | sh`)
 - PostgreSQL
 - Redis
