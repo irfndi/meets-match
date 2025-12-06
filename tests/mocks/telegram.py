@@ -7,6 +7,9 @@ from unittest.mock import AsyncMock, MagicMock
 class MockUpdate:
     """Mock Telegram Update object."""
 
+    # Minimal subset of Update.ALL_TYPES to satisfy BotApplication init in tests
+    ALL_TYPES = ("message", "edited_message", "callback_query")
+
     def __init__(self, update_id: int = 1):
         self.update_id = update_id
         self.message = None

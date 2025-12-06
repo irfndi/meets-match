@@ -1,6 +1,7 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+from telegram import Update
 
 # Import application after mocks are set up in conftest.py
 from src.bot.application import BotApplication
@@ -42,7 +43,17 @@ async def test_application_run(mock_application):
             assert str(e) == "Test exit"
 
         # Verify the methods were called
-        mock_app.run_polling.assert_called_once()
+        mock_app.run_polling.assert_called_once_with(
+            drop_pending_updates=True,
+            bootstrap_retries=-1,
+            allowed_updates=app.allowed_updates,
+        )
+
+
+def test_application_sets_allowed_updates():
+    """BotApplication should always allow all update types (prevents lost callbacks)."""
+    app = BotApplication()
+    assert app.allowed_updates == Update.ALL_TYPES
 
 
 @pytest.mark.asyncio

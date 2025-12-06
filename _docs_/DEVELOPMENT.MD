@@ -96,6 +96,7 @@ scripts/               # Deployment/maintenance scripts
 3. **Telegram Bot Specific**:
    - Use PTB's ContextTypes
    - Isolate handler logic in `/bot/handlers`
+   - When polling, pass `allowed_updates=Update.ALL_TYPES` (see `BotApplication`) so Telegram doesn’t reuse an old webhook allowlist and silently drop callback queries.
 
 ## Testing & Quality Assurance
 - Goal: Achieve >95% test coverage, tracked via Codecov.
