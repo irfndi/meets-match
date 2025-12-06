@@ -12,6 +12,7 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
+from telegram.request import HTTPXRequest
 
 from src.bot.handlers import (
     about_command,
@@ -68,10 +69,19 @@ class BotApplication:
             parse_mode="HTML",
             allow_sending_without_reply=True,
         )
+
+        request = HTTPXRequest(
+            connect_timeout=settings.TELEGRAM_CONNECT_TIMEOUT,
+            read_timeout=settings.TELEGRAM_READ_TIMEOUT,
+            write_timeout=settings.TELEGRAM_WRITE_TIMEOUT,
+            pool_timeout=settings.TELEGRAM_POOL_TIMEOUT,
+        )
+
         return (
             Application.builder()
             .token(settings.TELEGRAM_BOT_TOKEN)
             .defaults(defaults)
+            .request(request)
             .post_init(self._post_init)
             .build()
         )

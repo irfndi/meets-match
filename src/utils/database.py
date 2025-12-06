@@ -113,8 +113,19 @@ class Database:
                 cls._engine = create_engine(database_url, pool_recycle=300, pool_pre_ping=True, echo=settings.DEBUG)
                 logger.info("Database engine created")
             except Exception as e:
-                logger.error("Failed to create database engine", error=str(e))
-                raise DatabaseError("Failed to connect to database", details={"error": str(e)}) from e
+                # Log redacted URL for debugging
+                safe_url = database_url
+                if "@" in safe_url:
+                    try:
+                        part1, part2 = safe_url.rsplit("@", 1)
+                        if ":" in part1:
+                            scheme_user, _ = part1.rsplit(":", 1)
+                            safe_url = f"{scheme_user}:***@{part2}"
+                    except Exception:
+                        safe_url = "REDACTED_MALFORMED_URL"
+
+                logger.error("Failed to create database engine", error=str(e), url=safe_url)
+                raise DatabaseError("Failed to connect to database", details={"error": str(e), "url": safe_url}) from e
         return cls._engine
 
     @classmethod

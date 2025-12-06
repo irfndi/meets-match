@@ -50,7 +50,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     try:
         init_database()
     except Exception as e:
-        logger.error("Failed to initialize database", error=str(e))
+        error_details = {}
+        if hasattr(e, "details"):
+            error_details = e.details
+        logger.error("Failed to initialize database", error=str(e), details=error_details)
         raise
 
     # Start bot in background

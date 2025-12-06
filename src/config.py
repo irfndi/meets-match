@@ -11,6 +11,10 @@ class Settings(BaseSettings):
 
     # Telegram Bot Configuration
     TELEGRAM_TOKEN: str
+    TELEGRAM_CONNECT_TIMEOUT: float = 30.0
+    TELEGRAM_READ_TIMEOUT: float = 30.0
+    TELEGRAM_WRITE_TIMEOUT: float = 30.0
+    TELEGRAM_POOL_TIMEOUT: float = 30.0
     ADMIN_IDS: str | None = None
 
     @property

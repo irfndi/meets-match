@@ -107,9 +107,10 @@ class TestDatabaseConnection:
         # Verify create_engine called only once
         assert mock_create_engine.call_count == 1
 
+    @patch("src.utils.database.logger")
     @patch("src.utils.database.create_engine")
     @patch("src.config.get_settings")
-    def test_create_engine_failure(self, mock_get_settings, mock_create_engine):
+    def test_create_engine_failure(self, mock_get_settings, mock_create_engine, mock_logger):
         """Test handling of engine creation failure."""
         mock_settings = MagicMock(spec=Settings)
         mock_settings.DATABASE_URL = "postgresql://user:pass@localhost:5432/db"
@@ -123,5 +124,15 @@ class TestDatabaseConnection:
         Database._engine = None
 
         # Verify exception is raised
-        with pytest.raises(DatabaseError, match="Failed to connect to database"):
+        with pytest.raises(DatabaseError, match="Failed to connect to database") as excinfo:
             Database.get_engine()
+
+        error_details = excinfo.value.details
+        assert error_details["error"] == "Connection failed"
+        assert error_details["url"] == "postgresql://user:***@localhost:5432/db"
+
+        mock_logger.error.assert_called_once()
+        args, kwargs = mock_logger.error.call_args
+        assert args[0] == "Failed to create database engine"
+        assert kwargs["error"] == "Connection failed"
+        assert kwargs["url"] == "postgresql://user:***@localhost:5432/db"
