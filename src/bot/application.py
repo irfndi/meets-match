@@ -56,6 +56,8 @@ class BotApplication:
         """Initialize the bot application."""
         self.application: Application | None = None
         self.admin_ids: set[str] = set(settings.ADMIN_IDS.split(",") if settings.ADMIN_IDS else [])
+        # Allow all update types (callbacks can be filtered out if Telegram remembered a restricted allowlist).
+        self.allowed_updates = Update.ALL_TYPES
 
         logger.info("Initializing bot application", admin_ids=self.admin_ids)
 
@@ -332,7 +334,11 @@ class BotApplication:
 
         logger.info("Bot starting...")
         try:
-            self.application.run_polling(drop_pending_updates=True, bootstrap_retries=-1)
+            self.application.run_polling(
+                drop_pending_updates=True,
+                bootstrap_retries=-1,
+                allowed_updates=self.allowed_updates,
+            )
         except Conflict as ce:
             logger.error(
                 "Polling conflict detected: another bot instance is running for this token.",
@@ -375,6 +381,7 @@ class BotApplication:
                 await self.application.updater.start_polling(
                     drop_pending_updates=True,
                     bootstrap_retries=-1,  # Infinite retries to handle temporary connection issues
+                    allowed_updates=self.allowed_updates,
                     timeout=20,  # Increase timeout slightly
                 )
             except Conflict as e:
