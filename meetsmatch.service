@@ -1,0 +1,16 @@
+[Unit]
+Description=MeetsMatch Telegram Bot
+After=network.target postgresql.service redis-server.service
+
+[Service]
+Type=simple
+User=meetsmatch
+Group=meetsmatch
+WorkingDirectory=/opt/meetsmatch
+EnvironmentFile=/opt/meetsmatch/.env
+ExecStart=/usr/local/bin/uv run python main.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

@@ -78,38 +78,27 @@ def validate_profile(user: User) -> dict:
 
 ### Delete Account Mechanism
 - Users can delete their account and all associated data via `/configuration`.
-- On database (Cloudflare D1) we mark soft delete and keep the data for a retention period.
+- On database (PostgreSQL) we mark soft delete and keep the data for a retention period.
 - If users create with same telegram username, we still create new account other different ID
 
 ### Media Mechanism
 - Max 5 media files (images/videos) per profile with max size 5MB.
-- Have mechanism to store media metadata in D1 and potentially use R2 or KV for blobs if needed (evaluate based on cost/performance).
+- Store media metadata in PostgreSQL. Blob storage strategy is deployment-dependent; keep only references/URLs.
 - Have mechanism to delete media references in 180 days after they change their media or account is deleted.
 
 ## Data Persistence
-- **Profile Data:** Stored in Cloudflare D1 (SQLite-based serverless database).
-- **Media Metadata:** Stored in Cloudflare D1. Blob storage TBD (R2/KV).
-- **Cache/Session Data:** Cloudflare KV for fast lookups.
+- **Profile Data:** Stored in PostgreSQL.
+- **Media Metadata:** Stored in PostgreSQL; blobs referenced via URLs.
+- **Cache/Session Data:** Redis (optional) for fast lookups.
 
 ## Security & Privacy
 1. **Data Encryption**
-   - Data at rest encrypted by Cloudflare.
-   - TLS 1.3 for data in transit (Cloudflare default).
+   - Data at rest handled by PostgreSQL and server disk encryption policies.
+   - TLS 1.3 for data in transit via server configuration (if applicable).
 
 2. **Access Controls**
-    - Access to D1/KV/R2 managed via Cloudflare Worker bindings and secrets.
-    - Environment variables for API keys/tokens managed securely via Cloudflare dashboard and `.dev.vars`.
-```yaml
-# wrangler.toml example binding (conceptual)
-[[d1_databases]]
-binding = "DB"
-database_name = "meetmatch-db"
-database_id = "your-d1-database-id"
-
-[[kv_namespaces]]
-binding = "CACHE"
-id = "your-kv-namespace-id"
-```
+    - Access to PostgreSQL/Redis managed via network-level controls and service credentials.
+    - Environment variables for API keys/tokens managed via `.env`.
 
 ## Rate Limits & Quotas
 - Implement rate limits for API requests to prevent abuse.

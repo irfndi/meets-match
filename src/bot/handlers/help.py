@@ -1,16 +1,10 @@
 """Help command handlers for the MeetMatch bot."""
 
-# TODO: Post-Cloudflare Migration Review
-# These handlers rely on the service layer (e.g., user_service, conversation_service).
-# After the service layer is refactored to use Cloudflare D1/KV/R2:
-# 1. Review how Cloudflare bindings/context ('env') are passed to service calls, if needed.
-# 2. Update error handling if D1/KV/R2 exceptions differ from previous DB/cache exceptions.
-# 3. Check if data structures returned by service calls have changed.
-
-from telegram import ReplyKeyboardMarkup, Update
+from telegram import Update
 from telegram.ext import ContextTypes
 
 from src.bot.middleware import user_command_limiter
+from src.bot.ui.keyboards import main_menu
 from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -35,9 +29,6 @@ HELP_MESSAGE = """
 /interests - Set your interests
 /location - Set your location
 
-*Chat Commands:*
-/chat [match_id] - Chat with a match
-
 Need more help? Contact support at @MeetMatchSupport
 """
 
@@ -50,7 +41,7 @@ MeetMatch is an AI-powered matchmaking bot that helps you find people with simil
 1. Create your profile
 2. Set your preferences
 3. Get matched with compatible people
-4. Chat and connect
+4. Connect with matches
 
 *Privacy:*
 - Your data is secure and never shared with third parties
@@ -72,17 +63,13 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     # Apply rate limiting
     await user_command_limiter()(update, context)
 
+    if not update.message:
+        return
+
     await update.message.reply_text(
         HELP_MESSAGE,
         parse_mode="Markdown",
-        reply_markup=ReplyKeyboardMarkup(
-            [
-                ["/profile", "/match"],
-                ["/matches", "/settings"],
-                ["/about", "/start"],
-            ],
-            resize_keyboard=True,
-        ),
+        reply_markup=main_menu(),
     )
 
 
@@ -96,15 +83,11 @@ async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     # Apply rate limiting
     await user_command_limiter()(update, context)
 
+    if not update.message:
+        return
+
     await update.message.reply_text(
         ABOUT_MESSAGE,
         parse_mode="Markdown",
-        reply_markup=ReplyKeyboardMarkup(
-            [
-                ["/profile", "/match"],
-                ["/matches", "/settings"],
-                ["/help", "/start"],
-            ],
-            resize_keyboard=True,
-        ),
+        reply_markup=main_menu(),
     )

@@ -16,25 +16,21 @@ from src.utils.errors import (
 from src.utils.logging import configure_logging, get_logger, log_error
 
 __all__ = [
-    # Cache utilities
-    "delete_cache",
-    "get_cache",
-    "get_cache_model",
-    "set_cache",
-    # Database utilities
-    "execute_query",
-    # Error classes
-    "MeetMatchError",
+    "AuthenticationError",
     "ConfigurationError",
     "DatabaseError",
-    "ValidationError",
-    "AuthenticationError",
-    "NotFoundError",
-    "RateLimitError",
     "ExternalServiceError",
     "MatchingError",
-    # Logging utilities
+    "MeetMatchError",
+    "NotFoundError",
+    "RateLimitError",
+    "ValidationError",
     "configure_logging",
+    "delete_cache",
+    "execute_query",
+    "get_cache",
+    "get_cache_model",
     "get_logger",
     "log_error",
+    "set_cache",
 ]
