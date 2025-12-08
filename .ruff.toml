@@ -21,7 +21,7 @@ select = [
     "C4",  # flake8-comprehensions
     "RUF", # Ruff-specific rules
 ]
-ignore = ["E501"]  # Line too long
+ignore = ["E501", "W293"]  # Line too long, Blank line contains whitespace
 
 [lint.per-file-ignores]
 "__init__.py" = ["F401"]  # Unused imports

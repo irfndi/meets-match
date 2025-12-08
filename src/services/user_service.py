@@ -1,15 +1,9 @@
 """User service for the MeetMatch bot."""
 
-# TODO: Cloudflare Migration (D1/KV/R2)
-# This service likely contains logic interacting with the database (Supabase/PostgreSQL)
-# for user CRUD, caching (Redis), and potentially file storage (S3 for photos).
-# - All database CRUD operations must be rewritten to use Cloudflare D1 (via bindings).
-# - All caching logic needs to be updated to use Cloudflare KV (via bindings).
-# - Any photo/file storage logic must be updated to use Cloudflare R2 (via bindings).
-# Review all methods for persistence, caching, and file storage logic.
-
 from datetime import datetime
 from typing import Dict, List, Optional, Union, cast
+
+import sentry_sdk
 
 from src.models.user import Location, Preferences, User
 from src.utils.cache import delete_cache, get_cache_model, set_cache
@@ -36,33 +30,38 @@ def get_user(user_id: str) -> User:
     Raises:
         NotFoundError: If user not found
     """
-    # Check cache first
-    cache_key = USER_CACHE_KEY.format(user_id=user_id)
-    cached_user = get_cache_model(cache_key, User)
-    if cached_user:
-        logger.debug("User retrieved from cache", user_id=user_id)
-        return cached_user
+    with sentry_sdk.start_span(op="user.get", name=user_id) as span:
+        # Check cache first
+        cache_key = USER_CACHE_KEY.format(user_id=user_id)
+        # Use sliding expiration: extend cache by 1 hour on every access
+        cached_user = get_cache_model(cache_key, User, extend_ttl=3600)
+        if cached_user:
+            logger.debug("User retrieved from cache", user_id=user_id)
+            span.set_data("source", "cache")
+            return cached_user
 
-    # Query database
-    result = execute_query(
-        table="users",
-        query_type="select",
-        filters={"id": user_id},
-    )
+        # Query database
+        result = execute_query(
+            table="users",
+            query_type="select",
+            filters={"id": user_id},
+        )
 
-    data = result.data
-    if not data or len(data) == 0:
-        logger.warning("User not found", user_id=user_id)
-        raise NotFoundError(f"User not found: {user_id}")
+        data = result.data
+        if not data or len(data) == 0:
+            logger.warning("User not found", user_id=user_id)
+            span.set_status("not_found")
+            raise NotFoundError(f"User not found: {user_id}")
 
-    # Convert to User model
-    user = User.model_validate(data[0])
+        # Convert to User model
+        user = User.model_validate(data[0])
 
-    # Cache user
-    set_cache(cache_key, user, expiration=3600)  # 1 hour
+        # Cache user
+        set_cache(cache_key, user, expiration=3600)  # 1 hour
 
-    logger.debug("User retrieved from database", user_id=user_id)
-    return user
+        logger.debug("User retrieved from database", user_id=user_id)
+        span.set_data("source", "database")
+        return user
 
 
 def create_user(user: User) -> User:
@@ -77,48 +76,51 @@ def create_user(user: User) -> User:
     Raises:
         ValidationError: If user already exists
     """
-    # Check if user already exists
-    try:
-        existing_user = get_user(user.id)
-        if existing_user:
-            logger.warning("User already exists", user_id=user.id)
-            raise ValidationError(
-                f"User already exists: {user.id}",
-                details={"user_id": user.id},
-            )
-    except NotFoundError:
-        # User doesn't exist, continue with creation
-        pass
+    with sentry_sdk.start_span(op="user.create", name=user.id) as span:
+        # Check if user already exists
+        try:
+            existing_user = get_user(user.id)
+            if existing_user:
+                logger.warning("User already exists", user_id=user.id)
+                span.set_status("already_exists")
+                raise ValidationError(
+                    f"User already exists: {user.id}",
+                    details={"user_id": user.id},
+                )
+        except NotFoundError:
+            # User doesn't exist, continue with creation
+            pass
 
-    # Set timestamps
-    now = datetime.now()
-    user.created_at = now
-    user.updated_at = now
-    user.last_active = now
+        # Set timestamps
+        now = datetime.now()
+        user.created_at = now
+        user.updated_at = now
+        user.last_active = now
 
-    # Insert into database
-    result = execute_query(
-        table="users",
-        query_type="insert",
-        data=user.model_dump(),
-    )
-
-    if not result.data or len(result.data) == 0:
-        logger.error("Failed to create user", user_id=user.id)
-        raise ValidationError(
-            f"Failed to create user: {user.id}",
-            details={"user_id": user.id},
+        # Insert into database
+        result = execute_query(
+            table="users",
+            query_type="insert",
+            data=user.model_dump(),
         )
 
-    # Cache user
-    cache_key = USER_CACHE_KEY.format(user_id=user.id)
-    set_cache(cache_key, user, expiration=3600)  # 1 hour
+        if not result.data or len(result.data) == 0:
+            logger.error("Failed to create user", user_id=user.id)
+            span.set_status("internal_error")
+            raise ValidationError(
+                f"Failed to create user: {user.id}",
+                details={"user_id": user.id},
+            )
 
-    logger.info("User created", user_id=user.id)
-    return user
+        # Cache user
+        cache_key = USER_CACHE_KEY.format(user_id=user.id)
+        set_cache(cache_key, user, expiration=3600)  # 1 hour
+
+        logger.info("User created", user_id=user.id)
+        return user
 
 
-def update_user(user_id: str, data: Dict[str, Union[str, int, bool, List[str], Dict]]) -> User:
+def update_user(user_id: str, data: Dict[str, Union[str, int, bool, datetime, List[str], Dict]]) -> User:
     """Update a user.
 
     Args:
@@ -132,43 +134,69 @@ def update_user(user_id: str, data: Dict[str, Union[str, int, bool, List[str], D
         NotFoundError: If user not found
         ValidationError: If update data is invalid
     """
-    # Get current user
-    get_user(user_id)
+    with sentry_sdk.start_span(op="user.update", name=user_id) as span:
+        span.set_data("fields", list(data.keys()))
 
-    # Update timestamps
-    data["updated_at"] = datetime.now()
+        # Get current user
+        get_user(user_id)
 
-    # Update user in database
-    result = execute_query(
-        table="users",
-        query_type="update",
-        filters={"id": user_id},
-        data=data,
-    )
+        # Update timestamps
+        data["updated_at"] = datetime.now()
 
-    if not result.data or len(result.data) == 0:
-        logger.error("Failed to update user", user_id=user_id)
-        raise ValidationError(
-            f"Failed to update user: {user_id}",
-            details={"user_id": user_id},
+        # Update user in database
+        if "preferences" in data:
+            logger.debug("Updating user preferences", user_id=user_id, preferences=data["preferences"])
+        else:
+            logger.debug("Executing update_user query", user_id=user_id, data_keys=list(data.keys()))
+
+        result = execute_query(
+            table="users",
+            query_type="update",
+            filters={"id": user_id},
+            data=data,
         )
 
-    # Get updated user
-    updated_user = get_user(user_id)
+        if not result.data or len(result.data) == 0:
+            logger.error("Failed to update user in DB", user_id=user_id, data_keys=list(data.keys()))
+            span.set_status("internal_error")
+            raise ValidationError(
+                f"Failed to update user: {user_id}",
+                details={"user_id": user_id},
+            )
 
-    # Update cache
-    cache_key = USER_CACHE_KEY.format(user_id=user_id)
-    set_cache(cache_key, updated_user, expiration=3600)  # 1 hour
+        logger.debug("Database update successful", user_id=user_id)
 
-    # If location was updated, update location cache
-    if "location" in data:
+        # Invalidate caches to avoid stale reads
+        cache_key = USER_CACHE_KEY.format(user_id=user_id)
+        delete_cache(cache_key)
+        logger.debug("Invalidated user cache", key=cache_key)
         location_cache_key = USER_LOCATION_CACHE_KEY.format(user_id=user_id)
-        location_data = cast(Dict, data["location"])
-        location = Location.model_validate(location_data)
-        set_cache(location_cache_key, location, expiration=86400)  # 24 hours
+        if (
+            "location" in data
+            or "location_latitude" in data
+            or "location_longitude" in data
+            or "location_city" in data
+            or "location_country" in data
+        ):
+            delete_cache(location_cache_key)
 
-    logger.info("User updated", user_id=user_id)
-    return updated_user
+        # Get updated user from database and refresh caches
+        updated_user = get_user(user_id)
+        set_cache(cache_key, updated_user, expiration=3600)  # 1 hour
+
+        # Refresh location cache if available
+        if updated_user.location:
+            set_cache(location_cache_key, updated_user.location, expiration=86400)
+        elif "location" in data:
+            try:
+                location_data = cast(Dict, data["location"])  # type: ignore[index]
+                location = Location.model_validate(location_data)
+                set_cache(location_cache_key, location, expiration=86400)
+            except Exception:
+                pass  # Ignore cache update failures for location
+
+        logger.info("User updated", user_id=user_id)
+        return updated_user
 
 
 def update_user_location(user_id: str, location: Location) -> User:
@@ -184,22 +212,71 @@ def update_user_location(user_id: str, location: Location) -> User:
     Raises:
         NotFoundError: If user not found
     """
-    # Update location timestamp
-    location.last_updated = datetime.now()
+    with sentry_sdk.start_span(op="user.update_location", name=user_id) as span:
+        span.set_data("city", location.city)
+        span.set_data("country", location.country)
 
-    # Update user
-    user = update_user(user_id, {"location": location.model_dump()})
+        # Update location timestamp
+        location.last_updated = datetime.now()
 
-    # Update location cache
-    location_cache_key = USER_LOCATION_CACHE_KEY.format(user_id=user_id)
-    set_cache(location_cache_key, location, expiration=86400)  # 24 hours
+        # Update user
+        user = update_user(user_id, {"location": location.model_dump()})
 
-    logger.info("User location updated", user_id=user_id, location=location.model_dump())
-    return user
+        # Update location cache
+        location_cache_key = USER_LOCATION_CACHE_KEY.format(user_id=user_id)
+        set_cache(location_cache_key, location, expiration=86400)  # 24 hours
+
+        logger.info("User location updated", user_id=user_id, location=location.model_dump())
+        return user
+
+
+def get_user_location_text(user_id: str) -> Optional[str]:
+    """Get a human-readable location string (city, country) for a user.
+
+    Falls back to flat DB fields if nested location isn't present.
+    """
+
+    def _format_location(city: str, country: str) -> Optional[str]:
+        """Format city and country into a single string, handling empty values."""
+        parts = [p for p in (city, country) if p]
+        return ", ".join(parts) if parts else None
+
+    try:
+        user = get_user(user_id)
+        if user.location and (user.location.city or user.location.country):
+            city = user.location.city or ""
+            country = user.location.country or ""
+            return _format_location(city, country)
+    except Exception:
+        pass  # Fall through to try DB query fallback
+
+    try:
+        result = execute_query(
+            table="users",
+            query_type="select",
+            filters={"id": user_id},
+        )
+        data = result.data or []
+        if data:
+            row = data[0]
+            loc = row.get("location")
+            if loc and isinstance(loc, dict):
+                city = loc.get("city") or ""
+                country = loc.get("country") or ""
+                text = _format_location(city, country)
+                if text:
+                    return text
+            city = row.get("location_city") or ""
+            country = row.get("location_country") or ""
+            return _format_location(city, country)
+    except Exception:
+        pass  # Return None if location cannot be determined
+
+    return None
 
 
 def update_user_preferences(user_id: str, preferences: Preferences) -> User:
-    """Update a user's preferences.
+    """Update a user's preferences by merging with existing values.
 
     Args:
         user_id: User ID
@@ -211,11 +288,22 @@ def update_user_preferences(user_id: str, preferences: Preferences) -> User:
     Raises:
         NotFoundError: If user not found
     """
-    # Update user
-    user = update_user(user_id, {"preferences": preferences.model_dump()})
+    with sentry_sdk.start_span(op="user.update_preferences", name=user_id) as span:
+        # Load existing preferences
+        existing_user = get_user(user_id)
+        existing_prefs = existing_user.preferences.model_dump() if existing_user.preferences else {}
 
-    logger.info("User preferences updated", user_id=user_id)
-    return user
+        # Only apply non-None fields to avoid wiping existing settings unintentionally
+        new_prefs_partial = preferences.model_dump(exclude_none=True)
+        merged = {**existing_prefs, **new_prefs_partial}
+
+        span.set_data("updated_fields", list(new_prefs_partial.keys()))
+
+        # Persist merged preferences
+        user = update_user(user_id, {"preferences": merged})
+
+        logger.info("User preferences updated", user_id=user_id)
+        return user
 
 
 def delete_user(user_id: str) -> None:
@@ -298,3 +386,109 @@ def update_last_active(user_id: str) -> None:
     now = datetime.now()
     update_user(user_id, {"last_active": now})
     logger.debug("User last active updated", user_id=user_id, timestamp=now)
+
+
+def get_inactive_users(days_inactive: int) -> List[User]:
+    """Get users who have been inactive for exactly the specified number of days."""
+    from datetime import timedelta
+
+    # Calculate the time range for "exact" match (e.g., between X and X+1 days ago)
+    # We want users where (now - last_active) is close to days_inactive.
+    # So last_active should be between (now - days_inactive - 1) and (now - days_inactive)
+
+    # Example: If days_inactive=1 (yesterday)
+    # We want users active between 48h ago and 24h ago?
+    # Or simply: last_active < (now - days) AND last_active >= (now - days - 1)
+
+    # Use naive UTC consistently with the rest of the codebase
+    now = datetime.now()
+    end_date = now - timedelta(days=days_inactive)
+    start_date = end_date - timedelta(days=1)
+
+    # We use execute_query with range filters
+    # src/utils/database.py supports "__gte", "__lte", "__gt", "__lt"
+
+    # last_active >= start_date AND last_active < end_date
+    # means they were last active strictly within that 24h window X days ago.
+
+    result = execute_query(
+        table="users",
+        query_type="select",
+        filters={"last_active__gte": start_date, "last_active__lt": end_date, "is_active": True},
+    )
+
+    if not result.data:
+        return []
+
+    return [User.model_validate(u) for u in result.data]
+
+
+def set_user_sleeping(user_id: str, is_sleeping: bool) -> User:
+    """Set a user's sleeping/paused status.
+
+    Args:
+        user_id: User ID
+        is_sleeping: Whether the user is sleeping/paused
+
+    Returns:
+        Updated user object
+
+    Raises:
+        NotFoundError: If user not found
+    """
+    user = update_user(user_id, {"is_sleeping": is_sleeping})
+    logger.info("User sleeping status updated", user_id=user_id, is_sleeping=is_sleeping)
+    return user
+
+
+def wake_user(user_id: str) -> User:
+    """Wake up a sleeping user and update their last_active timestamp.
+
+    Args:
+        user_id: User ID
+
+    Returns:
+        Updated user object
+
+    Raises:
+        NotFoundError: If user not found
+    """
+    now = datetime.now()
+    user = update_user(user_id, {"is_sleeping": False, "last_active": now})
+    logger.info("User woken up", user_id=user_id)
+    return user
+
+
+def get_users_for_auto_sleep(inactivity_minutes: int = 15) -> List[User]:
+    """Get active, non-sleeping users who have been inactive for the specified minutes.
+
+    Args:
+        inactivity_minutes: Number of minutes of inactivity before auto-sleep
+
+    Returns:
+        List of users eligible for auto-sleep
+    """
+    from datetime import timedelta
+
+    # Use naive UTC consistently with the rest of the codebase
+    now = datetime.now()
+    threshold = now - timedelta(minutes=inactivity_minutes)
+
+    # Get users who:
+    # - Are active (is_active=True)
+    # - Are NOT sleeping (is_sleeping=False)
+    # - Have last_active before the threshold
+    result = execute_query(
+        table="users",
+        query_type="select",
+        filters={
+            "last_active__lt": threshold,
+            "is_active": True,
+            "is_sleeping": False,
+        },
+    )
+
+    if not result.data:
+        return []
+
+    return [User.model_validate(u) for u in result.data]

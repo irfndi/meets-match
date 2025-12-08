@@ -1,6 +1,6 @@
 # SOME DESCRIPTIVE TITLE.
 # Copyright (C) YEAR ORGANIZATION
-# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+# FIRST AUTHOR <join.mantap@gmail.com>, 2025.
 #
 msgid ""
 msgstr ""
@@ -56,7 +56,7 @@ msgstr ""
 msgid "No more matches available. Try again later!"
 msgstr ""
 
-msgid "It's a match! You can now chat with @{username}"
+msgid "It's a match! Check out @{username}"
 msgstr ""
 
 msgid "Profile saved!"
