@@ -1,3 +1,4 @@
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -7,7 +8,8 @@ from src.utils.database import DatabaseError, UserDB, _model_to_dict, _transform
 
 class TestDatabaseExtended:
     @patch("src.utils.database.get_session")
-    def test_select_operators(self, mock_get_session):
+    def test_select_operators(self, mock_get_session: MagicMock) -> None:
+        """Test select queries with various filter operators (__gte, __in, __like)."""
         mock_session = MagicMock()
         mock_query = MagicMock()
         mock_session.query.return_value = mock_query
@@ -19,7 +21,9 @@ class TestDatabaseExtended:
 
         # Test __gte
         execute_query("users", "select", filters={"age__gte": 18})
-        # We can't easily assert the expression equality without compiling, but we can verify filter was called
+        # SQLAlchemy filter expressions are complex objects that cannot be directly compared for equality in tests.
+        # To assert the exact filter expression, we would need to compile the query to SQL, which requires a database engine.
+        # Therefore, we only verify that filter() was called, not that it was called with the exact expected expression.
         mock_query.filter.assert_called()
 
         # Test __in
@@ -31,7 +35,8 @@ class TestDatabaseExtended:
         mock_query.filter.assert_called()
 
     @patch("src.utils.database.get_session")
-    def test_select_order_by(self, mock_get_session):
+    def test_select_order_by(self, mock_get_session: MagicMock) -> None:
+        """Test select queries with order_by clause (ASC and DESC)."""
         mock_session = MagicMock()
         mock_query = MagicMock()
         mock_session.query.return_value = mock_query
@@ -49,7 +54,8 @@ class TestDatabaseExtended:
         mock_query.order_by.assert_called()
 
     @patch("src.utils.database.get_session")
-    def test_insert(self, mock_get_session):
+    def test_insert(self, mock_get_session: MagicMock) -> None:
+        """Test inserting a new record into the database."""
         mock_session = MagicMock()
         mock_get_session.return_value = mock_session
 
@@ -62,7 +68,8 @@ class TestDatabaseExtended:
         assert result.data[0]["id"] == "1"
 
     @patch("src.utils.database.get_session")
-    def test_update_success(self, mock_get_session):
+    def test_update_success(self, mock_get_session: MagicMock) -> None:
+        """Test successful update of an existing record."""
         mock_session = MagicMock()
         mock_query = MagicMock()
         mock_session.query.return_value = mock_query
@@ -73,21 +80,12 @@ class TestDatabaseExtended:
         # Mock update
         mock_query.update.return_value = 1
 
-        # Let's mock a UserDB object with minimal structure
-        col = MagicMock()
-        col.name = "id"
-
-        # Create object and attach __table__ manually to avoid Mock restrictions
-        class MockModel:
-            class Table:
-                columns = [col]  # noqa: RUF012
-
-            __table__ = Table()
-            id = "1"
-            # Add other attributes needed for log debug calls
-            preferences = {}  # noqa: RUF012
-
-        updated_obj = MockModel()
+        # Create a mock updated object with necessary attributes
+        updated_obj = MagicMock()
+        updated_obj.__table__ = MagicMock()
+        updated_obj.__table__.columns = [MagicMock(name="id")]
+        updated_obj.id = "1"
+        updated_obj.preferences = {}
 
         mock_query.all.return_value = [updated_obj]
 
@@ -99,7 +97,8 @@ class TestDatabaseExtended:
         mock_session.commit.assert_called()
 
     @patch("src.utils.database.get_session")
-    def test_update_not_found(self, mock_get_session):
+    def test_update_not_found(self, mock_get_session: MagicMock) -> None:
+        """Test update operation when the record to update is not found."""
         mock_session = MagicMock()
         mock_query = MagicMock()
         mock_session.query.return_value = mock_query
@@ -114,7 +113,8 @@ class TestDatabaseExtended:
         assert len(result.data) == 0
 
     @patch("src.utils.database.get_session")
-    def test_delete(self, mock_get_session):
+    def test_delete(self, mock_get_session: MagicMock) -> None:
+        """Test deleting a record from the database."""
         mock_session = MagicMock()
         mock_query = MagicMock()
         mock_session.query.return_value = mock_query
@@ -127,12 +127,12 @@ class TestDatabaseExtended:
         mock_query.delete.assert_called()
         mock_session.commit.assert_called()
 
-    def test_transform_user_data(self):
+    def test_transform_user_data(self) -> None:
+        """Test transformation of user data with nested location and invalid preferences."""
         data = {
             "id": "1",
             "location": {"latitude": 1.0, "longitude": 2.0, "city": "City", "country": "Country"},
-            # We must provide something that triggers the dict check if we want coverage there
-            # But the code says: if "preferences" in transformed and transformed["preferences"] is not None:
+            # Provide a non-dict value for "preferences" to test type validation logic
             "preferences": "some string",  # Invalid dict
         }
 
@@ -144,7 +144,8 @@ class TestDatabaseExtended:
         # Since it was a string, it should be reset to {}
         assert transformed["preferences"] == {}
 
-    def test_model_to_dict(self):
+    def test_model_to_dict(self) -> None:
+        """Test converting UserDB model to dictionary with nested location fields."""
         # Create a real UserDB instance if possible or a mock with proper attributes
         user = UserDB(
             id="1", location_latitude=1.0, location_longitude=2.0, location_city="City", location_country="Country"
@@ -156,17 +157,20 @@ class TestDatabaseExtended:
         assert result["location"]["city"] == "City"
         assert "location_city" not in result
 
-    def test_invalid_table(self):
+    def test_invalid_table(self) -> None:
+        """Test that querying an invalid table raises ValueError."""
         with pytest.raises(ValueError, match="Unknown table"):
             execute_query("invalid_table", "select")
 
-    def test_invalid_query_type(self):
+    def test_invalid_query_type(self) -> None:
+        """Test that using an invalid query type raises DatabaseError."""
         # execute_query wraps exceptions in DatabaseError
         with pytest.raises(DatabaseError, match="Database operation failed"):
             execute_query("users", "invalid_type")
 
     @patch("src.utils.database.get_session")
-    def test_database_error_handling(self, mock_get_session):
+    def test_database_error_handling(self, mock_get_session: MagicMock) -> None:
+        """Test that database errors are properly caught and wrapped in DatabaseError."""
         mock_session = MagicMock()
         mock_get_session.return_value = mock_session
         mock_session.query.side_effect = Exception("DB Error")

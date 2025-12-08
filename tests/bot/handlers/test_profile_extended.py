@@ -1,4 +1,5 @@
 import sys
+from typing import Any, Generator
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -8,7 +9,7 @@ from telegram.ext import ContextTypes
 
 # Fixture to provide the profile module with mocked dependencies
 @pytest.fixture
-def profile_module():
+def profile_module() -> Generator[Any, None, None]:
     # Ensure src.bot.middleware is mocked so @authenticated doesn't cause issues
     mock_middleware = MagicMock()
     mock_middleware.authenticated = lambda x: x
@@ -26,7 +27,7 @@ def profile_module():
 
 
 @pytest.fixture
-def mock_update_context():
+def mock_update_context() -> tuple[MagicMock, MagicMock]:
     update = MagicMock(spec=Update)
     update.effective_user = MagicMock(spec=User)
     update.effective_user.id = 12345
@@ -44,7 +45,8 @@ def mock_update_context():
 
 
 @pytest.mark.asyncio
-async def test_save_bio_too_long(profile_module, mock_update_context):
+async def test_save_bio_too_long(profile_module: Any, mock_update_context: tuple[MagicMock, MagicMock]) -> None:
+    """Test that bios exceeding 300 characters are rejected."""
     update, context = mock_update_context
     long_bio = "a" * 301
 
@@ -60,7 +62,8 @@ async def test_save_bio_too_long(profile_module, mock_update_context):
 
 
 @pytest.mark.asyncio
-async def test_save_interests_too_many(profile_module, mock_update_context):
+async def test_save_interests_too_many(profile_module: Any, mock_update_context: tuple[MagicMock, MagicMock]) -> None:
+    """Test that more than 10 interests are rejected."""
     update, context = mock_update_context
     interests = "1,2,3,4,5,6,7,8,9,10,11"
 
@@ -74,7 +77,8 @@ async def test_save_interests_too_many(profile_module, mock_update_context):
 
 
 @pytest.mark.asyncio
-async def test_save_interests_empty(profile_module, mock_update_context):
+async def test_save_interests_empty(profile_module: Any, mock_update_context: tuple[MagicMock, MagicMock]) -> None:
+    """Test that empty interests list is rejected."""
     update, context = mock_update_context
     interests = " , , "
 
@@ -88,7 +92,10 @@ async def test_save_interests_empty(profile_module, mock_update_context):
 
 
 @pytest.mark.asyncio
-async def test_process_manual_location_invalid_format(profile_module, mock_update_context):
+async def test_process_manual_location_invalid_format(
+    profile_module: Any, mock_update_context: tuple[MagicMock, MagicMock]
+) -> None:
+    """Test that invalid location format (missing comma) is rejected."""
     update, context = mock_update_context
     location_text = "CityOnly"
 
@@ -100,7 +107,10 @@ async def test_process_manual_location_invalid_format(profile_module, mock_updat
 
 
 @pytest.mark.asyncio
-async def test_process_manual_location_geocode_fail(profile_module, mock_update_context):
+async def test_process_manual_location_geocode_fail(
+    profile_module: Any, mock_update_context: tuple[MagicMock, MagicMock]
+) -> None:
+    """Test that geocoding failures are handled gracefully."""
     update, context = mock_update_context
     location_text = "Unknown, City"
 
@@ -114,15 +124,18 @@ async def test_process_manual_location_geocode_fail(profile_module, mock_update_
 
 
 @pytest.mark.asyncio
-async def test_process_manual_location_success(profile_module, mock_update_context):
+async def test_process_manual_location_success(
+    profile_module: Any, mock_update_context: tuple[MagicMock, MagicMock]
+) -> None:
+    """Test successful manual location processing and user update."""
     update, context = mock_update_context
     location_text = "Berlin, Germany"
 
     mock_geo_result = {"latitude": 52.52, "longitude": 13.40, "city": "Berlin", "country": "Germany"}
 
-    # We need to mock Preferences inside the function if it's imported locally?
-    # No, it calls get_user and then getattr(user, 'preferences').
-    # We just need to ensure get_user returns something sensible.
+    # Mocking Preferences directly is not necessary here because the function retrieves preferences
+    # via the user object returned by get_user. Therefore, we only need to mock get_user to return
+    # a user object with a preferences attribute.
 
     mock_user = MagicMock()
     mock_user.preferences = MagicMock()
@@ -150,7 +163,10 @@ async def test_process_manual_location_success(profile_module, mock_update_conte
 
 
 @pytest.mark.asyncio
-async def test_gender_selection_invalid(profile_module, mock_update_context):
+async def test_gender_selection_invalid(
+    profile_module: Any, mock_update_context: tuple[MagicMock, MagicMock]
+) -> None:
+    """Test that invalid gender selection is rejected."""
     update, context = mock_update_context
     context.user_data["awaiting_gender"] = True
 
@@ -162,7 +178,10 @@ async def test_gender_selection_invalid(profile_module, mock_update_context):
 
 
 @pytest.mark.asyncio
-async def test_gender_selection_cancel(profile_module, mock_update_context):
+async def test_gender_selection_cancel(
+    profile_module: Any, mock_update_context: tuple[MagicMock, MagicMock]
+) -> None:
+    """Test that Cancel command properly exits gender selection."""
     update, context = mock_update_context
     context.user_data["awaiting_gender"] = True
     context.user_data["profile_setup_step"] = 2
@@ -176,7 +195,10 @@ async def test_gender_selection_cancel(profile_module, mock_update_context):
 
 
 @pytest.mark.asyncio
-async def test_photo_handler_limit_reached(profile_module, mock_update_context):
+async def test_photo_handler_limit_reached(
+    profile_module: Any, mock_update_context: tuple[MagicMock, MagicMock]
+) -> None:
+    """Test that photo upload is rejected when maximum file count is reached."""
     update, context = mock_update_context
 
     # Mock settings
@@ -199,7 +221,10 @@ async def test_photo_handler_limit_reached(profile_module, mock_update_context):
 
 
 @pytest.mark.asyncio
-async def test_photo_handler_validation_fail(profile_module, mock_update_context):
+async def test_photo_handler_validation_fail(
+    profile_module: Any, mock_update_context: tuple[MagicMock, MagicMock]
+) -> None:
+    """Test that photo validation failures are properly handled."""
     update, context = mock_update_context
 
     mock_settings = MagicMock()
@@ -227,7 +252,8 @@ async def test_photo_handler_validation_fail(profile_module, mock_update_context
 
 
 @pytest.mark.asyncio
-async def test_view_profile_callback(profile_module, mock_update_context):
+async def test_view_profile_callback(profile_module: Any, mock_update_context: tuple[MagicMock, MagicMock]) -> None:
+    """Test viewing profile via callback query."""
     update, context = mock_update_context
     update.callback_query = MagicMock(spec=CallbackQuery)
     update.callback_query.data = "view_profile_999"
@@ -259,7 +285,9 @@ async def test_view_profile_callback(profile_module, mock_update_context):
 
 
 @pytest.mark.asyncio
-async def test_handle_text_message_skip_in_adhoc_mode(profile_module, mock_update_context):
+async def test_handle_text_message_skip_in_adhoc_mode(
+    profile_module: Any, mock_update_context: tuple[MagicMock, MagicMock]
+) -> None:
     """Test 'Skip' command in adhoc mode (completing missing fields one by one)."""
     update, context = mock_update_context
     update.message.text = "Skip"
@@ -281,7 +309,9 @@ async def test_handle_text_message_skip_in_adhoc_mode(profile_module, mock_updat
 
 
 @pytest.mark.asyncio
-async def test_handle_text_message_cancel(profile_module, mock_update_context):
+async def test_handle_text_message_cancel(
+    profile_module: Any, mock_update_context: tuple[MagicMock, MagicMock]
+) -> None:
     """Test 'Cancel' command."""
     update, context = mock_update_context
     update.message.text = "Cancel"
