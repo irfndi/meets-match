@@ -764,7 +764,7 @@ async def show_saved_matches_page(update: Update, context: ContextTypes.DEFAULT_
             keyboard.append(
                 [
                     InlineKeyboardButton(
-                        "� View Profile",
+                        "👤 View Profile",
                         callback_data=f"view_match_{match.id}",
                     )
                 ]
