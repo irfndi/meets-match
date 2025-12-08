@@ -28,11 +28,16 @@ Need help? Just type /help anytime.
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle the /start command.
+    """
+    Handle the /start command.
+
+    Registers new users or welcomes back existing users. Checks for missing
+    profile information and prompts the user to complete it if necessary.
+    If the profile is complete, attempts to show matches or the main menu.
 
     Args:
-        update: The update object
-        context: The context object
+        update (Update): The update object from Telegram.
+        context (ContextTypes.DEFAULT_TYPE): The callback context.
     """
     # Apply rate limiting
     await user_command_limiter()(update, context)

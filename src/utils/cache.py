@@ -16,20 +16,29 @@ T = TypeVar("T", bound=BaseModel)
 
 
 class RedisClient:
-    """Singleton class for Redis client."""
+    """
+    Singleton class for Redis client.
+
+    Manages the Redis connection pool and provides a unified access point
+    for caching operations.
+    """
 
     _instance: Optional[redis.Redis] = None
     _failed: bool = False
 
     @classmethod
     def get_client(cls) -> Optional[redis.Redis]:
-        """Get or create a Redis client instance.
+        """
+        Get or create a Redis client instance.
+
+        Initializes a Redis connection pool if one doesn't exist. If configuration
+        is missing or connection fails, it marks the client as failed and returns None.
 
         Returns:
-            Redis client instance or None if Redis is not configured
+            Optional[redis.Redis]: Redis client instance or None if unavailable.
 
         Raises:
-            ConfigurationError: If connection fails after Redis is configured
+            ConfigurationError: If connection fails (internally caught).
         """
         if cls._failed:
             return None
@@ -63,16 +72,19 @@ class RedisClient:
 
 
 def set_cache(key: str, value: Union[str, Dict[str, Any], BaseModel], expiration: int = 3600) -> None:
-    """Set a value in the Redis cache.
+    """
+    Set a value in the Redis cache.
+
+    Serializes inputs (strings, dicts, or Pydantic models) to JSON/string before storage.
+    Enforces an expiration time.
 
     Args:
-        key: Cache key
-        value: Value to cache (string, dict, or Pydantic model)
-        expiration: Cache expiration time in seconds (default: 1 hour).
-                   MUST be provided to prevent indefinite memory usage.
+        key (str): Cache key.
+        value (Union[str, Dict[str, Any], BaseModel]): Value to cache.
+        expiration (int): Cache expiration time in seconds (default: 3600).
 
     Note:
-        Silently skips caching if Redis is not available
+        Silently skips caching if Redis is not available.
     """
     with sentry_sdk.start_span(op="cache.set", name=key) as span:
         span.set_data("expiration", expiration)
@@ -110,14 +122,15 @@ def set_cache(key: str, value: Union[str, Dict[str, Any], BaseModel], expiration
 
 
 def get_cache(key: str, extend_ttl: Optional[int] = None) -> Optional[str]:
-    """Get a string value from the Redis cache.
+    """
+    Get a string value from the Redis cache.
 
     Args:
-        key: Cache key
-        extend_ttl: Optional seconds to extend the TTL if key exists (sliding expiration)
+        key (str): Cache key.
+        extend_ttl (Optional[int]): Seconds to extend the TTL if key exists (sliding expiration).
 
     Returns:
-        Cached value or None if not found or Redis is not available
+        Optional[str]: Cached value or None if not found or Redis is not available.
     """
     with sentry_sdk.start_span(op="cache.get", name=key) as span:
         client = RedisClient.get_client()
@@ -144,18 +157,21 @@ def get_cache(key: str, extend_ttl: Optional[int] = None) -> Optional[str]:
 
 
 def get_cache_model(key: str, model_class: Type[T], extend_ttl: Optional[int] = None) -> Optional[T]:
-    """Get a Pydantic model from the Redis cache.
+    """
+    Get a Pydantic model from the Redis cache.
+
+    Retrieves a JSON string from cache and deserializes it into a Pydantic model.
 
     Args:
-        key: Cache key
-        model_class: Pydantic model class
-        extend_ttl: Optional seconds to extend the TTL if key exists (sliding expiration)
+        key (str): Cache key.
+        model_class (Type[T]): Pydantic model class to validate against.
+        extend_ttl (Optional[int]): Seconds to extend the TTL if key exists.
 
     Returns:
-        Pydantic model instance or None if not found
+        Optional[T]: Pydantic model instance or None if not found.
 
     Raises:
-        ConfigurationError: If cache operation fails
+        ConfigurationError: If cache operation fails (internally caught and logged).
     """
     with sentry_sdk.start_span(op="cache.get_model", name=key) as span:
         span.set_data("model", model_class.__name__)
@@ -182,13 +198,16 @@ def get_cache_model(key: str, model_class: Type[T], extend_ttl: Optional[int] = 
 
 
 def delete_pattern(pattern: str) -> int:
-    """Delete all keys matching a pattern.
+    """
+    Delete all keys matching a pattern.
+
+    Uses SCAN to safely iterate and delete keys matching the glob pattern.
 
     Args:
-        pattern: Redis glob pattern (e.g. "user:*")
+        pattern (str): Redis glob pattern (e.g. "user:*").
 
     Returns:
-        Number of keys deleted
+        int: Number of keys deleted.
     """
     with sentry_sdk.start_span(op="cache.delete_pattern", name=pattern) as span:
         client = RedisClient.get_client()
@@ -219,13 +238,14 @@ def delete_pattern(pattern: str) -> int:
 
 
 def delete_cache(key: str) -> None:
-    """Delete a value from the Redis cache.
+    """
+    Delete a value from the Redis cache.
 
     Args:
-        key: Cache key
+        key (str): Cache key.
 
     Note:
-        Silently skips deletion if Redis is not available
+        Silently skips deletion if Redis is not available.
     """
     with sentry_sdk.start_span(op="cache.delete", name=key) as span:
         client = RedisClient.get_client()

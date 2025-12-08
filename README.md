@@ -89,9 +89,22 @@ MeetMatch is an AI-powered Telegram bot built with Python 3.13+ that facilitates
 
 ```text
 src/
-├── bot/               # Telegram bot handlers and application
-├── models/            # Pydantic data models
-├── services/          # Business logic layer
-├── utils/             # Helper utilities
+├── api/               # FastAPI endpoints for health checks and management
+├── bot/               # Telegram bot handlers, middleware, and application logic
+│   ├── handlers/      # Command and callback handlers
+│   ├── middleware/    # Authentication and rate limiting middleware
+│   └── ui/            # Keyboards and UI elements
+├── models/            # Pydantic data models and enums
+├── services/          # Business logic layer (User, Matching, Geocoding)
+├── utils/             # Helper utilities (DB, Cache, Logging, Media)
 └── config.py          # Environment configuration
 ```
+
+## Documentation
+
+The codebase is fully documented with docstrings.
+- **Handlers**: located in `src/bot/handlers`, covering `/start`, `/match`, `/profile`, etc.
+- **Services**: core logic in `src/services`, handling user management and matching algorithms.
+- **Models**: data structures in `src/models`.
+
+Use `pydoc` or your IDE to explore specific function documentation.

@@ -17,12 +17,21 @@ SUPPORTED_LANGUAGES = {
 
 
 class I18n:
+    """Internationalization support for the bot."""
+
     def __init__(self) -> None:
+        """Initialize the I18n provider and load translations."""
         self.translations: Dict[str, Any] = {}
         self._load_translations()
 
     def _load_translations(self) -> None:
-        """Load all available translations."""
+        """
+        Load all available translations from the locale directory.
+
+        It attempts to load .mo files for each supported language.
+        If a translation file is missing, it falls back to NullTranslations
+        (returning the original key).
+        """
         # FIXME: Verify this path after moving the file
         localedir = os.path.join(os.path.dirname(__file__), "..", "..", "locales")
         # Original path relative to src/meetsmatch/:
@@ -43,19 +52,26 @@ class I18n:
         """
         Get translated text for a given key and language.
 
+        Uses caching to improve performance for frequently accessed strings.
+
         Args:
-            key (str): The message key to translate
-            lang (str): The language code (e.g., 'en', 'es')
+            key (str): The message key (usually English text) to translate.
+            lang (str): The target language code (e.g., 'en', 'es').
 
         Returns:
-            str: The translated text, or the original text if translation not found
+            str: The translated text, or the original text if translation not found.
         """
         if lang not in self.translations:
             lang = "en"
         return str(self.translations[lang].gettext(key))
 
     def get_supported_languages(self) -> dict:
-        """Get dictionary of supported languages."""
+        """
+        Get dictionary of supported languages.
+
+        Returns:
+            dict: A mapping of language codes to language names.
+        """
         return SUPPORTED_LANGUAGES.copy()
 
 

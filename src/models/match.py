@@ -8,7 +8,11 @@ from pydantic import BaseModel, Field
 
 
 class MatchStatus(str, Enum):
-    """Match status enumeration."""
+    """
+    Match status enumeration.
+
+    Represents the current state of a match between two users.
+    """
 
     PENDING = "pending"  # One user liked, waiting for the other
     MATCHED = "matched"  # Both users liked each other
@@ -17,7 +21,11 @@ class MatchStatus(str, Enum):
 
 
 class MatchAction(str, Enum):
-    """Match action enumeration."""
+    """
+    Match action enumeration.
+
+    Represents an action taken by a user on a match proposal.
+    """
 
     LIKE = "like"
     DISLIKE = "dislike"
@@ -25,7 +33,11 @@ class MatchAction(str, Enum):
 
 
 class MatchScore(BaseModel):
-    """Match score model."""
+    """
+    Match score model.
+
+    Stores the compatibility scores between two users based on various factors.
+    """
 
     total: float
     location: float
@@ -34,7 +46,12 @@ class MatchScore(BaseModel):
 
 
 class Match(BaseModel):
-    """Match model."""
+    """
+    Match model.
+
+    Represents a potential or active match between two users, including their
+    actions, the match status, and compatibility score.
+    """
 
     id: str
     user1_id: str
@@ -49,7 +66,15 @@ class Match(BaseModel):
     expired_at: Optional[datetime] = None
 
     def update_status(self) -> None:
-        """Update match status based on user actions."""
+        """
+        Update match status based on user actions.
+
+        This method evaluates the actions taken by both users and updates
+        the `status` and `matched_at` fields accordingly.
+        - If both users LIKE, status becomes MATCHED.
+        - If either user DISLIKES, status becomes REJECTED.
+        - Otherwise, status remains PENDING.
+        """
         now = datetime.now()
         self.updated_at = now
 
@@ -68,7 +93,12 @@ class Match(BaseModel):
 
 
 class UserMatch(BaseModel):
-    """User match view model (for presenting matches to users)."""
+    """
+    User match view model.
+
+    A simplified model used for presenting match information to users,
+    containing details about the matched partner and the match metadata.
+    """
 
     match_id: str
     user_id: str  # The other user's ID

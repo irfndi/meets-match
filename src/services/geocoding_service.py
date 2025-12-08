@@ -9,6 +9,18 @@ _geocoder = Nominatim(user_agent="meetsmatch-bot/1.0")
 
 
 def _extract_city_country(address: Dict[str, str]) -> Dict[str, Optional[str]]:
+    """
+    Extract city and country from an address dictionary.
+
+    Tries multiple keys for city (city, town, village, etc.) to ensure
+    maximum compatibility with different address formats.
+
+    Args:
+        address (Dict[str, str]): Address dictionary from geocoder.
+
+    Returns:
+        Dict[str, Optional[str]]: A dictionary containing 'city' and 'country'.
+    """
     city = (
         address.get("city")
         or address.get("town")
@@ -24,6 +36,20 @@ def _extract_city_country(address: Dict[str, str]) -> Dict[str, Optional[str]]:
 
 
 async def geocode_city(city_text: str, language: str = "en") -> Optional[Dict[str, Any]]:
+    """
+    Geocode a city name to coordinates.
+
+    Uses the Nominatim geocoder to find the latitude and longitude for a given city.
+    It returns the first result found.
+
+    Args:
+        city_text (str): The name of the city to geocode.
+        language (str, optional): The preferred language for the result. Defaults to "en".
+
+    Returns:
+        Optional[Dict[str, Any]]: A dictionary containing latitude, longitude, city,
+        and country if found, otherwise None.
+    """
     query = city_text.strip()
     if not query:
         return None
@@ -61,6 +87,19 @@ async def geocode_city(city_text: str, language: str = "en") -> Optional[Dict[st
 
 
 def normalize_city_alias(query_text: str, country: Optional[str]) -> str:
+    """
+    Normalize city aliases to full names.
+
+    Maps common abbreviations (like 'jkt' for 'Jakarta') to their full city names,
+    currently supporting Indonesian cities.
+
+    Args:
+        query_text (str): The input city text (potential alias).
+        country (Optional[str]): The country context.
+
+    Returns:
+        str: The normalized city name if a mapping exists, otherwise the original query.
+    """
     alias_map = {
         "indonesia": {
             "bdg": "Bandung",
@@ -83,6 +122,20 @@ def normalize_city_alias(query_text: str, country: Optional[str]) -> str:
 
 
 def _distance_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """
+    Calculate the distance between two coordinates in kilometers.
+
+    Uses the Haversine formula.
+
+    Args:
+        lat1 (float): Latitude of the first point.
+        lon1 (float): Longitude of the first point.
+        lat2 (float): Latitude of the second point.
+        lon2 (float): Longitude of the second point.
+
+    Returns:
+        float: Distance in kilometers.
+    """
     r = 6371.0
     phi1 = math.radians(lat1)
     phi2 = math.radians(lat2)
@@ -100,6 +153,22 @@ async def search_cities(
     prefer_country: Optional[str] = None,
     prefer_coords: Optional[Tuple[float, float]] = None,
 ) -> List[Dict[str, Any]]:
+    """
+    Search for cities matching a query string.
+
+    Returns a list of candidate cities with their coordinates and country info.
+    Results can be prioritized by country or proximity to coordinates.
+
+    Args:
+        query_text (str): The search query.
+        limit (int, optional): Maximum number of results. Defaults to 8.
+        language (str, optional): Preferred language. Defaults to "en".
+        prefer_country (Optional[str], optional): Prioritize results from this country.
+        prefer_coords (Optional[Tuple[float, float]], optional): Prioritize results closer to these coordinates (lat, lon).
+
+    Returns:
+        List[Dict[str, Any]]: List of matching cities with details.
+    """
     query = query_text.strip()
     if not query:
         return []
@@ -167,6 +236,16 @@ async def search_cities(
 
 
 async def reverse_geocode_coordinates(latitude: float, longitude: float) -> Optional[Dict[str, Any]]:
+    """
+    Reverse geocode coordinates to find the nearest city.
+
+    Args:
+        latitude (float): Latitude.
+        longitude (float): Longitude.
+
+    Returns:
+        Optional[Dict[str, Any]]: A dictionary containing city, country, and original coordinates if found, otherwise None.
+    """
     with sentry_sdk.start_span(op="geocoding.reverse", name=f"{latitude},{longitude}") as span:
         try:
             result = await asyncio.to_thread(

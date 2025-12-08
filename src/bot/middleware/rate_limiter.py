@@ -27,17 +27,21 @@ async def rate_limiter(
     window: int = 60,
     key_func: Optional[Callable[[Update], str]] = None,
 ) -> None:
-    """Rate limiting middleware for Telegram handlers.
+    """
+    Rate limiting middleware for Telegram handlers.
+
+    Uses Redis to track request counts within a sliding window. Falls back to
+    in-memory tracking if Redis is unavailable.
 
     Args:
-        update: Telegram update
-        context: Telegram context
-        limit: Maximum number of requests in the window
-        window: Time window in seconds
-        key_func: Function to generate rate limit key from update
+        update (Update): The Telegram update.
+        context (ContextTypes.DEFAULT_TYPE): The Telegram context.
+        limit (int): Maximum number of requests allowed in the window.
+        window (int): Time window in seconds.
+        key_func (Optional[Callable[[Update], str]]): Custom function to generate rate limit keys.
 
     Raises:
-        RateLimitError: If rate limit is exceeded
+        RateLimitError: If the rate limit is exceeded.
     """
     # Get user ID
     user_id = update.effective_user.id if update.effective_user else "anonymous"
@@ -130,14 +134,15 @@ async def rate_limiter(
 
 
 def user_command_limiter(limit: int = 5, window: int = 60) -> Callable:
-    """Create a rate limiter for user commands.
+    """
+    Create a rate limiter for user commands.
 
     Args:
-        limit: Maximum number of requests in the window
-        window: Time window in seconds
+        limit (int): Max requests per window.
+        window (int): Time window in seconds.
 
     Returns:
-        Rate limiter function
+        Callable: An async function to apply rate limiting.
     """
 
     async def limiter(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -157,14 +162,17 @@ def user_command_limiter(limit: int = 5, window: int = 60) -> Callable:
 
 
 def global_user_limiter(limit: int = 30, window: int = 60) -> Callable:
-    """Create a global rate limiter for users.
+    """
+    Create a global rate limiter for users.
+
+    Applies to all interactions from a user, regardless of command.
 
     Args:
-        limit: Maximum number of requests in the window
-        window: Time window in seconds
+        limit (int): Max requests per window.
+        window (int): Time window in seconds.
 
     Returns:
-        Rate limiter function
+        Callable: An async function to apply rate limiting.
     """
 
     async def limiter(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

@@ -50,10 +50,19 @@ logger = get_logger(__name__)
 
 
 class BotApplication:
-    """Telegram bot application."""
+    """
+    Telegram bot application wrapper.
+
+    Manages the lifecycle, configuration, and execution of the Telegram bot.
+    Handles startup, shutdown, signal registration, and error handling.
+    """
 
     def __init__(self) -> None:
-        """Initialize the bot application."""
+        """
+        Initialize the bot application configuration.
+
+        Sets up admin IDs and allowed update types.
+        """
         self.application: Application | None = None
         self.admin_ids: set[str] = set(settings.ADMIN_IDS.split(",") if settings.ADMIN_IDS else [])
         # Allow all update types (callbacks can be filtered out if Telegram remembered a restricted allowlist).
@@ -62,10 +71,14 @@ class BotApplication:
         logger.info("Initializing bot application", admin_ids=self.admin_ids)
 
     def _build_application(self) -> Application:
-        """Build and return the configured Application instance.
+        """
+        Build and return the configured Application instance.
+
+        Sets up the application builder with the bot token, defaults (HTML parse mode),
+        request timeout settings, and post-initialization hooks.
 
         Returns:
-            Configured Application instance.
+            Application: Configured Telegram Application instance.
         """
         defaults = Defaults(
             parse_mode="HTML",
@@ -89,20 +102,24 @@ class BotApplication:
         )
 
     async def setup(self) -> None:
-        """Set up the bot application.
+        """
+        Asynchronously set up the bot application.
 
-        Returns:
-                None
+        Builds the application and registers all handlers.
         """
         self.application = self._build_application()
         self._register_handlers()
         logger.info("Bot application setup complete")
 
     async def _post_init(self, application: Application) -> None:
-        """Set bot slash commands after application initialization.
+        """
+        Post-initialization hook.
+
+        Registers scheduled jobs (cleanup, reminders) and sets the bot's slash commands
+        in the Telegram UI.
 
         Args:
-            application: The initialized Telegram Application instance.
+            application (Application): The initialized Telegram Application instance.
         """
         # Register scheduled jobs
         if application.job_queue:
@@ -149,10 +166,11 @@ class BotApplication:
             logger.error("Failed to register bot commands", error=str(e), exc_info=e)
 
     def _register_handlers(self) -> None:
-        """Register all handlers.
+        """
+        Register all message, command, and callback handlers.
 
-        Returns:
-                None
+        Organizes handlers for commands, profile management, matching, settings,
+        and generic text messages.
         """
         if not self.application:
             raise MeetMatchError("Application not initialized")
@@ -246,14 +264,15 @@ class BotApplication:
         logger.info("Handlers registered")
 
     async def _error_handler(self, update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Handle errors in the bot.
+        """
+        Global error handler for the bot application.
+
+        Logs errors and sends a user-friendly message to the chat if possible.
+        Specifically handles polling conflicts and reports unexpected errors to Sentry.
 
         Args:
-                update: Update that caused the error
-                context: Context with error information
-
-        Returns:
-                None
+            update (object): The update object that caused the error.
+            context (ContextTypes.DEFAULT_TYPE): The callback context.
         """
         error = context.error
 
@@ -320,13 +339,21 @@ class BotApplication:
                 )
 
     def setup_sync(self) -> None:
-        """Set up the bot application synchronously."""
+        """
+        Set up the bot application synchronously.
+
+        Used when running the bot in standalone mode (not via async entry point).
+        """
         self.application = self._build_application()
         self._register_handlers()
         logger.info("Bot application setup complete")
 
     def run(self) -> None:
-        """Run the bot application."""
+        """
+        Run the bot application in standalone polling mode.
+
+        Blocks until the bot is stopped.
+        """
         if not self.application:
             self.setup_sync()
 
@@ -352,13 +379,23 @@ class BotApplication:
 
     @property
     def is_running(self) -> bool:
-        """Check if the bot is running and polling."""
+        """
+        Check if the bot is running and polling.
+
+        Returns:
+            bool: True if the updater is running, False otherwise.
+        """
         if not self.application or not self.application.updater:
             return False
         return self.application.updater.running
 
     async def start(self) -> None:
-        """Start the bot application in background mode (for API integration)."""
+        """
+        Start the bot application in background mode.
+
+        Used when running the bot alongside the API (lifespan management).
+        Ensures any existing webhook is deleted before starting polling.
+        """
         if not self.application:
             await self.setup()
 
@@ -389,7 +426,11 @@ class BotApplication:
                 raise  # Let caller handle the conflict
 
     async def stop(self) -> None:
-        """Stop the bot application."""
+        """
+        Stop the bot application.
+
+        Stops the updater and the application, performing a graceful shutdown.
+        """
         if self.application:
             logger.info("Bot stopping...")
             if self.application.updater:
@@ -400,6 +441,10 @@ class BotApplication:
 
 
 def start_bot() -> None:
-    """Start the bot application."""
+    """
+    Start the bot application.
+
+    Entry point for the standalone bot script.
+    """
     bot = BotApplication()
     bot.run()

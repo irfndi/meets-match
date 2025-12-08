@@ -27,14 +27,18 @@ _SETTINGS_CALLBACK_PREFIXES = (
 
 
 def _get_effective_premium_tier(user_id: str, prefs: Preferences) -> str:
-    """Return the user's effective premium tier, including admin overrides.
+    """
+    Return the user's effective premium tier, including admin overrides.
+
+    Checks if the user is in the admin list defined in settings. If so, they
+    get 'admin' tier. Otherwise, returns their stored premium tier or 'free'.
 
     Args:
-        user_id: The user's ID
-        prefs: The user's Preferences object
+        user_id (str): The user's ID.
+        prefs (Preferences): The user's Preferences object.
 
     Returns:
-        The effective tier string: 'free', 'pro', or 'admin'
+        str: The effective tier string ('free', 'pro', or 'admin').
     """
     from src.config import settings as app_settings
 
@@ -46,13 +50,17 @@ def _get_effective_premium_tier(user_id: str, prefs: Preferences) -> str:
 
 
 def _safe_get_preferences(user: Any) -> Preferences:
-    """Safely extract preferences from user, handling None/corrupt data.
+    """
+    Safely extract preferences from user object.
+
+    Handles cases where preferences might be None, a dictionary (from corrupt cache/DB),
+    or a mock object during testing. Returns a valid Preferences object with defaults if extraction fails.
 
     Args:
-        user: User object (may have None or invalid preferences)
+        user (Any): User object.
 
     Returns:
-        Valid Preferences object (existing or new default)
+        Preferences: A valid Preferences object.
     """
     try:
         if user.preferences is not None:
@@ -109,18 +117,20 @@ async def _reply_or_edit(
     parse_mode: str | None = None,
     error_fallback_text: str | None = None,
 ) -> None:
-    """Helper function to reply or edit message based on update type.
+    """
+    Helper function to reply to a message or edit an existing one.
 
-    If the update is from a callback query, edits the original message.
-    Otherwise, sends a new reply message.
+    If the update comes from a callback query (button click), it attempts to edit
+    the message text. If that fails (e.g., message too old), it sends a new message.
+    If the update is a text message, it replies directly.
 
     Args:
-        update: The update object
-        context: The context object
-        text: Text content to send
-        reply_markup: Optional keyboard markup
-        parse_mode: Optional parse mode for markdown/HTML formatting
-        error_fallback_text: Optional text to send if editing fails with an error
+        update (Update): The update object.
+        context (ContextTypes.DEFAULT_TYPE): The context object.
+        text (str): Text content to send.
+        reply_markup (InlineKeyboardMarkup | None, optional): Keyboard markup.
+        parse_mode (str | None, optional): Parse mode (Markdown/HTML).
+        error_fallback_text (str | None, optional): Text to send if editing fails.
     """
     if update.callback_query:
         logger.debug("_reply_or_edit: callback detected, attempting edit")
@@ -190,11 +200,15 @@ Use /premium to customize age range, distance, notifications (coming soon).
 
 @authenticated
 async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle the /settings command.
+    """
+    Handle the /settings command.
+
+    Displays the settings menu, allowing users to configure region, language,
+    and view premium status.
 
     Args:
-        update: The update object
-        context: The context object
+        update (Update): The update object.
+        context (ContextTypes.DEFAULT_TYPE): The context object.
     """
     # Apply rate limiting only for explicit commands/messages, not callback navigations
     if update.message:
@@ -288,7 +302,13 @@ async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
 
 async def settings_callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Route callback queries to settings_callback if they belong to settings flows."""
+    """
+    Route callback queries to settings_callback if they belong to settings flows.
+
+    Args:
+        update (Update): The update object.
+        context (ContextTypes.DEFAULT_TYPE): The context object.
+    """
 
     if not update.callback_query or not update.callback_query.data:
         return
@@ -302,11 +322,14 @@ async def settings_callback_router(update: Update, context: ContextTypes.DEFAULT
 
 @authenticated
 async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle settings-related callbacks.
+    """
+    Handle settings-related callbacks.
+
+    Processes interactions within the settings menu (changing region, language, etc.).
 
     Args:
-        update: The update object
-        context: The context object
+        update (Update): The update object.
+        context (ContextTypes.DEFAULT_TYPE): The context object.
     """
     if not update.callback_query or not update.effective_user:
         return
@@ -516,12 +539,16 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
 
 async def handle_region(update: Update, context: ContextTypes.DEFAULT_TYPE, country: str) -> None:
-    """Handle region (country) selection and update user preferences and location.
+    """
+    Handle region (country) selection and update user preferences and location.
+
+    Updates the user's location and preferred country. If language is not set,
+    prompts for language selection next.
 
     Args:
-        update: The update object.
-        context: The context object.
-        country: Selected country name.
+        update (Update): The update object.
+        context (ContextTypes.DEFAULT_TYPE): The context object.
+        country (str): Selected country name.
     """
     if not update.effective_user:
         return
@@ -616,12 +643,16 @@ async def handle_region(update: Update, context: ContextTypes.DEFAULT_TYPE, coun
 
 
 async def handle_language(update: Update, context: ContextTypes.DEFAULT_TYPE, language_code: str) -> None:
-    """Handle language selection and update user preferences.
+    """
+    Handle language selection and update user preferences.
+
+    Updates the user's preferred language. If region is not set,
+    prompts for region selection next.
 
     Args:
-        update: The update object.
-        context: The context object.
-        language_code: Selected language code (e.g., "en", "id").
+        update (Update): The update object.
+        context (ContextTypes.DEFAULT_TYPE): The context object.
+        language_code (str): Selected language code (e.g., "en").
     """
     if not update.effective_user:
         return
@@ -707,13 +738,16 @@ async def handle_language(update: Update, context: ContextTypes.DEFAULT_TYPE, la
 
 
 async def handle_age_range(update: Update, context: ContextTypes.DEFAULT_TYPE, age_type: str, age_value: int) -> None:
-    """Handle age range selection.
+    """
+    Handle age range selection.
+
+    Updates min or max age preferences.
 
     Args:
-        update: The update object
-        context: The context object
-        age_type: Age type (min or max)
-        age_value: Age value
+        update (Update): The update object.
+        context (ContextTypes.DEFAULT_TYPE): The context object.
+        age_type (str): "min" or "max".
+        age_value (int): The selected age value.
     """
     if not update.callback_query or not update.effective_user:
         return
@@ -770,12 +804,15 @@ async def handle_age_range(update: Update, context: ContextTypes.DEFAULT_TYPE, a
 
 
 async def handle_max_distance(update: Update, context: ContextTypes.DEFAULT_TYPE, distance: int) -> None:
-    """Handle max distance selection.
+    """
+    Handle max distance selection.
+
+    Updates maximum distance preference for matching.
 
     Args:
-        update: The update object
-        context: The context object
-        distance: Distance value
+        update (Update): The update object.
+        context (ContextTypes.DEFAULT_TYPE): The context object.
+        distance (int): Distance in km (1000 for "Anywhere").
     """
     if not update.callback_query or not update.effective_user:
         return
@@ -831,12 +868,15 @@ async def handle_max_distance(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 
 async def handle_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE, enabled: bool) -> None:
-    """Handle notifications selection.
+    """
+    Handle notifications selection.
+
+    Enables or disables notifications for the user.
 
     Args:
-        update: The update object
-        context: The context object
-        enabled: Whether notifications are enabled
+        update (Update): The update object.
+        context (ContextTypes.DEFAULT_TYPE): The context object.
+        enabled (bool): True to enable notifications, False to disable.
     """
     if not update.callback_query or not update.effective_user:
         return
@@ -888,11 +928,14 @@ async def handle_notifications(update: Update, context: ContextTypes.DEFAULT_TYP
 
 
 async def handle_reset_settings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle reset settings.
+    """
+    Handle reset settings.
+
+    Resets user preferences to default values.
 
     Args:
-        update: The update object
-        context: The context object
+        update (Update): The update object.
+        context (ContextTypes.DEFAULT_TYPE): The context object.
     """
     if not update.effective_user:
         return
@@ -944,11 +987,14 @@ async def handle_reset_settings(update: Update, context: ContextTypes.DEFAULT_TY
 
 @authenticated
 async def settings_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Route text commands to appropriate settings handlers.
+    """
+    Route text commands (from main menu buttons) to appropriate settings handlers.
+
+    Handles "Region", "Language", "Premium", and "Reset" text commands.
 
     Args:
-        update: The update object
-        context: The context object
+        update (Update): The update object.
+        context (ContextTypes.DEFAULT_TYPE): The context object.
     """
     await user_command_limiter()(update, context)
     if not update.message or not update.message.text or not update.effective_user:
@@ -1006,11 +1052,12 @@ Your current tier: {tier}
 
 @authenticated
 async def premium_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle the /premium command and display the user's current premium tier.
+    """
+    Handle the /premium command and display the user's current premium tier.
 
     Args:
-        update: The update object
-        context: The context object
+        update (Update): The update object.
+        context (ContextTypes.DEFAULT_TYPE): The context object.
     """
     await user_command_limiter()(update, context)
     if not update.effective_user or not update.message:
