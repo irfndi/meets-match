@@ -103,7 +103,7 @@ class DeletedMediaDB(Base):
     Deleted media tracking model.
 
     Represents the `deleted_media` table. Used for soft deleting media files
-    and tracking them for permanent purging (e.g., after 30 days or a year).
+    and tracking them for permanent purging after the retention period (365 days).
     """
 
     __tablename__ = "deleted_media"

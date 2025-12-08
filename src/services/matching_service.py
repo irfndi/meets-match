@@ -869,6 +869,9 @@ def get_match_by_id(match_id: str) -> Match:
 
     Returns:
         Match: Match object.
+
+    Raises:
+        NotFoundError: If the match is not found.
     """
     return get_match(match_id)
 

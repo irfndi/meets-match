@@ -207,9 +207,6 @@ class User(BaseModel):
 
         Returns:
             List[str]: Validated and normalized list of interests.
-
-        Raises:
-            ValidationError: If interests are invalid (though currently not raising).
         """
         # Normalize interests (lowercase, trim whitespace)
         normalized = [interest.lower().strip() for interest in v]
