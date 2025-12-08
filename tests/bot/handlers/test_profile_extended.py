@@ -163,9 +163,7 @@ async def test_process_manual_location_success(
 
 
 @pytest.mark.asyncio
-async def test_gender_selection_invalid(
-    profile_module: Any, mock_update_context: tuple[MagicMock, MagicMock]
-) -> None:
+async def test_gender_selection_invalid(profile_module: Any, mock_update_context: tuple[MagicMock, MagicMock]) -> None:
     """Test that invalid gender selection is rejected."""
     update, context = mock_update_context
     context.user_data["awaiting_gender"] = True
@@ -178,9 +176,7 @@ async def test_gender_selection_invalid(
 
 
 @pytest.mark.asyncio
-async def test_gender_selection_cancel(
-    profile_module: Any, mock_update_context: tuple[MagicMock, MagicMock]
-) -> None:
+async def test_gender_selection_cancel(profile_module: Any, mock_update_context: tuple[MagicMock, MagicMock]) -> None:
     """Test that Cancel command properly exits gender selection."""
     update, context = mock_update_context
     context.user_data["awaiting_gender"] = True
