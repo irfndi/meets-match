@@ -1,5 +1,4 @@
 import sys
-from typing import Any, Generator
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -9,7 +8,7 @@ from telegram.ext import ContextTypes
 
 # Fixture to provide the match module with mocked dependencies
 @pytest.fixture
-def match_module() -> Generator[Any, None, None]:
+def match_module():
     # Ensure src.bot.middleware is mocked
     mock_middleware = MagicMock()
     mock_middleware.authenticated = lambda x: x
@@ -26,7 +25,7 @@ def match_module() -> Generator[Any, None, None]:
 
 
 @pytest.fixture
-def mock_update_context() -> tuple[MagicMock, MagicMock]:
+def mock_update_context():
     update = MagicMock(spec=Update)
     update.effective_user = MagicMock(spec=User)
     update.effective_user.id = 12345
@@ -52,10 +51,7 @@ def mock_update_context() -> tuple[MagicMock, MagicMock]:
 
 
 @pytest.mark.asyncio
-async def test_handle_like_mutual_notification(
-    match_module: Any, mock_update_context: tuple[MagicMock, MagicMock]
-) -> None:
-    """Test that mutual match notifications are sent to the target user."""
+async def test_handle_like_mutual_notification(match_module, mock_update_context):
     update, context = mock_update_context
     match_id = "match123"
 
@@ -91,10 +87,7 @@ async def test_handle_like_mutual_notification(
 
 
 @pytest.mark.asyncio
-async def test_handle_like_mutual_notification_target_editing(
-    match_module: Any, mock_update_context: tuple[MagicMock, MagicMock]
-) -> None:
-    """Test that notifications are not sent when target user is editing their profile."""
+async def test_handle_like_mutual_notification_target_editing(match_module, mock_update_context):
     update, context = mock_update_context
     match_id = "match123"
 
@@ -118,10 +111,7 @@ async def test_handle_like_mutual_notification_target_editing(
 
 
 @pytest.mark.asyncio
-async def test_show_matches_page_limit_free(
-    match_module: Any, mock_update_context: tuple[MagicMock, MagicMock]
-) -> None:
-    """Test that free tier users are limited in pagination."""
+async def test_show_matches_page_limit_free(match_module, mock_update_context):
     update, context = mock_update_context
     page = 2  # offset 10 (limit 5)
 
@@ -147,10 +137,7 @@ async def test_show_matches_page_limit_free(
 
 
 @pytest.mark.asyncio
-async def test_matches_pagination_callback_new_matches(
-    match_module: Any, mock_update_context: tuple[MagicMock, MagicMock]
-) -> None:
-    """Test new_matches callback handling."""
+async def test_matches_pagination_callback_new_matches(match_module, mock_update_context):
     update, context = mock_update_context
     update.callback_query.data = "new_matches"
 
@@ -162,10 +149,7 @@ async def test_matches_pagination_callback_new_matches(
 
 
 @pytest.mark.asyncio
-async def test_show_matches_page_admin_unlimited(
-    match_module: Any, mock_update_context: tuple[MagicMock, MagicMock]
-) -> None:
-    """Test that admin users have unlimited pagination access."""
+async def test_show_matches_page_admin_unlimited(match_module, mock_update_context):
     update, context = mock_update_context
     update.effective_user.id = 999
     page = 10
