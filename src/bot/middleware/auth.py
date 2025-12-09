@@ -217,7 +217,7 @@ def admin_only(admin_ids: Optional[List[str]] = None) -> Callable[[HandlerType],
         admin_ids (Optional[List[str]]): List of authorized admin user IDs.
 
     Returns:
-        Decorator function.
+        Callable[[HandlerType], HandlerType]: Decorator function that wraps handler functions.
     """
 
     def decorator(func: HandlerType) -> HandlerType:
