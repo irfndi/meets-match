@@ -42,7 +42,19 @@ bot_app = BotApplication()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    """Manage application lifespan."""
+    """
+    Manage application lifespan.
+
+    This context manager handles startup and shutdown events for the FastAPI application.
+    It initializes the database and starts the Telegram bot on startup, and stops
+    the bot on shutdown.
+
+    Args:
+        app (FastAPI): The FastAPI application instance.
+
+    Yields:
+        None: Control is yielded back to the application.
+    """
     # Startup
     logger.info("Starting API and Bot...")
 
@@ -80,7 +92,16 @@ app = FastAPI(
 
 @app.get("/health")
 async def health_check() -> JSONResponse:
-    """Health check endpoint."""
+    """
+    Health check endpoint.
+
+    Returns the current status of the application and the bot.
+
+    Returns:
+        JSONResponse: A JSON response containing the status of the service,
+        bot running state, application name, and environment.
+        Status code 200 if the bot is running, 503 otherwise.
+    """
     is_running = bot_app.is_running
     status_code = 200 if is_running else 503
 
@@ -97,7 +118,14 @@ async def health_check() -> JSONResponse:
 
 @app.get("/")
 async def root() -> JSONResponse:
-    """Root endpoint."""
+    """
+    Root endpoint.
+
+    Provides a simple welcome message and a link to the documentation.
+
+    Returns:
+        JSONResponse: A JSON response with a welcome message and docs URL.
+    """
     return JSONResponse(
         content={
             "message": "MeetMatch Bot is running",

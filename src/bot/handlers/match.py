@@ -78,11 +78,15 @@ You and {name} liked each other.
 @authenticated
 @profile_required
 async def match_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle the /match command.
+    """
+    Handle the /match command.
+
+    Initiates the matching flow, displaying potential matches one by one.
+    Checks user eligibility and rate limits before showing matches.
 
     Args:
-        update: The update object
-        context: The context object
+        update (Update): The update object from Telegram.
+        context (ContextTypes.DEFAULT_TYPE): The callback context.
     """
     # Apply rate limiting
     await user_command_limiter()(update, context)
@@ -111,15 +115,21 @@ async def match_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 
 async def get_and_show_match(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: str) -> bool:
-    """Get and show the next potential match.
+    """
+    Get and show the next potential match.
+
+    Retrieves a potential match candidate, creates a match record, and displays
+    the candidate's profile to the user. Enforces daily match viewing limits based
+    on user tier.
 
     Args:
-        update: The update object
-        context: The context object
-        user_id: The user ID
+        update (Update): The update object.
+        context (ContextTypes.DEFAULT_TYPE): The callback context.
+        user_id (str): The ID of the user requesting a match.
 
     Returns:
-        bool: True if a match was shown, False otherwise
+        bool: True if a match was successfully shown (or limit reached message sent),
+              False if no matches are available.
     """
     # Determine message object to reply to
     message = update.message
@@ -224,11 +234,14 @@ async def get_and_show_match(update: Update, context: ContextTypes.DEFAULT_TYPE,
 @authenticated
 @profile_required
 async def match_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle match-related callbacks.
+    """
+    Handle match-related callbacks (like, dislike, view, skip).
+
+    Processes button clicks from match profiles and match notifications.
 
     Args:
-        update: The update object
-        context: The context object
+        update (Update): The update object.
+        context (ContextTypes.DEFAULT_TYPE): The callback context.
     """
     query = update.callback_query
     if not query or not update.effective_user:
@@ -294,12 +307,16 @@ async def match_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
 
 async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE, match_id: str) -> None:
-    """Handle liking a match.
+    """
+    Handle liking a match.
+
+    Records the LIKE action. If it's a mutual match, notifies both users
+    (the current user immediately, the other user via message if not busy).
 
     Args:
-        update: The update object
-        context: The context object
-        match_id: Match ID
+        update (Update): The update object.
+        context (ContextTypes.DEFAULT_TYPE): The callback context.
+        match_id (str): The ID of the match being liked.
     """
     query = update.callback_query
     if not query or not update.effective_user:
@@ -394,12 +411,15 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE, match_
 
 
 async def handle_dislike(update: Update, context: ContextTypes.DEFAULT_TYPE, match_id: str) -> None:
-    """Handle disliking a match.
+    """
+    Handle disliking a match.
+
+    Records the DISLIKE action and prompts the user to continue matching.
 
     Args:
-        update: The update object
-        context: The context object
-        match_id: Match ID
+        update (Update): The update object.
+        context (ContextTypes.DEFAULT_TYPE): The callback context.
+        match_id (str): The ID of the match being disliked.
     """
     query = update.callback_query
     if not query or not update.effective_user:
@@ -447,12 +467,16 @@ async def handle_dislike(update: Update, context: ContextTypes.DEFAULT_TYPE, mat
 
 
 async def handle_view_match(update: Update, context: ContextTypes.DEFAULT_TYPE, match_id: str) -> None:
-    """Handle viewing a specific match profile.
+    """
+    Handle viewing a specific match profile.
+
+    Used when viewing details of a saved match or a new match notification.
+    Displays the user's profile and media, along with action buttons.
 
     Args:
-        update: The update object
-        context: The context object
-        match_id: Match ID
+        update (Update): The update object.
+        context (ContextTypes.DEFAULT_TYPE): The callback context.
+        match_id (str): The ID of the match to view.
     """
     query = update.callback_query
     if not query or not update.effective_user:
@@ -532,11 +556,14 @@ async def handle_view_match(update: Update, context: ContextTypes.DEFAULT_TYPE, 
 @authenticated
 @profile_required
 async def matches_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle the /matches command.
+    """
+    Handle the /matches command.
+
+    Displays a paginated list of the user's active (mutual) matches.
 
     Args:
-        update: The update object
-        context: The context object
+        update (Update): The update object.
+        context (ContextTypes.DEFAULT_TYPE): The callback context.
     """
     # Apply rate limiting
     await user_command_limiter()(update, context)
@@ -561,11 +588,14 @@ async def matches_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 
 async def matches_pagination_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle pagination for matches list.
+    """
+    Handle pagination for matches list.
+
+    Navigates between pages of active or saved matches.
 
     Args:
-        update: The update object
-        context: The context object
+        update (Update): The update object.
+        context (ContextTypes.DEFAULT_TYPE): The callback context.
     """
     query = update.callback_query
     if not query or not update.effective_user:
@@ -611,12 +641,16 @@ async def matches_pagination_callback(update: Update, context: ContextTypes.DEFA
 
 
 async def show_matches_page(update: Update, context: ContextTypes.DEFAULT_TYPE, page: int) -> None:
-    """Show a page of active matches.
+    """
+    Show a page of active matches.
+
+    Fetches active matches from the database, enforcing history limits for free users.
+    Renders a list of matches with chat links.
 
     Args:
-        update: The update object
-        context: The context object
-        page: Page number (0-based)
+        update (Update): The update object.
+        context (ContextTypes.DEFAULT_TYPE): The callback context.
+        page (int): The page number to display (0-based).
     """
     if not update.effective_user:
         return
@@ -722,12 +756,15 @@ async def show_matches_page(update: Update, context: ContextTypes.DEFAULT_TYPE, 
 
 
 async def show_saved_matches_page(update: Update, context: ContextTypes.DEFAULT_TYPE, page: int) -> None:
-    """Show a page of saved matches.
+    """
+    Show a page of saved matches.
+
+    Saved matches are those the user has skipped/saved for later.
 
     Args:
-        update: The update object
-        context: The context object
-        page: Page number (0-based)
+        update (Update): The update object.
+        context (ContextTypes.DEFAULT_TYPE): The callback context.
+        page (int): The page number to display (0-based).
     """
     if not update.effective_user:
         return
@@ -801,11 +838,15 @@ async def show_saved_matches_page(update: Update, context: ContextTypes.DEFAULT_
 
 
 async def reengagement_response(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle re-engagement response (1 🚀 or 2).
+    """
+    Handle re-engagement response (1 🚀 or 2).
+
+    Processes quick replies from the re-engagement notification.
+    "1 🚀" triggers matching, "2" dismisses the prompt.
 
     Args:
-        update: The update object
-        context: The context object
+        update (Update): The update object.
+        context (ContextTypes.DEFAULT_TYPE): The callback context.
     """
     if not update.message or not update.message.text:
         return

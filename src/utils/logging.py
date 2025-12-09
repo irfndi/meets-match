@@ -11,7 +11,14 @@ from src.config import settings
 
 
 def configure_logging() -> None:
-    """Configure structured logging for the application."""
+    """
+    Configure structured logging for the application.
+
+    Sets up the Python standard library logger to forward logs to `structlog`.
+    Configures processors for context management, timestamps, exception info,
+    and rendering. Use `ConsoleRenderer` for development and `JSONRenderer`
+    for production.
+    """
     # Set the log level
     log_level = getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO)
 
@@ -50,14 +57,15 @@ def configure_logging() -> None:
 
 
 def get_logger(name: str, **initial_values: Any) -> structlog.stdlib.BoundLogger:
-    """Get a structured logger with the given name and initial values.
+    """
+    Get a structured logger with the given name and initial values.
 
     Args:
-        name: Logger name
-        **initial_values: Initial values to bind to the logger
+        name (str): Logger name (usually `__name__`).
+        **initial_values: Key-value pairs to initially bind to the logger context.
 
     Returns:
-        A configured structured logger
+        structlog.stdlib.BoundLogger: A configured structured logger instance.
     """
     return structlog.get_logger(name).bind(**initial_values)  # type: ignore
 
@@ -68,13 +76,17 @@ def log_error(
     message: Optional[str] = None,
     extra: Optional[Dict[str, Any]] = None,
 ) -> None:
-    """Log an error with structured context.
+    """
+    Log an error with structured context.
+
+    Automatically extracts error type, message, and traceback. If the error object
+    has a `details` attribute (like custom exceptions), it includes that as well.
 
     Args:
-        logger: Structured logger
-        error: Exception to log
-        message: Optional message to include
-        extra: Additional context to include
+        logger (structlog.stdlib.BoundLogger): The logger instance to use.
+        error (Exception): The exception to log.
+        message (Optional[str], optional): Custom message. Defaults to "An error occurred".
+        extra (Optional[Dict[str, Any]], optional): Additional context to log.
     """
     context = extra or {}
     context["error_type"] = error.__class__.__name__

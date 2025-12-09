@@ -10,14 +10,22 @@ from src.utils.errors import ValidationError
 
 
 class Gender(str, Enum):
-    """Gender enumeration."""
+    """
+    Gender enumeration.
+
+    Represents the gender of a user.
+    """
 
     MALE = "male"
     FEMALE = "female"
 
 
 class RelationshipType(str, Enum):
-    """Relationship type enumeration."""
+    """
+    Relationship type enumeration.
+
+    Represents the type of relationship a user is looking for.
+    """
 
     FRIENDSHIP = "friendship"
     DATING = "dating"
@@ -28,7 +36,12 @@ class RelationshipType(str, Enum):
 
 
 class Location(BaseModel):
-    """User location model."""
+    """
+    User location model.
+
+    Stores the geographic coordinates and optional city/country information
+    for a user, along with the timestamp of the last update.
+    """
 
     latitude: float
     longitude: float
@@ -38,7 +51,12 @@ class Location(BaseModel):
 
 
 class Preferences(BaseModel):
-    """User preferences model."""
+    """
+    User preferences model.
+
+    Stores the user's preferences for matching, including age range, gender,
+    relationship type, distance, and other settings.
+    """
 
     min_age: Optional[int] = None
     max_age: Optional[int] = None
@@ -53,17 +71,21 @@ class Preferences(BaseModel):
     @field_validator("min_age", "max_age")
     @classmethod
     def validate_age_range(cls, v: Optional[int], info: ValidationInfo) -> Optional[int]:
-        """Validate age range.
+        """
+        Validate age range.
+
+        Ensures that the age is within the allowed range (10-65) and that
+        min_age is not greater than max_age.
 
         Args:
-            v: Age value
-            info: Validation info containing other field values
+            v (Optional[int]): Age value to validate.
+            info (ValidationInfo): Validation info containing other field values.
 
         Returns:
-            Validated age value
+            Optional[int]: Validated age value.
 
         Raises:
-            ValidationError: If age is invalid
+            ValidationError: If age is invalid or min_age > max_age.
         """
         if v is not None and (v < 10 or v > 65):
             raise ValidationError("Age must be between 10 and 65")
@@ -80,16 +102,19 @@ class Preferences(BaseModel):
     @field_validator("max_distance")
     @classmethod
     def validate_distance(cls, v: Optional[int]) -> Optional[int]:
-        """Validate distance range.
+        """
+        Validate distance range.
+
+        Ensures that the max_distance is within the allowed range (1-500 km).
 
         Args:
-            v: Distance value
+            v (Optional[int]): Distance value to validate.
 
         Returns:
-            Validated distance value
+            Optional[int]: Validated distance value.
 
         Raises:
-            ValidationError: If distance is invalid
+            ValidationError: If distance is invalid.
         """
         if v is not None and (v < 1 or v > 500):
             raise ValidationError("Distance must be between 1 and 500 kilometers")
@@ -98,6 +123,20 @@ class Preferences(BaseModel):
     @field_validator("premium_tier")
     @classmethod
     def validate_tier(cls, v: Optional[str]) -> Optional[str]:
+        """
+        Validate premium tier.
+
+        Ensures that the premium tier is one of the allowed values ('free', 'pro', 'admin').
+
+        Args:
+            v (Optional[str]): Premium tier value to validate.
+
+        Returns:
+            Optional[str]: Validated premium tier (lowercase).
+
+        Raises:
+            ValidationError: If the tier is invalid.
+        """
         if v is None:
             return v
         allowed = {"free", "pro", "admin"}
@@ -108,7 +147,12 @@ class Preferences(BaseModel):
 
 
 class User(BaseModel):
-    """User model."""
+    """
+    User model.
+
+    Represents a user in the MeetMatch system, including their profile information,
+    location, preferences, and account status.
+    """
 
     id: str = Field(..., description="Unique user ID (Telegram user ID)")
     username: Optional[str] = None
@@ -132,16 +176,19 @@ class User(BaseModel):
     @field_validator("age")
     @classmethod
     def validate_age(cls, v: Optional[int]) -> Optional[int]:
-        """Validate user age.
+        """
+        Validate user age.
+
+        Ensures that the user's age is within the allowed range (10-65).
 
         Args:
-            v: Age value
+            v (Optional[int]): Age value to validate.
 
         Returns:
-            Validated age value
+            Optional[int]: Validated age value.
 
         Raises:
-            ValidationError: If age is invalid
+            ValidationError: If age is invalid.
         """
         if v is not None and (v < 10 or v > 65):
             raise ValidationError("Age must be between 10 and 65")
@@ -150,16 +197,16 @@ class User(BaseModel):
     @field_validator("interests")
     @classmethod
     def validate_interests(cls, v: List[str]) -> List[str]:
-        """Validate user interests.
+        """
+        Validate user interests.
+
+        Normalizes interests to lowercase and removes duplicates.
 
         Args:
-            v: List of interests
+            v (List[str]): List of interests to validate.
 
         Returns:
-            Validated interests list
-
-        Raises:
-            ValidationError: If interests are invalid
+            List[str]: Validated and normalized list of interests.
         """
         # Normalize interests (lowercase, trim whitespace)
         normalized = [interest.lower().strip() for interest in v]
@@ -175,26 +222,34 @@ class User(BaseModel):
     @field_validator("photos")
     @classmethod
     def validate_photos(cls, v: List[str]) -> List[str]:
-        """Validate user photos.
+        """
+        Validate user photos.
+
+        Ensures that the number of photos does not exceed the maximum allowed (3).
 
         Args:
-            v: List of photo URLs or file IDs
+            v (List[str]): List of photo URLs or file IDs.
 
         Returns:
-            Validated photos list
+            List[str]: Validated list of photos.
 
         Raises:
-            ValidationError: If photos are invalid
+            ValidationError: If more than 3 photos are provided.
         """
         if len(v) > 3:
             raise ValidationError("Maximum 3 photos allowed")
         return v
 
     def is_match_eligible(self) -> bool:
-        """Check if user is eligible for matching.
+        """
+        Check if user is eligible for matching.
+
+        A user is eligible if they are active, their profile is complete, and
+        they have provided all necessary information (age, gender, location,
+        interests, photos).
 
         Returns:
-            True if user is eligible for matching, False otherwise
+            bool: True if user is eligible for matching, False otherwise.
         """
         return (
             self.is_active

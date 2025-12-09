@@ -8,16 +8,21 @@ from src.utils.media import get_storage_path
 
 async def send_media_group_safe(send_function: Callable[..., Any], photos: List[str], **kwargs: Any) -> List[Message]:
     """
-    Send a media group safely, using cached file_ids if available,
-    and caching new file_ids after sending.
+    Send a media group safely, utilizing Telegram file ID caching.
+
+    If a media file has already been uploaded, its `file_id` is retrieved from cache
+    and used instead of re-uploading the file. This saves bandwidth and speeds up sending.
+    If not cached, the file is uploaded from local storage, and the resulting `file_id`
+    is cached for future use.
 
     Args:
-        send_function: The function to call to send media (e.g. message.reply_media_group)
-        photos: List of relative file paths to media
-        **kwargs: Additional arguments for send_function
+        send_function (Callable[..., Any]): The async function to call to send media
+            (e.g., `context.bot.send_media_group` or `message.reply_media_group`).
+        photos (List[str]): List of relative file paths to the media files.
+        **kwargs: Additional keyword arguments to pass to `send_function` (e.g., chat_id).
 
     Returns:
-        List of sent messages
+        List[Message]: A list of sent Message objects returned by Telegram.
     """
     media_group: List[Union[InputMediaPhoto, InputMediaVideo]] = []
     opened_files = []

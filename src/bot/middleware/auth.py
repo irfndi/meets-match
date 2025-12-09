@@ -30,7 +30,15 @@ What would you like to do?
 
 
 async def warm_up_matches(user_id: str) -> None:
-    """Background task to warm up match cache."""
+    """
+    Background task to warm up match cache.
+
+    Pre-fetches potential matches and stores them in the cache so that
+    when the user requests matches, they are served instantly.
+
+    Args:
+        user_id (str): The user ID.
+    """
     try:
         # Run blocking DB call in a separate thread to avoid blocking the event loop
         await asyncio.to_thread(get_potential_matches, user_id)
@@ -40,13 +48,18 @@ async def warm_up_matches(user_id: str) -> None:
 
 
 def authenticated(func: HandlerType) -> HandlerType:
-    """Decorator to ensure user is authenticated.
+    """
+    Decorator to ensure user is authenticated.
+
+    Checks if the Telegram user exists in the database.
+    - If user exists: updates last active time, wakes them up if sleeping, warms up cache, and proceeds.
+    - If user does not exist: blocks access and prompts to register (unless it's the /start command).
 
     Args:
-        func: Handler function to decorate
+        func (HandlerType): Handler function to decorate.
 
     Returns:
-        Decorated handler function
+        HandlerType: Decorated handler function.
     """
 
     @wraps(func)
@@ -195,13 +208,16 @@ def authenticated(func: HandlerType) -> HandlerType:
 
 
 def admin_only(admin_ids: Optional[List[str]] = None) -> Callable[[HandlerType], HandlerType]:
-    """Decorator to ensure user is an admin.
+    """
+    Decorator to ensure user is an admin.
+
+    Checks if the user ID is in the provided list of admin IDs.
 
     Args:
-        admin_ids: List of admin user IDs
+        admin_ids (Optional[List[str]]): List of authorized admin user IDs.
 
     Returns:
-        Decorator function
+        Callable[[HandlerType], HandlerType]: Decorator function that wraps handler functions.
     """
 
     def decorator(func: HandlerType) -> HandlerType:
@@ -239,16 +255,17 @@ def admin_only(admin_ids: Optional[List[str]] = None) -> Callable[[HandlerType],
 
 
 def profile_required(func: HandlerType) -> HandlerType:
-    """Decorator to ensure user has completed required profile fields.
+    """
+    Decorator to ensure user has completed required profile fields.
 
-    Required fields: name, age
-    Recommended (optional) fields: gender, bio, interests, location
+    Checks if basic info (Name, Age) is present. If missing, blocks access
+    to the feature and prompts the user to complete their profile.
 
     Args:
-        func: Handler function to decorate
+        func (HandlerType): Handler function to decorate.
 
     Returns:
-        Decorated handler function
+        HandlerType: Decorated handler function.
     """
     from src.services.user_service import update_user
 

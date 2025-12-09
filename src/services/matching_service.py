@@ -24,17 +24,21 @@ MATCH_CACHE_KEY = "match:{match_id}"
 
 
 def calculate_match_score(user1: User, user2: User) -> MatchScore:
-    """Calculate match score between two users.
+    """
+    Calculate match score between two users.
+
+    Computes a compatibility score based on location proximity, shared interests,
+    and mutual preferences. The total score is a weighted average of these components.
 
     Args:
-        user1: First user
-        user2: Second user
+        user1 (User): First user.
+        user2 (User): Second user.
 
     Returns:
-        Match score
+        MatchScore: The calculated match score details.
 
     Raises:
-        MatchingError: If match score calculation fails
+        MatchingError: If match score calculation fails due to an unexpected error.
     """
     with sentry_sdk.start_span(op="match.calculate_score", name=f"{user1.id} <-> {user2.id}") as span:
         try:
@@ -138,13 +142,14 @@ def calculate_match_score(user1: User, user2: User) -> MatchScore:
 
 
 def _has_preferences_configured(preferences: Preferences) -> bool:
-    """Check if any preference fields are configured.
+    """
+    Check if any preference fields are configured.
 
     Args:
-        preferences: User preferences object
+        preferences (Preferences): User preferences object.
 
     Returns:
-        True if any preference field is set, False otherwise
+        bool: True if any preference field is set, False otherwise.
     """
     return any(
         (
@@ -158,14 +163,18 @@ def _has_preferences_configured(preferences: Preferences) -> bool:
 
 
 def is_potential_match(user1: User, user2: User) -> bool:
-    """Check if two users are potential matches.
+    """
+    Check if two users are potential matches.
+
+    Verifies hard constraints like age limits, gender preferences, distance,
+    and profile completeness.
 
     Args:
-        user1: First user
-        user2: Second user
+        user1 (User): First user.
+        user2 (User): Second user.
 
     Returns:
-        True if users are potential matches, False otherwise
+        bool: True if users are potential matches, False otherwise.
     """
     # Skip if either user is not active or profile not complete
     if not user1.is_active or not user2.is_active:
@@ -226,18 +235,23 @@ def is_potential_match(user1: User, user2: User) -> bool:
 
 
 def get_potential_matches(user_id: str, limit: int = 10) -> List[User]:
-    """Get potential matches for a user.
+    """
+    Get potential matches for a user.
+
+    Retrieves a list of compatible users based on the matching algorithm.
+    It checks cache first, then falls back to a database query with filters
+    for age, gender, and location. Results are sorted by relevance.
 
     Args:
-        user_id: User ID
-        limit: Maximum number of matches to return
+        user_id (str): User ID to find matches for.
+        limit (int, optional): Maximum number of matches to return. Defaults to 10.
 
     Returns:
-        List of potential matches
+        List[User]: List of potential match users.
 
     Raises:
-        NotFoundError: If user not found
-        MatchingError: If matching fails
+        NotFoundError: If the requesting user is not found.
+        MatchingError: If matching process fails.
     """
     with sentry_sdk.start_span(op="match.get_potential", name=user_id) as span:
         # Get user
@@ -400,18 +414,22 @@ def get_potential_matches(user_id: str, limit: int = 10) -> List[User]:
 
 
 def create_match(user1_id: str, user2_id: str) -> Match:
-    """Create a new match between two users.
+    """
+    Create a new match between two users.
+
+    Initializes a match record in PENDING state. If an old match exists
+    and is eligible for recycling (expired/rejected long ago), it resets it.
 
     Args:
-        user1_id: First user ID
-        user2_id: Second user ID
+        user1_id (str): ID of the first user.
+        user2_id (str): ID of the second user.
 
     Returns:
-        Created match
+        Match: The created or recycled match object.
 
     Raises:
-        NotFoundError: If user not found
-        MatchingError: If match creation fails
+        NotFoundError: If one of the users is not found.
+        MatchingError: If match creation fails.
     """
     with sentry_sdk.start_span(op="match.create", name=f"{user1_id} <-> {user2_id}") as span:
         # Get users
@@ -533,16 +551,19 @@ def create_match(user1_id: str, user2_id: str) -> Match:
 
 
 def get_match(match_id: str) -> Match:
-    """Get a match by ID.
+    """
+    Get a match by ID.
+
+    Retrieves match details from cache or database.
 
     Args:
-        match_id: Match ID
+        match_id (str): The ID of the match to retrieve.
 
     Returns:
-        Match object
+        Match: The match object.
 
     Raises:
-        NotFoundError: If match not found
+        NotFoundError: If the match is not found.
     """
     # Check cache
     cache_key = MATCH_CACHE_KEY.format(match_id=match_id)
@@ -574,19 +595,23 @@ def get_match(match_id: str) -> Match:
 
 
 def update_match(match_id: str, user_id: str, action: MatchAction) -> Match:
-    """Update a match with a user action.
+    """
+    Update a match with a user action.
+
+    Records a user's action (LIKE, DISLIKE, SKIP) on a match and updates
+    the match status (e.g., to MATCHED or REJECTED).
 
     Args:
-        match_id: Match ID
-        user_id: User ID
-        action: Match action
+        match_id (str): The ID of the match.
+        user_id (str): The ID of the user performing the action.
+        action (MatchAction): The action being performed.
 
     Returns:
-        Updated match
+        Match: The updated match object.
 
     Raises:
-        NotFoundError: If match not found
-        MatchingError: If match update fails
+        NotFoundError: If the match is not found.
+        MatchingError: If the user is not part of the match or update fails.
     """
     # Get match
     match = get_match(match_id)
@@ -656,19 +681,22 @@ def get_user_matches(
     limit: int = 10,
     offset: int = 0,
 ) -> List[Match]:
-    """Get matches for a user.
+    """
+    Get matches for a user.
+
+    Retrieves a list of matches involving the user, optionally filtered by status.
 
     Args:
-        user_id: User ID
-        status: Optional match status filter
-        limit: Max number of matches to return
-        offset: Number of matches to skip
+        user_id (str): User ID.
+        status (Optional[MatchStatus], optional): Filter by match status.
+        limit (int, optional): Max number of matches. Defaults to 10.
+        offset (int, optional): Pagination offset. Defaults to 0.
 
     Returns:
-        List of matches
+        List[Match]: List of match objects.
 
     Raises:
-        NotFoundError: If user not found
+        NotFoundError: If user not found (checked at start).
     """
     # Check if user exists
     get_user(user_id)
@@ -709,18 +737,22 @@ def get_user_matches(
 
 
 def get_user_match_view(match: Match, user_id: str) -> UserMatch:
-    """Get a user-friendly view of a match.
+    """
+    Get a user-friendly view of a match.
+
+    Constructs a `UserMatch` object containing details about the other user
+    in the match, suitable for display in the UI.
 
     Args:
-        match: Match object
-        user_id: User ID to create view for
+        match (Match): The match object.
+        user_id (str): The ID of the user viewing the match.
 
     Returns:
-        UserMatch view
+        UserMatch: The user-friendly match view.
 
     Raises:
-        NotFoundError: If user not found
-        MatchingError: If match view creation fails
+        NotFoundError: If the other user is not found.
+        MatchingError: If creating the view fails.
     """
     # Determine the other user ID
     other_user_id = match.user2_id if match.user1_id == user_id else match.user1_id
@@ -759,19 +791,22 @@ def get_user_match_views(
     limit: int = 10,
     offset: int = 0,
 ) -> List[UserMatch]:
-    """Get user-friendly views of matches for a user.
+    """
+    Get user-friendly views of matches for a user.
+
+    Retrieves matches and converts them into `UserMatch` views.
 
     Args:
-        user_id: User ID
-        status: Optional match status filter
-        limit: Max number of matches to return
-        offset: Number of matches to skip
+        user_id (str): User ID.
+        status (Optional[MatchStatus], optional): Filter by status.
+        limit (int, optional): Max results. Defaults to 10.
+        offset (int, optional): Pagination offset. Defaults to 0.
 
     Returns:
-        List of UserMatch views
+        List[UserMatch]: List of match views.
 
     Raises:
-        NotFoundError: If user not found
+        NotFoundError: If user not found.
     """
     # Get matches
     matches = get_user_matches(user_id, status, limit, offset)
@@ -794,10 +829,13 @@ def get_user_match_views(
 
 
 def clear_potential_matches_cache(user_id: str) -> None:
-    """Clear potential matches cache for a user.
+    """
+    Clear potential matches cache for a user.
+
+    Useful when user preferences change.
 
     Args:
-        user_id: User ID
+        user_id (str): User ID.
     """
     from src.utils.cache import delete_cache
 
@@ -807,10 +845,13 @@ def clear_potential_matches_cache(user_id: str) -> None:
 
 
 def clear_user_matches_cache(user_id: str) -> None:
-    """Clear user matches cache for a user.
+    """
+    Clear user matches cache for a user.
+
+    Useful when new matches are created or updated.
 
     Args:
-        user_id: User ID
+        user_id (str): User ID.
     """
     from src.utils.cache import delete_cache
 
@@ -820,29 +861,34 @@ def clear_user_matches_cache(user_id: str) -> None:
 
 
 def get_match_by_id(match_id: str) -> Match:
-    """Get a match by ID (alias for get_match).
+    """
+    Get a match by ID (alias for get_match).
 
     Args:
-        match_id: Match ID
+        match_id (str): Match ID.
 
     Returns:
-        Match object
+        Match: Match object.
 
     Raises:
-        NotFoundError: If match not found
+        NotFoundError: If the match is not found.
     """
     return get_match(match_id)
 
 
 def like_match(match_id: str, user_id: str) -> bool:
-    """Like a match.
+    """
+    Like a match.
+
+    Updates the match with a LIKE action from the user. Checks if this results
+    in a mutual match (match status becomes MATCHED).
 
     Args:
-        match_id: Match ID
-        user_id: User ID performing the action
+        match_id (str): Match ID.
+        user_id (str): User ID performing the like.
 
     Returns:
-        True if mutual match, False otherwise
+        bool: True if it's a mutual match, False otherwise.
     """
     updated_match = update_match(match_id, user_id, MatchAction.LIKE)
 
@@ -850,21 +896,27 @@ def like_match(match_id: str, user_id: str) -> bool:
 
 
 def dislike_match(match_id: str, user_id: str) -> None:
-    """Dislike a match.
+    """
+    Dislike a match.
+
+    Updates the match with a DISLIKE action.
 
     Args:
-        match_id: Match ID
-        user_id: User ID performing the action
+        match_id (str): Match ID.
+        user_id (str): User ID performing the dislike.
     """
     update_match(match_id, user_id, MatchAction.DISLIKE)
 
 
 def skip_match(match_id: str, user_id: str) -> None:
-    """Skip a match (save for later).
+    """
+    Skip a match (save for later).
+
+    Updates the match with a SKIP action.
 
     Args:
-        match_id: Match ID
-        user_id: User ID performing the action
+        match_id (str): Match ID.
+        user_id (str): User ID performing the skip.
     """
     update_match(match_id, user_id, MatchAction.SKIP)
 
@@ -874,15 +926,18 @@ def get_active_matches(
     limit: int = 10,
     offset: int = 0,
 ) -> List[Match]:
-    """Get active matches for a user.
+    """
+    Get active matches for a user.
+
+    Retrieves matches where status is MATCHED.
 
     Args:
-        user_id: User ID
-        limit: Max number of matches to return
-        offset: Number of matches to skip
+        user_id (str): User ID.
+        limit (int, optional): Max results. Defaults to 10.
+        offset (int, optional): Pagination offset. Defaults to 0.
 
     Returns:
-        List of active matches
+        List[Match]: List of active matches.
     """
     return get_user_matches(user_id, status=MatchStatus.MATCHED, limit=limit, offset=offset)
 
@@ -892,15 +947,18 @@ def get_saved_matches(
     limit: int = 10,
     offset: int = 0,
 ) -> List[Match]:
-    """Get saved (skipped) matches for a user.
+    """
+    Get saved (skipped) matches for a user.
+
+    Retrieves matches where the user has previously performed a SKIP action.
 
     Args:
-        user_id: User ID
-        limit: Max number of matches to return
-        offset: Number of matches to skip
+        user_id (str): User ID.
+        limit (int, optional): Max results. Defaults to 10.
+        offset (int, optional): Pagination offset. Defaults to 0.
 
     Returns:
-        List of saved matches
+        List[Match]: List of saved matches.
     """
     # Check if user exists
     get_user(user_id)
@@ -929,13 +987,17 @@ def get_saved_matches(
 
 
 def get_pending_incoming_likes_count(user_id: str) -> int:
-    """Get count of pending incoming likes for a user.
+    """
+    Get count of pending incoming likes for a user.
+
+    Counts matches where the other user has liked, but the current user
+    has not yet taken action.
 
     Args:
-        user_id: User ID
+        user_id (str): User ID.
 
     Returns:
-        Count of pending incoming likes
+        int: Count of pending incoming likes.
     """
     # Check if user exists
     get_user(user_id)

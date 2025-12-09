@@ -15,18 +15,36 @@ logger = get_logger(__name__)
 
 
 def utcnow() -> datetime:
-    """Get current UTC time (naive) to replace datetime.utcnow()."""
+    """
+    Get current UTC time (naive).
+
+    Replaces datetime.utcnow() which is deprecated.
+    Returns a naive datetime object representing UTC time, consistent with
+    how most ORMs handle datetime fields by default.
+
+    Returns:
+        datetime: Current UTC time.
+    """
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class Base(DeclarativeBase):
-    """Base class for SQLAlchemy models."""
+    """
+    Base class for SQLAlchemy models.
+
+    All database models should inherit from this class.
+    """
 
     pass
 
 
 class UserDB(Base):
-    """User database model."""
+    """
+    User database model.
+
+    Represents the `users` table in the database. Stores user profile information,
+    preferences (as JSON), location (flattened columns), and status flags.
+    """
 
     __tablename__ = "users"
 
@@ -54,7 +72,13 @@ class UserDB(Base):
 
 
 class MatchDB(Base):
-    """Match database model."""
+    """
+    Match database model.
+
+    Represents the `matches` table. Stores information about matches between
+    users, including their actions (like/dislike/skip), the match status, and
+    compatibility scores.
+    """
 
     __tablename__ = "matches"
 
@@ -75,7 +99,12 @@ class MatchDB(Base):
 
 
 class DeletedMediaDB(Base):
-    """Deleted media tracking model for soft delete and 365-day retention."""
+    """
+    Deleted media tracking model.
+
+    Represents the `deleted_media` table. Used for soft deleting media files
+    and tracking them for permanent purging after the retention period (365 days).
+    """
 
     __tablename__ = "deleted_media"
 
@@ -88,14 +117,29 @@ class DeletedMediaDB(Base):
 
 
 class Database:
-    """Singleton database connection manager."""
+    """
+    Singleton database connection manager.
+
+    Handles creation of the SQLAlchemy engine and session factory.
+    """
 
     _engine = None
     _session_factory = None
 
     @classmethod
     def get_engine(cls) -> Any:
-        """Get or create the database engine."""
+        """
+        Get or create the database engine.
+
+        Lazily initializes the SQLAlchemy engine using the DATABASE_URL from settings.
+        Handles connection pooling and special cases for URL schemes (e.g. postgres:// vs postgresql://).
+
+        Returns:
+            Any: SQLAlchemy Engine instance.
+
+        Raises:
+            DatabaseError: If DATABASE_URL is missing or connection fails.
+        """
         if cls._engine is None:
             from src.config import get_settings
 
@@ -130,31 +174,57 @@ class Database:
 
     @classmethod
     def get_session_factory(cls) -> Any:
-        """Get or create the session factory."""
+        """
+        Get or create the session factory.
+
+        Returns:
+            Any: SQLAlchemy sessionmaker instance.
+        """
         if cls._session_factory is None:
             cls._session_factory = sessionmaker(bind=cls.get_engine())
         return cls._session_factory
 
     @classmethod
     def get_session(cls) -> Session:
-        """Get a new database session."""
+        """
+        Get a new database session.
+
+        Returns:
+            Session: A new SQLAlchemy Session.
+        """
         return cls.get_session_factory()()  # type: ignore
 
     @classmethod
     def create_tables(cls) -> None:
-        """Create all database tables."""
+        """
+        Create all database tables.
+
+        Uses SQLAlchemy's metadata to create tables defined in the models.
+        Should be used for initialization or testing.
+        """
         engine = cls.get_engine()
         Base.metadata.create_all(engine)
         logger.info("Database tables created")
 
 
 def get_session() -> Session:
-    """Get a database session."""
+    """
+    Get a database session.
+
+    Helper function to get a session from the Database singleton.
+
+    Returns:
+        Session: A new SQLAlchemy Session.
+    """
     return Database.get_session()
 
 
 def init_database() -> None:
-    """Initialize the database and create tables."""
+    """
+    Initialize the database and create tables.
+
+    Entry point for database initialization.
+    """
     Database.create_tables()
 
 
@@ -168,20 +238,33 @@ def execute_query(
     offset: Optional[int] = None,
     order_by: Optional[str] = None,
 ) -> Any:
-    """Execute a query on the database (compatibility wrapper).
+    """
+    Execute a query on the database.
+
+    A generic wrapper around SQLAlchemy operations to provide a simple
+    interface for CRUD operations. Supports filtering, sorting, pagination,
+    and special query operators.
 
     Args:
-        table: Table name
-        query_type: Query type (select, insert, update, delete)
-        filters: Query filters
-        data: Data for insert/update operations
-        select: Fields to select
-        limit: Max number of records to return
-        offset: Number of records to skip
-        order_by: Field to sort by (e.g. "created_at desc")
+        table (str): Table name ("users", "matches", "deleted_media").
+        query_type (str): Type of query ("select", "insert", "update", "delete").
+        filters (Optional[Dict[str, Any]]): Dictionary of filters. Supports:
+            - Exact match: `{"field": value}`
+            - Operators: `{"field__gte": value}`, `{"field__in": [v1, v2]}`
+            - OR condition: `{"$or": [{"f1": v1}, {"f2": v2}]}`
+        data (Optional[Dict[str, Any]]): Data for insert/update operations.
+        select (str, optional): Fields to select (currently unused, selects all).
+        limit (Optional[int], optional): Max number of records to return.
+        offset (Optional[int], optional): Number of records to skip.
+        order_by (Optional[str], optional): Sorting instruction (e.g. "created_at desc").
 
     Returns:
-        Query result
+        Any: Query result. Returns an object with a `data` attribute containing
+        a list of dictionaries.
+
+    Raises:
+        ValueError: If table name or query type is invalid.
+        DatabaseError: If the database operation fails.
     """
     session = get_session()
     filters = filters or {}
@@ -358,9 +441,17 @@ def execute_query(
 
 
 def _transform_user_data(data: Dict[str, Any]) -> Dict[str, Any]:
-    """Transform User model data to UserDB schema.
+    """
+    Transform User model data to UserDB schema.
 
-    Flattens nested location and preferences fields.
+    Flattens the nested 'location' dictionary into 'location_latitude',
+    'location_longitude', etc., to match the database schema.
+
+    Args:
+        data (Dict[str, Any]): Original data dictionary.
+
+    Returns:
+        Dict[str, Any]: Transformed data dictionary ready for DB insertion/update.
     """
     transformed = data.copy()
 
@@ -383,7 +474,18 @@ def _transform_user_data(data: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _model_to_dict(model: Any) -> Dict[str, Any]:
-    """Convert a SQLAlchemy model to a dictionary."""
+    """
+    Convert a SQLAlchemy model to a dictionary.
+
+    Reconstructs the nested 'location' dictionary from the flattened
+    database columns for the User model.
+
+    Args:
+        model (Any): SQLAlchemy model instance.
+
+    Returns:
+        Dict[str, Any]: Dictionary representation of the model.
+    """
     result = {c.name: getattr(model, c.name) for c in model.__table__.columns}
 
     # Reconstruct location object from flat fields for UserDB

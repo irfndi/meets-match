@@ -10,7 +10,10 @@ from PIL import Image
 
 
 class MediaValidator:
+    """Validator for media files (images and videos)."""
+
     def __init__(self) -> None:
+        """Initialize validator with size and type constraints."""
         # TODO: Consider making these configurable via src/config.py
         self.max_image_size_bytes = 5 * 1024 * 1024  # 5MB
         self.max_video_size_bytes = 20 * 1024 * 1024  # 20MB
@@ -21,21 +24,32 @@ class MediaValidator:
 
     @lru_cache(maxsize=1000)  # noqa: B019
     def get_mime_type(self, file_name: str) -> str | None:
-        """Get MIME type from file name."""
+        """
+        Get MIME type from file name extension.
+
+        Args:
+            file_name (str): The name of the file.
+
+        Returns:
+            str | None: The estimated MIME type or None if unknown.
+        """
         return mimetypes.guess_type(file_name)[0]
 
     async def validate_file_type(self, file_data: bytes, file_name: str) -> Tuple[bool, str]:
         """
-        Validate file type using both extension and content analysis.
+        Validate file type using both extension and content analysis (magic bytes).
+
+        Verifies that the file content matches allowed types and its extension.
+        Prioritizes content analysis over file extension.
 
         Args:
-            file_data: Raw file data
-            file_name: Original file name
+            file_data (bytes): Raw file data.
+            file_name (str): Original file name.
 
         Returns:
-            Tuple[bool, str]: (is_valid, type_or_error_message)
-                If valid, the second element is 'image' or 'video'.
-                If invalid, the second element is an error message.
+            Tuple[bool, str]: A tuple containing:
+                - bool: True if valid, False otherwise.
+                - str: 'image' or 'video' if valid, or an error message if invalid.
         """
         # Check by extension
         mime_type = self.get_mime_type(file_name)
@@ -71,13 +85,17 @@ class MediaValidator:
 
     async def validate_image(self, image_data: bytes) -> Tuple[bool, str]:
         """
-        Validate image dimensions and format.
+        Validate image dimensions and format using Pillow.
+
+        Ensures the image is not corrupt and falls within allowed dimension limits.
 
         Args:
-            image_data: Raw image data
+            image_data (bytes): Raw image data.
 
         Returns:
-            Tuple[bool, str]: (is_valid, error_message)
+            Tuple[bool, str]: A tuple containing:
+                - bool: True if valid, False otherwise.
+                - str: "Valid image" or an error message.
         """
         try:
             img = Image.open(io.BytesIO(image_data))
@@ -107,14 +125,16 @@ class MediaValidator:
 
     async def validate_file_size(self, file_size: int, file_type: str) -> Tuple[bool, str]:
         """
-        Validate file size based on type.
+        Validate file size based on type (image vs video).
 
         Args:
-            file_size: Size in bytes
-            file_type: 'image' or 'video'
+            file_size (int): Size in bytes.
+            file_type (str): 'image' or 'video'.
 
         Returns:
-            Tuple[bool, str]: (is_valid, error_message)
+            Tuple[bool, str]: A tuple containing:
+                - bool: True if valid, False otherwise.
+                - str: "Valid size" or an error message.
         """
         if file_type == "image" and file_size > self.max_image_size_bytes:
             return False, (f"Image too large. Maximum size: {self.max_image_size_bytes // 1024 // 1024}MB")

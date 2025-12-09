@@ -54,11 +54,14 @@ MeetMatch is an AI-powered matchmaking bot that helps you find people with simil
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle the /help command.
+    """
+    Handle the /help command.
+
+    Displays a help message with a list of available commands and usage instructions.
 
     Args:
-        update: The update object
-        context: The context object
+        update (Update): The update object from Telegram.
+        context (ContextTypes.DEFAULT_TYPE): The callback context.
     """
     # Apply rate limiting
     await user_command_limiter()(update, context)
@@ -74,11 +77,14 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 
 async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle the /about command.
+    """
+    Handle the /about command.
+
+    Displays information about the bot, its features, privacy policy, and version.
 
     Args:
-        update: The update object
-        context: The context object
+        update (Update): The update object from Telegram.
+        context (ContextTypes.DEFAULT_TYPE): The callback context.
     """
     # Apply rate limiting
     await user_command_limiter()(update, context)

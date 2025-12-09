@@ -50,7 +50,16 @@ USER_EDITING_STATE_KEY = "user:editing:{user_id}"
 
 
 def set_user_editing_state(user_id: str, is_editing: bool) -> None:
-    """Set the user's editing state in Redis."""
+    """
+    Set the user's editing state in Redis.
+
+    This state is used to prevent sending notifications (like match alerts)
+    while the user is actively editing their profile.
+
+    Args:
+        user_id (str): The user ID.
+        is_editing (bool): True if user is editing, False otherwise.
+    """
     key = USER_EDITING_STATE_KEY.format(user_id=user_id)
     if is_editing:
         # Set with 1 hour expiration in case they abandon the session
@@ -129,7 +138,15 @@ RECOMMENDED_FIELDS = ["bio", "interests", "location"]
 
 
 def get_missing_required_fields(user: User) -> list[str]:
-    """Get list of missing required fields for a user."""
+    """
+    Get list of missing required fields for a user.
+
+    Args:
+        user (User): The user object.
+
+    Returns:
+        list[str]: List of missing required field names.
+    """
     missing = []
     if not user.first_name:
         missing.append("name")
@@ -147,7 +164,15 @@ def get_missing_required_fields(user: User) -> list[str]:
 
 
 def get_missing_recommended_fields(user: User) -> list[str]:
-    """Get list of missing recommended fields for a user."""
+    """
+    Get list of missing recommended fields for a user.
+
+    Args:
+        user (User): The user object.
+
+    Returns:
+        list[str]: List of missing recommended field names.
+    """
     missing = []
     if not user.bio:
         missing.append("bio")
@@ -163,14 +188,19 @@ def get_missing_recommended_fields(user: User) -> list[str]:
 
 
 def check_and_update_profile_complete(user_id: str, context: ContextTypes.DEFAULT_TYPE | None = None) -> bool:
-    """Check if profile is complete and update the flag if needed.
+    """
+    Check if profile is complete and update the flag if needed.
 
     Profile is considered complete when all REQUIRED fields are filled.
     Recommended fields are optional and don't block matching.
-
     If context is provided, also refreshes context.user_data["user"].
 
-    Returns True if profile is now complete.
+    Args:
+        user_id (str): The user ID.
+        context (ContextTypes.DEFAULT_TYPE | None): The callback context.
+
+    Returns:
+        bool: True if profile is now complete.
     """
     user = get_user(user_id)
     missing_required = get_missing_required_fields(user)
@@ -198,16 +228,17 @@ STATE_ADHOC_CONTINUE = "adhoc_continue_profile"
 
 
 def _get_chat_id_from_update(update: Update) -> int | None:
-    """Extract chat_id from an update, trying multiple sources.
+    """
+    Extract chat_id from an update, trying multiple sources.
 
     This handles the case where effective_message is None (e.g., callback queries
     with inaccessible messages).
 
     Args:
-        update: The update object
+        update (Update): The update object.
 
     Returns:
-        Chat ID if found, None otherwise
+        int | None: Chat ID if found, None otherwise.
     """
     if update.effective_chat:
         return update.effective_chat.id
@@ -225,19 +256,20 @@ async def _send_message_safe(
     text: str,
     reply_markup: InlineKeyboardMarkup | ReplyKeyboardMarkup | ReplyKeyboardRemove | ForceReply | None = None,
 ) -> bool:
-    """Send a message safely, handling both message and callback query contexts.
+    """
+    Send a message safely, handling both message and callback query contexts.
 
     Tries update.effective_message.reply_text() first, then falls back to
     context.bot.send_message() using the effective chat/user ID.
 
     Args:
-        update: The update object
-        context: The context object
-        text: Text content to send
-        reply_markup: Optional keyboard markup
+        update (Update): The update object.
+        context (ContextTypes.DEFAULT_TYPE): The context object.
+        text (str): Text content to send.
+        reply_markup (Optional[Union[InlineKeyboardMarkup, ReplyKeyboardMarkup, ReplyKeyboardRemove, ForceReply]]): Optional keyboard markup.
 
     Returns:
-        True if message was sent successfully, False otherwise
+        bool: True if message was sent successfully, False otherwise.
     """
     # Try effective_message first
     if update.effective_message:
@@ -258,16 +290,20 @@ async def _send_message_safe(
 async def prompt_for_next_missing_field(
     update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: str, silent_if_complete: bool = False
 ) -> bool:
-    """Prompt user for the next missing required or recommended field (ad-hoc mode).
+    """
+    Prompt user for the next missing required or recommended field (ad-hoc mode).
+
+    Checks for missing fields and prompts the user to fill them. Honors cooldown periods for skipped fields.
+    This is for single field edits, NOT the guided setup flow.
 
     Args:
-        update: The update object
-        context: The context object
-        user_id: The user ID
-        silent_if_complete: If True, don't send "Profile complete" message when returning False.
+        update (Update): The update object.
+        context (ContextTypes.DEFAULT_TYPE): The context object.
+        user_id (str): The user ID.
+        silent_if_complete (bool): If True, don't send "Profile complete" message when returning False.
 
-    Returns True if there was a missing field to prompt for, False if profile is complete (or cooldown active).
-    This is for single field edits, NOT the guided setup flow.
+    Returns:
+        bool: True if there was a missing field to prompt for, False if profile is complete (or cooldown active).
     """
     if context.user_data is None:
         logger.error("context.user_data is None in prompt_for_next_missing_field")
@@ -403,11 +439,14 @@ async def prompt_for_next_missing_field(
 
 @authenticated
 async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle the /profile command.
+    """
+    Handle the /profile command.
+
+    Displays the profile menu to the user.
 
     Args:
-        update: The update object
-        context: The context object
+        update (Update): The update object.
+        context (ContextTypes.DEFAULT_TYPE): The context object.
     """
     # Apply rate limiting
     await user_command_limiter()(update, context)
@@ -427,11 +466,14 @@ async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 @authenticated
 async def name_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle the /name command.
+    """
+    Handle the /name command.
+
+    Updates the user's name or prompts for input.
 
     Args:
-        update: The update object
-        context: The context object
+        update (Update): The update object.
+        context (ContextTypes.DEFAULT_TYPE): The context object.
     """
     # Apply rate limiting
     await user_command_limiter()(update, context)
@@ -467,7 +509,14 @@ async def name_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 
 async def _save_name(update: Update, context: ContextTypes.DEFAULT_TYPE, name: str) -> None:
-    """Save the user's name."""
+    """
+    Save the user's name.
+
+    Args:
+        update (Update): The update object.
+        context (ContextTypes.DEFAULT_TYPE): The context object.
+        name (str): The name to save.
+    """
     if not update.effective_user or not update.message or context.user_data is None:
         return
 
@@ -493,11 +542,14 @@ async def _save_name(update: Update, context: ContextTypes.DEFAULT_TYPE, name: s
 
 @authenticated
 async def age_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle the /age command.
+    """
+    Handle the /age command.
+
+    Updates the user's age or prompts for input.
 
     Args:
-        update: The update object
-        context: The context object
+        update (Update): The update object.
+        context (ContextTypes.DEFAULT_TYPE): The context object.
     """
     # Apply rate limiting
     await user_command_limiter()(update, context)
@@ -535,7 +587,15 @@ async def age_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
 
 def _coerce_preferences(prefs: Any) -> Preferences:
-    """Return a Preferences object from various persisted shapes."""
+    """
+    Return a Preferences object from various persisted shapes.
+
+    Args:
+        prefs (Any): Preferences data (can be dict, Preferences object, or None).
+
+    Returns:
+        Preferences: A valid Preferences object.
+    """
     if isinstance(prefs, Preferences):
         return prefs
     if isinstance(prefs, dict):
@@ -547,7 +607,14 @@ def _coerce_preferences(prefs: Any) -> Preferences:
 
 
 def _maybe_set_age_range_defaults(user_id: str, age: int, prefs: Any) -> None:
-    """Auto-set min/max age to age±4 when not already set."""
+    """
+    Auto-set min/max age to age±4 when not already set.
+
+    Args:
+        user_id (str): The user ID.
+        age (int): The user's age.
+        prefs (Any): Current preferences.
+    """
     try:
         pref_obj = _coerce_preferences(prefs)
         needs_min = pref_obj.min_age is None
@@ -575,7 +642,17 @@ def _maybe_set_age_range_defaults(user_id: str, age: int, prefs: Any) -> None:
 
 
 async def _save_age(update: Update, context: ContextTypes.DEFAULT_TYPE, age_str: str) -> bool:
-    """Save the user's age. Returns True if successful."""
+    """
+    Save the user's age.
+
+    Args:
+        update (Update): The update object.
+        context (ContextTypes.DEFAULT_TYPE): The context object.
+        age_str (str): The age as a string.
+
+    Returns:
+        bool: True if successful, False otherwise.
+    """
     if not update.effective_user or not update.message or context.user_data is None:
         return False
 
@@ -614,11 +691,14 @@ async def _save_age(update: Update, context: ContextTypes.DEFAULT_TYPE, age_str:
 
 @authenticated
 async def gender_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle the /gender command.
+    """
+    Handle the /gender command.
+
+    Updates the user's gender or prompts for input.
 
     Args:
-        update: The update object
-        context: The context object
+        update (Update): The update object.
+        context (ContextTypes.DEFAULT_TYPE): The context object.
     """
     # Apply rate limiting
     await user_command_limiter()(update, context)
@@ -657,11 +737,12 @@ async def gender_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
 @authenticated
 async def gender_selection(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle gender selection from keyboard.
+    """
+    Handle gender selection from keyboard.
 
     Args:
-        update: The update object
-        context: The context object
+        update (Update): The update object.
+        context (ContextTypes.DEFAULT_TYPE): The context object.
     """
     if context.user_data is None or not update.message or not update.message.text or not update.effective_user:
         return
@@ -685,12 +766,15 @@ async def gender_selection(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
 
 async def process_gender_selection(update: Update, context: ContextTypes.DEFAULT_TYPE, gender_str: str) -> None:
-    """Process gender selection.
+    """
+    Process gender selection.
+
+    Validates and updates the user's gender.
 
     Args:
-        update: The update object
-        context: The context object
-        gender_str: Selected gender string
+        update (Update): The update object.
+        context (ContextTypes.DEFAULT_TYPE): The context object.
+        gender_str (str): Selected gender string (Male/Female).
     """
     if not update.effective_user or not update.message or context.user_data is None:
         return
@@ -750,11 +834,14 @@ async def process_gender_selection(update: Update, context: ContextTypes.DEFAULT
 
 @authenticated
 async def bio_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle the /bio command.
+    """
+    Handle the /bio command.
+
+    Updates the user's bio or prompts for input.
 
     Args:
-        update: The update object
-        context: The context object
+        update (Update): The update object.
+        context (ContextTypes.DEFAULT_TYPE): The context object.
     """
     # Apply rate limiting
     await user_command_limiter()(update, context)
@@ -790,7 +877,17 @@ async def bio_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
 
 async def _save_bio(update: Update, context: ContextTypes.DEFAULT_TYPE, bio: str) -> bool:
-    """Save the user's bio. Returns True if successful."""
+    """
+    Save the user's bio.
+
+    Args:
+        update (Update): The update object.
+        context (ContextTypes.DEFAULT_TYPE): The context object.
+        bio (str): The bio text.
+
+    Returns:
+        bool: True if successful, False otherwise.
+    """
     if not update.effective_user or not update.message or context.user_data is None:
         return False
 
@@ -819,11 +916,14 @@ async def _save_bio(update: Update, context: ContextTypes.DEFAULT_TYPE, bio: str
 
 @authenticated
 async def interests_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle the /interests command.
+    """
+    Handle the /interests command.
+
+    Updates the user's interests or prompts for input.
 
     Args:
-        update: The update object
-        context: The context object
+        update (Update): The update object.
+        context (ContextTypes.DEFAULT_TYPE): The context object.
     """
     # Apply rate limiting
     await user_command_limiter()(update, context)
@@ -860,7 +960,17 @@ async def interests_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
 
 async def _save_interests(update: Update, context: ContextTypes.DEFAULT_TYPE, interests_text: str) -> bool:
-    """Save the user's interests. Returns True if successful."""
+    """
+    Save the user's interests.
+
+    Args:
+        update (Update): The update object.
+        context (ContextTypes.DEFAULT_TYPE): The context object.
+        interests_text (str): Comma-separated list of interests.
+
+    Returns:
+        bool: True if successful, False otherwise.
+    """
     if not update.effective_user or not update.message or context.user_data is None:
         return False
 
@@ -895,11 +1005,14 @@ async def _save_interests(update: Update, context: ContextTypes.DEFAULT_TYPE, in
 
 @authenticated
 async def location_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle the /location command.
+    """
+    Handle the /location command.
+
+    Prompts the user to share their location or enter it manually.
 
     Args:
-        update: The update object
-        context: The context object
+        update (Update): The update object.
+        context (ContextTypes.DEFAULT_TYPE): The context object.
     """
     # Apply rate limiting
     await user_command_limiter()(update, context)
@@ -927,11 +1040,14 @@ async def location_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
 @authenticated
 async def location_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle location sharing.
+    """
+    Handle location sharing via Telegram's location feature.
+
+    Updates the user's coordinates and attempts to reverse geocode them to a city/country.
 
     Args:
-        update: The update object
-        context: The context object
+        update (Update): The update object.
+        context (ContextTypes.DEFAULT_TYPE): The context object.
     """
     # Always handle incoming location messages
 
@@ -1002,12 +1118,15 @@ async def location_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
 
 async def process_manual_location(update: Update, context: ContextTypes.DEFAULT_TYPE, location_text: str) -> None:
-    """Process manual location entry.
+    """
+    Process manual location entry.
+
+    Geocodes the city/country string entered by the user.
 
     Args:
-        update: The update object
-        context: The context object
-        location_text: Location text
+        update (Update): The update object.
+        context (ContextTypes.DEFAULT_TYPE): The context object.
+        location_text (str): Location string (e.g., "Paris, France").
     """
     if not update.effective_user or not update.message or context.user_data is None:
         return
@@ -1104,7 +1223,13 @@ async def process_manual_location(update: Update, context: ContextTypes.DEFAULT_
 
 
 def clear_conversation_state(context: ContextTypes.DEFAULT_TYPE, user_id: str | None = None) -> None:
-    """Clear all conversation states."""
+    """
+    Clear all conversation states.
+
+    Args:
+        context (ContextTypes.DEFAULT_TYPE): The context object.
+        user_id (str | None): Optional user ID to clear Redis state.
+    """
     if context.user_data is None:
         return
     states_to_clear = [
@@ -1131,7 +1256,16 @@ PROFILE_STEPS = ["name", "age", "gender", "gender_preference", "bio", "interests
 
 
 async def _next_profile_step(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Move to the next step in profile setup."""
+    """
+    Move to the next step in profile setup.
+
+    Iterates through the list of profile steps (name, age, etc.) and prompts
+    the user for the next required piece of information.
+
+    Args:
+        update (Update): The update object.
+        context (ContextTypes.DEFAULT_TYPE): The context object.
+    """
     if not update.effective_user or not update.message or context.user_data is None:
         return
 
@@ -1292,7 +1426,15 @@ async def _next_profile_step(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 
 async def start_profile_setup(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Start the guided profile setup flow."""
+    """
+    Start the guided profile setup flow.
+
+    Initiates a step-by-step wizard to help the user complete their profile.
+
+    Args:
+        update (Update): The update object.
+        context (ContextTypes.DEFAULT_TYPE): The context object.
+    """
     if not update.message or context.user_data is None or not update.effective_user:
         return
 
@@ -1309,7 +1451,16 @@ async def start_profile_setup(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 @authenticated
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle text messages when awaiting user input."""
+    """
+    Handle text messages when awaiting user input.
+
+    Serves as the main router for conversational inputs (e.g., answering profile
+    questions) and main menu commands.
+
+    Args:
+        update (Update): The update object.
+        context (ContextTypes.DEFAULT_TYPE): The context object.
+    """
     if not update.message or not update.message.text or not update.effective_user or context.user_data is None:
         return
 
@@ -1826,7 +1977,16 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 @authenticated
 async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle photo and video uploads with validation and multi-file support."""
+    """
+    Handle photo and video uploads with validation and multi-file support.
+
+    Processes uploaded media, validates size and type, and saves to storage.
+    Supports a pending session for uploading multiple files.
+
+    Args:
+        update (Update): The update object.
+        context (ContextTypes.DEFAULT_TYPE): The context object.
+    """
     if not update.message or not update.effective_user or context.user_data is None:
         return
 
@@ -1938,7 +2098,13 @@ VIEW_PROFILE_TEMPLATE = """
 
 
 async def view_profile_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle viewing another user's profile."""
+    """
+    Handle viewing another user's profile from a match or list.
+
+    Args:
+        update (Update): The update object.
+        context (ContextTypes.DEFAULT_TYPE): The context object.
+    """
     if not update.callback_query:
         return
 

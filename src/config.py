@@ -7,7 +7,14 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """Application settings loaded from environment variables."""
+    """
+    Application settings loaded from environment variables.
+
+    This class defines the configuration for the MeetMatch bot, including
+    Telegram API keys, database connections, Redis settings, and application-specific
+    parameters. It uses Pydantic's `BaseSettings` to automatically load values
+    from environment variables and a `.env` file.
+    """
 
     # Telegram Bot Configuration
     TELEGRAM_TOKEN: str
@@ -19,7 +26,12 @@ class Settings(BaseSettings):
 
     @property
     def TELEGRAM_BOT_TOKEN(self) -> str:
-        """Alias for TELEGRAM_TOKEN for compatibility."""
+        """
+        Alias for TELEGRAM_TOKEN for compatibility.
+
+        Returns:
+            str: The Telegram bot token.
+        """
         return self.TELEGRAM_TOKEN
 
     # Database Configuration
@@ -52,7 +64,16 @@ class Settings(BaseSettings):
     @field_validator("DEBUG", mode="before")
     @classmethod
     def set_debug(cls, v: Any, info: ValidationInfo) -> bool:
-        """Enable debug mode if ENVIRONMENT is development."""
+        """
+        Enable debug mode if ENVIRONMENT is development.
+
+        Args:
+            v (Any): The value of the DEBUG field.
+            info (ValidationInfo): Validation info containing other field values.
+
+        Returns:
+            bool: True if debug mode should be enabled, False otherwise.
+        """
         if isinstance(v, bool):
             return v
         return bool(info.data.get("ENVIRONMENT", "").lower() == "development")
@@ -65,5 +86,10 @@ settings = Settings()  # type: ignore
 
 
 def get_settings() -> Settings:
-    """Return the settings instance."""
+    """
+    Return the settings instance.
+
+    Returns:
+        Settings: The global application settings instance.
+    """
     return settings

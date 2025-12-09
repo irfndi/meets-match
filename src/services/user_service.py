@@ -19,16 +19,19 @@ USER_LOCATION_CACHE_KEY = "user:location:{user_id}"
 
 
 def get_user(user_id: str) -> User:
-    """Get a user by ID.
+    """
+    Get a user by ID.
+
+    Retrieves user data from cache or database.
 
     Args:
-        user_id: User ID
+        user_id (str): User ID.
 
     Returns:
-        User object
+        User: The user object.
 
     Raises:
-        NotFoundError: If user not found
+        NotFoundError: If user is not found.
     """
     with sentry_sdk.start_span(op="user.get", name=user_id) as span:
         # Check cache first
@@ -65,16 +68,19 @@ def get_user(user_id: str) -> User:
 
 
 def create_user(user: User) -> User:
-    """Create a new user.
+    """
+    Create a new user.
+
+    Inserts a new user record into the database. Fails if user already exists.
 
     Args:
-        user: User object
+        user (User): The user object to create.
 
     Returns:
-        Created user object
+        User: The created user object.
 
     Raises:
-        ValidationError: If user already exists
+        ValidationError: If user already exists or creation fails.
     """
     with sentry_sdk.start_span(op="user.create", name=user.id) as span:
         # Check if user already exists
@@ -121,18 +127,22 @@ def create_user(user: User) -> User:
 
 
 def update_user(user_id: str, data: Dict[str, Union[str, int, bool, datetime, List[str], Dict]]) -> User:
-    """Update a user.
+    """
+    Update a user.
+
+    Updates user fields in the database and invalidates/updates relevant caches.
+    Automatically updates the `updated_at` timestamp.
 
     Args:
-        user_id: User ID
-        data: User data to update
+        user_id (str): User ID.
+        data (Dict): Dictionary of fields to update.
 
     Returns:
-        Updated user object
+        User: The updated user object.
 
     Raises:
-        NotFoundError: If user not found
-        ValidationError: If update data is invalid
+        NotFoundError: If user is not found.
+        ValidationError: If update operation fails.
     """
     with sentry_sdk.start_span(op="user.update", name=user_id) as span:
         span.set_data("fields", list(data.keys()))
@@ -200,17 +210,20 @@ def update_user(user_id: str, data: Dict[str, Union[str, int, bool, datetime, Li
 
 
 def update_user_location(user_id: str, location: Location) -> User:
-    """Update a user's location.
+    """
+    Update a user's location.
+
+    Sets the user's location and updates the last_updated timestamp for the location.
 
     Args:
-        user_id: User ID
-        location: Location object
+        user_id (str): User ID.
+        location (Location): New location object.
 
     Returns:
-        Updated user object
+        User: Updated user object.
 
     Raises:
-        NotFoundError: If user not found
+        NotFoundError: If user not found.
     """
     with sentry_sdk.start_span(op="user.update_location", name=user_id) as span:
         span.set_data("city", location.city)
@@ -231,9 +244,17 @@ def update_user_location(user_id: str, location: Location) -> User:
 
 
 def get_user_location_text(user_id: str) -> Optional[str]:
-    """Get a human-readable location string (city, country) for a user.
+    """
+    Get a human-readable location string (city, country) for a user.
 
-    Falls back to flat DB fields if nested location isn't present.
+    Attempts to retrieve location from the user object. Falls back to flat database
+    fields if the structured location object is not fully populated.
+
+    Args:
+        user_id (str): User ID.
+
+    Returns:
+        Optional[str]: formatted location string "City, Country" or None.
     """
 
     def _format_location(city: str, country: str) -> Optional[str]:
@@ -276,17 +297,21 @@ def get_user_location_text(user_id: str) -> Optional[str]:
 
 
 def update_user_preferences(user_id: str, preferences: Preferences) -> User:
-    """Update a user's preferences by merging with existing values.
+    """
+    Update a user's preferences.
+
+    Merges new preferences with existing ones, ensuring that existing settings
+    are not accidentally wiped out by partial updates.
 
     Args:
-        user_id: User ID
-        preferences: Preferences object
+        user_id (str): User ID.
+        preferences (Preferences): New preferences object.
 
     Returns:
-        Updated user object
+        User: Updated user object.
 
     Raises:
-        NotFoundError: If user not found
+        NotFoundError: If user not found.
     """
     with sentry_sdk.start_span(op="user.update_preferences", name=user_id) as span:
         # Load existing preferences
@@ -307,13 +332,17 @@ def update_user_preferences(user_id: str, preferences: Preferences) -> User:
 
 
 def delete_user(user_id: str) -> None:
-    """Delete a user.
+    """
+    Delete a user.
+
+    Removes the user from the database and clears all associated caches.
 
     Args:
-        user_id: User ID
+        user_id (str): User ID.
 
     Raises:
-        NotFoundError: If user not found
+        NotFoundError: If user not found (checked at start).
+        ValidationError: If deletion fails.
     """
     # Check if user exists
     get_user(user_id)
@@ -344,16 +373,19 @@ def delete_user(user_id: str) -> None:
 
 
 def get_user_location(user_id: str) -> Optional[Location]:
-    """Get a user's location.
+    """
+    Get a user's location.
+
+    Retrieves location from cache or user object.
 
     Args:
-        user_id: User ID
+        user_id (str): User ID.
 
     Returns:
-        Location object or None if not set
+        Optional[Location]: Location object or None.
 
     Raises:
-        NotFoundError: If user not found
+        NotFoundError: If user not found.
     """
     # Check cache first
     location_cache_key = USER_LOCATION_CACHE_KEY.format(user_id=user_id)
@@ -375,13 +407,16 @@ def get_user_location(user_id: str) -> Optional[Location]:
 
 
 def update_last_active(user_id: str) -> None:
-    """Update a user's last active timestamp.
+    """
+    Update a user's last active timestamp.
+
+    Sets the `last_active` field to the current time.
 
     Args:
-        user_id: User ID
+        user_id (str): User ID.
 
     Raises:
-        NotFoundError: If user not found
+        NotFoundError: If user not found.
     """
     now = datetime.now()
     update_user(user_id, {"last_active": now})
@@ -389,7 +424,18 @@ def update_last_active(user_id: str) -> None:
 
 
 def get_inactive_users(days_inactive: int) -> List[User]:
-    """Get users who have been inactive for exactly the specified number of days."""
+    """
+    Get users who have been inactive for exactly the specified number of days.
+
+    Used for sending re-engagement notifications. Matches users whose
+    last active time falls within a 24-hour window ending `days_inactive` days ago.
+
+    Args:
+        days_inactive (int): Number of days of inactivity.
+
+    Returns:
+        List[User]: List of inactive users.
+    """
     from datetime import timedelta
 
     # Calculate the time range for "exact" match (e.g., between X and X+1 days ago)
@@ -424,17 +470,20 @@ def get_inactive_users(days_inactive: int) -> List[User]:
 
 
 def set_user_sleeping(user_id: str, is_sleeping: bool) -> User:
-    """Set a user's sleeping/paused status.
+    """
+    Set a user's sleeping/paused status.
+
+    When sleeping, a user is not eligible for matching.
 
     Args:
-        user_id: User ID
-        is_sleeping: Whether the user is sleeping/paused
+        user_id (str): User ID.
+        is_sleeping (bool): True to pause matching, False to resume.
 
     Returns:
-        Updated user object
+        User: Updated user object.
 
     Raises:
-        NotFoundError: If user not found
+        NotFoundError: If user not found.
     """
     user = update_user(user_id, {"is_sleeping": is_sleeping})
     logger.info("User sleeping status updated", user_id=user_id, is_sleeping=is_sleeping)
@@ -442,16 +491,19 @@ def set_user_sleeping(user_id: str, is_sleeping: bool) -> User:
 
 
 def wake_user(user_id: str) -> User:
-    """Wake up a sleeping user and update their last_active timestamp.
+    """
+    Wake up a sleeping user and update their last_active timestamp.
+
+    Resumes matching for the user.
 
     Args:
-        user_id: User ID
+        user_id (str): User ID.
 
     Returns:
-        Updated user object
+        User: Updated user object.
 
     Raises:
-        NotFoundError: If user not found
+        NotFoundError: If user not found.
     """
     now = datetime.now()
     user = update_user(user_id, {"is_sleeping": False, "last_active": now})
@@ -460,13 +512,17 @@ def wake_user(user_id: str) -> User:
 
 
 def get_users_for_auto_sleep(inactivity_minutes: int = 15) -> List[User]:
-    """Get active, non-sleeping users who have been inactive for the specified minutes.
+    """
+    Get active, non-sleeping users who have been inactive for a specified time.
+
+    Used to automatically set users to sleep mode if they haven't been active
+    recently.
 
     Args:
-        inactivity_minutes: Number of minutes of inactivity before auto-sleep
+        inactivity_minutes (int, optional): Inactivity threshold. Defaults to 15.
 
     Returns:
-        List of users eligible for auto-sleep
+        List[User]: List of users eligible for auto-sleep.
     """
     from datetime import timedelta
 

@@ -17,7 +17,14 @@ RETENTION_DAYS = 365
 
 
 def get_storage_path() -> Path:
-    """Get the absolute path to the storage directory."""
+    """
+    Get the absolute path to the storage directory.
+
+    Ensures the directory exists.
+
+    Returns:
+        Path: The absolute path to the media storage directory.
+    """
     path = Path(settings.STORAGE_PATH)
     if not path.is_absolute():
         path = Path.cwd() / path
@@ -26,15 +33,18 @@ def get_storage_path() -> Path:
 
 
 def save_media(file_content: bytes, user_id: str, file_ext: str = "jpg") -> str:
-    """Save media to local storage and return the relative path.
+    """
+    Save media to local storage and return the relative path.
+
+    Compresses images to JPEG format to save space.
 
     Args:
-        file_content: The binary content of the file.
-        user_id: The ID of the user uploading the file.
-        file_ext: The file extension.
+        file_content (bytes): The binary content of the file.
+        user_id (str): The ID of the user uploading the file.
+        file_ext (str, optional): The file extension. Defaults to "jpg".
 
     Returns:
-        The relative path to the saved file.
+        str: The relative path to the saved file (e.g., "user_id/uuid.jpg").
     """
     storage_path = get_storage_path()
     user_dir = storage_path / user_id
@@ -70,17 +80,19 @@ def save_media(file_content: bytes, user_id: str, file_ext: str = "jpg") -> str:
 
 
 def delete_media(file_path: str, user_id: Optional[str] = None, reason: str = "replaced") -> bool:
-    """Soft delete media - records deletion in database and removes file from storage.
+    """
+    Soft delete media.
 
-    The deletion record is kept for 365 days to allow recovery/auditing.
+    Removes the file from storage and records a deletion entry in the database.
+    The deletion record is used for auditing and potential recovery within the retention period.
 
     Args:
-        file_path: Relative path to the file.
-        user_id: The ID of the user who owned the file. If not provided, extracted from path.
-        reason: Reason for deletion (e.g., 'replaced', 'user_deleted', 'profile_edit').
+        file_path (str): Relative path to the file.
+        user_id (Optional[str], optional): User ID. If not provided, extracted from path.
+        reason (str, optional): Reason for deletion. Defaults to "replaced".
 
     Returns:
-        True if deleted successfully, False on error.
+        bool: True if deleted successfully, False on error.
     """
     try:
         # Extract user_id from path if not provided
@@ -106,12 +118,13 @@ def delete_media(file_path: str, user_id: Optional[str] = None, reason: str = "r
 
 
 def _record_deleted_media(user_id: str, file_path: str, reason: str) -> None:
-    """Record a deleted media file in the database.
+    """
+    Record a deleted media file in the database.
 
     Args:
-        user_id: The ID of the user who owned the file.
-        file_path: Relative path to the file.
-        reason: Reason for deletion.
+        user_id (str): The ID of the user who owned the file.
+        file_path (str): Relative path to the file.
+        reason (str): Reason for deletion.
     """
     try:
         from src.utils.database import execute_query
@@ -135,14 +148,15 @@ def _record_deleted_media(user_id: str, file_path: str, reason: str) -> None:
 
 
 def get_deleted_media_by_user(user_id: str, include_purged: bool = False) -> List[dict]:
-    """Get list of deleted media files for a user.
+    """
+    Get list of deleted media files for a user.
 
     Args:
-        user_id: The ID of the user.
-        include_purged: Whether to include permanently purged files in the result.
+        user_id (str): The ID of the user.
+        include_purged (bool, optional): Whether to include permanently purged files. Defaults to False.
 
     Returns:
-        List of deleted media records with file_path, deleted_at, and reason.
+        List[dict]: List of deleted media records.
     """
     try:
         from src.utils.database import execute_query
@@ -164,13 +178,16 @@ def get_deleted_media_by_user(user_id: str, include_purged: bool = False) -> Lis
 
 
 def get_recoverable_media(user_id: str) -> List[dict]:
-    """Get list of media files that can still be recovered (within 365-day window).
+    """
+    Get list of media files that can still be recovered.
+
+    Returns files deleted within the retention period (365 days).
 
     Args:
-        user_id: The ID of the user.
+        user_id (str): The ID of the user.
 
     Returns:
-        List of recoverable media records.
+        List[dict]: List of recoverable media records.
     """
     try:
         from src.utils.database import execute_query
@@ -194,13 +211,14 @@ def get_recoverable_media(user_id: str) -> List[dict]:
 
 
 def purge_expired_media_records() -> int:
-    """Permanently mark media records older than 365 days as purged.
+    """
+    Permanently mark media records older than retention period as purged.
 
     This function is meant to be called periodically (e.g., by a scheduled job)
-    to clean up old deletion records after the retention period.
+    to clean up old deletion records after the retention period (365 days).
 
     Returns:
-        Number of records purged.
+        int: Number of records purged.
     """
     try:
         from src.utils.database import execute_query

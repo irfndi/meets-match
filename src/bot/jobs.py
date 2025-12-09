@@ -24,11 +24,16 @@ REMINDER_IMAGE_URL = "https://placehold.co/600x400/png?text=We+Miss+You"
 
 
 async def auto_sleep_inactive_users_job(context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Job to automatically put inactive users into sleep/pause mode.
+    """
+    Job to automatically put inactive users into sleep/pause mode.
 
-    Users who have been inactive for AUTO_SLEEP_INACTIVITY_MINUTES minutes
+    Users who have been inactive for `AUTO_SLEEP_INACTIVITY_MINUTES` minutes
     will be automatically set to sleeping status. Their profile remains visible
-    to others in the match cycle, but they are in "paused" state.
+    to others in the match cycle, but they are considered "paused" until they
+    interact with the bot again.
+
+    Args:
+        context (ContextTypes.DEFAULT_TYPE): The callback context.
     """
     logger.info("Running auto-sleep inactive users job")
 
@@ -76,7 +81,15 @@ async def auto_sleep_inactive_users_job(context: ContextTypes.DEFAULT_TYPE) -> N
 
 
 async def cleanup_old_media_job(context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Job to delete old media files (> 1 year) that are no longer referenced."""
+    """
+    Job to delete old media files (> 1 year) that are no longer referenced.
+
+    Iterates through storage directories and removes files older than 365 days.
+    This helps in managing disk usage.
+
+    Args:
+        context (ContextTypes.DEFAULT_TYPE): The callback context.
+    """
     from src.utils.media import get_storage_path
 
     logger.info("Running old media cleanup job")
@@ -122,7 +135,16 @@ async def cleanup_old_media_job(context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def inactive_user_reminder_job(context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Job to send reminders to inactive users."""
+    """
+    Job to send re-engagement reminders to inactive users.
+
+    Targets users who have been inactive for specific durations (defined in
+    `INACTIVITY_DAYS`). Sends personalized messages based on location and
+    pending matches to encourage them to return.
+
+    Args:
+        context (ContextTypes.DEFAULT_TYPE): The callback context.
+    """
     logger.info("Running inactive user reminder job")
 
     with sentry_sdk.start_span(op="job.reminder", name="inactive_user_reminder") as span:
