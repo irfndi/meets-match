@@ -486,6 +486,14 @@ async def handle_view_match(update: Update, context: ContextTypes.DEFAULT_TYPE, 
 
     try:
         match = get_match_by_id(match_id)
+
+        # Security check: Ensure user is part of the match
+        if user_id != match.user1_id and user_id != match.user2_id:
+            logger.warning("Unauthorized match view attempt", user_id=user_id, match_id=match_id)
+            if query.message:
+                await query.edit_message_text("You are not authorized to view this match.")
+            return
+
         # Determine target user
         target_user_id = match.user1_id if match.user2_id == user_id else match.user2_id
         match_user = get_user(target_user_id)
