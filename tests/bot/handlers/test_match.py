@@ -419,3 +419,38 @@ async def test_handle_view_match_with_media(match_handler_module, mock_dependenc
     assert "Jane" in kwargs["text"]
     assert "Jakarta" in kwargs["text"]
     assert "reply_markup" in kwargs
+
+
+async def test_handle_view_match_unauthorized_access(match_handler_module, mock_dependencies, mock_update_context):
+    """Test that unauthorized users cannot view matches they are not part of."""
+    update, context = mock_update_context
+    mock_deps = mock_dependencies
+
+    # Mock callback query from user with ID 99999 (not part of the match)
+    update.callback_query.data = "view_match_match_123"
+    update.callback_query.message.chat_id = 99999
+    update.effective_user.id = 99999  # User attempting unauthorized access
+
+    # Mock match between user1_id=12345 and user2_id=67890
+    mock_match = MagicMock()
+    mock_match.id = "match_123"
+    mock_match.user1_id = "12345"
+    mock_match.user2_id = "67890"
+    mock_match.status = match_handler_module.MatchStatus.MATCHED
+
+    mock_deps["get_match_by_id"].return_value = mock_match
+
+    # Call the handler
+    await match_handler_module.match_callback(update, context)
+
+    # Verify that access was denied with generic error message
+    update.callback_query.edit_message_text.assert_called_once_with(
+        "This match is no longer available. Try /match to find new matches."
+    )
+
+    # Verify that get_user was NOT called (early return after auth check)
+    mock_deps["get_user"].assert_not_called()
+
+    # Verify no media or profile messages were sent
+    context.bot.send_media_group.assert_not_called()
+    context.bot.send_message.assert_not_called()
