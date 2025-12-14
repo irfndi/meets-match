@@ -491,7 +491,7 @@ async def handle_view_match(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         if user_id != match.user1_id and user_id != match.user2_id:
             logger.warning("Unauthorized match view attempt", user_id=user_id, match_id=match_id)
             if query.message:
-                await query.edit_message_text("You are not authorized to view this match.")
+                await query.edit_message_text("This match is no longer available. Try /match to find new matches.")
             return
 
         # Determine target user
