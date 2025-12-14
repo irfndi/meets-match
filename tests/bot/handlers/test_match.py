@@ -421,6 +421,7 @@ async def test_handle_view_match_with_media(match_handler_module, mock_dependenc
     assert "reply_markup" in kwargs
 
 
+@pytest.mark.asyncio
 async def test_handle_view_match_unauthorized_access(match_handler_module, mock_dependencies, mock_update_context):
     """Test that unauthorized users cannot view matches they are not part of."""
     update, context = mock_update_context
