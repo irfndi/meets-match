@@ -30,6 +30,7 @@ from src.services.user_service import get_user
 from src.utils.cache import get_cache, set_cache
 from src.utils.errors import NotFoundError
 from src.utils.logging import get_logger
+from src.utils.security import sanitize_html
 
 # Shared constant for user editing state
 USER_EDITING_STATE_KEY = "user:editing:{user_id}"
@@ -179,21 +180,21 @@ async def get_and_show_match(update: Update, context: ContextTypes.DEFAULT_TYPE,
         match = create_match(user_id, match_user.id)
 
         # Format interests
-        interests_text = ", ".join(match_user.interests) if match_user.interests else "None"
+        interests_text = sanitize_html(", ".join(match_user.interests)) if match_user.interests else "None"
 
         # Format location
         location_text = (
-            f"{match_user.location.city}, {match_user.location.country}"
+            sanitize_html(f"{match_user.location.city}, {match_user.location.country}")
             if match_user.location and match_user.location.city
             else "Unknown location"
         )
 
         # Send match profile
         profile_text = MATCH_PROFILE_TEMPLATE.format(
-            name=match_user.first_name,
+            name=sanitize_html(match_user.first_name),
             age=match_user.age,
             gender=match_user.gender.value if match_user.gender else "Not specified",
-            bio=match_user.bio or "No bio provided",
+            bio=sanitize_html(match_user.bio) or "No bio provided",
             interests=interests_text,
             location=location_text,
         )
@@ -338,7 +339,7 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE, match_
             tg_link = f"tg://user?id={target_user.id}"
             await query.edit_message_text(
                 MUTUAL_MATCH_MESSAGE.format(
-                    name=target_user.first_name,
+                    name=sanitize_html(target_user.first_name),
                     match_id=match_id,
                 ),
                 reply_markup=InlineKeyboardMarkup(
@@ -364,7 +365,7 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE, match_
                     current_user = get_user(user_id)
 
                     notify_text = (
-                        f"🎉 New Match! You matched with {current_user.first_name}!\n\n"
+                        f"🎉 New Match! You matched with {sanitize_html(current_user.first_name)}!\n\n"
                         f"Start a conversation now or skip for later."
                     )
 
@@ -381,7 +382,7 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE, match_
         else:
             # One-sided like
             await query.edit_message_text(
-                MATCH_LIKED_MESSAGE.format(name=target_user.first_name),
+                MATCH_LIKED_MESSAGE.format(name=sanitize_html(target_user.first_name)),
                 reply_markup=InlineKeyboardMarkup(
                     [
                         [
@@ -437,7 +438,7 @@ async def handle_dislike(update: Update, context: ContextTypes.DEFAULT_TYPE, mat
         dislike_match(match_id, user_id)
 
         await query.edit_message_text(
-            MATCH_DISLIKED_MESSAGE.format(name=target_user.first_name),
+            MATCH_DISLIKED_MESSAGE.format(name=sanitize_html(target_user.first_name)),
             reply_markup=InlineKeyboardMarkup(
                 [
                     [
@@ -499,20 +500,20 @@ async def handle_view_match(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         match_user = get_user(target_user_id)
 
         # Format interests
-        interests_text = ", ".join(match_user.interests) if match_user.interests else "None"
+        interests_text = sanitize_html(", ".join(match_user.interests)) if match_user.interests else "None"
 
         # Format location
         location_text = (
-            f"{match_user.location.city}, {match_user.location.country}"
+            sanitize_html(f"{match_user.location.city}, {match_user.location.country}")
             if match_user.location and match_user.location.city
             else "Unknown location"
         )
 
         message_text = MATCH_PROFILE_TEMPLATE.format(
-            name=match_user.first_name,
+            name=sanitize_html(match_user.first_name),
             age=match_user.age,
             gender=match_user.gender.value if match_user.gender else "Not specified",
-            bio=match_user.bio or "No bio provided",
+            bio=sanitize_html(match_user.bio) or "No bio provided",
             interests=interests_text,
             location=location_text,
         )
@@ -720,7 +721,7 @@ async def show_matches_page(update: Update, context: ContextTypes.DEFAULT_TYPE, 
             match_user = get_user(match_user_id)
 
             # Add to message
-            message += f"👤 <b>{match_user.first_name}</b>, {match_user.age}\n"
+            message += f"👤 <b>{sanitize_html(match_user.first_name)}</b>, {match_user.age}\n"
 
             # Add chat button
             tg_link = f"tg://user?id={match_user.id}"
@@ -803,7 +804,7 @@ async def show_saved_matches_page(update: Update, context: ContextTypes.DEFAULT_
             match_user = get_user(match_user_id)
 
             # Add to message
-            message += f"👤 <b>{match_user.first_name}</b>, {match_user.age}\n"
+            message += f"👤 <b>{sanitize_html(match_user.first_name)}</b>, {match_user.age}\n"
 
             # Add view profile button
             keyboard.append(
