@@ -18,7 +18,7 @@ def test_sanitize_html_injection():
 def test_sanitize_html_quotes():
     """Test quote sanitization."""
     input_text = ' "Quote" '
-    expected = ' &quot;Quote&quot; '
+    expected = " &quot;Quote&quot; "
     assert sanitize_html(input_text) == expected
 
 
