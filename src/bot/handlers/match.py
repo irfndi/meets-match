@@ -30,6 +30,7 @@ from src.services.user_service import get_user
 from src.utils.cache import get_cache, set_cache
 from src.utils.errors import NotFoundError
 from src.utils.logging import get_logger
+from src.utils.security import sanitize_html
 
 # Shared constant for user editing state
 USER_EDITING_STATE_KEY = "user:editing:{user_id}"
@@ -188,14 +189,14 @@ async def get_and_show_match(update: Update, context: ContextTypes.DEFAULT_TYPE,
             else "Unknown location"
         )
 
-        # Send match profile
+        # Send match profile (with sanitization)
         profile_text = MATCH_PROFILE_TEMPLATE.format(
-            name=match_user.first_name,
+            name=sanitize_html(match_user.first_name),
             age=match_user.age,
-            gender=match_user.gender.value if match_user.gender else "Not specified",
-            bio=match_user.bio or "No bio provided",
-            interests=interests_text,
-            location=location_text,
+            gender=sanitize_html(match_user.gender.value if match_user.gender else "Not specified"),
+            bio=sanitize_html(match_user.bio or "No bio provided"),
+            interests=sanitize_html(interests_text),
+            location=sanitize_html(location_text),
         )
 
         reply_markup = InlineKeyboardMarkup(
@@ -509,12 +510,12 @@ async def handle_view_match(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         )
 
         message_text = MATCH_PROFILE_TEMPLATE.format(
-            name=match_user.first_name,
+            name=sanitize_html(match_user.first_name),
             age=match_user.age,
-            gender=match_user.gender.value if match_user.gender else "Not specified",
-            bio=match_user.bio or "No bio provided",
-            interests=interests_text,
-            location=location_text,
+            gender=sanitize_html(match_user.gender.value if match_user.gender else "Not specified"),
+            bio=sanitize_html(match_user.bio or "No bio provided"),
+            interests=sanitize_html(interests_text),
+            location=sanitize_html(location_text),
         )
 
         # Determine buttons based on context
@@ -720,7 +721,7 @@ async def show_matches_page(update: Update, context: ContextTypes.DEFAULT_TYPE, 
             match_user = get_user(match_user_id)
 
             # Add to message
-            message += f"👤 <b>{match_user.first_name}</b>, {match_user.age}\n"
+            message += f"👤 <b>{sanitize_html(match_user.first_name)}</b>, {match_user.age}\n"
 
             # Add chat button
             tg_link = f"tg://user?id={match_user.id}"
@@ -803,7 +804,7 @@ async def show_saved_matches_page(update: Update, context: ContextTypes.DEFAULT_
             match_user = get_user(match_user_id)
 
             # Add to message
-            message += f"👤 <b>{match_user.first_name}</b>, {match_user.age}\n"
+            message += f"👤 <b>{sanitize_html(match_user.first_name)}</b>, {match_user.age}\n"
 
             # Add view profile button
             keyboard.append(
