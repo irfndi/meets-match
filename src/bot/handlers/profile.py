@@ -2136,7 +2136,9 @@ async def view_profile_callback(update: Update, context: ContextTypes.DEFAULT_TY
             ),
             media_count=len(target_user.photos) if target_user.photos else 0,
             bio=sanitize_html(target_user.bio or "No bio yet."),
-            interests=sanitize_html(", ".join(target_user.interests) if target_user.interests else "No interests listed."),
+            interests=sanitize_html(
+                ", ".join(target_user.interests) if target_user.interests else "No interests listed."
+            ),
             location=sanitize_html(get_user_location_text(target_user.id) or "Location hidden"),
         )
 
