@@ -30,6 +30,7 @@ from src.services.user_service import get_user
 from src.utils.cache import get_cache, set_cache
 from src.utils.errors import NotFoundError
 from src.utils.logging import get_logger
+from src.utils.security import sanitize_html
 
 # Shared constant for user editing state
 USER_EDITING_STATE_KEY = "user:editing:{user_id}"
@@ -179,21 +180,22 @@ async def get_and_show_match(update: Update, context: ContextTypes.DEFAULT_TYPE,
         match = create_match(user_id, match_user.id)
 
         # Format interests
-        interests_text = ", ".join(match_user.interests) if match_user.interests else "None"
+        interests = [sanitize_html(i) for i in (match_user.interests or [])]
+        interests_text = ", ".join(interests) if interests else "None"
 
         # Format location
-        location_text = (
-            f"{match_user.location.city}, {match_user.location.country}"
-            if match_user.location and match_user.location.city
-            else "Unknown location"
-        )
+        location_text = "Unknown location"
+        if match_user.location and match_user.location.city:
+            city = sanitize_html(match_user.location.city)
+            country = sanitize_html(match_user.location.country)
+            location_text = f"{city}, {country}"
 
         # Send match profile
         profile_text = MATCH_PROFILE_TEMPLATE.format(
-            name=match_user.first_name,
+            name=sanitize_html(match_user.first_name),
             age=match_user.age,
-            gender=match_user.gender.value if match_user.gender else "Not specified",
-            bio=match_user.bio or "No bio provided",
+            gender=sanitize_html(match_user.gender.value if match_user.gender else "Not specified"),
+            bio=sanitize_html(match_user.bio or "No bio provided"),
             interests=interests_text,
             location=location_text,
         )
@@ -336,15 +338,16 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE, match_
         if is_mutual:
             # Mutual match
             tg_link = f"tg://user?id={target_user.id}"
+            name = sanitize_html(target_user.first_name)
             await query.edit_message_text(
                 MUTUAL_MATCH_MESSAGE.format(
-                    name=target_user.first_name,
+                    name=name,
                     match_id=match_id,
                 ),
                 reply_markup=InlineKeyboardMarkup(
                     [
                         [
-                            InlineKeyboardButton(f"💬 Chat with {target_user.first_name}", url=tg_link),
+                            InlineKeyboardButton(f"💬 Chat with {name}", url=tg_link),
                         ],
                         [
                             InlineKeyboardButton("⏭️ Continue Matching", callback_data="next_match"),
@@ -362,9 +365,10 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE, match_
                 if not is_editing:
                     # We need the liker's info (current user)
                     current_user = get_user(user_id)
+                    current_user_name = sanitize_html(current_user.first_name)
 
                     notify_text = (
-                        f"🎉 New Match! You matched with {current_user.first_name}!\n\n"
+                        f"🎉 New Match! You matched with {current_user_name}!\n\n"
                         f"Start a conversation now or skip for later."
                     )
 
@@ -380,8 +384,9 @@ async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE, match_
                 logger.warning("Failed to send match notification", error=str(e), target_user_id=target_user.id)
         else:
             # One-sided like
+            name = sanitize_html(target_user.first_name)
             await query.edit_message_text(
-                MATCH_LIKED_MESSAGE.format(name=target_user.first_name),
+                MATCH_LIKED_MESSAGE.format(name=name),
                 reply_markup=InlineKeyboardMarkup(
                     [
                         [
@@ -436,8 +441,9 @@ async def handle_dislike(update: Update, context: ContextTypes.DEFAULT_TYPE, mat
         # Dislike the match
         dislike_match(match_id, user_id)
 
+        name = sanitize_html(target_user.first_name)
         await query.edit_message_text(
-            MATCH_DISLIKED_MESSAGE.format(name=target_user.first_name),
+            MATCH_DISLIKED_MESSAGE.format(name=name),
             reply_markup=InlineKeyboardMarkup(
                 [
                     [
@@ -499,20 +505,21 @@ async def handle_view_match(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         match_user = get_user(target_user_id)
 
         # Format interests
-        interests_text = ", ".join(match_user.interests) if match_user.interests else "None"
+        interests = [sanitize_html(i) for i in (match_user.interests or [])]
+        interests_text = ", ".join(interests) if interests else "None"
 
         # Format location
-        location_text = (
-            f"{match_user.location.city}, {match_user.location.country}"
-            if match_user.location and match_user.location.city
-            else "Unknown location"
-        )
+        location_text = "Unknown location"
+        if match_user.location and match_user.location.city:
+            city = sanitize_html(match_user.location.city)
+            country = sanitize_html(match_user.location.country)
+            location_text = f"{city}, {country}"
 
         message_text = MATCH_PROFILE_TEMPLATE.format(
-            name=match_user.first_name,
+            name=sanitize_html(match_user.first_name),
             age=match_user.age,
-            gender=match_user.gender.value if match_user.gender else "Not specified",
-            bio=match_user.bio or "No bio provided",
+            gender=sanitize_html(match_user.gender.value if match_user.gender else "Not specified"),
+            bio=sanitize_html(match_user.bio or "No bio provided"),
             interests=interests_text,
             location=location_text,
         )
@@ -521,7 +528,8 @@ async def handle_view_match(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         buttons = []
         if match.status == MatchStatus.MATCHED:
             tg_link = f"tg://user?id={match_user.id}"
-            buttons.append([InlineKeyboardButton(f"💬 Chat with {match_user.first_name}", url=tg_link)])
+            name = sanitize_html(match_user.first_name)
+            buttons.append([InlineKeyboardButton(f"💬 Chat with {name}", url=tg_link)])
         else:
             buttons.append(
                 [
@@ -720,14 +728,15 @@ async def show_matches_page(update: Update, context: ContextTypes.DEFAULT_TYPE, 
             match_user = get_user(match_user_id)
 
             # Add to message
-            message += f"👤 <b>{match_user.first_name}</b>, {match_user.age}\n"
+            name = sanitize_html(match_user.first_name)
+            message += f"👤 <b>{name}</b>, {match_user.age}\n"
 
             # Add chat button
             tg_link = f"tg://user?id={match_user.id}"
             keyboard.append(
                 [
                     InlineKeyboardButton(
-                        f"💬 Chat with {match_user.first_name}",
+                        f"💬 Chat with {name}",
                         url=tg_link,
                     )
                 ]
@@ -803,7 +812,8 @@ async def show_saved_matches_page(update: Update, context: ContextTypes.DEFAULT_
             match_user = get_user(match_user_id)
 
             # Add to message
-            message += f"👤 <b>{match_user.first_name}</b>, {match_user.age}\n"
+            name = sanitize_html(match_user.first_name)
+            message += f"👤 <b>{name}</b>, {match_user.age}\n"
 
             # Add view profile button
             keyboard.append(
