@@ -3,6 +3,7 @@
 import html
 from typing import Any
 
+
 def sanitize_html(text: Any) -> str:
     """
     Sanitize text to be safe for Telegram HTML parse mode.

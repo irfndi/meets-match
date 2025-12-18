@@ -180,9 +180,7 @@ async def get_and_show_match(update: Update, context: ContextTypes.DEFAULT_TYPE,
         match = create_match(user_id, match_user.id)
 
         # Format interests
-        interests_text = (
-            ", ".join([sanitize_html(i) for i in match_user.interests]) if match_user.interests else "None"
-        )
+        interests_text = ", ".join([sanitize_html(i) for i in match_user.interests]) if match_user.interests else "None"
 
         # Format location
         location_text = (
@@ -502,9 +500,7 @@ async def handle_view_match(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         match_user = get_user(target_user_id)
 
         # Format interests
-        interests_text = (
-            ", ".join([sanitize_html(i) for i in match_user.interests]) if match_user.interests else "None"
-        )
+        interests_text = ", ".join([sanitize_html(i) for i in match_user.interests]) if match_user.interests else "None"
 
         # Format location
         location_text = (
