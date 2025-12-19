@@ -42,6 +42,7 @@ from src.services.user_service import get_user, get_user_location_text, update_u
 from src.utils.cache import delete_cache, set_cache
 from src.utils.logging import get_logger
 from src.utils.media import delete_media, get_storage_path, save_media
+from src.utils.security import sanitize_html
 from src.utils.validators import media_validator
 
 logger = get_logger(__name__)
@@ -526,7 +527,7 @@ async def _save_name(update: Update, context: ContextTypes.DEFAULT_TYPE, name: s
         update_user(user_id, {"first_name": name})
         user = get_user(user_id)
         context.user_data["user"] = user
-        await update.message.reply_text(NAME_UPDATED_MESSAGE.format(name=name))
+        await update.message.reply_text(NAME_UPDATED_MESSAGE.format(name=sanitize_html(name)))
 
         if context.user_data.get(STATE_PROFILE_SETUP) is not None:
             await _next_profile_step(update, context)
@@ -814,7 +815,7 @@ async def process_gender_selection(update: Update, context: ContextTypes.DEFAULT
         update_user(user_id, {"gender": gender.value})
         user = get_user(user_id)
         context.user_data["user"] = user
-        await update.message.reply_text(GENDER_UPDATED_MESSAGE.format(gender=gender.value))
+        await update.message.reply_text(GENDER_UPDATED_MESSAGE.format(gender=sanitize_html(gender.value)))
 
         context.user_data.pop("awaiting_gender", None)
 
@@ -1097,7 +1098,7 @@ async def location_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
         await update.message.reply_text(
             LOCATION_UPDATED_MESSAGE.format(
-                location=f"{location_data['location_city']}, {location_data['location_country']}"
+                location=f"{sanitize_html(location_data['location_city'])}, {sanitize_html(location_data['location_country'])}"
             )
         )
 
@@ -1202,7 +1203,7 @@ async def process_manual_location(update: Update, context: ContextTypes.DEFAULT_
         context.user_data["user"] = user
         await update.message.reply_text(
             LOCATION_UPDATED_MESSAGE.format(
-                location=f"{location_data['location_city']}, {location_data['location_country']}"
+                location=f"{sanitize_html(location_data['location_city'])}, {sanitize_html(location_data['location_country'])}"
             )
         )
 
@@ -1480,15 +1481,15 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             user_id = str(update.effective_user.id)
             user = get_user(user_id)
             profile_text = VIEW_PROFILE_TEMPLATE.format(
-                name=user.first_name,
+                name=sanitize_html(user.first_name),
                 age=user.age,
                 gender=user.gender.value.capitalize()
                 if isinstance(user.gender, Gender)
-                else (user.gender or "Not specified"),
+                else (sanitize_html(user.gender) or "Not specified"),
                 media_count=len(user.photos) if user.photos else 0,
-                bio=user.bio or "No bio yet.",
-                interests=", ".join(user.interests) if user.interests else "No interests listed.",
-                location=get_user_location_text(user.id) or "Location hidden",
+                bio=sanitize_html(user.bio) or "No bio yet.",
+                interests=sanitize_html(", ".join(user.interests)) if user.interests else "No interests listed.",
+                location=sanitize_html(get_user_location_text(user.id)) or "Location hidden",
             )
 
             # Send media if available
@@ -2124,15 +2125,15 @@ async def view_profile_callback(update: Update, context: ContextTypes.DEFAULT_TY
         target_user = get_user(target_user_id)
 
         profile_text = VIEW_PROFILE_TEMPLATE.format(
-            name=target_user.first_name,
+            name=sanitize_html(target_user.first_name),
             age=target_user.age,
             gender=target_user.gender.value.capitalize()
             if isinstance(target_user.gender, Gender)
-            else (target_user.gender or "Not specified"),
+            else (sanitize_html(target_user.gender) or "Not specified"),
             media_count=len(target_user.photos) if target_user.photos else 0,
-            bio=target_user.bio or "No bio yet.",
-            interests=", ".join(target_user.interests) if target_user.interests else "No interests listed.",
-            location=get_user_location_text(target_user.id) or "Location hidden",
+            bio=sanitize_html(target_user.bio) or "No bio yet.",
+            interests=sanitize_html(", ".join(target_user.interests)) if target_user.interests else "No interests listed.",
+            location=sanitize_html(get_user_location_text(target_user.id)) or "Location hidden",
         )
 
         # We can add a "Back" button that goes back to matches list

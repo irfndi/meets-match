@@ -14,6 +14,7 @@ from src.utils.errors import (
     ValidationError,
 )
 from src.utils.logging import configure_logging, get_logger, log_error
+from src.utils.security import sanitize_html
 
 __all__ = [
     "AuthenticationError",
@@ -32,5 +33,6 @@ __all__ = [
     "get_cache_model",
     "get_logger",
     "log_error",
+    "sanitize_html",
     "set_cache",
 ]
