@@ -3,6 +3,7 @@
 import html
 from typing import Any
 
+
 def escape_html(text: Any) -> str:
     """
     Escapes special characters in text to prevent HTML injection.
@@ -20,6 +21,7 @@ def escape_html(text: Any) -> str:
     if text is None:
         return ""
     return html.escape(str(text))
+
 
 # Alias for compatibility if needed (some docs use sanitize_html)
 sanitize_html = escape_html
