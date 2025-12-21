@@ -42,6 +42,7 @@ from src.services.user_service import get_user, get_user_location_text, update_u
 from src.utils.cache import delete_cache, set_cache
 from src.utils.logging import get_logger
 from src.utils.media import delete_media, get_storage_path, save_media
+from src.utils.security import escape_html
 from src.utils.validators import media_validator
 
 logger = get_logger(__name__)
@@ -1479,16 +1480,18 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             # Show own profile
             user_id = str(update.effective_user.id)
             user = get_user(user_id)
+            interests_str = ", ".join(user.interests) if user.interests else "No interests listed."
+
             profile_text = VIEW_PROFILE_TEMPLATE.format(
-                name=user.first_name,
+                name=escape_html(user.first_name),
                 age=user.age,
                 gender=user.gender.value.capitalize()
                 if isinstance(user.gender, Gender)
-                else (user.gender or "Not specified"),
+                else (escape_html(user.gender) or "Not specified"),
                 media_count=len(user.photos) if user.photos else 0,
-                bio=user.bio or "No bio yet.",
-                interests=", ".join(user.interests) if user.interests else "No interests listed.",
-                location=get_user_location_text(user.id) or "Location hidden",
+                bio=escape_html(user.bio) if user.bio else "No bio yet.",
+                interests=escape_html(interests_str),
+                location=escape_html(get_user_location_text(user.id) or "Location hidden"),
             )
 
             # Send media if available
@@ -2123,16 +2126,18 @@ async def view_profile_callback(update: Update, context: ContextTypes.DEFAULT_TY
     try:
         target_user = get_user(target_user_id)
 
+        interests_str = ", ".join(target_user.interests) if target_user.interests else "No interests listed."
+
         profile_text = VIEW_PROFILE_TEMPLATE.format(
-            name=target_user.first_name,
+            name=escape_html(target_user.first_name),
             age=target_user.age,
             gender=target_user.gender.value.capitalize()
             if isinstance(target_user.gender, Gender)
-            else (target_user.gender or "Not specified"),
+            else (escape_html(target_user.gender) or "Not specified"),
             media_count=len(target_user.photos) if target_user.photos else 0,
-            bio=target_user.bio or "No bio yet.",
-            interests=", ".join(target_user.interests) if target_user.interests else "No interests listed.",
-            location=get_user_location_text(target_user.id) or "Location hidden",
+            bio=escape_html(target_user.bio) if target_user.bio else "No bio yet.",
+            interests=escape_html(interests_str),
+            location=escape_html(get_user_location_text(target_user.id) or "Location hidden"),
         )
 
         # We can add a "Back" button that goes back to matches list
