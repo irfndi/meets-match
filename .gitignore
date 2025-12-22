@@ -42,3 +42,9 @@ log/
 # Misc
 .DS_Store
 coolify.env
+
+# Node
+node_modules/
+
+# Generated protobuf output
+packages/contracts/gen/
