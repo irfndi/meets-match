@@ -31,7 +31,7 @@ security: api-sec
 
 api-lint:
 	@echo "Linting Go API..."
-	docker run --rm -v $(PWD):/app -w /app/services/api golangci/golangci-lint:v1.62.2 golangci-lint run -v
+	cd services/api && go run github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.0 run -v
 
 api-fmt:
 	@echo "Formatting Go API..."
@@ -45,7 +45,7 @@ api-test:
 
 api-sec:
 	@echo "Checking Go Security..."
-	cd services/api && go run golang.org/x/vuln/cmd/govulncheck ./...
+	cd services/api && go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
 api-build:
 	@echo "Building Go API..."

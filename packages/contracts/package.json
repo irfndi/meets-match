@@ -1,0 +1,14 @@
+{
+  "name": "@meetsmatch/contracts",
+  "version": "0.0.1",
+  "private": true,
+  "files": [
+    "gen/ts"
+  ],
+  "exports": {
+    "./proto/*.js": "./gen/ts/proto/*.ts"
+  },
+  "dependencies": {
+    "@bufbuild/protobuf": "^2.0.0"
+  }
+}

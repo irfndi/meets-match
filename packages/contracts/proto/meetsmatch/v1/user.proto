@@ -1,0 +1,79 @@
+syntax = "proto3";
+
+package meetsmatch.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/irfndi/match-bot/packages/contracts/gen/go/proto/meetsmatch/v1;meetsmatchv1";
+
+service UserService {
+  rpc GetUser(GetUserRequest) returns (GetUserResponse);
+  rpc CreateUser(CreateUserRequest) returns (CreateUserResponse);
+  rpc UpdateUser(UpdateUserRequest) returns (UpdateUserResponse);
+}
+
+message User {
+  string id = 1;
+  string username = 2;
+  string first_name = 3;
+  string last_name = 4;
+  string bio = 5;
+  int32 age = 6;
+  string gender = 7;
+  repeated string interests = 8;
+  repeated string photos = 9;
+  Location location = 10;
+  Preferences preferences = 11;
+  bool is_active = 12;
+  bool is_sleeping = 13;
+  bool is_profile_complete = 14;
+  google.protobuf.Timestamp created_at = 15;
+  google.protobuf.Timestamp updated_at = 16;
+  google.protobuf.Timestamp last_active = 17;
+}
+
+message Location {
+  double latitude = 1;
+  double longitude = 2;
+  string city = 3;
+  string country = 4;
+  google.protobuf.Timestamp last_updated = 5;
+}
+
+message Preferences {
+  int32 min_age = 1;
+  int32 max_age = 2;
+  repeated string gender_preference = 3;
+  repeated string relationship_type = 4;
+  int32 max_distance = 5;
+  bool notifications_enabled = 6;
+  string preferred_language = 7;
+  string preferred_country = 8;
+  string premium_tier = 9;
+}
+
+message GetUserRequest {
+  string user_id = 1;
+}
+
+message GetUserResponse {
+  User user = 1;
+}
+
+message CreateUserRequest {
+  User user = 1;
+}
+
+message CreateUserResponse {
+  User user = 1;
+}
+
+message UpdateUserRequest {
+  string user_id = 1;
+  User user = 2; // Only non-zero fields will be updated (partial update logic to be handled by server)
+  repeated string update_mask = 3; // List of fields to update
+}
+
+message UpdateUserResponse {
+  User user = 1;
+}
