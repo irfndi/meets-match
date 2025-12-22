@@ -1491,9 +1491,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
                 media_count=len(user.photos) if user.photos else 0,
                 bio=escape_html(user.bio or "No bio yet."),
                 interests=(
-                    ", ".join([escape_html(i) for i in user.interests])
-                    if user.interests
-                    else "No interests listed."
+                    ", ".join([escape_html(i) for i in user.interests]) if user.interests else "No interests listed."
                 ),
                 location=escape_html(get_user_location_text(user.id) or "Location hidden"),
             )

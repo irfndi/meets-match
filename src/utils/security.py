@@ -3,6 +3,7 @@
 import html
 from typing import Any
 
+
 def escape_html(text: Any) -> str:
     """
     Escape HTML characters in a string to prevent HTML injection in Telegram messages.
