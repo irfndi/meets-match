@@ -13,7 +13,8 @@ const transport = createConnectTransport({
   httpVersion: '1.1',
 });
 
-const client = createClient(UserService, transport);
+// Cast to bypass version mismatch between generated code and connect client
+const client = createClient(UserService as any, transport);
 
 export const userService = {
   getUser: (userId: string): Effect.Effect<GetUserResponse, unknown> =>

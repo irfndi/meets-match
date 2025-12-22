@@ -5,11 +5,11 @@
     "": {
       "name": "@meetsmatch/contracts",
       "dependencies": {
-        "@bufbuild/protobuf": "^2.0.0",
+        "@bufbuild/protobuf": "^1.10.0",
       },
     },
   },
   "packages": {
-    "@bufbuild/protobuf": ["@bufbuild/protobuf@2.10.2", "", {}, "sha512-uFsRXwIGyu+r6AMdz+XijIIZJYpoWeYzILt5yZ2d3mCjQrWUTVpVD9WL/jZAbvp+Ed04rOhrsk7FiTcEDseB5A=="],
+    "@bufbuild/protobuf": ["@bufbuild/protobuf@1.10.1", "", {}, "sha512-wJ8ReQbHxsAfXhrf9ixl0aYbZorRuOWpBNzm8pL8ftmSxQx/wnJD5Eg861NwJU/czy2VXFIebCeZnZrI9rktIQ=="],
   }
 }

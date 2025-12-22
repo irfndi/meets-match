@@ -16,7 +16,8 @@ const transport = createConnectTransport({
   httpVersion: '1.1',
 });
 
-const client = createClient(MatchService, transport);
+// Cast to bypass version mismatch between generated code and connect client
+const client = createClient(MatchService as any, transport);
 
 export const matchService = {
   getPotentialMatches: (

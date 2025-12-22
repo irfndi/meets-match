@@ -4,10 +4,8 @@ import { Keyboard } from 'grammy';
 import { userService } from '../services/userService.js';
 import type { MyContext } from '../types.js';
 
-type MyConversation = Conversation<MyContext>;
-
 // === BIO CONVERSATION ===
-export async function editBio(conversation: MyConversation, ctx: MyContext) {
+export async function editBio(conversation: Conversation<MyContext>, ctx: MyContext) {
   await ctx.reply('Please enter your new bio (max 300 characters):', {
     reply_markup: new Keyboard().text('Cancel').resized().oneTime(),
   });
@@ -44,7 +42,7 @@ export async function editBio(conversation: MyConversation, ctx: MyContext) {
 }
 
 // === AGE CONVERSATION ===
-export async function editAge(conversation: MyConversation, ctx: MyContext) {
+export async function editAge(conversation: Conversation<MyContext>, ctx: MyContext) {
   await ctx.reply('Please enter your age (18-65):', {
     reply_markup: new Keyboard().text('Cancel').resized().oneTime(),
   });
@@ -82,7 +80,7 @@ export async function editAge(conversation: MyConversation, ctx: MyContext) {
 }
 
 // === NAME CONVERSATION ===
-export async function editName(conversation: MyConversation, ctx: MyContext) {
+export async function editName(conversation: Conversation<MyContext>, ctx: MyContext) {
   await ctx.reply('Please enter your first name:', {
     reply_markup: new Keyboard().text('Cancel').resized().oneTime(),
   });
@@ -119,7 +117,7 @@ export async function editName(conversation: MyConversation, ctx: MyContext) {
 }
 
 // === GENDER CONVERSATION ===
-export async function editGender(conversation: MyConversation, ctx: MyContext) {
+export async function editGender(conversation: Conversation<MyContext>, ctx: MyContext) {
   await ctx.reply('Select your gender:', {
     reply_markup: new Keyboard()
       .text('Male')
@@ -170,7 +168,7 @@ export async function editGender(conversation: MyConversation, ctx: MyContext) {
 }
 
 // === INTERESTS CONVERSATION ===
-export async function editInterests(conversation: MyConversation, ctx: MyContext) {
+export async function editInterests(conversation: Conversation<MyContext>, ctx: MyContext) {
   await ctx.reply(
     'Enter your interests, separated by commas (max 10):\n\nExample: coding, coffee, travel, music',
     {
@@ -218,7 +216,7 @@ export async function editInterests(conversation: MyConversation, ctx: MyContext
 }
 
 // === LOCATION CONVERSATION ===
-export async function editLocation(conversation: MyConversation, ctx: MyContext) {
+export async function editLocation(conversation: Conversation<MyContext>, ctx: MyContext) {
   await ctx.reply(
     "Please share your location or enter your city manually (e.g., 'Seoul, South Korea'):",
     {

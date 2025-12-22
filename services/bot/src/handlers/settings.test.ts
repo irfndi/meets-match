@@ -2,6 +2,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Context } from 'grammy';
 import { Effect } from 'effect';
 
+import {
+  createMockUser,
+  createMockPreferences,
+  createGetUserResponse,
+  createUpdateUserResponse,
+  createMockContext,
+} from '../test/fixtures.js';
+
 // Mock the services to return Effect values
 vi.mock('../services/userService.js', () => ({
   userService: {
@@ -14,37 +22,30 @@ import { userService } from '../services/userService.js';
 import { settingsCommand, settingsCallbacks } from './settings.js';
 
 describe('Settings Handler', () => {
-  let mockCtx: Partial<Context>;
+  let mockCtx: ReturnType<typeof createMockContext>;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockCtx = {
-      from: { id: 12345 } as any,
-      reply: vi.fn().mockResolvedValue({}),
-      callbackQuery: undefined,
-      answerCallbackQuery: vi.fn().mockResolvedValue({}),
-      editMessageText: vi.fn().mockResolvedValue({}),
-      deleteMessage: vi.fn().mockResolvedValue({}),
-    };
+    mockCtx = createMockContext();
   });
 
   describe('settingsCommand', () => {
     it('should display settings menu', async () => {
-      vi.mocked(userService.getUser).mockReturnValue(
-        Effect.succeed({
-          user: {
-            id: '12345',
-            preferences: {
-              minAge: 20,
-              maxAge: 30,
-              maxDistance: 25,
-              notificationsEnabled: true,
-            },
-          },
+      const user = createMockUser({
+        id: '12345',
+        preferences: createMockPreferences({
+          minAge: 20,
+          maxAge: 30,
+          maxDistance: 25,
+          notificationsEnabled: true,
         }),
+      });
+
+      vi.mocked(userService.getUser).mockReturnValue(
+        Effect.succeed(createGetUserResponse(user)),
       );
 
-      await settingsCommand(mockCtx as Context);
+      await settingsCommand(mockCtx as unknown as Context);
 
       expect(mockCtx.reply).toHaveBeenCalledWith(
         expect.stringContaining('Settings'),
@@ -55,18 +56,45 @@ describe('Settings Handler', () => {
     });
 
     it('should show no preferences message when empty', async () => {
-      vi.mocked(userService.getUser).mockReturnValue(
-        Effect.succeed({
-          user: {
-            id: '12345',
-            preferences: {},
-          },
+      const user = createMockUser({
+        id: '12345',
+        preferences: createMockPreferences({
+          minAge: 0,
+          maxAge: 0,
+          maxDistance: 0,
+          notificationsEnabled: false,
+          genderPreference: [],
+          preferredLanguage: '',
         }),
+      });
+
+      vi.mocked(userService.getUser).mockReturnValue(
+        Effect.succeed(createGetUserResponse(user)),
       );
 
-      await settingsCommand(mockCtx as Context);
+      await settingsCommand(mockCtx as unknown as Context);
 
       expect(mockCtx.reply).toHaveBeenCalled();
+    });
+
+    it('should not process if no user ID', async () => {
+      mockCtx.from = undefined;
+
+      await settingsCommand(mockCtx as unknown as Context);
+
+      expect(userService.getUser).not.toHaveBeenCalled();
+    });
+
+    it('should handle errors gracefully', async () => {
+      vi.mocked(userService.getUser).mockReturnValue(
+        Effect.fail(new Error('Network error')),
+      );
+
+      await settingsCommand(mockCtx as unknown as Context);
+
+      expect(mockCtx.reply).toHaveBeenCalledWith(
+        expect.stringContaining('something went wrong'),
+      );
     });
   });
 
@@ -74,7 +102,7 @@ describe('Settings Handler', () => {
     it('should handle settings_close callback', async () => {
       mockCtx.callbackQuery = { data: 'settings_close' } as any;
 
-      await settingsCallbacks(mockCtx as Context);
+      await settingsCallbacks(mockCtx as unknown as Context);
 
       expect(mockCtx.answerCallbackQuery).toHaveBeenCalled();
       expect(mockCtx.deleteMessage).toHaveBeenCalled();
@@ -83,18 +111,20 @@ describe('Settings Handler', () => {
     it('should toggle notifications', async () => {
       mockCtx.callbackQuery = { data: 'settings_notifications' } as any;
 
+      const user = createMockUser({
+        id: '12345',
+        preferences: createMockPreferences({ notificationsEnabled: true }),
+      });
+
       vi.mocked(userService.getUser).mockReturnValue(
-        Effect.succeed({
-          user: {
-            id: '12345',
-            preferences: { notificationsEnabled: true },
-          },
-        }),
+        Effect.succeed(createGetUserResponse(user)),
       );
 
-      vi.mocked(userService.updateUser).mockReturnValue(Effect.succeed({ user: { id: '12345' } }));
+      vi.mocked(userService.updateUser).mockReturnValue(
+        Effect.succeed(createUpdateUserResponse(user)),
+      );
 
-      await settingsCallbacks(mockCtx as Context);
+      await settingsCallbacks(mockCtx as unknown as Context);
 
       expect(userService.updateUser).toHaveBeenCalledWith(
         '12345',
@@ -107,7 +137,7 @@ describe('Settings Handler', () => {
     it('should show age range options', async () => {
       mockCtx.callbackQuery = { data: 'settings_age_range' } as any;
 
-      await settingsCallbacks(mockCtx as Context);
+      await settingsCallbacks(mockCtx as unknown as Context);
 
       expect(mockCtx.editMessageText).toHaveBeenCalledWith(
         expect.stringContaining('Age Range'),
@@ -118,9 +148,12 @@ describe('Settings Handler', () => {
     it('should update age range', async () => {
       mockCtx.callbackQuery = { data: 'age_25_35' } as any;
 
-      vi.mocked(userService.updateUser).mockReturnValue(Effect.succeed({ user: { id: '12345' } }));
+      const user = createMockUser({ id: '12345' });
+      vi.mocked(userService.updateUser).mockReturnValue(
+        Effect.succeed(createUpdateUserResponse(user)),
+      );
 
-      await settingsCallbacks(mockCtx as Context);
+      await settingsCallbacks(mockCtx as unknown as Context);
 
       expect(userService.updateUser).toHaveBeenCalledWith(
         '12345',
@@ -133,7 +166,7 @@ describe('Settings Handler', () => {
     it('should show distance options', async () => {
       mockCtx.callbackQuery = { data: 'settings_distance' } as any;
 
-      await settingsCallbacks(mockCtx as Context);
+      await settingsCallbacks(mockCtx as unknown as Context);
 
       expect(mockCtx.editMessageText).toHaveBeenCalledWith(
         expect.stringContaining('Distance'),
@@ -144,9 +177,12 @@ describe('Settings Handler', () => {
     it('should update distance', async () => {
       mockCtx.callbackQuery = { data: 'dist_50' } as any;
 
-      vi.mocked(userService.updateUser).mockReturnValue(Effect.succeed({ user: { id: '12345' } }));
+      const user = createMockUser({ id: '12345' });
+      vi.mocked(userService.updateUser).mockReturnValue(
+        Effect.succeed(createUpdateUserResponse(user)),
+      );
 
-      await settingsCallbacks(mockCtx as Context);
+      await settingsCallbacks(mockCtx as unknown as Context);
 
       expect(userService.updateUser).toHaveBeenCalledWith(
         '12345',
@@ -159,7 +195,7 @@ describe('Settings Handler', () => {
     it('should show gender preference options', async () => {
       mockCtx.callbackQuery = { data: 'settings_gender' } as any;
 
-      await settingsCallbacks(mockCtx as Context);
+      await settingsCallbacks(mockCtx as unknown as Context);
 
       expect(mockCtx.editMessageText).toHaveBeenCalledWith(
         expect.stringContaining('Gender Preference'),
@@ -170,9 +206,12 @@ describe('Settings Handler', () => {
     it('should update gender preference', async () => {
       mockCtx.callbackQuery = { data: 'gender_pref_all' } as any;
 
-      vi.mocked(userService.updateUser).mockReturnValue(Effect.succeed({ user: { id: '12345' } }));
+      const user = createMockUser({ id: '12345' });
+      vi.mocked(userService.updateUser).mockReturnValue(
+        Effect.succeed(createUpdateUserResponse(user)),
+      );
 
-      await settingsCallbacks(mockCtx as Context);
+      await settingsCallbacks(mockCtx as unknown as Context);
 
       expect(userService.updateUser).toHaveBeenCalledWith(
         '12345',
@@ -185,7 +224,7 @@ describe('Settings Handler', () => {
     it('should show language options', async () => {
       mockCtx.callbackQuery = { data: 'settings_language' } as any;
 
-      await settingsCallbacks(mockCtx as Context);
+      await settingsCallbacks(mockCtx as unknown as Context);
 
       expect(mockCtx.editMessageText).toHaveBeenCalledWith(
         expect.stringContaining('Language'),
@@ -196,9 +235,12 @@ describe('Settings Handler', () => {
     it('should update language', async () => {
       mockCtx.callbackQuery = { data: 'lang_id' } as any;
 
-      vi.mocked(userService.updateUser).mockReturnValue(Effect.succeed({ user: { id: '12345' } }));
+      const user = createMockUser({ id: '12345' });
+      vi.mocked(userService.updateUser).mockReturnValue(
+        Effect.succeed(createUpdateUserResponse(user)),
+      );
 
-      await settingsCallbacks(mockCtx as Context);
+      await settingsCallbacks(mockCtx as unknown as Context);
 
       expect(userService.updateUser).toHaveBeenCalledWith(
         '12345',
@@ -206,6 +248,28 @@ describe('Settings Handler', () => {
           preferences: { preferredLanguage: 'id' },
         }),
       );
+    });
+
+    it('should handle settings_back callback', async () => {
+      mockCtx.callbackQuery = { data: 'settings_back' } as any;
+
+      const user = createMockUser({ id: '12345' });
+      vi.mocked(userService.getUser).mockReturnValue(
+        Effect.succeed(createGetUserResponse(user)),
+      );
+
+      await settingsCallbacks(mockCtx as unknown as Context);
+
+      // Should trigger settingsCommand and delete old message
+      expect(mockCtx.reply).toHaveBeenCalled();
+    });
+
+    it('should do nothing if no callback data', async () => {
+      mockCtx.callbackQuery = undefined;
+
+      await settingsCallbacks(mockCtx as unknown as Context);
+
+      expect(userService.updateUser).not.toHaveBeenCalled();
     });
   });
 });
