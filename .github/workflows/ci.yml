@@ -6,46 +6,86 @@ permissions:
   contents: read
 
 jobs:
-  test:
+  api-test:
+    name: Go API
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.13"]
-
+    env:
+      GOWORK: ${{ github.workspace }}/go.work
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Install uv
-      uses: astral-sh/setup-uv@v5
-      with:
-        version: "latest"
-    
-    - name: Set up Python ${{ matrix.python-version }}
-      run: uv python install ${{ matrix.python-version }}
+      - uses: actions/checkout@v4
 
-    - name: Install dependencies
-      run: uv sync --all-extras --dev
+      - name: Set up Buf
+        uses: bufbuild/buf-setup-action@v1
+        with:
+          version: '1.47.2'
 
-    - name: Lint with Ruff
-      run: uv run ruff check .
+      - name: Generate protobufs
+        run: buf generate
 
-    - name: Check Formatting with Ruff
-      run: uv run ruff format --check .
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache-dependency-path: |
+            services/api/go.sum
+            packages/contracts/go.sum
 
-    - name: Run tests with coverage
-      env:
-        TELEGRAM_TOKEN: mock_token_for_ci_tests
-        DATABASE_URL: postgresql://user:pass@localhost:5432/test_db
-        REDIS_URL: redis://localhost:6379/0
-      run: |
-        uv run pytest tests --cov=src --cov-report=xml -v
+      - name: Download dependencies
+        run: go mod download -x
+        working-directory: services/api
 
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v4
-      with:
-        token: ${{ secrets.CODECOV_TOKEN }}
-        files: ./coverage.xml
-        flags: unittests
-        verbose: true
-        name: codecov-umbrella
-        fail_ci_if_error: false
+      - name: Lint
+        uses: golangci/golangci-lint-action@v7
+        with:
+          version: v2.7.2
+          args: ./services/api/...
+
+      - name: Test
+        run: go test ./... -coverprofile=coverage.out
+        working-directory: services/api
+
+      - name: Security Check
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+        working-directory: services/api
+
+      - name: Build
+        run: go build -o bin/api cmd/api/main.go
+        working-directory: services/api
+
+  bot-test:
+    name: TypeScript Bot
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/bot
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Buf
+        uses: bufbuild/buf-setup-action@v1
+        with:
+          version: '1.47.2'
+
+      - name: Generate protobufs
+        run: buf generate
+        working-directory: .
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Lint
+        run: bun run lint
+
+      - name: Format check
+        run: bun run format:check
+
+      - name: Test
+        run: bun run test:coverage
+
+      - name: Build
+        run: bun run build

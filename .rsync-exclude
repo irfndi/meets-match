@@ -1,0 +1,34 @@
+# Version control
+.git
+
+# Python
+.venv
+__pycache__
+.pytest_cache
+.ruff_cache
+.mypy_cache
+
+# Node.js
+node_modules
+
+# Environment and secrets
+.env
+.env.local
+.env.*.local
+
+# Build artifacts and caches
+db
+cache
+data
+log
+backups
+tmp
+*.log
+
+# IDE
+.vscode
+.idea
+
+# OS
+.DS_Store
+Thumbs.db
