@@ -19,30 +19,41 @@ export interface HealthStatus {
 export interface HealthServer {
   server: Server;
   isHealthy: boolean;
+  isShuttingDown: boolean;
   setHealthy: (healthy: boolean) => void;
+  setShuttingDown: (shuttingDown: boolean) => void;
   stop: () => void;
 }
 
 // Use a wrapper object to ensure state changes are visible in the closure
 interface HealthState {
   isHealthy: boolean;
+  isShuttingDown: boolean;
+}
+
+function getHealthStatus(state: HealthState): HealthStatus['status'] {
+  if (state.isShuttingDown) return 'unhealthy';
+  if (state.isHealthy) return 'healthy';
+  return 'starting';
 }
 
 export function createHealthServer(options: HealthServerOptions): HealthServer {
   const { port, serviceName = 'meetsmatch-bot' } = options;
-  const state: HealthState = { isHealthy: false };
+  const state: HealthState = { isHealthy: false, isShuttingDown: false };
 
   const server = createServer((req, res) => {
     const url = new URL(req.url || '/', `http://localhost:${port}`);
 
     if (url.pathname === '/health' || url.pathname === '/') {
+      const status = getHealthStatus(state);
       const healthStatus: HealthStatus = {
-        status: state.isHealthy ? 'healthy' : 'starting',
+        status,
         service: serviceName,
         timestamp: new Date().toISOString(),
       };
       const body = JSON.stringify(healthStatus);
-      res.writeHead(state.isHealthy ? 200 : 503, {
+      const httpStatus = status === 'healthy' ? 200 : 503;
+      res.writeHead(httpStatus, {
         'Content-Type': 'application/json',
         'Content-Length': Buffer.byteLength(body),
       });
@@ -61,8 +72,14 @@ export function createHealthServer(options: HealthServerOptions): HealthServer {
     get isHealthy() {
       return state.isHealthy;
     },
+    get isShuttingDown() {
+      return state.isShuttingDown;
+    },
     setHealthy(healthy: boolean) {
       state.isHealthy = healthy;
+    },
+    setShuttingDown(shuttingDown: boolean) {
+      state.isShuttingDown = shuttingDown;
     },
     stop() {
       server.close();

@@ -64,12 +64,49 @@ describe('Health Server', () => {
       expect(healthServer.isHealthy).toBe(false);
     });
 
+    it('should start with isShuttingDown as false', () => {
+      expect(healthServer.isShuttingDown).toBe(false);
+    });
+
     it('should update isHealthy when setHealthy is called', () => {
       healthServer.setHealthy(true);
       expect(healthServer.isHealthy).toBe(true);
 
       healthServer.setHealthy(false);
       expect(healthServer.isHealthy).toBe(false);
+    });
+
+    it('should update isShuttingDown when setShuttingDown is called', () => {
+      healthServer.setShuttingDown(true);
+      expect(healthServer.isShuttingDown).toBe(true);
+
+      healthServer.setShuttingDown(false);
+      expect(healthServer.isShuttingDown).toBe(false);
+    });
+  });
+
+  describe('shutdown behavior', () => {
+    it('should return 503 with unhealthy status when shutting down', async () => {
+      healthServer.setHealthy(true);
+      healthServer.setShuttingDown(true);
+
+      const response = await fetch(`http://localhost:${testPort}/health`);
+      expect(response.status).toBe(503);
+
+      const body: HealthStatus = await response.json();
+      expect(body.status).toBe('unhealthy');
+    });
+
+    it('should prioritize unhealthy status over healthy when shutting down', async () => {
+      // Even if healthy is true, shutting down should return unhealthy
+      healthServer.setHealthy(true);
+      healthServer.setShuttingDown(true);
+
+      const response = await fetch(`http://localhost:${testPort}/health`);
+      const body: HealthStatus = await response.json();
+
+      expect(body.status).toBe('unhealthy');
+      expect(response.status).toBe(503);
     });
   });
 
