@@ -25,7 +25,9 @@ jobs:
         run: go mod download
 
       - name: Lint
-        run: go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.7.2 run -v
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v2.7.2
 
       - name: Test
         run: go test ./... -coverprofile=coverage.out
