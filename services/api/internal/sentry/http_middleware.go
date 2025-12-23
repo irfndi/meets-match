@@ -21,9 +21,11 @@ func FiberMiddleware() fiber.Handler {
 				hub.RecoverWithContext(c.Context(), r)
 				// Note: We can't return an error from defer, so we set the response directly
 				// The fiber.Ctx will handle the response after defer completes
-				c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				if jsonErr := c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 					"error": "Internal Server Error",
-				})
+				}); jsonErr != nil {
+					hub.CaptureException(jsonErr)
+				}
 			}
 		}()
 
