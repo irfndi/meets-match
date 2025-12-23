@@ -9,6 +9,8 @@ jobs:
   api-test:
     name: Go API
     runs-on: ubuntu-latest
+    env:
+      GOWORK: ${{ github.workspace }}/go.work
     steps:
       - uses: actions/checkout@v4
 
