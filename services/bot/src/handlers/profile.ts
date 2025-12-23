@@ -32,7 +32,7 @@ export const profileCommand = (ctx: Context) =>
 👤 Profile
 
 Name: ${user.firstName} ${user.lastName || ''}
-Username: ${user.username ? '@' + user.username : 'N/A'}
+Username: ${user.username ? `@${user.username}` : 'N/A'}
 Age: ${user.age || 'Not set'}
 Gender: ${user.gender || 'Not set'}
 Bio: ${user.bio || 'Not set'}

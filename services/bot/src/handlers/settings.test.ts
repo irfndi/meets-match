@@ -41,9 +41,7 @@ describe('Settings Handler', () => {
         }),
       });
 
-      vi.mocked(userService.getUser).mockReturnValue(
-        Effect.succeed(createGetUserResponse(user)),
-      );
+      vi.mocked(userService.getUser).mockReturnValue(Effect.succeed(createGetUserResponse(user)));
 
       await settingsCommand(mockCtx as unknown as Context);
 
@@ -68,9 +66,7 @@ describe('Settings Handler', () => {
         }),
       });
 
-      vi.mocked(userService.getUser).mockReturnValue(
-        Effect.succeed(createGetUserResponse(user)),
-      );
+      vi.mocked(userService.getUser).mockReturnValue(Effect.succeed(createGetUserResponse(user)));
 
       await settingsCommand(mockCtx as unknown as Context);
 
@@ -86,15 +82,11 @@ describe('Settings Handler', () => {
     });
 
     it('should handle errors gracefully', async () => {
-      vi.mocked(userService.getUser).mockReturnValue(
-        Effect.fail(new Error('Network error')),
-      );
+      vi.mocked(userService.getUser).mockReturnValue(Effect.fail(new Error('Network error')));
 
       await settingsCommand(mockCtx as unknown as Context);
 
-      expect(mockCtx.reply).toHaveBeenCalledWith(
-        expect.stringContaining('something went wrong'),
-      );
+      expect(mockCtx.reply).toHaveBeenCalledWith(expect.stringContaining('something went wrong'));
     });
   });
 
@@ -116,9 +108,7 @@ describe('Settings Handler', () => {
         preferences: createMockPreferences({ notificationsEnabled: true }),
       });
 
-      vi.mocked(userService.getUser).mockReturnValue(
-        Effect.succeed(createGetUserResponse(user)),
-      );
+      vi.mocked(userService.getUser).mockReturnValue(Effect.succeed(createGetUserResponse(user)));
 
       vi.mocked(userService.updateUser).mockReturnValue(
         Effect.succeed(createUpdateUserResponse(user)),
@@ -254,9 +244,7 @@ describe('Settings Handler', () => {
       mockCtx.callbackQuery = { data: 'settings_back' } as any;
 
       const user = createMockUser({ id: '12345' });
-      vi.mocked(userService.getUser).mockReturnValue(
-        Effect.succeed(createGetUserResponse(user)),
-      );
+      vi.mocked(userService.getUser).mockReturnValue(Effect.succeed(createGetUserResponse(user)));
 
       await settingsCallbacks(mockCtx as unknown as Context);
 

@@ -176,7 +176,7 @@ export const settingsCallbacks = (ctx: Context) =>
 
     if (data.startsWith('dist_')) {
       const distance = parseInt(data.replace('dist_', ''), 10);
-      if (!isNaN(distance)) {
+      if (!Number.isNaN(distance)) {
         yield* _(
           userService.updateUser(userId, {
             preferences: { maxDistance: distance },

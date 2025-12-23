@@ -142,12 +142,12 @@ export const handleLike = (ctx: Context, matchId: string) =>
     if (result.isMutual) {
       // Get match details to show the other user's name
       const matchDetails = yield* _(matchService.getMatch(matchId));
-      const otherUserId =
+      const _otherUserId =
         matchDetails.match?.user1Id === userId
           ? matchDetails.match?.user2Id
           : matchDetails.match?.user1Id;
 
-      // For now, show generic mutual message
+      // For now, show generic mutual message (TODO: fetch other user's name using _otherUserId)
       yield* _(
         Effect.tryPromise(() =>
           ctx.editMessageText(MUTUAL_MATCH_MESSAGE('your match'), {

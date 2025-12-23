@@ -1,7 +1,7 @@
 import { createClient } from '@connectrpc/connect';
 import { createConnectTransport } from '@connectrpc/connect-node';
 import { UserService } from '@meetsmatch/contracts/proto/meetsmatch/v1/user_connect.js';
-import {
+import type {
   GetUserResponse,
   CreateUserResponse,
   UpdateUserResponse,
@@ -14,24 +14,24 @@ const transport = createConnectTransport({
 });
 
 // Cast to bypass version mismatch between generated code and connect client
-const client = createClient(UserService as any, transport);
+const client = createClient(UserService as any, transport) as any;
 
 export const userService = {
   getUser: (userId: string): Effect.Effect<GetUserResponse, unknown> =>
     Effect.tryPromise({
-      try: () => client.getUser({ userId }) as Promise<GetUserResponse>,
+      try: async (): Promise<GetUserResponse> => client.getUser({ userId }),
       catch: (e) => e,
     }),
 
   createUser: (user: any): Effect.Effect<CreateUserResponse, unknown> =>
     Effect.tryPromise({
-      try: () => client.createUser({ user }) as Promise<CreateUserResponse>,
+      try: async (): Promise<CreateUserResponse> => client.createUser({ user }),
       catch: (e) => e,
     }),
 
   updateUser: (userId: string, user: any): Effect.Effect<UpdateUserResponse, unknown> =>
     Effect.tryPromise({
-      try: () => client.updateUser({ userId, user }) as Promise<UpdateUserResponse>,
+      try: async (): Promise<UpdateUserResponse> => client.updateUser({ userId, user }),
       catch: (e) => e,
     }),
 };

@@ -10,22 +10,9 @@ REMOTE_DIR="/opt/apps/meetsmatch"
 echo "Deploying MeetMatch Bot to $SERVER_IP:$REMOTE_DIR..."
 
 # Sync code using rsync
-# Exclude heavy/unnecessary files
+# Using exclude file for maintainability
 rsync -avz --delete \
-    --exclude '.git' \
-    --exclude '.venv' \
-    --exclude 'node_modules' \
-    --exclude '__pycache__' \
-    --exclude '.pytest_cache' \
-    --exclude '.ruff_cache' \
-    --exclude '.mypy_cache' \
-    --exclude '.env' \
-    --exclude 'db' \
-    --exclude 'cache' \
-    --exclude 'data' \
-    --exclude 'log' \
-    --exclude 'backups' \
-    --exclude 'tmp' \
+    --exclude-from='.rsync-exclude' \
     ./ "$SSH_USER@$SERVER_IP:$REMOTE_DIR/"
 
 echo "Code synced successfully."
@@ -36,5 +23,6 @@ echo "Deployment synced. You may need to:"
 echo "1. SSH into the server: ssh $SSH_USER@$SERVER_IP"
 echo "2. Go to the directory: cd $REMOTE_DIR"
 echo "3. Update .env file if needed."
-echo "4. Run 'make up' to restart the services with new code."
+echo "4. Restart services: make api-run (in one terminal) and make bot-run (in another)"
+echo "   Or use your process manager (systemd/pm2/docker) to restart services."
 echo "---------------------------------------------------"

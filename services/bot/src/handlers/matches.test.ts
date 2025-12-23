@@ -92,9 +92,7 @@ describe('Matches List Handler', () => {
     });
 
     it('should handle errors gracefully', async () => {
-      vi.mocked(matchService.getMatchList).mockReturnValue(
-        Effect.fail(new Error('Network error')),
-      );
+      vi.mocked(matchService.getMatchList).mockReturnValue(Effect.fail(new Error('Network error')));
 
       await matchesCommand(mockCtx as unknown as Context);
 
@@ -117,9 +115,7 @@ describe('Matches List Handler', () => {
         Effect.succeed(createGetMatchListResponse([match])),
       );
 
-      vi.mocked(userService.getUser).mockReturnValue(
-        Effect.fail(new Error('User not found')),
-      );
+      vi.mocked(userService.getUser).mockReturnValue(Effect.fail(new Error('User not found')));
 
       await matchesCommand(mockCtx as unknown as Context);
 
@@ -166,9 +162,7 @@ describe('Matches List Handler', () => {
     it("should show not found message if user doesn't exist", async () => {
       mockCtx.callbackQuery = { data: 'view_match_user_unknown' } as any;
 
-      vi.mocked(userService.getUser).mockReturnValue(
-        Effect.succeed(createGetUserResponse(null)),
-      );
+      vi.mocked(userService.getUser).mockReturnValue(Effect.succeed(createGetUserResponse(null)));
 
       await matchesCallbacks(mockCtx as unknown as Context);
 
@@ -198,9 +192,7 @@ describe('Matches List Handler', () => {
     it('should handle errors gracefully when viewing user', async () => {
       mockCtx.callbackQuery = { data: 'view_match_user_user2' } as any;
 
-      vi.mocked(userService.getUser).mockReturnValue(
-        Effect.fail(new Error('Network error')),
-      );
+      vi.mocked(userService.getUser).mockReturnValue(Effect.fail(new Error('Network error')));
 
       await matchesCallbacks(mockCtx as unknown as Context);
 

@@ -134,9 +134,7 @@ describe('Match Handler', () => {
       mockCtx.callbackQuery = { data: 'like_match123' } as any;
 
       vi.mocked(matchService.likeMatch).mockReturnValue(
-        Effect.succeed(
-          createLikeMatchResponse(false, createMockMatch({ id: 'match123' })),
-        ),
+        Effect.succeed(createLikeMatchResponse(false, createMockMatch({ id: 'match123' }))),
       );
 
       await matchCallbacks(mockCtx as unknown as Context);
@@ -193,9 +191,7 @@ describe('Match Handler', () => {
 
     it('should show liked message when not mutual', async () => {
       vi.mocked(matchService.likeMatch).mockReturnValue(
-        Effect.succeed(
-          createLikeMatchResponse(false, createMockMatch({ id: 'match123' })),
-        ),
+        Effect.succeed(createLikeMatchResponse(false, createMockMatch({ id: 'match123' }))),
       );
 
       await handleLike(mockCtx as unknown as Context, 'match123');
@@ -207,9 +203,7 @@ describe('Match Handler', () => {
     });
 
     it('should handle errors gracefully', async () => {
-      vi.mocked(matchService.likeMatch).mockReturnValue(
-        Effect.fail(new Error('Network error')),
-      );
+      vi.mocked(matchService.likeMatch).mockReturnValue(Effect.fail(new Error('Network error')));
 
       await handleLike(mockCtx as unknown as Context, 'match123');
 
@@ -232,9 +226,7 @@ describe('Match Handler', () => {
     });
 
     it('should handle errors gracefully', async () => {
-      vi.mocked(matchService.dislikeMatch).mockReturnValue(
-        Effect.fail(new Error('Network error')),
-      );
+      vi.mocked(matchService.dislikeMatch).mockReturnValue(Effect.fail(new Error('Network error')));
 
       await handleDislike(mockCtx as unknown as Context, 'match123');
 

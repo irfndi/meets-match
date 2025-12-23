@@ -3,11 +3,7 @@ import { profileCommand } from './profile.js';
 import type { Context } from 'grammy';
 import { Effect } from 'effect';
 
-import {
-  createMockUser,
-  createMockLocation,
-  createGetUserResponse,
-} from '../test/fixtures.js';
+import { createMockUser, createMockLocation, createGetUserResponse } from '../test/fixtures.js';
 
 // Mock the userService to return Effect values
 vi.mock('../services/userService.js', () => ({
@@ -39,9 +35,7 @@ describe('Profile Handler', () => {
       location: createMockLocation({ city: 'New York', country: 'USA' }),
     });
 
-    vi.mocked(userService.getUser).mockReturnValue(
-      Effect.succeed(createGetUserResponse(mockUser)),
-    );
+    vi.mocked(userService.getUser).mockReturnValue(Effect.succeed(createGetUserResponse(mockUser)));
 
     await profileCommand(mockContext);
 
@@ -106,9 +100,7 @@ describe('Profile Handler', () => {
       location: undefined,
     });
 
-    vi.mocked(userService.getUser).mockReturnValue(
-      Effect.succeed(createGetUserResponse(mockUser)),
-    );
+    vi.mocked(userService.getUser).mockReturnValue(Effect.succeed(createGetUserResponse(mockUser)));
 
     await profileCommand(mockContext);
 
