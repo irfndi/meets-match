@@ -1,4 +1,4 @@
-.PHONY: help ci lint format test security api-lint api-fmt api-test api-sec api-build api-tidy api-run bot-run bot-lint bot-fmt bot-test bot-build py-run py-lint py-fmt py-test proto-gen dry-build deploy-app
+.PHONY: help ci lint format test security api-lint api-fmt api-test api-sec api-build api-tidy api-run bot-run bot-lint bot-fmt bot-test bot-build proto-gen dry-build deploy-app
 
 # Default target
 help:
@@ -10,10 +10,6 @@ help:
 	@echo "  make lint            Run all linters"
 	@echo "  make format          Format all code"
 	@echo "  make deploy-app      Deploy to server via rsync"
-	@echo ""
-	@echo "Legacy (Python - will be removed):"
-	@echo "  make py-run          Run the python bot"
-	@echo "  make py-test         Run python tests"
 
 # --- Main CI ---
 ci: format lint security test dry-build
@@ -21,9 +17,9 @@ ci: format lint security test dry-build
 
 # --- Sub-tasks ---
 
-lint: api-lint bot-lint py-lint
-format: api-fmt bot-fmt py-fmt
-test: api-test bot-test py-test
+lint: api-lint bot-lint
+format: api-fmt bot-fmt
+test: api-test bot-test
 security: api-sec
 
 # --- Go API ---
@@ -82,22 +78,6 @@ bot-test:
 bot-build:
 	@echo "Building TS Bot..."
 	cd services/bot && bun run build
-
-# --- Legacy Python ---
-
-py-run:
-	uv run python main.py
-
-py-lint:
-	uv run ruff check .
-	uv run ty check
-
-py-fmt:
-	uv run ruff format .
-	uv run ruff check --fix .
-
-py-test:
-	uv run pytest
 
 # --- Infrastructure ---
 
