@@ -16,10 +16,16 @@ import { matchesCallbacks, matchesCommand } from './handlers/matches.js';
 import { profileCommand } from './handlers/profile.js';
 import { settingsCallbacks, settingsCommand } from './handlers/settings.js';
 import { startCommand } from './handlers/start.js';
+import { createHealthServer } from './lib/health.js';
 import { flushSentry, initSentry, loadSentryConfig } from './lib/sentry.js';
 import { attachSentryErrorHandler } from './lib/sentryBotHandler.js';
 import { profileMenu } from './menus/profile.js';
 import type { MyContext } from './types.js';
+
+// Health check HTTP server for container orchestration (Coolify/K8s)
+const HEALTH_PORT = Number(process.env.HEALTH_PORT) || 3000;
+const healthServer = createHealthServer({ port: HEALTH_PORT });
+console.log(`Health server listening on port ${HEALTH_PORT}`);
 
 // Initialize Sentry first (before bot)
 const sentryConfig = loadSentryConfig();
@@ -107,7 +113,9 @@ bot.on('message:text', (ctx) =>
 // Graceful shutdown handlers
 const shutdown = async () => {
   console.log('Shutting down...');
+  healthServer.setHealthy(false);
   bot.stop();
+  healthServer.stop();
   await flushSentry();
   process.exit(0);
 };
@@ -116,4 +124,9 @@ process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
 
 console.log('Bot starting...');
-bot.start();
+bot.start({
+  onStart: () => {
+    healthServer.setHealthy(true);
+    console.log('Bot started successfully');
+  },
+});
