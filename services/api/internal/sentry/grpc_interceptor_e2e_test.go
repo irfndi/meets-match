@@ -26,7 +26,7 @@ func TestUnaryServerInterceptor_E2E_PanicRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to listen: %v", err)
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 
 	server := grpc.NewServer(grpc.UnaryInterceptor(UnaryServerInterceptor()))
 	pb.RegisterHealthServiceServer(server, panicHealthService{})
@@ -43,7 +43,7 @@ func TestUnaryServerInterceptor_E2E_PanicRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to dial: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	client := pb.NewHealthServiceClient(conn)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)

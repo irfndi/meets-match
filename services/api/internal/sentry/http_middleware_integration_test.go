@@ -27,7 +27,7 @@ func TestFiberMiddleware_AttachesHubToContext(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to execute request: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -47,7 +47,7 @@ func TestFiberMiddleware_PanicRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to execute request: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusInternalServerError {
