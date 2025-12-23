@@ -1,8 +1,8 @@
+import { Code, ConnectError } from '@connectrpc/connect';
+import { User } from '@meetsmatch/contracts/proto/meetsmatch/v1/user_pb.js';
 import { Effect } from 'effect';
 import type { Context } from 'grammy';
 import { userService } from '../services/userService.js';
-import { User } from '@meetsmatch/contracts/proto/meetsmatch/v1/user_pb.js';
-import { ConnectError, Code } from '@connectrpc/connect';
 
 const WELCOME_MESSAGE = `
 👋 Welcome to MeetMatch!

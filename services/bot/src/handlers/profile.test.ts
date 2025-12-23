@@ -1,9 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { profileCommand } from './profile.js';
-import type { Context } from 'grammy';
 import { Effect } from 'effect';
-
-import { createMockUser, createMockLocation, createGetUserResponse } from '../test/fixtures.js';
+import type { Context } from 'grammy';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createGetUserResponse, createMockLocation, createMockUser } from '../test/fixtures.js';
+import { profileCommand } from './profile.js';
 
 // Mock the userService to return Effect values
 vi.mock('../services/userService.js', () => ({

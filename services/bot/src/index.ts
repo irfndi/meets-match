@@ -1,22 +1,21 @@
 import 'dotenv/config';
+import { conversations, createConversation } from '@grammyjs/conversations';
 import { Effect } from 'effect';
 import { Bot, session } from 'grammy';
-import { conversations, createConversation } from '@grammyjs/conversations';
-
-import { helpCommand, aboutCommand } from './handlers/help.js';
-import { startCommand } from './handlers/start.js';
-import { profileCommand } from './handlers/profile.js';
-import { matchCommand, matchCallbacks } from './handlers/match.js';
-import { matchesCommand, matchesCallbacks } from './handlers/matches.js';
-import { settingsCommand, settingsCallbacks } from './handlers/settings.js';
 import {
-  editBio,
   editAge,
-  editName,
+  editBio,
   editGender,
   editInterests,
   editLocation,
+  editName,
 } from './conversations/profile.js';
+import { aboutCommand, helpCommand } from './handlers/help.js';
+import { matchCallbacks, matchCommand } from './handlers/match.js';
+import { matchesCallbacks, matchesCommand } from './handlers/matches.js';
+import { profileCommand } from './handlers/profile.js';
+import { settingsCallbacks, settingsCommand } from './handlers/settings.js';
+import { startCommand } from './handlers/start.js';
 import { profileMenu } from './menus/profile.js';
 import type { MyContext } from './types.js';
 

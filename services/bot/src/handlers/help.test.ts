@@ -1,6 +1,6 @@
-import { describe, it, expect, vi } from 'vitest';
-import { helpCommand } from './help.js';
 import type { Context } from 'grammy';
+import { describe, expect, it, vi } from 'vitest';
+import { helpCommand } from './help.js';
 
 describe('Help Handler', () => {
   it('should reply with help text', async () => {

@@ -1,5 +1,5 @@
-import type { Context, SessionFlavor } from 'grammy';
 import type { ConversationFlavor } from '@grammyjs/conversations';
+import type { Context, SessionFlavor } from 'grammy';
 
 // Session data structure - empty for now, will hold conversation state
 export type SessionData = Record<string, never>;

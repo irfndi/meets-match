@@ -1,17 +1,17 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { Context } from 'grammy';
 import { Effect } from 'effect';
+import type { Context } from 'grammy';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  createMockUser,
-  createMockMatch,
-  createMockLocation,
-  createGetPotentialMatchesResponse,
   createCreateMatchResponse,
-  createLikeMatchResponse,
   createDislikeMatchResponse,
   createGetMatchResponse,
+  createGetPotentialMatchesResponse,
+  createLikeMatchResponse,
   createMockContext,
+  createMockLocation,
+  createMockMatch,
+  createMockUser,
 } from '../test/fixtures.js';
 
 // Mock the services to return Effect values
@@ -32,7 +32,7 @@ vi.mock('../services/userService.js', () => ({
 }));
 
 import { matchService } from '../services/matchService.js';
-import { matchCommand, matchCallbacks, handleLike, handleDislike } from './match.js';
+import { handleDislike, handleLike, matchCallbacks, matchCommand } from './match.js';
 
 describe('Match Handler', () => {
   let mockCtx: ReturnType<typeof createMockContext>;

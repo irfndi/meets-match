@@ -1,7 +1,7 @@
 import { Effect, Either } from 'effect';
 import type { Context } from 'grammy';
-import { userService } from '../services/userService.js';
 import { profileMenu } from '../menus/profile.js';
+import { userService } from '../services/userService.js';
 
 export const profileCommand = (ctx: Context) =>
   Effect.runPromise(

@@ -6,20 +6,20 @@
  */
 
 import type {
-  GetPotentialMatchesResponse,
   CreateMatchResponse,
-  LikeMatchResponse,
   DislikeMatchResponse,
-  GetMatchResponse,
   GetMatchListResponse,
+  GetMatchResponse,
+  GetPotentialMatchesResponse,
+  LikeMatchResponse,
   Match,
 } from '@meetsmatch/contracts/proto/meetsmatch/v1/match_pb.js';
 import type {
   GetUserResponse,
-  UpdateUserResponse,
-  User,
   Location,
   Preferences,
+  UpdateUserResponse,
+  User,
 } from '@meetsmatch/contracts/proto/meetsmatch/v1/user_pb.js';
 
 // Mock Timestamp type (plain object without importing from protobuf)

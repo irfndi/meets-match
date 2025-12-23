@@ -1,13 +1,13 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { Context } from 'grammy';
 import { Effect } from 'effect';
+import type { Context } from 'grammy';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  createMockUser,
-  createMockPreferences,
   createGetUserResponse,
-  createUpdateUserResponse,
   createMockContext,
+  createMockPreferences,
+  createMockUser,
+  createUpdateUserResponse,
 } from '../test/fixtures.js';
 
 // Mock the services to return Effect values
@@ -19,7 +19,7 @@ vi.mock('../services/userService.js', () => ({
 }));
 
 import { userService } from '../services/userService.js';
-import { settingsCommand, settingsCallbacks } from './settings.js';
+import { settingsCallbacks, settingsCommand } from './settings.js';
 
 describe('Settings Handler', () => {
   let mockCtx: ReturnType<typeof createMockContext>;

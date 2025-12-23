@@ -2,8 +2,8 @@ import { createClient } from '@connectrpc/connect';
 import { createConnectTransport } from '@connectrpc/connect-node';
 import { UserService } from '@meetsmatch/contracts/proto/meetsmatch/v1/user_connect.js';
 import type {
-  GetUserResponse,
   CreateUserResponse,
+  GetUserResponse,
   UpdateUserResponse,
 } from '@meetsmatch/contracts/proto/meetsmatch/v1/user_pb.js';
 import { Effect } from 'effect';
