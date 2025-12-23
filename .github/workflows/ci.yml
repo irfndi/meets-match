@@ -18,6 +18,7 @@ jobs:
         uses: bufbuild/buf-setup-action@v1
         with:
           version: '1.47.2'
+          github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate protobufs
         run: buf generate
@@ -65,6 +66,7 @@ jobs:
         uses: bufbuild/buf-setup-action@v1
         with:
           version: '1.47.2'
+          github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate protobufs
         run: buf generate
