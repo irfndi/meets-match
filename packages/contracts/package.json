@@ -2,11 +2,12 @@
   "name": "@meetsmatch/contracts",
   "version": "0.0.1",
   "private": true,
+  "type": "module",
   "files": [
     "gen/ts"
   ],
   "exports": {
-    "./proto/*.js": "./gen/ts/proto/*.ts"
+    "./proto/meetsmatch/v1/*.js": "./gen/ts/proto/meetsmatch/v1/*.ts"
   },
   "peerDependencies": {
     "@bufbuild/protobuf": "^1.10.0"
