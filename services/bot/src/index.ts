@@ -107,6 +107,7 @@ bot.on('message:text', (ctx) =>
 // Graceful shutdown handlers
 const shutdown = async () => {
   console.log('Shutting down...');
+  bot.stop();
   await flushSentry();
   process.exit(0);
 };

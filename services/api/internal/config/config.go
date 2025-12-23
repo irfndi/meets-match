@@ -23,7 +23,7 @@ type Config struct {
 // Load loads configuration from environment variables.
 // Required variables: DATABASE_URL
 // Optional variables with defaults: HTTP_ADDR, GRPC_ADDR, REDIS_URL, ENVIRONMENT, LOG_LEVEL
-// Sentry variables: SENTRY_DSN, SENTRY_ENVIRONMENT, ENABLE_SENTRY
+// Sentry variables: SENTRY_DSN, SENTRY_ENVIRONMENT, SENTRY_RELEASE, ENABLE_SENTRY
 func Load() Config {
 	env := envOr("ENVIRONMENT", "development")
 	return Config{
@@ -72,6 +72,7 @@ func envRequired(key string) string {
 func parseBool(s string) bool {
 	b, err := strconv.ParseBool(s)
 	if err != nil {
+		fmt.Printf("WARNING: Could not parse boolean value %q, defaulting to false. Error: %v\n", s, err)
 		return false
 	}
 	return b

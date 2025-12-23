@@ -16,7 +16,7 @@ func UnaryServerInterceptor() grpc.UnaryServerInterceptor {
 		req interface{},
 		info *grpc.UnaryServerInfo,
 		handler grpc.UnaryHandler,
-	) (interface{}, error) {
+	) (resp interface{}, err error) {
 		// Clone hub and attach to context first
 		hub := sentry.CurrentHub().Clone()
 		ctx = sentry.SetHubOnContext(ctx, hub)
@@ -33,7 +33,15 @@ func UnaryServerInterceptor() grpc.UnaryServerInterceptor {
 			},
 		}, nil)
 
-		resp, err := handler(ctx, req)
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				hub.RecoverWithContext(ctx, recovered)
+				resp = nil
+				err = status.Error(codes.Internal, "internal server error")
+			}
+		}()
+
+		resp, err = handler(ctx, req)
 		if err != nil {
 			// Only capture Internal errors and above (not NotFound, InvalidArgument, etc.)
 			if shouldCaptureGRPCError(err) {

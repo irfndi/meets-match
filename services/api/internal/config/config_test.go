@@ -1,7 +1,10 @@
 package config
 
 import (
+	"bytes"
+	"io"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -22,6 +25,8 @@ func TestLoad(t *testing.T) {
 	t.Setenv("GRPC_ADDR", ":9091")
 	t.Setenv("DATABASE_URL", "postgres://test")
 	t.Setenv("REDIS_URL", "redis://test")
+	t.Setenv("SENTRY_RELEASE", "meetsmatch-api@test")
+	t.Setenv("ENABLE_SENTRY", "true")
 
 	cfg = Load()
 
@@ -37,4 +42,44 @@ func TestLoad(t *testing.T) {
 	if cfg.RedisURL != "redis://test" {
 		t.Errorf("Expected RedisURL redis://test, got %s", cfg.RedisURL)
 	}
+	if cfg.SentryRelease != "meetsmatch-api@test" {
+		t.Errorf("Expected SentryRelease meetsmatch-api@test, got %s", cfg.SentryRelease)
+	}
+	if !cfg.EnableSentry {
+		t.Error("Expected EnableSentry to be true")
+	}
+}
+
+func TestParseBool_InvalidLogsWarning(t *testing.T) {
+	output := captureStdout(t, func() {
+		if parseBool("tue") {
+			t.Error("Expected invalid boolean to parse as false")
+		}
+	})
+
+	if !strings.Contains(output, "Could not parse boolean value") {
+		t.Errorf("Expected warning output, got %q", output)
+	}
+}
+
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+
+	original := os.Stdout
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("Failed to create pipe: %v", err)
+	}
+
+	os.Stdout = writer
+	fn()
+
+	_ = writer.Close()
+	os.Stdout = original
+
+	var buffer bytes.Buffer
+	_, _ = io.Copy(&buffer, reader)
+	_ = reader.Close()
+
+	return buffer.String()
 }

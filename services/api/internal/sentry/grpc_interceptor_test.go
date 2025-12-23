@@ -73,6 +73,32 @@ func TestUnaryServerInterceptor_InternalError(t *testing.T) {
 	}
 }
 
+func TestUnaryServerInterceptor_Panic(t *testing.T) {
+	interceptor := UnaryServerInterceptor()
+
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		panic("boom")
+	}
+
+	info := &grpc.UnaryServerInfo{FullMethod: "/test/Method"}
+
+	resp, err := interceptor(context.Background(), nil, info, handler)
+	if err == nil {
+		t.Fatal("Expected error from panic recovery")
+	}
+	if resp != nil {
+		t.Errorf("Expected nil response, got %v", resp)
+	}
+
+	st, ok := status.FromError(err)
+	if !ok {
+		t.Errorf("Expected gRPC status error")
+	}
+	if st.Code() != codes.Internal {
+		t.Errorf("Expected Internal code, got %v", st.Code())
+	}
+}
+
 func TestShouldCaptureGRPCError(t *testing.T) {
 	tests := []struct {
 		name     string

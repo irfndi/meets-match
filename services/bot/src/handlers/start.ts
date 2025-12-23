@@ -31,7 +31,7 @@ export const startCommand = (ctx: Context) =>
         isActive: true,
       });
 
-      const createResult = yield* _(
+      yield* _(
         userService.createUser(user).pipe(
           Effect.catchAll((error) =>
             Effect.gen(function* () {

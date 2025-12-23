@@ -1,6 +1,8 @@
 package sentry
 
 import (
+	"context"
+
 	"github.com/getsentry/sentry-go"
 	"github.com/gofiber/fiber/v2"
 )
@@ -9,6 +11,13 @@ import (
 func FiberMiddleware() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		hub := sentry.CurrentHub().Clone()
+		userCtx := c.UserContext()
+		if userCtx == nil {
+			userCtx = context.Background()
+		}
+		userCtx = sentry.SetHubOnContext(userCtx, hub)
+		c.SetUserContext(userCtx)
+
 		hub.Scope().SetTag("http.path", c.Path())
 		hub.Scope().SetTag("http.method", c.Method())
 
@@ -18,7 +27,7 @@ func FiberMiddleware() fiber.Handler {
 		defer func() {
 			if r := recover(); r != nil {
 				recovered = true
-				hub.RecoverWithContext(c.Context(), r)
+				hub.RecoverWithContext(userCtx, r)
 				// Note: We can't return an error from defer, so we set the response directly
 				// The fiber.Ctx will handle the response after defer completes
 				if jsonErr := c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
