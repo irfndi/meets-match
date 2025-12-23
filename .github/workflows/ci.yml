@@ -18,14 +18,14 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: '1.25'
           cache-dependency-path: services/api/go.sum
 
       - name: Download dependencies
         run: go mod download
 
       - name: Lint
-        run: go run github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.0 run -v
+        run: go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.7.2 run -v
 
       - name: Test
         run: go test ./... -coverprofile=coverage.out
