@@ -5,8 +5,21 @@
 FROM oven/bun:1 AS base
 WORKDIR /app
 
+# Install buf for protobuf generation
+RUN apt-get update && apt-get install -y curl && \
+    curl -sSL "https://github.com/bufbuild/buf/releases/download/v1.47.2/buf-Linux-x86_64" -o /usr/local/bin/buf && \
+    chmod +x /usr/local/bin/buf && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
 # Copy the entire project to handle local dependencies
 COPY . .
+
+# Generate protobuf files
+RUN buf generate
+
+# Install dependencies for contracts package
+WORKDIR /app/packages/contracts
+RUN bun install
 
 # Install dependencies for the bot service
 WORKDIR /app/services/bot
@@ -23,7 +36,10 @@ COPY --from=base /app/packages /app/packages
 WORKDIR /app/services/bot
 ENV NODE_ENV=production
 
-# Health check endpoint (bot exposes HTTP health on port 3000)
+# Health check for container orchestration
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1
+
 EXPOSE 3000
 
 CMD ["bun", "run", "start"]
