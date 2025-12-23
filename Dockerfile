@@ -37,8 +37,9 @@ WORKDIR /app/services/bot
 ENV NODE_ENV=production
 
 # Health check for container orchestration
+# Use 127.0.0.1 instead of localhost to avoid IPv6 resolution issues in Alpine
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1
+  CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:3000/health || exit 1
 
 EXPOSE 3000
 
