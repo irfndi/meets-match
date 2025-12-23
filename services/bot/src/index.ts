@@ -16,8 +16,14 @@ import { matchesCallbacks, matchesCommand } from './handlers/matches.js';
 import { profileCommand } from './handlers/profile.js';
 import { settingsCallbacks, settingsCommand } from './handlers/settings.js';
 import { startCommand } from './handlers/start.js';
+import { flushSentry, initSentry, loadSentryConfig } from './lib/sentry.js';
+import { attachSentryErrorHandler } from './lib/sentryBotHandler.js';
 import { profileMenu } from './menus/profile.js';
 import type { MyContext } from './types.js';
+
+// Initialize Sentry first (before bot)
+const sentryConfig = loadSentryConfig();
+initSentry(sentryConfig);
 
 const token = process.env.BOT_TOKEN;
 if (!token) {
@@ -25,6 +31,9 @@ if (!token) {
 }
 
 const bot = new Bot<MyContext>(token);
+
+// Attach Sentry error handler for unhandled bot errors
+attachSentryErrorHandler(bot);
 
 bot.use(session({ initial: () => ({}) }));
 bot.use(conversations());
@@ -94,6 +103,16 @@ bot.on('message:text', (ctx) =>
     }),
   ),
 );
+
+// Graceful shutdown handlers
+const shutdown = async () => {
+  console.log('Shutting down...');
+  await flushSentry();
+  process.exit(0);
+};
+
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);
 
 console.log('Bot starting...');
 bot.start();

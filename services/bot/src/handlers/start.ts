@@ -2,6 +2,7 @@ import { Code, ConnectError } from '@connectrpc/connect';
 import { User } from '@meetsmatch/contracts/proto/meetsmatch/v1/user_pb.js';
 import { Effect } from 'effect';
 import type { Context } from 'grammy';
+import { captureError } from '../lib/sentry.js';
 import { userService } from '../services/userService.js';
 
 const WELCOME_MESSAGE = `
@@ -38,6 +39,10 @@ export const startCommand = (ctx: Context) =>
           // User already exists, which is fine
         } else {
           console.error('Failed to create user:', error);
+          captureError(error, {
+            tags: { context: 'startCommand' },
+            userId: String(ctx.from.id),
+          });
           // Continue anyway to show welcome message
         }
       }

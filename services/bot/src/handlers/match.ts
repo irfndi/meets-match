@@ -2,6 +2,7 @@ import { Effect } from 'effect';
 import type { Context } from 'grammy';
 import { InlineKeyboard } from 'grammy';
 
+import { captureEffectError } from '../lib/sentry.js';
 import { matchService } from '../services/matchService.js';
 import { mainMenuKeyboard } from '../ui/keyboards.js';
 
@@ -96,7 +97,7 @@ export const matchCommand = (ctx: Context) =>
   }).pipe(
     Effect.catchAll((error) =>
       Effect.gen(function* (_) {
-        console.error('Match error:', error);
+        yield* _(captureEffectError('matchCommand', ctx.from?.id?.toString())(error));
         yield* _(
           Effect.tryPromise(() =>
             ctx.reply('Sorry, something went wrong finding matches.', {
@@ -172,7 +173,7 @@ export const handleLike = (ctx: Context, matchId: string) =>
   }).pipe(
     Effect.catchAll((error) =>
       Effect.gen(function* (_) {
-        console.error('Like error:', error);
+        yield* _(captureEffectError('handleLike', ctx.from?.id?.toString())(error));
         yield* _(Effect.tryPromise(() => ctx.answerCallbackQuery('Something went wrong')));
       }),
     ),
@@ -199,7 +200,7 @@ export const handleDislike = (ctx: Context, matchId: string) =>
   }).pipe(
     Effect.catchAll((error) =>
       Effect.gen(function* (_) {
-        console.error('Dislike error:', error);
+        yield* _(captureEffectError('handleDislike', ctx.from?.id?.toString())(error));
         yield* _(Effect.tryPromise(() => ctx.answerCallbackQuery('Something went wrong')));
       }),
     ),

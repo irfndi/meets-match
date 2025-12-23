@@ -10,6 +10,9 @@ services:
       - GRPC_ADDR=:50051
       - DATABASE_URL=postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-meetsmatch}?sslmode=disable
       - REDIS_URL=redis://redis:6379/0
+      - SENTRY_DSN=${SENTRY_DSN:-}
+      - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-development}
+      - ENABLE_SENTRY=${ENABLE_SENTRY:-false}
     ports:
       - "8080:8080"
       - "50051:50051"
@@ -26,6 +29,9 @@ services:
     environment:
       - BOT_TOKEN=${BOT_TOKEN}
       - API_URL=http://api:8080
+      - SENTRY_DSN=${SENTRY_DSN:-}
+      - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-development}
+      - ENABLE_SENTRY=${ENABLE_SENTRY:-false}
     depends_on:
       - api
     networks:

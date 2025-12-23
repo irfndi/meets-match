@@ -15,6 +15,7 @@ import (
 	"github.com/irfndi/match-bot/services/api/internal/config"
 	"github.com/irfndi/match-bot/services/api/internal/grpcserver"
 	"github.com/irfndi/match-bot/services/api/internal/httpserver"
+	sentrypkg "github.com/irfndi/match-bot/services/api/internal/sentry"
 
 	_ "github.com/lib/pq"
 )
@@ -22,6 +23,14 @@ import (
 func main() {
 	cfg := config.Load()
 	logger := log.New(os.Stdout, "", log.LstdFlags)
+
+	// Initialize Sentry (graceful degradation if disabled or DSN not set)
+	if err := sentrypkg.Init(cfg); err != nil {
+		logger.Printf("WARNING: Sentry initialization failed: %v", err)
+	} else if cfg.EnableSentry {
+		logger.Printf("Sentry initialized for environment: %s", cfg.SentryEnvironment)
+	}
+	defer sentrypkg.Flush(2 * time.Second)
 
 	// Validate configuration
 	if err := cfg.Validate(); err != nil {
