@@ -16,6 +16,7 @@ type Config struct {
 	LogLevel          string
 	SentryDSN         string
 	SentryEnvironment string
+	SentryRelease     string
 	EnableSentry      bool
 }
 
@@ -34,6 +35,7 @@ func Load() Config {
 		LogLevel:          envOr("LOG_LEVEL", "info"),
 		SentryDSN:         envOr("SENTRY_DSN", ""),
 		SentryEnvironment: envOr("SENTRY_ENVIRONMENT", env),
+		SentryRelease:     envOr("SENTRY_RELEASE", "meetsmatch-api@dev"),
 		EnableSentry:      parseBool(envOr("ENABLE_SENTRY", "false")),
 	}
 }

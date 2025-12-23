@@ -20,7 +20,7 @@ func Init(cfg config.Config) error {
 	err := sentry.Init(sentry.ClientOptions{
 		Dsn:         cfg.SentryDSN,
 		Environment: cfg.SentryEnvironment,
-		Release:     "meetsmatch-api@1.0.0",
+		Release:     cfg.SentryRelease,
 		BeforeSend: func(event *sentry.Event, hint *sentry.EventHint) *sentry.Event {
 			sanitizeEvent(event)
 			return event

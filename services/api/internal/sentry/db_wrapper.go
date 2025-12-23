@@ -20,10 +20,22 @@ func WrapDBError(ctx context.Context, operation string, query string, err error)
 		return err
 	}
 
-	AddBreadcrumb("db", fmt.Sprintf("DB %s failed", operation), sentry.LevelError, map[string]interface{}{
-		"operation": operation,
-		"query":     truncateQuery(query),
-	})
+	// Get hub from context, fall back to current hub if not set
+	hub := sentry.GetHubFromContext(ctx)
+	if hub == nil {
+		hub = sentry.CurrentHub().Clone()
+	}
+
+	// Add breadcrumb to the request-specific hub
+	hub.AddBreadcrumb(&sentry.Breadcrumb{
+		Category: "db",
+		Message:  fmt.Sprintf("DB %s failed", operation),
+		Level:    sentry.LevelError,
+		Data: map[string]interface{}{
+			"operation": operation,
+			"query":     truncateQuery(query),
+		},
+	}, nil)
 
 	CaptureErrorWithContext(ctx, err, map[string]string{
 		"db.operation": operation,

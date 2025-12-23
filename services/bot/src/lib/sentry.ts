@@ -5,6 +5,7 @@ export interface SentryConfig {
   dsn: string;
   environment: string;
   tracesSampleRate: number;
+  release: string;
   enabled: boolean;
 }
 
@@ -16,6 +17,7 @@ export const loadSentryConfig = (): SentryConfig => ({
   dsn: process.env.SENTRY_DSN || '',
   environment: process.env.SENTRY_ENVIRONMENT || 'development',
   tracesSampleRate: Number.parseFloat(process.env.SENTRY_TRACES_SAMPLE_RATE || '0.2'),
+  release: process.env.SENTRY_RELEASE || 'meetsmatch-bot@dev',
   enabled: process.env.ENABLE_SENTRY === 'true' && !!process.env.SENTRY_DSN,
 });
 
@@ -33,7 +35,7 @@ export const initSentry = (config: SentryConfig): void => {
     dsn: config.dsn,
     environment: config.environment,
     tracesSampleRate: config.tracesSampleRate,
-    release: 'meetsmatch-bot@1.0.0',
+    release: config.release,
     beforeSend(event) {
       // Sanitize sensitive data
       if (event.request?.headers) {
@@ -78,7 +80,10 @@ export const captureError = (
     if (error instanceof Error) {
       Sentry.captureException(error);
     } else {
-      Sentry.captureMessage(String(error), 'error');
+      // Wrap non-Error types in an Error to preserve call stack
+      const wrappedError = new Error(String(error));
+      wrappedError.name = 'NonErrorException';
+      Sentry.captureException(wrappedError);
     }
   });
 };

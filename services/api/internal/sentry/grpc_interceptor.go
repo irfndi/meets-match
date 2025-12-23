@@ -17,16 +17,21 @@ func UnaryServerInterceptor() grpc.UnaryServerInterceptor {
 		info *grpc.UnaryServerInfo,
 		handler grpc.UnaryHandler,
 	) (interface{}, error) {
-		// Add breadcrumb for the request
-		AddBreadcrumb("grpc", info.FullMethod, sentry.LevelInfo, map[string]interface{}{
-			"method": info.FullMethod,
-		})
-
-		// Clone hub and attach to context
+		// Clone hub and attach to context first
 		hub := sentry.CurrentHub().Clone()
 		ctx = sentry.SetHubOnContext(ctx, hub)
 
 		hub.Scope().SetTag("grpc.method", info.FullMethod)
+
+		// Add breadcrumb to the cloned hub's scope (not global)
+		hub.AddBreadcrumb(&sentry.Breadcrumb{
+			Category: "grpc",
+			Message:  info.FullMethod,
+			Level:    sentry.LevelInfo,
+			Data: map[string]interface{}{
+				"method": info.FullMethod,
+			},
+		}, nil)
 
 		resp, err := handler(ctx, req)
 		if err != nil {

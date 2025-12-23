@@ -62,12 +62,19 @@ describe('Sentry Module', () => {
       const config = loadSentryConfig();
       expect(config.environment).toBe('development');
       expect(config.tracesSampleRate).toBe(0.2);
+      expect(config.release).toBe('meetsmatch-bot@dev');
     });
   });
 
   describe('initSentry', () => {
     it('should not initialize when disabled', () => {
-      initSentry({ dsn: '', environment: 'test', tracesSampleRate: 0.2, enabled: false });
+      initSentry({
+        dsn: '',
+        environment: 'test',
+        tracesSampleRate: 0.2,
+        release: 'test@1.0.0',
+        enabled: false,
+      });
       expect(Sentry.init).not.toHaveBeenCalled();
     });
 
@@ -76,12 +83,14 @@ describe('Sentry Module', () => {
         dsn: 'https://test@sentry.io/123',
         environment: 'test',
         tracesSampleRate: 0.2,
+        release: 'test@1.0.0',
         enabled: true,
       });
       expect(Sentry.init).toHaveBeenCalledWith(
         expect.objectContaining({
           dsn: 'https://test@sentry.io/123',
           environment: 'test',
+          release: 'test@1.0.0',
         }),
       );
     });
@@ -100,10 +109,11 @@ describe('Sentry Module', () => {
       expect(Sentry.captureException).toHaveBeenCalled();
     });
 
-    it('should capture string errors as messages', () => {
+    it('should capture string errors as wrapped Error', () => {
       captureError('test string error');
       expect(Sentry.withScope).toHaveBeenCalled();
-      expect(Sentry.captureMessage).toHaveBeenCalledWith('test string error', 'error');
+      // Non-Error types are now wrapped in an Error for better stack traces
+      expect(Sentry.captureException).toHaveBeenCalled();
     });
 
     it('should set tags and extras when provided', () => {
