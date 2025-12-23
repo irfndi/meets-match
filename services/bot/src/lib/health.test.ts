@@ -1,15 +1,28 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createHealthServer, type HealthServer, type HealthStatus } from './health.js';
 
-describe('Health Server', () => {
+// Helper to wait for server to be listening
+function waitForServer(server: HealthServer['server']): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (server.listening) {
+      resolve();
+      return;
+    }
+    server.once('listening', resolve);
+    server.once('error', reject);
+  });
+}
+
+describe('Health Server', { sequential: true }, () => {
   let healthServer: HealthServer;
   // Use random port to avoid conflicts between parallel test runs
   const getRandomPort = () => 40000 + Math.floor(Math.random() * 10000);
   let testPort: number;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     testPort = getRandomPort();
     healthServer = createHealthServer({ port: testPort, serviceName: 'test-service' });
+    await waitForServer(healthServer.server);
   });
 
   afterEach(() => {
@@ -114,6 +127,7 @@ describe('Health Server', () => {
     it('should use default service name when not provided', async () => {
       const defaultPort = getRandomPort();
       const defaultServer = createHealthServer({ port: defaultPort });
+      await waitForServer(defaultServer.server);
 
       const response = await fetch(`http://localhost:${defaultPort}/health`);
       const body: HealthStatus = await response.json();

@@ -65,7 +65,7 @@ export function createHealthServer(options: HealthServerOptions): HealthServer {
     res.end('Not Found');
   });
 
-  server.listen(port);
+  server.listen(port, '0.0.0.0');
 
   return {
     server,
