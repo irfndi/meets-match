@@ -31,9 +31,10 @@ console.log(`Health server listening on port ${HEALTH_PORT}`);
 const sentryConfig = loadSentryConfig();
 initSentry(sentryConfig);
 
-const token = process.env.BOT_TOKEN;
+// Support both BOT_TOKEN and TELEGRAM_TOKEN for backwards compatibility
+const token = process.env.BOT_TOKEN || process.env.TELEGRAM_TOKEN;
 if (!token) {
-  throw new Error('BOT_TOKEN is required');
+  throw new Error('BOT_TOKEN or TELEGRAM_TOKEN is required');
 }
 
 const bot = new Bot<MyContext>(token);
