@@ -31,7 +31,11 @@ func setupTestDB(t *testing.T) *sql.DB {
 
 func TestUserService_CreateAndGetUser(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("failed to close db: %v", err)
+		}
+	})
 
 	svc := NewUserService(db)
 	ctx := context.Background()

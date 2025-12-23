@@ -18,11 +18,10 @@ func TestLoad(t *testing.T) {
 	}
 
 	// Test overrides
-	os.Setenv("HTTP_ADDR", ":9090")
-	os.Setenv("GRPC_ADDR", ":9091")
-	os.Setenv("DATABASE_URL", "postgres://test")
-	os.Setenv("REDIS_URL", "redis://test")
-	defer os.Clearenv()
+	t.Setenv("HTTP_ADDR", ":9090")
+	t.Setenv("GRPC_ADDR", ":9091")
+	t.Setenv("DATABASE_URL", "postgres://test")
+	t.Setenv("REDIS_URL", "redis://test")
 
 	cfg = Load()
 

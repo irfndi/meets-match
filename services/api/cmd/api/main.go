@@ -35,7 +35,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to open db: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			logger.Printf("failed to close db: %v", err)
+		}
+	}()
 
 	// Wait for DB with retry
 	maxRetries := 30

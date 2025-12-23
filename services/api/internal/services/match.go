@@ -109,7 +109,9 @@ func (s *MatchService) GetPotentialMatches(ctx context.Context, req *pb.GetPoten
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to query users: %v", err)
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	var candidates []*models.User
 	for rows.Next() {
@@ -391,11 +393,12 @@ func (s *MatchService) LikeMatch(ctx context.Context, req *pb.LikeMatchRequest) 
 	}
 
 	who := 0 // 1 for user1, 2 for user2
-	if req.UserId == u1 {
+	switch req.UserId {
+	case u1:
 		who = 1
-	} else if req.UserId == u2 {
+	case u2:
 		who = 2
-	} else {
+	default:
 		return nil, status.Error(codes.PermissionDenied, "user not part of match")
 	}
 
@@ -450,11 +453,12 @@ func (s *MatchService) DislikeMatch(ctx context.Context, req *pb.DislikeMatchReq
 	}
 
 	who := 0
-	if req.UserId == u1 {
+	switch req.UserId {
+	case u1:
 		who = 1
-	} else if req.UserId == u2 {
+	case u2:
 		who = 2
-	} else {
+	default:
 		return nil, status.Error(codes.PermissionDenied, "user not part of match")
 	}
 
@@ -496,7 +500,9 @@ func (s *MatchService) GetMatchList(ctx context.Context, req *pb.GetMatchListReq
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	var matches []*pb.Match
 	for rows.Next() {
@@ -546,11 +552,12 @@ func (s *MatchService) SkipMatch(ctx context.Context, req *pb.SkipMatchRequest) 
 	}
 
 	who := 0
-	if req.UserId == u1 {
+	switch req.UserId {
+	case u1:
 		who = 1
-	} else if req.UserId == u2 {
+	case u2:
 		who = 2
-	} else {
+	default:
 		return nil, status.Error(codes.PermissionDenied, "user not part of match")
 	}
 
