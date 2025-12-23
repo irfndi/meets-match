@@ -2,6 +2,7 @@ import { Effect } from 'effect';
 import type { Context } from 'grammy';
 import { InlineKeyboard } from 'grammy';
 
+import { captureEffectError } from '../lib/sentry.js';
 import { userService } from '../services/userService.js';
 
 const SETTINGS_MESSAGE = `
@@ -66,7 +67,7 @@ export const settingsCommand = (ctx: Context) =>
   }).pipe(
     Effect.catchAll((error) =>
       Effect.gen(function* (_) {
-        console.error('Settings error:', error);
+        yield* _(captureEffectError('settingsCommand', ctx.from?.id?.toString())(error));
         yield* _(
           Effect.tryPromise(() => ctx.reply('Sorry, something went wrong loading settings.')),
         );
@@ -280,7 +281,7 @@ export const settingsCallbacks = (ctx: Context) =>
   }).pipe(
     Effect.catchAll((error) =>
       Effect.gen(function* (_) {
-        console.error('Settings callback error:', error);
+        yield* _(captureEffectError('settingsCallbacks', ctx.from?.id?.toString())(error));
         yield* _(Effect.tryPromise(() => ctx.answerCallbackQuery('Something went wrong')));
       }),
     ),

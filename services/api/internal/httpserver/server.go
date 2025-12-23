@@ -1,9 +1,15 @@
 package httpserver
 
-import "github.com/gofiber/fiber/v2"
+import (
+	"github.com/gofiber/fiber/v2"
+	sentrypkg "github.com/irfndi/match-bot/services/api/internal/sentry"
+)
 
 func New() *fiber.App {
 	app := fiber.New()
+
+	// Add Sentry middleware for panic recovery and error capture
+	app.Use(sentrypkg.FiberMiddleware())
 
 	app.Get("/", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{

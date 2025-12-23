@@ -2,6 +2,7 @@ import { Effect } from 'effect';
 import type { Context } from 'grammy';
 import { InlineKeyboard } from 'grammy';
 
+import { captureEffectError } from '../lib/sentry.js';
 import { matchService } from '../services/matchService.js';
 import { userService } from '../services/userService.js';
 import { mainMenuKeyboard } from '../ui/keyboards.js';
@@ -105,7 +106,7 @@ export const matchesCommand = (ctx: Context) =>
   }).pipe(
     Effect.catchAll((error) =>
       Effect.gen(function* (_) {
-        console.error('Matches list error:', error);
+        yield* _(captureEffectError('matchesCommand', ctx.from?.id?.toString())(error));
         yield* _(
           Effect.tryPromise(() =>
             ctx.reply('Sorry, something went wrong loading your matches.', {
@@ -182,7 +183,7 @@ export const matchesCallbacks = (ctx: Context) =>
   }).pipe(
     Effect.catchAll((error) =>
       Effect.gen(function* (_) {
-        console.error('Matches callback error:', error);
+        yield* _(captureEffectError('matchesCallbacks', ctx.from?.id?.toString())(error));
         yield* _(Effect.tryPromise(() => ctx.answerCallbackQuery('Something went wrong')));
       }),
     ),

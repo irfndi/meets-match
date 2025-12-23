@@ -2,6 +2,7 @@ import { Code, ConnectError } from '@connectrpc/connect';
 import { User } from '@meetsmatch/contracts/proto/meetsmatch/v1/user_pb.js';
 import { Effect } from 'effect';
 import type { Context } from 'grammy';
+import { captureEffectError } from '../lib/sentry.js';
 import { userService } from '../services/userService.js';
 
 const WELCOME_MESSAGE = `
@@ -30,17 +31,22 @@ export const startCommand = (ctx: Context) =>
         isActive: true,
       });
 
-      try {
-        yield* _(userService.createUser(user));
-      } catch (error) {
-        // Ignore AlreadyExists error, re-throw others
-        if (error instanceof ConnectError && error.code === Code.AlreadyExists) {
-          // User already exists, which is fine
-        } else {
-          console.error('Failed to create user:', error);
-          // Continue anyway to show welcome message
-        }
-      }
+      yield* _(
+        userService.createUser(user).pipe(
+          Effect.catchAll((error) =>
+            Effect.gen(function* () {
+              // Ignore AlreadyExists error, capture others
+              if (error instanceof ConnectError && error.code === Code.AlreadyExists) {
+                // User already exists, which is fine
+              } else {
+                yield* _(captureEffectError('startCommand', String(ctx.from?.id))(error));
+              }
+              // Continue anyway to show welcome message
+              return null;
+            }),
+          ),
+        ),
+      );
 
       yield* _(Effect.tryPromise(() => ctx.reply(WELCOME_MESSAGE)));
     }),
