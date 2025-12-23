@@ -14,6 +14,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set up Buf
+        uses: bufbuild/buf-setup-action@v1
+        with:
+          version: '1.47.2'
+
+      - name: Generate protobufs
+        run: buf generate
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
@@ -52,6 +60,15 @@ jobs:
         working-directory: services/bot
     steps:
       - uses: actions/checkout@v4
+
+      - name: Set up Buf
+        uses: bufbuild/buf-setup-action@v1
+        with:
+          version: '1.47.2'
+
+      - name: Generate protobufs
+        run: buf generate
+        working-directory: .
 
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
