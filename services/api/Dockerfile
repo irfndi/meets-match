@@ -18,11 +18,17 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o /app/bin/api ./cmd/api
 # Final Stage
 FROM alpine:3.19
 
+# Install curl for health checks
+RUN apk add --no-cache curl
+
 WORKDIR /app
 
 COPY --from=builder /app/bin/api /app/api
-# Copy .env if needed, but usually passed via docker-compose
 
 EXPOSE 8080 50051
+
+# Health check for container orchestration
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=5 \
+  CMD curl -f http://127.0.0.1:8080/health || exit 1
 
 CMD ["/app/api"]

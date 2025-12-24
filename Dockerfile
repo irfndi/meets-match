@@ -25,9 +25,12 @@ RUN bun install
 WORKDIR /app/services/bot
 RUN bun install --frozen-lockfile
 
-# Final Stage
-FROM oven/bun:1-alpine
+# Final Stage - Use debian-slim instead of alpine to avoid musl/glibc segfaults with Bun
+FROM oven/bun:1-debian-slim
 WORKDIR /app
+
+# Install curl for health checks (wget not available in debian-slim)
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 
 # Copy bot service with its dependencies
 COPY --from=base /app/services/bot /app/services/bot
@@ -37,9 +40,9 @@ WORKDIR /app/services/bot
 ENV NODE_ENV=production
 
 # Health check for container orchestration
-# Use 127.0.0.1 instead of localhost to avoid IPv6 resolution issues in Alpine
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:3000/health || exit 1
+# Increased start-period for initial startup (buf generate, npm install, etc.)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=5 \
+  CMD curl -f http://127.0.0.1:3000/health || exit 1
 
 EXPOSE 3000
 
