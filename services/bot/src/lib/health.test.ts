@@ -13,20 +13,34 @@ function waitForServer(server: HealthServer['server']): Promise<void> {
   });
 }
 
+// Helper to wait for server to fully close
+function waitForClose(server: HealthServer['server']): Promise<void> {
+  return new Promise((resolve) => {
+    if (!server.listening) {
+      resolve();
+      return;
+    }
+    server.once('close', resolve);
+  });
+}
+
+// Track port usage to avoid conflicts
+let portCounter = 0;
+const getUniquePort = () => 45000 + portCounter++;
+
 describe('Health Server', { sequential: true }, () => {
   let healthServer: HealthServer;
-  // Use random port to avoid conflicts between parallel test runs
-  const getRandomPort = () => 40000 + Math.floor(Math.random() * 10000);
   let testPort: number;
 
   beforeEach(async () => {
-    testPort = getRandomPort();
+    testPort = getUniquePort();
     healthServer = createHealthServer({ port: testPort, serviceName: 'test-service' });
     await waitForServer(healthServer.server);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     healthServer.stop();
+    await waitForClose(healthServer.server);
   });
 
   describe('health endpoint', () => {
@@ -125,7 +139,7 @@ describe('Health Server', { sequential: true }, () => {
 
   describe('default service name', () => {
     it('should use default service name when not provided', async () => {
-      const defaultPort = getRandomPort();
+      const defaultPort = getUniquePort();
       const defaultServer = createHealthServer({ port: defaultPort });
       await waitForServer(defaultServer.server);
 

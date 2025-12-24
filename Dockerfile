@@ -25,8 +25,8 @@ RUN bun install
 WORKDIR /app/services/bot
 RUN bun install --frozen-lockfile
 
-# Final Stage - Use debian-slim instead of alpine to avoid musl/glibc segfaults with Bun
-FROM oven/bun:1-debian-slim
+# Final Stage - Use slim debian variant to avoid musl/glibc segfaults with Bun
+FROM oven/bun:1-slim
 WORKDIR /app
 
 # Install curl for health checks (wget not available in debian-slim)

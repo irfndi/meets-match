@@ -4,11 +4,16 @@ FROM golang:1.25.5-alpine AS builder
 
 WORKDIR /app
 
-# Install build dependencies
-RUN apk add --no-cache git make
+# Install build dependencies including buf for protobuf generation
+RUN apk add --no-cache git make curl && \
+    curl -sSL "https://github.com/bufbuild/buf/releases/download/v1.47.2/buf-Linux-x86_64" -o /usr/local/bin/buf && \
+    chmod +x /usr/local/bin/buf
 
 # Copy the entire project to handle local replacements
 COPY . .
+
+# Generate protobuf files
+RUN buf generate
 
 # Build the API
 WORKDIR /app/services/api
