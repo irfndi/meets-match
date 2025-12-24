@@ -115,27 +115,50 @@ jobs:
             -p 3000:3000 \
             meetsmatch-bot:test
 
-          # Wait for container to start and health check
-          sleep 15
+          # Wait for container to start
+          sleep 10
 
-          # Check if container is still running (not crashed with SIGSEGV)
-          if docker ps | grep -q test-bot; then
-            echo "Container is running successfully (no segfault)"
+          # Get container status and exit code
+          CONTAINER_STATUS=$(docker inspect test-bot --format='{{.State.Status}}' 2>/dev/null || echo "unknown")
+          EXIT_CODE=$(docker inspect test-bot --format='{{.State.ExitCode}}' 2>/dev/null || echo "0")
 
-            # Test health endpoint
-            if curl -f http://localhost:3000/health; then
-              echo "Health check passed"
-            else
-              echo "Health endpoint not ready yet (may need more time)"
-            fi
+          echo "Container status: $CONTAINER_STATUS, exit code: $EXIT_CODE"
 
-            docker stop test-bot
-            exit 0
-          else
-            echo "Container crashed - checking logs"
+          # Check for SIGSEGV (exit code 139)
+          if [ "$EXIT_CODE" = "139" ]; then
+            echo "Container crashed with SIGSEGV (exit code 139)"
             docker logs test-bot 2>&1 || true
             exit 1
           fi
+
+          # If container is still running, test health endpoint
+          if [ "$CONTAINER_STATUS" = "running" ]; then
+            echo "Container is running successfully (no segfault)"
+            if curl -f http://localhost:3000/health 2>/dev/null; then
+              echo "Health check passed"
+            else
+              echo "Health endpoint not ready yet"
+            fi
+            docker stop test-bot
+            exit 0
+          fi
+
+          # Container exited - check if it was due to expected bot token error (not SIGSEGV)
+          echo "Container exited with code: $EXIT_CODE"
+          docker logs test-bot 2>&1 | tail -20
+
+          # Exit code 1 is expected (invalid token error), 139 is SIGSEGV failure
+          if [ "$EXIT_CODE" = "1" ]; then
+            # Check if health server started (indicates Bun runtime works)
+            if docker logs test-bot 2>&1 | grep -q "Health server listening"; then
+              echo "Health server started successfully - Bun runtime works correctly"
+              echo "Bot exited due to expected token validation error (not SIGSEGV)"
+              exit 0
+            fi
+          fi
+
+          echo "Unexpected failure"
+          exit 1
 
   docker-api:
     name: Docker API Build
