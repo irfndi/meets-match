@@ -120,6 +120,62 @@ def create_user(user: User) -> User:
         return user
 
 
+def get_users(user_ids: List[str]) -> List[User]:
+    """Get multiple users by ID (batch).
+
+    Args:
+        user_ids: List of User IDs
+
+    Returns:
+        List of User objects (order not guaranteed)
+    """
+    if not user_ids:
+        return []
+
+    unique_ids = list(set(user_ids))
+    users = []
+    missing_ids = []
+
+    # Check cache for each user
+    for uid in unique_ids:
+        try:
+            cache_key = USER_CACHE_KEY.format(user_id=uid)
+            cached_user = get_cache_model(cache_key, User, extend_ttl=3600)
+            if cached_user:
+                users.append(cached_user)
+            else:
+                missing_ids.append(uid)
+        except Exception:
+            missing_ids.append(uid)
+
+    if missing_ids:
+        # Query database for missing users
+        try:
+            result = execute_query(
+                table="users",
+                query_type="select",
+                filters={"id__in": missing_ids},
+            )
+
+            if result.data:
+                for user_data in result.data:
+                    try:
+                        user = User.model_validate(user_data)
+                        users.append(user)
+
+                        # Cache user
+                        cache_key = USER_CACHE_KEY.format(user_id=user.id)
+                        set_cache(cache_key, user, expiration=3600)
+                    except Exception as e:
+                        logger.error(
+                            "Failed to validate user data in batch fetch", error=str(e), user_id=user_data.get("id")
+                        )
+        except Exception as e:
+            logger.error("Failed to batch fetch users from DB", error=str(e))
+
+    return users
+
+
 def update_user(user_id: str, data: Dict[str, Union[str, int, bool, datetime, List[str], Dict]]) -> User:
     """Update a user.
 

@@ -9,7 +9,7 @@ from geopy.distance import geodesic  # type: ignore
 from src.config import settings
 from src.models.match import Match, MatchAction, MatchScore, MatchStatus, UserMatch
 from src.models.user import Preferences, User
-from src.services.user_service import get_user
+from src.services.user_service import get_user, get_users
 from src.utils.cache import get_cache, set_cache
 from src.utils.database import execute_query
 from src.utils.errors import MatchingError, NotFoundError
@@ -776,11 +776,68 @@ def get_user_match_views(
     # Get matches
     matches = get_user_matches(user_id, status, limit, offset)
 
+    if not matches:
+        return []
+
+    # Get current user once
+    try:
+        current_user = get_user(user_id)
+    except NotFoundError:
+        return []
+
+    # Collect other user IDs
+    other_user_ids = []
+    for match in matches:
+        other_id = match.user2_id if match.user1_id == user_id else match.user1_id
+        other_user_ids.append(other_id)
+
+    # Batch get other users
+    other_users = get_users(other_user_ids)
+    other_users_map = {u.id: u for u in other_users}
+
     # Create views
     views = []
     for match in matches:
         try:
-            views.append(get_user_match_view(match, user_id))
+            other_id = match.user2_id if match.user1_id == user_id else match.user1_id
+            other_user = other_users_map.get(other_id)
+
+            if not other_user:
+                # Fallback to individual fetch if missing from batch (e.g. race condition or cache issue)
+                # But get_user_match_view calls get_user internally, so we use it.
+                # However, to be fully optimized, we should avoid calling get_user_match_view if we have the data.
+                # But get_user_match_view is not modified to accept user objects.
+                # I will reimplement the logic here to avoid the extra call, or modify get_user_match_view.
+                # Reimplementing logic here is safer to avoid breaking signature of public method.
+
+                # If truly missing, get_user_match_view will raise NotFoundError or fetch it.
+                # Let's rely on get_user_match_view as fallback, or just skip if batch fetch failed (likely user deleted).
+                # But batch fetch might miss if cache key missing AND db query failed? Unlikely.
+                # Let's fallback to get_user_match_view for safety.
+                views.append(get_user_match_view(match, user_id))
+                continue
+
+            # Logic from get_user_match_view but using pre-fetched objects
+            current_interests = current_user.interests or []
+            other_interests = other_user.interests or []
+            common_interests = list(set(current_interests).intersection(set(other_interests)))
+
+            view = UserMatch(
+                match_id=match.id,
+                user_id=other_id,
+                username=other_user.username,
+                first_name=other_user.first_name,
+                age=other_user.age,
+                bio=other_user.bio,
+                photo_url=other_user.photos[0] if other_user.photos else None,
+                common_interests=common_interests,
+                match_score=match.score.total,
+                status=match.status,
+                created_at=match.created_at,
+                matched_at=match.matched_at,
+            )
+            views.append(view)
+
         except (NotFoundError, MatchingError) as e:
             logger.warning(
                 "Failed to create match view",
