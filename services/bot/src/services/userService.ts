@@ -27,6 +27,11 @@ const getClient = (): any => {
   return _client;
 };
 
+// Reset client for testing purposes
+export const _resetClient = (): void => {
+  _client = null;
+};
+
 export const userService = {
   getUser: (userId: string): Effect.Effect<GetUserResponse, unknown> =>
     Effect.tryPromise({

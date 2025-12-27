@@ -30,6 +30,11 @@ const getClient = (): any => {
   return _client;
 };
 
+// Reset client for testing purposes
+export const _resetClient = (): void => {
+  _client = null;
+};
+
 export const matchService = {
   getPotentialMatches: (
     userId: string,

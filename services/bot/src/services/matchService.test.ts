@@ -1,5 +1,6 @@
 import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { _resetClient } from './matchService.js';
 
 // Store original env
 const originalEnv = process.env;
@@ -7,10 +8,12 @@ const originalEnv = process.env;
 describe('MatchService', () => {
   beforeEach(() => {
     vi.resetModules();
+    _resetClient();
     process.env = { ...originalEnv };
   });
 
   afterEach(() => {
+    _resetClient();
     process.env = originalEnv;
   });
 

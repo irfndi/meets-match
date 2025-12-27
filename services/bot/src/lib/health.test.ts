@@ -24,9 +24,10 @@ function waitForClose(server: HealthServer['server']): Promise<void> {
   });
 }
 
-// Track port usage to avoid conflicts
+// Track port usage to avoid conflicts - use random offset to prevent conflicts between .ts and .js test runs
+const portOffset = Math.floor(Math.random() * 10000);
 let portCounter = 0;
-const getUniquePort = () => 45000 + portCounter++;
+const getUniquePort = () => 45000 + portOffset + portCounter++;
 
 describe('Health Server', { sequential: true }, () => {
   let healthServer: HealthServer;
