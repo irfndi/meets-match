@@ -63,6 +63,11 @@ func envOr(key, fallback string) string {
 func envRequired(key string) string {
 	value := os.Getenv(key)
 	if value == "" {
+		env := os.Getenv("ENVIRONMENT")
+		if env != "" && env != "development" && env != "dev" {
+			// In production, fail immediately
+			panic(fmt.Sprintf("FATAL: Required environment variable %s is not set", key))
+		}
 		// In development, allow empty but warn
 		fmt.Printf("WARNING: %s is not set. This is required in production.\n", key)
 	}

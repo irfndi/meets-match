@@ -66,8 +66,14 @@ func (s *UserService) CreateUser(ctx context.Context, req *pb.CreateUserRequest)
 	u.LastActive = now
 
 	// Marshal complex types for insertion
-	locJSON, _ := json.Marshal(u.Location)
-	prefJSON, _ := json.Marshal(u.Preferences)
+	locJSON, err := json.Marshal(u.Location)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to marshal location: %v", err)
+	}
+	prefJSON, err := json.Marshal(u.Preferences)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to marshal preferences: %v", err)
+	}
 
 	query := `
 		INSERT INTO users (id, username, first_name, last_name, bio, age, gender, interests, photos, location, preferences, is_active, is_sleeping, is_profile_complete, created_at, updated_at, last_active)
@@ -75,7 +81,7 @@ func (s *UserService) CreateUser(ctx context.Context, req *pb.CreateUserRequest)
 		RETURNING id
 	`
 
-	_, err := s.db.ExecContext(ctx, query,
+	_, err = s.db.ExecContext(ctx, query,
 		u.ID, u.Username, u.FirstName, u.LastName, u.Bio, u.Age, u.Gender,
 		pq.Array(u.Interests), pq.Array(u.Photos), locJSON, prefJSON,
 		u.IsActive, u.IsSleeping, u.IsProfileComplete,

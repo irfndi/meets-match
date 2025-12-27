@@ -17,25 +17,40 @@ services:
       - "8080:8080"
       - "50051:50051"
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - meetsmatch-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
   bot:
     build:
       context: .
-      dockerfile: services/bot/Dockerfile
+      dockerfile: Dockerfile
     environment:
-      - BOT_TOKEN=${BOT_TOKEN}
+      - BOT_TOKEN=${BOT_TOKEN:?BOT_TOKEN is required}
       - API_URL=http://api:8080
       - SENTRY_DSN=${SENTRY_DSN:-}
       - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-development}
       - ENABLE_SENTRY=${ENABLE_SENTRY:-false}
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     networks:
       - meetsmatch-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
   postgres:
     image: postgres:17
@@ -49,15 +64,25 @@ services:
       - "5433:5432"
     networks:
       - meetsmatch-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
-    image: redis:latest
+    image: redis:7.4-alpine
     volumes:
       - redis-data:/data
     ports:
       - "6379:6379"
     networks:
       - meetsmatch-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
 networks:
   meetsmatch-net:

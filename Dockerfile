@@ -5,9 +5,12 @@
 FROM oven/bun:1 AS base
 WORKDIR /app
 
-# Install buf for protobuf generation
+# Install buf for protobuf generation with checksum verification
+ARG BUF_VERSION=1.47.2
+ARG BUF_CHECKSUM=3a0c4da8d46eea8136affa63db202c76a44f8112384160b73c3fffb1cf14b5d8
 RUN apt-get update && apt-get install -y curl && \
-    curl -sSL "https://github.com/bufbuild/buf/releases/download/v1.47.2/buf-Linux-x86_64" -o /usr/local/bin/buf && \
+    curl -sSL "https://github.com/bufbuild/buf/releases/download/v${BUF_VERSION}/buf-Linux-x86_64" -o /usr/local/bin/buf && \
+    echo "${BUF_CHECKSUM}  /usr/local/bin/buf" | sha256sum -c - && \
     chmod +x /usr/local/bin/buf && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 

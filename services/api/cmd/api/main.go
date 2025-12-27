@@ -44,6 +44,13 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to open db: %v", err)
 	}
+
+	// Configure connection pool for production use
+	db.SetMaxOpenConns(25)
+	db.SetMaxIdleConns(5)
+	db.SetConnMaxLifetime(5 * time.Minute)
+	db.SetConnMaxIdleTime(1 * time.Minute)
+
 	defer func() {
 		if err := db.Close(); err != nil {
 			logger.Printf("failed to close db: %v", err)
@@ -97,8 +104,20 @@ func main() {
 
 	group.Go(func() error {
 		<-groupCtx.Done()
-		_ = httpApp.Shutdown()
+
+		// Create shutdown context with timeout
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		// Shutdown HTTP with timeout
+		if err := httpApp.ShutdownWithContext(shutdownCtx); err != nil {
+			logger.Printf("HTTP shutdown error: %v", err)
+		}
+
+		// Graceful stop for gRPC
 		grpcServer.GracefulStop()
+
+		logger.Println("Graceful shutdown completed")
 		return nil
 	})
 
