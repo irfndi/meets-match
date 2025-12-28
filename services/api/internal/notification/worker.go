@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/getsentry/sentry-go"
 	"github.com/google/uuid"
 )
 
@@ -123,6 +124,9 @@ func (w *Worker) processLoop(ctx context.Context, ch <-chan uuid.UUID, workerNum
 
 		if err := w.service.Process(ctx, id, processorID); err != nil {
 			log.Printf("[%s] Error processing notification %s: %v", processorID, id, err)
+
+			// Report to Sentry
+			w.captureWorkerError(err, id, processorID)
 		}
 	}
 }
@@ -134,6 +138,10 @@ func (w *Worker) promoteDelayedLoop(ctx context.Context) {
 	ticker := time.NewTicker(w.config.DelayedPollInterval)
 	defer ticker.Stop()
 
+	// DLQ health check ticker (every 5 minutes)
+	dlqCheckTicker := time.NewTicker(5 * time.Minute)
+	defer dlqCheckTicker.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -144,10 +152,18 @@ func (w *Worker) promoteDelayedLoop(ctx context.Context) {
 			promoted, err := w.queue.PromoteDelayed(ctx, time.Now())
 			if err != nil {
 				log.Printf("[%s] Error promoting delayed notifications: %v", w.workerID, err)
+
+				// Report to Sentry
+				w.capturePromoteError(err)
 				continue
 			}
 			if promoted > 0 {
 				log.Printf("[%s] Promoted %d delayed notifications", w.workerID, promoted)
+			}
+		case <-dlqCheckTicker.C:
+			// Periodic DLQ health check
+			if err := w.service.CheckDLQHealth(ctx); err != nil {
+				log.Printf("[%s] Error checking DLQ health: %v", w.workerID, err)
 			}
 		}
 	}
@@ -179,4 +195,38 @@ func (w *Worker) IsRunning() bool {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	return w.isRunning
+}
+
+// captureWorkerError reports a worker processing error to Sentry.
+func (w *Worker) captureWorkerError(err error, notificationID uuid.UUID, processorID string) {
+	if err == nil {
+		return
+	}
+
+	hub := sentry.CurrentHub().Clone()
+	scope := hub.Scope()
+
+	scope.SetTag("service", "notification_worker")
+	scope.SetTag("processor_id", processorID)
+	scope.SetTag("worker_id", w.workerID)
+
+	scope.SetExtra("notification_id", notificationID.String())
+
+	hub.CaptureException(err)
+}
+
+// capturePromoteError reports a delayed queue promotion error to Sentry.
+func (w *Worker) capturePromoteError(err error) {
+	if err == nil {
+		return
+	}
+
+	hub := sentry.CurrentHub().Clone()
+	scope := hub.Scope()
+
+	scope.SetTag("service", "notification_worker")
+	scope.SetTag("worker_id", w.workerID)
+	scope.SetTag("operation", "promote_delayed")
+
+	hub.CaptureException(err)
 }

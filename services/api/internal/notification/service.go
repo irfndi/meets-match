@@ -6,6 +6,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/getsentry/sentry-go"
 	"github.com/google/uuid"
 )
 
@@ -236,7 +237,8 @@ func (s *Service) moveToDLQ(ctx context.Context, n *Notification, errorCode Erro
 
 	log.Printf("[notification] Moved to DLQ: %s (error: %s - %s)", n.ID, errorCode, errMsg)
 
-	// TODO: Alert on DLQ (integrate with Sentry)
+	// Alert to Sentry when notification moves to DLQ
+	s.captureNotificationDLQ(ctx, n, errorCode, errMsg)
 
 	return nil
 }
@@ -305,7 +307,136 @@ func (s *Service) GetQueueStats(ctx context.Context) (*QueueStats, error) {
 	return s.queue.GetQueueStats(ctx)
 }
 
-// logError logs an error with notification context.
-func (s *Service) logError(_ context.Context, msg string, err error, notificationID uuid.UUID) {
+// logError logs an error with notification context and reports to Sentry.
+func (s *Service) logError(ctx context.Context, msg string, err error, notificationID uuid.UUID) {
 	log.Printf("[notification] %s: %v (notification: %s)", msg, err, notificationID)
+
+	// Report to Sentry
+	s.captureError(ctx, err, map[string]string{
+		"notification_id": notificationID.String(),
+		"component":       "notification_service",
+	}, map[string]interface{}{
+		"message": msg,
+	})
+}
+
+// captureError reports an error to Sentry with context.
+func (s *Service) captureError(_ context.Context, err error, tags map[string]string, extras map[string]interface{}) {
+	if err == nil {
+		return
+	}
+
+	hub := sentry.CurrentHub().Clone()
+	scope := hub.Scope()
+
+	scope.SetTag("service", "notification")
+	for k, v := range tags {
+		scope.SetTag(k, v)
+	}
+	for k, v := range extras {
+		scope.SetExtra(k, v)
+	}
+
+	hub.CaptureException(err)
+}
+
+// captureNotificationDLQ reports a DLQ event to Sentry.
+func (s *Service) captureNotificationDLQ(_ context.Context, n *Notification, errorCode ErrorCode, errMsg string) {
+	hub := sentry.CurrentHub().Clone()
+	scope := hub.Scope()
+
+	scope.SetTag("service", "notification")
+	scope.SetTag("notification_type", string(n.Type))
+	scope.SetTag("notification_channel", string(n.Channel))
+	scope.SetTag("error_code", string(errorCode))
+	scope.SetLevel(sentry.LevelWarning)
+
+	scope.SetUser(sentry.User{ID: n.UserID})
+
+	scope.SetExtra("notification_id", n.ID.String())
+	scope.SetExtra("attempt_count", n.AttemptCount)
+	scope.SetExtra("max_attempts", n.MaxAttempts)
+	scope.SetExtra("error_message", errMsg)
+
+	// Add breadcrumb for the DLQ event
+	hub.AddBreadcrumb(&sentry.Breadcrumb{
+		Category: "notification",
+		Message:  fmt.Sprintf("Notification moved to DLQ: %s", n.ID),
+		Level:    sentry.LevelWarning,
+		Data: map[string]interface{}{
+			"type":         n.Type,
+			"channel":      n.Channel,
+			"error_code":   errorCode,
+			"attempt_count": n.AttemptCount,
+		},
+	}, nil)
+
+	hub.CaptureMessage(fmt.Sprintf("Notification moved to DLQ: %s (%s)", errorCode, errMsg))
+}
+
+// CheckDLQHealth checks DLQ size and reports alerts to Sentry.
+// Called periodically by the worker or monitoring.
+func (s *Service) CheckDLQHealth(ctx context.Context) error {
+	stats, err := s.GetDLQStats(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Alert thresholds
+	const (
+		warningThreshold  = 10
+		criticalThreshold = 50
+		staleHours        = 24
+	)
+
+	// Check total DLQ count
+	if stats.TotalCount >= criticalThreshold {
+		s.captureDLQAlert(sentry.LevelError, "DLQ critical threshold exceeded",
+			stats.TotalCount, criticalThreshold, stats)
+	} else if stats.TotalCount >= warningThreshold {
+		s.captureDLQAlert(sentry.LevelWarning, "DLQ warning threshold exceeded",
+			stats.TotalCount, warningThreshold, stats)
+	}
+
+	// Check for stale items
+	if stats.OldestItem != nil {
+		age := time.Since(*stats.OldestItem)
+		if age > time.Duration(staleHours)*time.Hour {
+			hub := sentry.CurrentHub().Clone()
+			scope := hub.Scope()
+
+			scope.SetTag("service", "notification")
+			scope.SetTag("alert_type", "dlq_stale")
+			scope.SetLevel(sentry.LevelWarning)
+
+			scope.SetExtra("oldest_item_age_hours", age.Hours())
+			scope.SetExtra("oldest_item", stats.OldestItem.Format(time.RFC3339))
+			scope.SetExtra("threshold_hours", staleHours)
+
+			hub.CaptureMessage(fmt.Sprintf("DLQ contains stale items (oldest: %.1f hours)", age.Hours()))
+		}
+	}
+
+	return nil
+}
+
+// captureDLQAlert reports a DLQ threshold alert to Sentry.
+func (s *Service) captureDLQAlert(level sentry.Level, message string, count int64, threshold int, stats *DLQStats) {
+	hub := sentry.CurrentHub().Clone()
+	scope := hub.Scope()
+
+	scope.SetTag("service", "notification")
+	scope.SetTag("alert_type", "dlq_threshold")
+	scope.SetLevel(level)
+
+	scope.SetExtra("dlq_count", count)
+	scope.SetExtra("threshold", threshold)
+	scope.SetExtra("count_by_type", stats.CountByType)
+	scope.SetExtra("count_by_error", stats.CountByError)
+
+	if stats.OldestItem != nil {
+		scope.SetExtra("oldest_item", stats.OldestItem.Format(time.RFC3339))
+	}
+
+	hub.CaptureMessage(fmt.Sprintf("%s: %d items (threshold: %d)", message, count, threshold))
 }
