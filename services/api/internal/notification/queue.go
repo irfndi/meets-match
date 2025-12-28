@@ -101,12 +101,15 @@ func NewRedisQueueFromClient(client *redis.Client, config Config) *RedisQueue {
 }
 
 // Enqueue adds a notification to the pending queue.
-// Score is calculated as: priority * 1e12 + (maxTime - createdAt)
-// This ensures higher priority items are processed first, then FIFO within same priority.
+// Score is calculated as: priority * 1e19 - timestamp
+// This ensures higher priority items are processed first (larger priority = higher score),
+// and older items within same priority are processed first (subtracting timestamp means
+// older timestamps yield higher scores).
 func (q *RedisQueue) Enqueue(ctx context.Context, id uuid.UUID, priority int) error {
 	// Score: higher priority first, then FIFO (older first)
-	// Use negative timestamp so older items have higher scores within same priority
-	score := float64(priority)*1e12 + float64(time.Now().UnixNano())
+	// Multiply priority by 1e19 to ensure it dominates over timestamp (~1.7e18 nanoseconds)
+	// Subtract timestamp so older items have higher scores within same priority
+	score := float64(priority)*1e19 - float64(time.Now().UnixNano())
 
 	err := q.client.ZAdd(ctx, keyPendingQueue, redis.Z{
 		Score:  score,

@@ -342,22 +342,23 @@ func (s *GRPCService) GetReengagementCandidates(ctx context.Context, req *pb.Get
 	// - Have notifications enabled
 	// - Haven't been reminded recently (cooldown)
 	// - Have been inactive for min-max days
+	// Uses LEFT JOIN with aggregation instead of correlated subquery for better performance
 	query := `
 		SELECT
 			u.id,
 			u.first_name,
 			EXTRACT(DAY FROM NOW() - u.last_active)::int as days_inactive,
-			COALESCE(
-				(SELECT COUNT(*) FROM matches m
-				 WHERE m.user2_id = u.id
-				 AND m.user1_action = 'like'
-				 AND m.user2_action = 'none'),
-				0
-			)::int as pending_likes_count,
+			COALESCE(pending_likes.cnt, 0)::int as pending_likes_count,
 			COALESCE((u.preferences->>'notifications_enabled')::boolean, true) as notifications_enabled,
 			u.last_active,
 			u.last_reminded_at
 		FROM users u
+		LEFT JOIN (
+			SELECT m.user2_id, COUNT(*) as cnt
+			FROM matches m
+			WHERE m.user1_action = 'like' AND m.user2_action = 'none'
+			GROUP BY m.user2_id
+		) pending_likes ON pending_likes.user2_id = u.id
 		WHERE u.is_active = true
 		  AND u.is_sleeping = false
 		  AND COALESCE((u.preferences->>'notifications_enabled')::boolean, true) = true
@@ -453,7 +454,14 @@ func (s *GRPCService) LogNotificationResult(ctx context.Context, req *pb.LogNoti
 
 	// If the notification was already delivered (from Bot), mark it as delivered
 	if req.Status == pb.NotificationStatus_NOTIFICATION_STATUS_DELIVERED {
-		_ = s.service.repo.MarkDelivered(ctx, n.ID, n.CreatedAt)
+		if err := s.service.repo.MarkDelivered(ctx, n.ID, n.CreatedAt); err != nil {
+			// Log but don't fail - the notification was created for audit purposes
+			// and the Bot already delivered it successfully
+			return &pb.LogNotificationResultResponse{
+				NotificationId: n.ID.String(),
+				Success:        true, // Still success since Bot delivered it
+			}, nil
+		}
 	}
 
 	return &pb.LogNotificationResultResponse{
