@@ -10,13 +10,26 @@ export interface SentryConfig {
 }
 
 /**
+ * Parse and validate a sample rate to ensure it's between 0 and 1.
+ */
+const parseSampleRate = (value: string | undefined, defaultValue: number): number => {
+  const parsed = Number.parseFloat(value || String(defaultValue));
+  if (Number.isNaN(parsed)) {
+    console.warn(`Invalid sample rate "${value}", using default ${defaultValue}`);
+    return defaultValue;
+  }
+  // Clamp to valid range [0, 1]
+  return Math.max(0, Math.min(1, parsed));
+};
+
+/**
  * Load Sentry configuration from environment variables.
  * Returns disabled config if SENTRY_DSN is not set (graceful degradation).
  */
 export const loadSentryConfig = (): SentryConfig => ({
   dsn: process.env.SENTRY_DSN || '',
   environment: process.env.SENTRY_ENVIRONMENT || 'development',
-  tracesSampleRate: Number.parseFloat(process.env.SENTRY_TRACES_SAMPLE_RATE || '0.2'),
+  tracesSampleRate: parseSampleRate(process.env.SENTRY_TRACES_SAMPLE_RATE, 0.2),
   release: process.env.SENTRY_RELEASE || 'meetsmatch-bot@dev',
   enabled: process.env.ENABLE_SENTRY === 'true' && !!process.env.SENTRY_DSN,
 });

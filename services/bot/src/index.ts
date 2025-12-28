@@ -16,29 +16,31 @@ import { matchesCallbacks, matchesCommand } from './handlers/matches.js';
 import { profileCommand } from './handlers/profile.js';
 import { settingsCallbacks, settingsCommand } from './handlers/settings.js';
 import { startCommand } from './handlers/start.js';
+import { loadConfig } from './lib/config.js';
 import { createHealthServer } from './lib/health.js';
-import { flushSentry, initSentry, loadSentryConfig } from './lib/sentry.js';
+import { flushSentry, initSentry } from './lib/sentry.js';
 import { attachSentryErrorHandler } from './lib/sentryBotHandler.js';
 import { startBotWithRetry } from './lib/startup.js';
 import { profileMenu } from './menus/profile.js';
 import type { MyContext } from './types.js';
 
-// Initialize Sentry first (before anything else that might fail)
-const sentryConfig = loadSentryConfig();
-initSentry(sentryConfig);
+// Load and validate configuration first (fails fast with helpful errors)
+const config = loadConfig();
+
+// Initialize Sentry for error tracking
+initSentry({
+  dsn: config.sentryDsn,
+  environment: config.sentryEnvironment,
+  release: config.sentryRelease,
+  enabled: config.enableSentry,
+  tracesSampleRate: config.tracesSampleRate,
+});
 
 // Health check HTTP server for container orchestration (Coolify/K8s)
-const HEALTH_PORT = Number(process.env.HEALTH_PORT) || 3000;
-const healthServer = createHealthServer({ port: HEALTH_PORT });
-console.log(`Health server listening on port ${HEALTH_PORT}`);
+const healthServer = createHealthServer({ port: config.healthPort });
+console.log(`Health server listening on port ${config.healthPort}`);
 
-// Support both BOT_TOKEN and TELEGRAM_TOKEN for backwards compatibility
-const token = process.env.BOT_TOKEN || process.env.TELEGRAM_TOKEN;
-if (!token) {
-  throw new Error('BOT_TOKEN or TELEGRAM_TOKEN is required');
-}
-
-const bot = new Bot<MyContext>(token);
+const bot = new Bot<MyContext>(config.botToken);
 
 // Attach Sentry error handler for unhandled bot errors
 attachSentryErrorHandler(bot);

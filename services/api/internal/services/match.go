@@ -127,6 +127,11 @@ func (s *MatchService) GetPotentialMatches(ctx context.Context, req *pb.GetPoten
 		candidates = append(candidates, &u)
 	}
 
+	// Check for errors from iterating over rows
+	if err := rows.Err(); err != nil {
+		return nil, status.Errorf(codes.Internal, "error iterating candidate rows: %v", err)
+	}
+
 	// 3. Score Candidates
 	type scoredCandidate struct {
 		user  *models.User
@@ -310,7 +315,10 @@ func (s *MatchService) CreateMatch(ctx context.Context, req *pb.CreateMatchReque
 	u1 := protoToModel(u1Resp.User)
 	u2 := protoToModel(u2Resp.User)
 	score := calculateMatchScore(u1, u2)
-	scoreJSON, _ := json.Marshal(score)
+	scoreJSON, err := json.Marshal(score)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to marshal match score: %v", err)
+	}
 
 	// Insert
 	newID := uuid.New().String()
@@ -530,6 +538,11 @@ func (s *MatchService) GetMatchList(ctx context.Context, req *pb.GetMatchListReq
 			pbMatch.MatchedAt = timestamppb.New(*m.MatchedAt)
 		}
 		matches = append(matches, pbMatch)
+	}
+
+	// Check for errors from iterating over rows
+	if err := rows.Err(); err != nil {
+		return nil, status.Errorf(codes.Internal, "error iterating match rows: %v", err)
 	}
 
 	return &pb.GetMatchListResponse{Matches: matches}, nil

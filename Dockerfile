@@ -5,9 +5,12 @@
 FROM oven/bun:1 AS base
 WORKDIR /app
 
-# Install buf for protobuf generation
+# Install buf for protobuf generation with checksum verification
+ARG BUF_VERSION=1.47.2
+ARG BUF_CHECKSUM=3a0c4da8d46eea8136affa63db202c76a44f8112384160b73c3fffb1cf14b5d8
 RUN apt-get update && apt-get install -y curl && \
-    curl -sSL "https://github.com/bufbuild/buf/releases/download/v1.47.2/buf-Linux-x86_64" -o /usr/local/bin/buf && \
+    curl -sSL "https://github.com/bufbuild/buf/releases/download/v${BUF_VERSION}/buf-Linux-x86_64" -o /usr/local/bin/buf && \
+    echo "${BUF_CHECKSUM}  /usr/local/bin/buf" | sha256sum -c - && \
     chmod +x /usr/local/bin/buf && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
@@ -25,9 +28,12 @@ RUN bun install
 WORKDIR /app/services/bot
 RUN bun install --frozen-lockfile
 
-# Final Stage
-FROM oven/bun:1-alpine
+# Final Stage - Use slim debian variant to avoid musl/glibc segfaults with Bun
+FROM oven/bun:1-slim
 WORKDIR /app
+
+# Install curl for health checks (wget not available in debian-slim)
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 
 # Copy bot service with its dependencies
 COPY --from=base /app/services/bot /app/services/bot
@@ -37,9 +43,9 @@ WORKDIR /app/services/bot
 ENV NODE_ENV=production
 
 # Health check for container orchestration
-# Use 127.0.0.1 instead of localhost to avoid IPv6 resolution issues in Alpine
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:3000/health || exit 1
+# Increased start-period for initial startup (buf generate, npm install, etc.)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=5 \
+  CMD curl -f http://127.0.0.1:3000/health || exit 1
 
 EXPOSE 3000
 

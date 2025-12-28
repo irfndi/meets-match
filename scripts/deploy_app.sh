@@ -2,8 +2,8 @@
 # Deploy MeetMatch Bot to the server
 set -e
 
-# Configuration
-SERVER_IP="${SERVER_IP:-217.216.35.77}"
+# Configuration - SERVER_IP must be provided explicitly for security
+SERVER_IP="${SERVER_IP:?SERVER_IP environment variable is required}"
 SSH_USER="${SSH_USER:-root}"
 REMOTE_DIR="/opt/apps/meetsmatch"
 

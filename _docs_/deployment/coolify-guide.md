@@ -96,9 +96,42 @@ You mentioned using an R2 bucket for backups. Here is how to configure it in Coo
     *   Save and **Redeploy**.
 
 ### 9. Troubleshooting
+
+#### Common Issues
+
+**Dockerfile not found:**
+- Ensure `Base Directory` in Coolify is set to `/` (repository root)
+- The `Dockerfile` must exist at the repository root (not in a subdirectory)
+- Verify the correct repository is connected (`irfndi/meets-match`)
+
+**Container crashes with exit code 139 (SIGSEGV):**
+- This is a segmentation fault, often caused by Alpine Linux + Bun compatibility issues
+- Solution: Use `oven/bun:1-debian-slim` instead of `oven/bun:1-alpine` in Dockerfile
+
+**Bot fails to start with "BOT_TOKEN required":**
+- Add `BOT_TOKEN=<your_telegram_bot_token>` to Coolify environment variables
+- Get a token from [@BotFather](https://t.me/BotFather) on Telegram
+
+**409 Conflict errors during startup:**
+- Another bot instance is using the same token
+- Wait for the old instance to shut down, or use the retry logic (built-in)
+
+#### General Troubleshooting
 - **Logs:** View logs in the Coolify UI under the specific resource.
 - **Shell:** Use the "Terminal" tab in Coolify to exec into the container.
 - **Connection Refused:** Ensure `pg_hba.conf` allows `0.0.0.0/0` (or docker subnet) and `redis.conf` binds to `10.0.0.1` or `0.0.0.0`.
+
+### Required Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `BOT_TOKEN` | Yes | Telegram bot token from @BotFather |
+| `DATABASE_URL` | Yes (API) | PostgreSQL connection string |
+| `REDIS_URL` | No | Redis connection string (optional) |
+| `SENTRY_DSN` | No | Sentry/GlitchTip DSN for error tracking |
+| `ENABLE_SENTRY` | No | Set to `true` to enable error tracking |
+| `API_URL` | No | API URL for bot (default: http://localhost:8080) |
+| `HEALTH_PORT` | No | Health check port (default: 3000) |
 
 ## 10. Migrating to Coolify Managed Resources (Recommended)
 Using Coolify-managed Postgres and Redis provides better isolation, automated backups, and easier management.
