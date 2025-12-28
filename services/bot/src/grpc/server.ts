@@ -32,35 +32,38 @@ export function startGrpcServer(bot: Bot<MyContext>, options: GrpcServerOptions)
   // types and @connectrpc/connect. This is safe as long as the proto definitions match.
   const routes = (router: ConnectRouter) =>
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    router.service(NotificationService as any, {
-      // Only implement SendNotification - other methods are handled by API service
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      sendNotification: async (req: any) => notificationHandler(req as SendNotificationRequest),
+    router.service(
+      NotificationService as any,
+      {
+        // Only implement SendNotification - other methods are handled by API service
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        sendNotification: async (req: any) => notificationHandler(req as SendNotificationRequest),
 
-      // Stub implementations for other methods (not used by Bot)
-      enqueueNotification: async () => {
-        throw new Error('Not implemented in Bot service');
-      },
-      getNotification: async () => {
-        throw new Error('Not implemented in Bot service');
-      },
-      getDLQStats: async () => {
-        throw new Error('Not implemented in Bot service');
-      },
-      replayDLQ: async () => {
-        throw new Error('Not implemented in Bot service');
-      },
-      getQueueStats: async () => {
-        throw new Error('Not implemented in Bot service');
-      },
-      getReengagementCandidates: async () => {
-        throw new Error('Not implemented in Bot service');
-      },
-      logNotificationResult: async () => {
-        throw new Error('Not implemented in Bot service');
-      },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any);
+        // Stub implementations for other methods (not used by Bot)
+        enqueueNotification: async () => {
+          throw new Error('Not implemented in Bot service');
+        },
+        getNotification: async () => {
+          throw new Error('Not implemented in Bot service');
+        },
+        getDLQStats: async () => {
+          throw new Error('Not implemented in Bot service');
+        },
+        replayDLQ: async () => {
+          throw new Error('Not implemented in Bot service');
+        },
+        getQueueStats: async () => {
+          throw new Error('Not implemented in Bot service');
+        },
+        getReengagementCandidates: async () => {
+          throw new Error('Not implemented in Bot service');
+        },
+        logNotificationResult: async () => {
+          throw new Error('Not implemented in Bot service');
+        },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any,
+    );
 
   // Create HTTP/2 server with Connect adapter
   const server = createServer(
