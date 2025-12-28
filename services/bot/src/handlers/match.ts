@@ -158,20 +158,27 @@ export const handleLike = (ctx: Context, matchId: string) =>
     if (result.isMutual) {
       // Get match details to show the other user's name
       const matchDetails = yield* _(matchService.getMatch(matchId));
+
+      // Validate match details exist before accessing properties
+      if (!matchDetails.match) {
+        yield* _(Effect.fail(new Error('Match details not found')));
+        return;
+      }
+
       const otherUserId =
-        matchDetails.match?.user1Id === userId
-          ? matchDetails.match?.user2Id
-          : matchDetails.match?.user1Id;
+        matchDetails.match.user1Id === userId
+          ? matchDetails.match.user2Id
+          : matchDetails.match.user1Id;
 
       // Fetch other user's details to show their name
-      const otherUserRes = yield* _(userService.getUser(otherUserId || ''));
+      const otherUserRes = yield* _(userService.getUser(otherUserId));
       const otherUser = otherUserRes.user;
       const otherName = otherUser?.firstName || 'your match';
       const template = getRandomStarter();
 
       yield* _(
         Effect.tryPromise(() =>
-          ctx.editMessageText(MUTUAL_MATCH_MESSAGE(otherName, otherUserId || '', template), {
+          ctx.editMessageText(MUTUAL_MATCH_MESSAGE(otherName, otherUserId, template), {
             parse_mode: 'Markdown',
             reply_markup: new InlineKeyboard()
               .url(`💬 Message ${otherName}`, `tg://user?id=${otherUserId}`)

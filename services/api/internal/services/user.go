@@ -254,7 +254,10 @@ func (s *UserService) UpdateLastActive(ctx context.Context, req *pb.UpdateLastAc
 		return nil, status.Errorf(codes.Internal, "failed to update last_active: %v", err)
 	}
 
-	rows, _ := result.RowsAffected()
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to get rows affected: %v", err)
+	}
 	if rows == 0 {
 		return nil, status.Error(codes.NotFound, "user not found")
 	}
@@ -275,7 +278,10 @@ func (s *UserService) UpdateLastRemindedAt(ctx context.Context, req *pb.UpdateLa
 		return nil, status.Errorf(codes.Internal, "failed to update last_reminded_at: %v", err)
 	}
 
-	rows, _ := result.RowsAffected()
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to get rows affected: %v", err)
+	}
 	if rows == 0 {
 		return nil, status.Error(codes.NotFound, "user not found")
 	}

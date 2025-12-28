@@ -58,7 +58,7 @@ func main() {
 		}
 	}()
 
-	// Wait for DB with retry
+	// Wait for DB with retry - allows DB to start up in containerized environments
 	maxRetries := 30
 	for i := 0; i < maxRetries; i++ {
 		if err := db.Ping(); err == nil {
@@ -69,7 +69,7 @@ func main() {
 			log.Fatalf("failed to connect to database after %d retries", maxRetries)
 		}
 		logger.Printf("Waiting for database... (%d/%d)", i+1, maxRetries)
-		time.Sleep(1 * time.Second)
+		time.Sleep(1 * time.Second) // Retry delay between connection attempts
 	}
 
 	// Initialize notification system (optional - graceful degradation if Redis unavailable)
@@ -92,9 +92,17 @@ func main() {
 
 		// Register Telegram sender (bot token from env)
 		if botToken := os.Getenv("TELEGRAM_BOT_TOKEN"); botToken != "" {
+			// Configurable timeout (default 10s, useful for slow networks)
+			telegramTimeout := 10 * time.Second
+			if timeoutStr := os.Getenv("TELEGRAM_SENDER_TIMEOUT_SECONDS"); timeoutStr != "" {
+				if secs, err := time.ParseDuration(timeoutStr + "s"); err == nil && secs > 0 {
+					telegramTimeout = secs
+				}
+			}
+
 			telegramSender := notification.NewTelegramSender(notification.TelegramSenderConfig{
 				BotToken: botToken,
-				Timeout:  10 * time.Second,
+				Timeout:  telegramTimeout,
 			})
 			notificationService.RegisterSender(telegramSender)
 			logger.Println("Telegram sender registered for notifications")
