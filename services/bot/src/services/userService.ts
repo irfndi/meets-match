@@ -58,8 +58,7 @@ export const userService = {
    */
   updateLastActive: (userId: string): Effect.Effect<UpdateLastActiveResponse, unknown> =>
     Effect.tryPromise({
-      try: async (): Promise<UpdateLastActiveResponse> =>
-        getClient().updateLastActive({ userId }),
+      try: async (): Promise<UpdateLastActiveResponse> => getClient().updateLastActive({ userId }),
       catch: (e) => e,
     }),
 };

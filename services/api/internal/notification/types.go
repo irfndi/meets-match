@@ -120,11 +120,11 @@ type EmailPayload struct {
 // PushPayload is the channel-specific payload for push notifications.
 // Prepared for future implementation.
 type PushPayload struct {
-	Token   string            `json:"token"`   // FCM/APNs token
-	Title   string            `json:"title"`
-	Body    string            `json:"body"`
-	Data    map[string]string `json:"data,omitempty"`
-	ImageURL string           `json:"image_url,omitempty"`
+	Token    string            `json:"token"` // FCM/APNs token
+	Title    string            `json:"title"`
+	Body     string            `json:"body"`
+	Data     map[string]string `json:"data,omitempty"`
+	ImageURL string            `json:"image_url,omitempty"`
 }
 
 // SMSPayload is the channel-specific payload for SMS notifications.

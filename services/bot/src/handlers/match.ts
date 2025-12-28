@@ -112,13 +112,13 @@ export const matchCommand = (ctx: Context) =>
   );
 
 const CONVERSATION_STARTERS = [
-  "Hey! We matched on MeetsMatch, nice to meet you! 👋",
+  'Hey! We matched on MeetsMatch, nice to meet you! 👋',
   "Hi there! Saw we matched - what's up? 😊",
-  "Hello! Great to match with you on MeetsMatch! 🎉",
+  'Hello! Great to match with you on MeetsMatch! 🎉',
   "Hey! Excited we matched - how's your day going? ✨",
   "Hi! We're a match! Would love to chat 💬",
   "Hey there! Looks like we vibed - let's talk! 🙌",
-  "Hi! So glad we matched - tell me about yourself! 🌟",
+  'Hi! So glad we matched - tell me about yourself! 🌟',
 ];
 
 const getRandomStarter = () =>

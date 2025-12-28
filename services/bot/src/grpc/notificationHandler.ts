@@ -26,9 +26,7 @@ export type NotificationErrorCode =
  * Creates a notification handler bound to a bot instance.
  */
 export function createNotificationHandler(bot: Bot<MyContext>) {
-  return async (
-    req: SendNotificationRequest,
-  ): Promise<SendNotificationResponse> => {
+  return async (req: SendNotificationRequest): Promise<SendNotificationResponse> => {
     const userId = req.userId;
 
     if (!userId) {
@@ -89,10 +87,7 @@ function categorizeError(error: unknown): {
     return { errorCode: 'bot_blocked', errorMessage };
   }
 
-  if (
-    errorMessage.includes('user is deactivated') ||
-    errorMessage.includes('chat not found')
-  ) {
+  if (errorMessage.includes('user is deactivated') || errorMessage.includes('chat not found')) {
     return { errorCode: 'invalid_chat', errorMessage };
   }
 

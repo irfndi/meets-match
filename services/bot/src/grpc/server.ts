@@ -23,10 +23,7 @@ export interface GrpcServerOptions {
  * @param bot - The Grammy bot instance for sending Telegram messages
  * @param options - Server configuration
  */
-export function startGrpcServer(
-  bot: Bot<MyContext>,
-  options: GrpcServerOptions,
-): void {
+export function startGrpcServer(bot: Bot<MyContext>, options: GrpcServerOptions): void {
   const notificationHandler = createNotificationHandler(bot);
 
   // Create Connect router with our service implementation
