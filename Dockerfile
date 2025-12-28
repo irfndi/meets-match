@@ -1,42 +1,52 @@
-# Use an official Python runtime as a parent image
-FROM python:3.13-slim
+# syntax=docker/dockerfile:1
+# Dockerfile for MeetsMatch Telegram Bot
+# Used by Coolify for deployment
 
-# Set the working directory in the container
+FROM oven/bun:1 AS base
 WORKDIR /app
 
-# Install system dependencies
-# libmagic1 is required for python-magic
-RUN apt-get update && apt-get install -y \
-    curl \
-    wget \
-    git \
-    libmagic1 \
-    && rm -rf /var/lib/apt/lists/*
+# Install buf for protobuf generation with checksum verification
+ARG BUF_VERSION=1.47.2
+ARG BUF_CHECKSUM=3a0c4da8d46eea8136affa63db202c76a44f8112384160b73c3fffb1cf14b5d8
+RUN apt-get update && apt-get install -y curl && \
+    curl -sSL "https://github.com/bufbuild/buf/releases/download/v${BUF_VERSION}/buf-Linux-x86_64" -o /usr/local/bin/buf && \
+    echo "${BUF_CHECKSUM}  /usr/local/bin/buf" | sha256sum -c - && \
+    chmod +x /usr/local/bin/buf && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Install uv
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
-
-# Copy dependency files first for better layer caching
-COPY pyproject.toml uv.lock ./
-
-# Install dependencies
-# --frozen ensures we stick to the lockfile
-RUN uv sync --frozen
-
-# Copy the rest of the project files
+# Copy the entire project to handle local dependencies
 COPY . .
 
-# Set environment variables
-ENV PATH="/app/.venv/bin:$PATH"
-ENV PYTHONUNBUFFERED=1
-ENV HOME=/app
+# Generate protobuf files
+RUN buf generate
 
-# Create a non-root user and switch to it for security
-RUN addgroup --system app && adduser --system --ingroup app app && chown -R app:app /app
-USER app
+# Install dependencies for contracts package
+WORKDIR /app/packages/contracts
+RUN bun install
 
-# Expose the API port
-EXPOSE 8000
+# Install dependencies for the bot service
+WORKDIR /app/services/bot
+RUN bun install --frozen-lockfile
 
-# Run the application
-CMD ["uv", "run", "python", "main.py"]
+# Final Stage - Use slim debian variant to avoid musl/glibc segfaults with Bun
+FROM oven/bun:1-slim
+WORKDIR /app
+
+# Install curl for health checks (wget not available in debian-slim)
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+
+# Copy bot service with its dependencies
+COPY --from=base /app/services/bot /app/services/bot
+COPY --from=base /app/packages /app/packages
+
+WORKDIR /app/services/bot
+ENV NODE_ENV=production
+
+# Health check for container orchestration
+# Increased start-period for initial startup (buf generate, npm install, etc.)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=5 \
+  CMD curl -f http://127.0.0.1:3000/health || exit 1
+
+EXPOSE 3000
+
+CMD ["bun", "run", "start"]

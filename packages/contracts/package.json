@@ -1,0 +1,46 @@
+{
+  "name": "@meetsmatch/contracts",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "files": [
+    "gen/ts"
+  ],
+  "exports": {
+    "./proto/meetsmatch/v1/health_pb.js": {
+      "types": "./gen/ts/proto/meetsmatch/v1/health_pb.ts",
+      "default": "./gen/ts/proto/meetsmatch/v1/health_pb.ts"
+    },
+    "./proto/meetsmatch/v1/health_connect.js": {
+      "types": "./gen/ts/proto/meetsmatch/v1/health_connect.ts",
+      "default": "./gen/ts/proto/meetsmatch/v1/health_connect.ts"
+    },
+    "./proto/meetsmatch/v1/match_pb.js": {
+      "types": "./gen/ts/proto/meetsmatch/v1/match_pb.ts",
+      "default": "./gen/ts/proto/meetsmatch/v1/match_pb.ts"
+    },
+    "./proto/meetsmatch/v1/match_connect.js": {
+      "types": "./gen/ts/proto/meetsmatch/v1/match_connect.ts",
+      "default": "./gen/ts/proto/meetsmatch/v1/match_connect.ts"
+    },
+    "./proto/meetsmatch/v1/user_pb.js": {
+      "types": "./gen/ts/proto/meetsmatch/v1/user_pb.ts",
+      "default": "./gen/ts/proto/meetsmatch/v1/user_pb.ts"
+    },
+    "./proto/meetsmatch/v1/user_connect.js": {
+      "types": "./gen/ts/proto/meetsmatch/v1/user_connect.ts",
+      "default": "./gen/ts/proto/meetsmatch/v1/user_connect.ts"
+    },
+    "./proto/meetsmatch/v1/notification_pb.js": {
+      "types": "./gen/ts/proto/meetsmatch/v1/notification_pb.ts",
+      "default": "./gen/ts/proto/meetsmatch/v1/notification_pb.ts"
+    },
+    "./proto/meetsmatch/v1/notification_connect.js": {
+      "types": "./gen/ts/proto/meetsmatch/v1/notification_connect.ts",
+      "default": "./gen/ts/proto/meetsmatch/v1/notification_connect.ts"
+    }
+  },
+  "peerDependencies": {
+    "@bufbuild/protobuf": "^2.0.0"
+  }
+}

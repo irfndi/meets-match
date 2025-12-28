@@ -2,28 +2,17 @@
 # Deploy MeetMatch Bot to the server
 set -e
 
-# Configuration
-SERVER_IP="${SERVER_IP:-217.216.35.77}"
+# Configuration - SERVER_IP must be provided explicitly for security
+SERVER_IP="${SERVER_IP:?SERVER_IP environment variable is required}"
 SSH_USER="${SSH_USER:-root}"
 REMOTE_DIR="/opt/apps/meetsmatch"
 
 echo "Deploying MeetMatch Bot to $SERVER_IP:$REMOTE_DIR..."
 
 # Sync code using rsync
-# Exclude heavy/unnecessary files
+# Using exclude file for maintainability
 rsync -avz --delete \
-    --exclude '.git' \
-    --exclude '.venv' \
-    --exclude '__pycache__' \
-    --exclude '.pytest_cache' \
-    --exclude '.ruff_cache' \
-    --exclude '.mypy_cache' \
-    --exclude '.env' \
-    --exclude 'db' \
-    --exclude 'cache' \
-    --exclude 'data' \
-    --exclude 'log' \
-    --exclude 'backups' \
+    --exclude-from='.rsync-exclude' \
     ./ "$SSH_USER@$SERVER_IP:$REMOTE_DIR/"
 
 echo "Code synced successfully."
@@ -33,6 +22,7 @@ echo "---------------------------------------------------"
 echo "Deployment synced. You may need to:"
 echo "1. SSH into the server: ssh $SSH_USER@$SERVER_IP"
 echo "2. Go to the directory: cd $REMOTE_DIR"
-echo "3. Update .env file with new configuration (OTEL)"
-echo "4. Rebuild/Restart the application container."
+echo "3. Update .env file if needed."
+echo "4. Restart services: make api-run (in one terminal) and make bot-run (in another)"
+echo "   Or use your process manager (systemd/pm2/docker) to restart services."
 echo "---------------------------------------------------"

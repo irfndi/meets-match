@@ -22,12 +22,15 @@ coverage.xml
 # IDE
 .idea/
 .vscode/
+.trae/
 *.swp
 *.swo
 
 # Environment variables
 .env
-.env.*
+.env.local
+.env.*.local
+!.env.example
 
 # Ruff cache
 .ruff_cache/
@@ -42,3 +45,13 @@ log/
 # Misc
 .DS_Store
 coolify.env
+
+# Node
+node_modules/
+
+# Generated protobuf output
+packages/contracts/gen/
+
+# Go build artifacts
+services/api/bin/
+services/api/coverage.out

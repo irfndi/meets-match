@@ -6,46 +6,209 @@ permissions:
   contents: read
 
 jobs:
-  test:
+  api-test:
+    name: Go API
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.13"]
-
+    env:
+      GOWORK: ${{ github.workspace }}/go.work
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Install uv
-      uses: astral-sh/setup-uv@v5
-      with:
-        version: "latest"
-    
-    - name: Set up Python ${{ matrix.python-version }}
-      run: uv python install ${{ matrix.python-version }}
+      - uses: actions/checkout@v4
 
-    - name: Install dependencies
-      run: uv sync --all-extras --dev
+      - name: Set up Buf
+        uses: bufbuild/buf-setup-action@v1
+        with:
+          version: '1.47.2'
+          github_token: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Lint with Ruff
-      run: uv run ruff check .
+      - name: Generate protobufs
+        run: buf generate
 
-    - name: Check Formatting with Ruff
-      run: uv run ruff format --check .
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache-dependency-path: |
+            services/api/go.sum
+            packages/contracts/go.sum
 
-    - name: Run tests with coverage
-      env:
-        TELEGRAM_TOKEN: mock_token_for_ci_tests
-        DATABASE_URL: postgresql://user:pass@localhost:5432/test_db
-        REDIS_URL: redis://localhost:6379/0
-      run: |
-        uv run pytest tests --cov=src --cov-report=xml -v
+      - name: Download dependencies
+        run: go mod download -x
+        working-directory: services/api
 
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v4
-      with:
-        token: ${{ secrets.CODECOV_TOKEN }}
-        files: ./coverage.xml
-        flags: unittests
-        verbose: true
-        name: codecov-umbrella
-        fail_ci_if_error: false
+      - name: Lint
+        uses: golangci/golangci-lint-action@v7
+        with:
+          version: v2.7.2
+          args: ./services/api/...
+
+      - name: Test
+        run: go test ./... -coverprofile=coverage.out
+        working-directory: services/api
+
+      - name: Upload API Coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./services/api/coverage.out
+          flags: api
+          name: api-coverage
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Security Check
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+        working-directory: services/api
+
+      - name: Build
+        run: go build -o bin/api cmd/api/main.go
+        working-directory: services/api
+
+  bot-test:
+    name: TypeScript Bot
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/bot
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Buf
+        uses: bufbuild/buf-setup-action@v1
+        with:
+          version: '1.47.2'
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate protobufs
+        run: buf generate
+        working-directory: .
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.5'
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Lint
+        run: bun run lint
+
+      - name: Format check
+        run: bun run format:check
+
+      - name: Test
+        run: bun run test:coverage
+
+      - name: Upload Bot Coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./services/bot/coverage/lcov.info
+          flags: bot
+          name: bot-coverage
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Build
+        run: bun run build
+
+  docker-bot:
+    name: Docker Bot Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Buf
+        uses: bufbuild/buf-setup-action@v1
+        with:
+          version: '1.47.2'
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Docker image
+        run: docker build -t meetsmatch-bot:test .
+
+      - name: Verify container starts without segfault
+        run: |
+          # Start container in background with mock token
+          docker run -d --name test-bot \
+            -e BOT_TOKEN=test:mock_token_for_ci \
+            -p 3000:3000 \
+            meetsmatch-bot:test
+
+          # Wait for container to start
+          sleep 10
+
+          # Get container status and exit code
+          CONTAINER_STATUS=$(docker inspect test-bot --format='{{.State.Status}}' 2>/dev/null || echo "unknown")
+          EXIT_CODE=$(docker inspect test-bot --format='{{.State.ExitCode}}' 2>/dev/null || echo "0")
+
+          echo "Container status: $CONTAINER_STATUS, exit code: $EXIT_CODE"
+
+          # Check for SIGSEGV (exit code 139)
+          if [ "$EXIT_CODE" = "139" ]; then
+            echo "Container crashed with SIGSEGV (exit code 139)"
+            docker logs test-bot 2>&1 || true
+            exit 1
+          fi
+
+          # If container is still running, test health endpoint
+          if [ "$CONTAINER_STATUS" = "running" ]; then
+            echo "Container is running successfully (no segfault)"
+            if curl -f http://localhost:3000/health 2>/dev/null; then
+              echo "Health check passed"
+            else
+              echo "Health endpoint not ready yet"
+            fi
+            docker stop test-bot
+            exit 0
+          fi
+
+          # Container exited - check if it was due to expected bot token error (not SIGSEGV)
+          echo "Container exited with code: $EXIT_CODE"
+          docker logs test-bot 2>&1 | tail -20
+
+          # Exit code 1 is expected (invalid token error), 139 is SIGSEGV failure
+          if [ "$EXIT_CODE" = "1" ]; then
+            # Check if health server started (indicates Bun runtime works)
+            if docker logs test-bot 2>&1 | grep -q "Health server listening"; then
+              echo "Health server started successfully - Bun runtime works correctly"
+              echo "Bot exited due to expected token validation error (not SIGSEGV)"
+              exit 0
+            fi
+          fi
+
+          echo "Unexpected failure"
+          exit 1
+
+  docker-api:
+    name: Docker API Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t meetsmatch-api:test -f services/api/Dockerfile .
+
+      - name: Verify container starts
+        run: |
+          # Start container with minimal config (will fail DB connection but shouldn't crash)
+          docker run -d --name test-api \
+            -e DATABASE_URL=postgres://test:test@localhost:5432/test \
+            -e HTTP_ADDR=:8080 \
+            -p 8080:8080 \
+            meetsmatch-api:test
+
+          # Wait for container to attempt startup
+          sleep 5
+
+          # Check if container is still running (should exit on DB connection failure, not segfault)
+          # Container will likely exit due to no DB, but exit code should not be 139 (SIGSEGV)
+          EXIT_CODE=$(docker inspect test-api --format='{{.State.ExitCode}}' 2>/dev/null || echo "0")
+
+          if [ "$EXIT_CODE" = "139" ]; then
+            echo "Container crashed with SIGSEGV (exit code 139)"
+            docker logs test-api 2>&1 || true
+            exit 1
+          fi
+
+          echo "Container did not segfault (exit code: $EXIT_CODE)"
+          docker logs test-api 2>&1 | tail -20 || true
+          docker rm -f test-api || true

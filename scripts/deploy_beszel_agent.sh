@@ -2,8 +2,8 @@
 # Deploy Beszel Agent to the server
 set -e
 
-# Configuration - can be overridden via environment variables
-SERVER_IP="${SERVER_IP:-217.216.35.77}"
+# Configuration - SERVER_IP must be provided explicitly for security
+SERVER_IP="${SERVER_IP:?SERVER_IP environment variable is required}"
 SSH_USER="${SSH_USER:-root}"
 BESZEL_PORT="${BESZEL_PORT:-45876}"
 
