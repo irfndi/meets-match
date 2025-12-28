@@ -374,7 +374,7 @@ func (r *PostgresRepository) GetPendingNotifications(ctx context.Context, limit 
 	if err != nil {
 		return nil, fmt.Errorf("failed to get pending notifications: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	return r.scanNotifications(rows)
 }
@@ -424,7 +424,7 @@ func (r *PostgresRepository) GetDLQNotifications(ctx context.Context, filter DLQ
 	if err != nil {
 		return nil, fmt.Errorf("failed to get DLQ notifications: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	return r.scanNotifications(rows)
 }
@@ -452,7 +452,7 @@ func (r *PostgresRepository) GetDLQStats(ctx context.Context) (*DLQStats, error)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get DLQ count by type: %w", err)
 	}
-	defer typeRows.Close()
+	defer func() { _ = typeRows.Close() }()
 
 	for typeRows.Next() {
 		var t string
@@ -473,7 +473,7 @@ func (r *PostgresRepository) GetDLQStats(ctx context.Context) (*DLQStats, error)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get DLQ count by error: %w", err)
 	}
-	defer errorRows.Close()
+	defer func() { _ = errorRows.Close() }()
 
 	for errorRows.Next() {
 		var e string

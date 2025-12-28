@@ -2,12 +2,12 @@ import { createClient } from '@connectrpc/connect';
 import { createConnectTransport } from '@connectrpc/connect-node';
 import { NotificationService } from '@meetsmatch/contracts/proto/meetsmatch/v1/notification_connect.js';
 import {
-  NotificationChannel,
-  NotificationType,
   type EnqueueNotificationResponse,
   type GetDLQStatsResponse,
   type GetNotificationResponse,
   type GetQueueStatsResponse,
+  NotificationChannel,
+  NotificationType,
   type ReplayDLQResponse,
 } from '@meetsmatch/contracts/proto/meetsmatch/v1/notification_pb.js';
 import { Effect } from 'effect';

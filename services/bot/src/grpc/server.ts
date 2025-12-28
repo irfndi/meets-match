@@ -5,12 +5,11 @@
  * notification requests from the Worker service.
  */
 import { createServer } from 'node:http2';
-import { connectNodeAdapter } from '@connectrpc/connect-node';
 import type { ConnectRouter } from '@connectrpc/connect';
-import type { Bot } from 'grammy';
-
+import { connectNodeAdapter } from '@connectrpc/connect-node';
 import { NotificationService } from '@meetsmatch/contracts/proto/meetsmatch/v1/notification_connect.js';
 import type { SendNotificationRequest } from '@meetsmatch/contracts/proto/meetsmatch/v1/notification_pb.js';
+import type { Bot } from 'grammy';
 import type { MyContext } from '../types.js';
 import { createNotificationHandler } from './notificationHandler.js';
 

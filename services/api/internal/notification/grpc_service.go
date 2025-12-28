@@ -375,7 +375,7 @@ func (s *GRPCService) GetReengagementCandidates(ctx context.Context, req *pb.Get
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to query candidates: %v", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	candidates := make([]*pb.ReengagementCandidate, 0)
 	for rows.Next() {

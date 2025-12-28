@@ -4,13 +4,13 @@
  * Implements the SendNotification RPC for receiving notification requests from the Worker.
  * Sends Telegram messages using the bot's API.
  */
-import type { Bot } from 'grammy';
-import { InlineKeyboard } from 'grammy';
 
 import type {
   SendNotificationRequest,
   SendNotificationResponse,
 } from '@meetsmatch/contracts/proto/meetsmatch/v1/notification_pb.js';
+import type { Bot } from 'grammy';
+import { InlineKeyboard } from 'grammy';
 import type { MyContext } from '../types.js';
 
 // Error codes for notification failures
