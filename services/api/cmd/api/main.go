@@ -15,6 +15,7 @@ import (
 	"github.com/irfndi/match-bot/services/api/internal/config"
 	"github.com/irfndi/match-bot/services/api/internal/grpcserver"
 	"github.com/irfndi/match-bot/services/api/internal/httpserver"
+	"github.com/irfndi/match-bot/services/api/internal/notification"
 	sentrypkg "github.com/irfndi/match-bot/services/api/internal/sentry"
 
 	_ "github.com/lib/pq"
@@ -71,8 +72,44 @@ func main() {
 		time.Sleep(1 * time.Second)
 	}
 
+	// Initialize notification system (optional - graceful degradation if Redis unavailable)
+	var notificationService *notification.Service
+	var notificationWorker *notification.Worker
+
+	notifCfg := notification.LoadConfig()
+	workerCfg := notification.LoadWorkerConfig()
+
+	// Try to connect to Redis for notification queue
+	redisQueue, err := notification.NewRedisQueue(cfg.RedisURL, notifCfg)
+	if err != nil {
+		logger.Printf("WARNING: Redis connection failed, notification queue disabled: %v", err)
+	} else {
+		logger.Println("Redis connection established for notification queue")
+
+		// Create notification repository and service
+		notifRepo := notification.NewPostgresRepository(db, notifCfg)
+		notificationService = notification.NewService(notifRepo, redisQueue, notifCfg)
+
+		// Register Telegram sender (bot token from env)
+		if botToken := os.Getenv("TELEGRAM_BOT_TOKEN"); botToken != "" {
+			telegramSender := notification.NewTelegramSender(notification.TelegramSenderConfig{
+				BotToken: botToken,
+				Timeout:  10 * time.Second,
+			})
+			notificationService.RegisterSender(telegramSender)
+			logger.Println("Telegram sender registered for notifications")
+		} else {
+			logger.Println("WARNING: TELEGRAM_BOT_TOKEN not set, Telegram notifications disabled")
+		}
+
+		// Create worker (will be started in errgroup)
+		notificationWorker = notification.NewWorker(notificationService, redisQueue, workerCfg)
+	}
+
 	httpApp := httpserver.New()
-	grpcServer := grpcserver.New(db)
+	grpcServer := grpcserver.New(db, &grpcserver.Options{
+		NotificationService: notificationService,
+	})
 
 	group, groupCtx := errgroup.WithContext(ctx)
 
@@ -102,12 +139,31 @@ func main() {
 		return nil
 	})
 
+	// Start notification worker if available
+	if notificationWorker != nil {
+		group.Go(func() error {
+			logger.Println("Starting notification worker...")
+			if err := notificationWorker.Start(groupCtx); err != nil {
+				if groupCtx.Err() != nil {
+					return nil
+				}
+				return err
+			}
+			return nil
+		})
+	}
+
 	group.Go(func() error {
 		<-groupCtx.Done()
 
 		// Create shutdown context with timeout
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
+
+		// Stop notification worker first
+		if notificationWorker != nil {
+			notificationWorker.Stop()
+		}
 
 		// Shutdown HTTP with timeout
 		if err := httpApp.ShutdownWithContext(shutdownCtx); err != nil {

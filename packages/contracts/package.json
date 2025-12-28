@@ -30,6 +30,14 @@
     "./proto/meetsmatch/v1/user_connect.js": {
       "types": "./gen/ts/proto/meetsmatch/v1/user_connect.ts",
       "default": "./gen/ts/proto/meetsmatch/v1/user_connect.ts"
+    },
+    "./proto/meetsmatch/v1/notification_pb.js": {
+      "types": "./gen/ts/proto/meetsmatch/v1/notification_pb.ts",
+      "default": "./gen/ts/proto/meetsmatch/v1/notification_pb.ts"
+    },
+    "./proto/meetsmatch/v1/notification_connect.js": {
+      "types": "./gen/ts/proto/meetsmatch/v1/notification_connect.ts",
+      "default": "./gen/ts/proto/meetsmatch/v1/notification_connect.ts"
     }
   },
   "peerDependencies": {
