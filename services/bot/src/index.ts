@@ -146,14 +146,13 @@ startBotWithRetry(bot, {
   onStart: () => {
     healthServer.setHealthy(true);
     console.log('Bot started successfully');
-
     // Start gRPC server for receiving notification requests from Worker
     startGrpcServer(bot, { port: config.grpcPort });
   },
   onRetry: (attempt) => {
     console.warn(
       `409 Conflict detected (attempt ${attempt}/3). ` +
-        `Another bot instance may be running. Retrying in 5s...`,
+      `Another bot instance may be running. Retrying in 5s...`,
     );
   },
   onFatalError: async (error) => {

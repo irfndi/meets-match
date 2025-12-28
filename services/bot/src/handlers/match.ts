@@ -134,15 +134,15 @@ _"${template}"_
 `;
 
 const LIKED_MESSAGE = `
-👍 *Liked!*
+👍 * Liked! *
 
-We'll let you know if they like you back.
-`;
+  We'll let you know if they like you back.
+    `;
 
 const PASSED_MESSAGE = `
-👎 *Passed*
+👎 * Passed *
 
-Moving on to the next potential match...
+  Moving on to the next potential match...
 `;
 
 // Handle like action

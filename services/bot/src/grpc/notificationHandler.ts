@@ -5,7 +5,7 @@
  * Sends Telegram messages using the bot's API.
  */
 
-import type {
+import {
   SendNotificationRequest,
   SendNotificationResponse,
 } from '@meetsmatch/contracts/proto/meetsmatch/v1/notification_pb.js';
@@ -30,12 +30,12 @@ export function createNotificationHandler(bot: Bot<MyContext>) {
     const userId = req.userId;
 
     if (!userId) {
-      return {
+      return new SendNotificationResponse({
         success: false,
         telegramMessageId: BigInt(0),
         error: 'user_id is required',
         errorCode: 'invalid_chat',
-      };
+      });
     }
 
     try {
@@ -54,21 +54,21 @@ export function createNotificationHandler(bot: Bot<MyContext>) {
         reply_markup: replyMarkup,
       });
 
-      return {
+      return new SendNotificationResponse({
         success: true,
         telegramMessageId: BigInt(message.message_id),
         error: '',
         errorCode: '',
-      };
+      });
     } catch (error) {
       const { errorCode, errorMessage } = categorizeError(error);
 
-      return {
+      return new SendNotificationResponse({
         success: false,
         telegramMessageId: BigInt(0),
         error: errorMessage,
         errorCode,
-      };
+      });
     }
   };
 }
