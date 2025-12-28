@@ -1,0 +1,96 @@
+syntax = "proto3";
+
+package meetsmatch.v1;
+
+import "google/protobuf/timestamp.proto";
+import "proto/meetsmatch/v1/user.proto";
+
+option go_package = "github.com/irfndi/match-bot/packages/contracts/gen/go/proto/meetsmatch/v1;meetsmatchv1";
+
+service MatchService {
+  rpc GetPotentialMatches(GetPotentialMatchesRequest) returns (GetPotentialMatchesResponse);
+  rpc LikeMatch(LikeMatchRequest) returns (LikeMatchResponse);
+  rpc DislikeMatch(DislikeMatchRequest) returns (DislikeMatchResponse);
+  rpc SkipMatch(SkipMatchRequest) returns (SkipMatchResponse);
+  rpc GetMatchList(GetMatchListRequest) returns (GetMatchListResponse);
+  rpc GetMatch(GetMatchRequest) returns (GetMatchResponse);
+  rpc CreateMatch(CreateMatchRequest) returns (CreateMatchResponse);
+}
+
+message Match {
+  string id = 1;
+  string user1_id = 2;
+  string user2_id = 3;
+  string status = 4; // PENDING, MATCHED, REJECTED
+  double score = 5;
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp updated_at = 7;
+  google.protobuf.Timestamp matched_at = 8;
+  string user1_action = 9; // LIKE, DISLIKE, SKIP, NONE
+  string user2_action = 10;
+}
+
+message GetPotentialMatchesRequest {
+  string user_id = 1;
+  int32 limit = 2;
+}
+
+message GetPotentialMatchesResponse {
+  repeated User potential_matches = 1;
+}
+
+message LikeMatchRequest {
+  string match_id = 1;
+  string user_id = 2;
+}
+
+message LikeMatchResponse {
+  bool is_mutual = 1;
+  Match match = 2;
+}
+
+message DislikeMatchRequest {
+  string match_id = 1;
+  string user_id = 2;
+}
+
+message DislikeMatchResponse {
+  Match match = 1;
+}
+
+message GetMatchListRequest {
+  string user_id = 1;
+  string status = 2; // Optional filter
+  int32 limit = 3;
+  int32 offset = 4;
+}
+
+message GetMatchListResponse {
+  repeated Match matches = 1;
+}
+
+message GetMatchRequest {
+  string match_id = 1;
+}
+
+message GetMatchResponse {
+  Match match = 1;
+}
+
+message CreateMatchRequest {
+  string user1_id = 1;
+  string user2_id = 2;
+}
+
+message CreateMatchResponse {
+  Match match = 1;
+}
+
+message SkipMatchRequest {
+  string match_id = 1;
+  string user_id = 2;
+}
+
+message SkipMatchResponse {
+  Match match = 1;
+}

@@ -1,0 +1,39 @@
+name: autofix.ci
+on:
+  pull_request:
+  push:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  autofix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install bot dependencies
+        working-directory: services/bot
+        run: bun install
+
+      - name: Format TypeScript code
+        working-directory: services/bot
+        run: bun run format
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache-dependency-path: services/api/go.sum
+
+      - name: Format Go code
+        working-directory: services/api
+        run: go fmt ./...
+
+      - uses: autofix-ci/action@635ffb0c9798bd160680f18fd73371e355b85f27

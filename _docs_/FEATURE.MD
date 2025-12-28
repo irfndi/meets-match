@@ -78,35 +78,27 @@ def validate_profile(user: User) -> dict:
 
 ### Delete Account Mechanism
 - Users can delete their account and all associated data via `/configuration`.
-- On database we mark soft delete and keep the data
+- On database (PostgreSQL) we mark soft delete and keep the data for a retention period.
 - If users create with same telegram username, we still create new account other different ID
 
 ### Media Mechanism
-- Max 5 media files (images/videos) per profile with max size 5MB
-- Have mechanism to store media in S3 compatible storage
-- Have mechanism to delete media in 180 days after their change their media
+- Max 5 media files (images/videos) per profile with max size 5MB.
+- Store media metadata in PostgreSQL. Blob storage strategy is deployment-dependent; keep only references/URLs.
+- Have mechanism to delete media references in 180 days after they change their media or account is deleted.
 
 ## Data Persistence
-- **Profile Data:** Stored in Supabase PostgreSQL with RLS policies
-- **Media Files:** Supabase Storage bucket with automatic CDN distribution
-- **Match History:** Supabase realtime subscriptions for instant updates
+- **Profile Data:** Stored in PostgreSQL.
+- **Media Metadata:** Stored in PostgreSQL; blobs referenced via URLs.
+- **Cache/Session Data:** Redis (optional) for fast lookups.
 
 ## Security & Privacy
 1. **Data Encryption**
-   - AES-256 for PII at rest
-   - TLS 1.3 for data in transit
+   - Data at rest handled by PostgreSQL and server disk encryption policies.
+   - TLS 1.3 for data in transit via server configuration (if applicable).
 
 2. **Access Controls**
-```yaml
-# IAM Policy Example
-Statement:
-  - Effect: Allow
-    Action: s3:GetObject
-    Resource: arn:aws:s3:::meetmatch-media/*
-    Condition:
-      StringEquals:
-        aws:PrincipalTag/project: meetmatch
-```
+    - Access to PostgreSQL/Redis managed via network-level controls and service credentials.
+    - Environment variables for API keys/tokens managed via `.env`.
 
 ## Rate Limits & Quotas
 - Implement rate limits for API requests to prevent abuse.
@@ -121,9 +113,6 @@ Statement:
 ### User Notifications:
 - Notify users when they receive a new like or match.
 - Send reminders to complete their profile if incomplete.
-
-### Profile Verification:
-- Add optional profile verification (e.g., photo ID) to increase trust and authenticity.
 
 ### Analytics Dashboard:
 - Track user interactions, matches, and reports for insights and improvements.

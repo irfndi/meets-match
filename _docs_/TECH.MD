@@ -1,134 +1,123 @@
 # Technical Documentation for Telegram Bot Project
 
-This document outlines the core technologies, libraries, and tools used in the development of this Telegram bot.
+This document outlines the core technologies, libraries, and tools used in the development and deployment of this Telegram bot on a VPS.
 
 ## Core Technologies
 
-* **Python (3.10+):** The primary programming language for the bot's logic and functionality. Leveraging modern features and security updates.
-* **Telegram Bot API:** The interface provided by Telegram for creating and interacting with bots. Understanding its methods and data structures is crucial.
-* **Supabase:** Open-source Firebase alternative providing PostgreSQL database, authentication, and realtime functionality
-* **Redis:** In-memory data store for real-time matching operations
-* **S3-Compatible Storage:** Object storage for media assets (using DigitalOcean Spaces)
+* `Python (3.10+)`: Primary language for bot logic running on a VPS.
+* `Telegram Bot API`: Interface for creating and interacting with bots.
 
 ## Key Libraries and Tools
 
-* **`python-telegram-bot` (20.0+):** A comprehensive Python wrapper for the Telegram Bot API. This library simplifies asynchronous programming, handling updates, and managing bot interactions efficiently. [GitHub Repository](https://github.com/python-telegram-bot/python-telegram-bot)
-* **`uv` (Latest Version):** A fast and modern Python package installer and resolver, used for managing the project's virtual environment and dependencies. Offers performance benefits over `pip`.
-* **`ruff` (Latest Version):** An extremely fast Python linter and formatter, used to enforce code quality, consistency, and catch potential errors. Replaces tools like `flake8`, `isort`, and `pydocstyle`.
-* **Docker:** A platform for building, sharing, and running applications in containers. Used for packaging the bot and its dependencies for consistent deployment.
-* **SQLAlchemy:** An SQL toolkit and Object-Relational Mapping (ORM) library for Python, used for database interactions with Supabase.
-* **Boto3:** The Amazon Web Services (AWS) SDK for Python, used for interacting with Amazon S3.
-* **`geopy` (Latest Version):** A Python library that provides geocoding and reverse geocoding functionalities. It will be used for location-based matching, specifically to determine the country of a given city and to implement the expanded matching criteria (nearby cities, country, nearby countries). [GitHub Repository](https://github.com/geopy/geopy)
-* **`coverage` (Latest Version):** A tool for measuring code coverage of Python programs. Used to identify which parts of the codebase are being tested and which need more testing.
-* **Codecov:** A tool that provides detailed code coverage reports and integrates with GitHub CI/CD. Used to track code coverage over time and ensure high testing standards.
+* `python-telegram-bot (20.0+)`: Python wrapper for the Telegram Bot API. [GitHub](https://github.com/python-telegram-bot/python-telegram-bot)
+* `uv` (latest): Manages virtual environment and dependencies.
+* `ruff` (latest): Linter and formatter.
+* `SQLAlchemy`: ORM for PostgreSQL.
+* `Alembic`: Database migrations.
+* `redis-py` (optional): Redis client used for caching.
+* `geopy` (latest): Location-based matching logic.
+* `coverage`: Measures code coverage locally and in CI.
+* `Codecov`: Tracks coverage reports integrated with CI.
 
 ## Development Environment
 
-* **Virtual Environment:** Isolated Python environment (created using `uv`) to manage project-specific dependencies and avoid conflicts with system-wide packages.
-* **Code Editor/IDE:** The specific editor or IDE is flexible but should support Python development and integrate with the project's linting and formatting tools.
-* **Git:** Version control system for tracking changes and collaborating with other developers.
+* `Virtual Environment`: Isolated Python environment managed by `uv`.
+* `Code Editor/IDE`: Python support; project uses `pyproject.toml`.
+* `Git`: Version control.
+* `.env`: Local and production configuration for secrets and settings.
 
 ## CI/CD Tools
 
-* **GitHub Actions:** Used for automating the build, test, and deployment processes.
-* **Codecov Integration:** Integrated with GitHub Actions to provide code coverage reports on pull requests and track coverage trends.
-* **Docker Hub:** Container registry for storing and distributing Docker images.
+* `GitHub Actions`: Automates testing (`pytest`, `coverage`) and static checks.
+* `Codecov Integration`: Uploads coverage reports from CI.
 
 ## Testing Framework
 
-* **unittest:** Python's built-in testing framework used for writing and running tests.
-* **coverage.py:** Used for measuring code coverage during test execution.
-* **Codecov GitHub App:** Provides detailed coverage reports and PR comments with coverage changes.
+* `pytest`: Unit and integration tests locally and in CI.
+* `coverage.py`: Measures code coverage. Goal: >95%.
+* `Codecov`: Tracks coverage and provides reports.
 
 ## Code Quality Tools
 
-* **ruff:** Fast Python linter and formatter.
-* **pylyzer:** Static type checker for Python code.
-* **Codecov Quality Gates:** Enforces minimum code coverage requirements for pull requests.
+* `ruff`: Linter and formatter.
+* `pylyzer`: Static type checker.
+* `Codecov Quality Gates`: Enforce minimum coverage (>95%) for pull requests.
 
 ## Monitoring and Analytics
 
-* **Telegram Bot Analytics:** Built-in analytics for monitoring bot usage and performance.
-* **AWS CloudWatch:** Used for monitoring application logs and metrics.
-* **Codecov Trends:** Tracks code coverage trends over time to maintain quality standards.
+* `Structured Logging`: Implemented via `structlog`.
+* `System Logs`: Production logs available via `journalctl -u meetsmatch`.
+* `Codecov Trends`: Tracks code coverage trends.
 
 ## Deployment
 
-* **Docker Container:** The bot will be packaged as a Docker container, ensuring consistent execution across different environments.
-* **Container Registry:** A service (e.g., Docker Hub, GitHub Container Registry) may be used to store and distribute the Docker image.
-* **Container Orchestration (Optional):** For more complex deployments, tools like Docker Compose or Kubernetes might be considered, though not explicitly required by the initial request.
-* **Database Hosting:** A Supabase instance, either self-hosted or using a cloud provider's managed service.
-* **S3 Bucket:** An Amazon S3 bucket configured for the bot's storage needs.
+* `VPS + systemd`: Bot runs as a systemd service (`meetsmatch.service`).
+* `EnvironmentFile`: `.env` loaded by the service.
+* `PostgreSQL`: Managed on the VPS; migrations handled via `Alembic`.
+* `Redis` (optional): Used for caching if configured.
 
 ## Key Concepts
 
-* **Asynchronous Programming:** The bot utilizes `python-telegram-bot`'s asynchronous capabilities to handle multiple incoming messages and events concurrently without blocking.
-* **Update Handling:** The mechanism for the bot to receive and process events from Telegram (e.g., new messages, commands, inline queries) using the library's `Updater` and `Dispatcher` classes.
-* **Command Handlers:** Functions or methods dedicated to processing specific user commands (e.g., `/start`, `/help`) using the `CommandHandler` class.
-* **Conversation Handlers:** Manage multi-step interactions or dialog flows with users using the `ConversationHandler` class.
-* **Inline Queries:** Functionality allowing users to interact with the bot directly from their chat input field, providing suggestions or actions using the `InlineQueryHandler` class.
-* **Database Operations:** Using SQLAlchemy to interact with Supabase for storing and retrieving structured data.
-* **S3 Operations:** Using Boto3 to interact with Amazon S3 for storing and retrieving unstructured data or large files.
+* `Asynchronous Programming`: Handling Telegram events asynchronously.
+* `Polling`: Bot runs in polling mode; no Cloudflare Worker/webhook.
+* `Command Handlers`: Logic for specific user commands.
+* `Conversation Handlers`: Managing multi-step interactions.
+* `Environment Variables`: Secrets (e.g., Telegram Bot Token) managed via `.env`.
 
 ## Data Persistence
 
-* **Supabase Database:** Used for storing structured data such as user information, bot states, and other relational data.
-* **Amazon S3:** Used for storing larger files, backups, or any unstructured data that the bot might need to handle.
-* **Connection Pooling:** Implement connection pooling for efficient database connections.
-* **Data Backup and Recovery:** Regular backups of Supabase data and S3 objects, with a defined recovery process.
+* `PostgreSQL`: Structured data (users, profiles, matches).
+* `Redis` (optional): Ephemeral data (session state, rate limits, cache).
+* `Backups`: Use PostgreSQL backup tools/policies at the VPS level.
 
 ## Database Architecture
 
 ```mermaid
 graph TD
-    A[Bot Service] --> B[(Supabase)]
-    B --> C[PostgreSQL]
-    B --> D[Auth]
-    B --> E[Realtime]
-    B --> F[Storage]
+    A[Bot Service] --> B[(PostgreSQL)]
+    A --> C[(Redis)]
 ```
 
-### Supabase Features Used:
-1. **Row-Level Security:** Granular access controls
-2. **Postgres Functions:** Server-side matching logic
-3. **Realtime API:** Instant match notifications
-4. **Storage API:** Media file management
+### VPS Components Used
+1. `systemd`: Service management
+2. `PostgreSQL`: Relational database
+3. `Redis` (optional): Cache
 
 # Technical Architecture Deep Dive
 
 ## System Components
 ```mermaid
 graph LR
-    A[Telegram] <--> B[Bot Server]
-    B <--> C[(Supabase)]
+    A[Telegram API] <--> B(Bot Service on VPS)
+    B <--> C[(PostgreSQL)]
     B <--> D[(Redis)]
-    B <--> E[S3]
-    E <--> F[CDN]
 ```
 
-## Service Interactions
+## Service Interactions (Example: Match Request)
 ```mermaid
 sequenceDiagram
-    User->>+Bot: /match
-    Bot->>+Redis: Get candidates
-    Redis-->>-Bot: Candidate IDs
-    Bot->>+DB: Fetch profiles
-    DB-->>-Bot: Profile data
-    Bot->>User: Display match
+    User->>+Telegram: /match command
+    Telegram->>+Bot: Update via polling
+    Bot->>+Redis: Check rate limits/cache
+    Redis-->>-Bot: Cache miss/OK
+    Bot->>+PostgreSQL: Query potential matches
+    PostgreSQL-->>-Bot: Candidate Profiles
+    Bot->>Telegram: Send match results
+    Telegram-->>-User: Display match
 ```
 
-## Performance Metrics
-| Component         | Target Latency | Error Budget |
-|-------------------|----------------|--------------|
-| API Response      | <500ms         | 99.9% SLA    |
-| Match Generation  | <2s            | 95th %ile    |
-| Media Upload      | <1s/MB         | 99% Success  |
+## Performance Metrics (Targets)
+| Component          | Target Latency | Error Budget |
+|--------------------|----------------|--------------|
+| Bot Response       | <500ms         | 99.9% Success|
+| DB Query (P95)     | <100ms         | -            |
+| Cache Read/Write   | <10ms          | 99.99% Success|
 
 ## Monitoring Stack
-1. **Application Metrics**
-   - Prometheus: Request rates, error ratios
-   - Grafana: Dashboards
-   
-2. **Business Metrics**
-   - Daily active matches
-   - Conversion funnel
+1. `System Logs`:
+   - `journalctl -u meetsmatch` for service logs
+   - PostgreSQL/Redis logs per their services
+2. `Codecov`:
+   - Coverage reports & trends
+3. `External Observability (Optional)`:
+   - Integrate if needed (e.g., Datadog, Sentry)

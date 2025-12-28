@@ -1,0 +1,225 @@
+syntax = "proto3";
+
+package meetsmatch.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/irfndi/match-bot/packages/contracts/gen/go/proto/meetsmatch/v1;meetsmatchv1";
+
+// NotificationService handles notification operations.
+// Used by the bot to enqueue notifications and by admin tools for management.
+service NotificationService {
+  // Enqueue a new notification for delivery
+  rpc EnqueueNotification(EnqueueNotificationRequest) returns (EnqueueNotificationResponse);
+
+  // Get notification status (for debugging/monitoring)
+  rpc GetNotification(GetNotificationRequest) returns (GetNotificationResponse);
+
+  // Get DLQ statistics
+  rpc GetDLQStats(GetDLQStatsRequest) returns (GetDLQStatsResponse);
+
+  // Replay notifications from DLQ
+  rpc ReplayDLQ(ReplayDLQRequest) returns (ReplayDLQResponse);
+
+  // Get queue statistics
+  rpc GetQueueStats(GetQueueStatsRequest) returns (GetQueueStatsResponse);
+
+  // Send a notification directly via Telegram (Worker -> Bot)
+  // Bot service implements this to receive notification requests from Worker
+  rpc SendNotification(SendNotificationRequest) returns (SendNotificationResponse);
+
+  // Get users eligible for re-engagement notifications
+  rpc GetReengagementCandidates(GetReengagementCandidatesRequest) returns (GetReengagementCandidatesResponse);
+
+  // Log a notification delivery result (Worker -> API)
+  rpc LogNotificationResult(LogNotificationResultRequest) returns (LogNotificationResultResponse);
+}
+
+// Notification types
+enum NotificationType {
+  NOTIFICATION_TYPE_UNSPECIFIED = 0;
+  NOTIFICATION_TYPE_MUTUAL_MATCH = 1;
+  NOTIFICATION_TYPE_NEW_LIKE = 2;
+  NOTIFICATION_TYPE_MATCH_REMINDER = 3;
+  NOTIFICATION_TYPE_PROFILE_INCOMPLETE = 4;
+  NOTIFICATION_TYPE_WELCOME = 5;
+  NOTIFICATION_TYPE_SYSTEM = 6;
+  // Re-engagement notification types (added for inactive user reminders)
+  NOTIFICATION_TYPE_REENGAGEMENT_GENTLE = 7;      // 3-7 days inactive
+  NOTIFICATION_TYPE_REENGAGEMENT_URGENT = 8;      // 7-14 days inactive
+  NOTIFICATION_TYPE_REENGAGEMENT_LAST_CHANCE = 9; // 14-21 days inactive
+}
+
+// Notification channels
+enum NotificationChannel {
+  NOTIFICATION_CHANNEL_UNSPECIFIED = 0;
+  NOTIFICATION_CHANNEL_TELEGRAM = 1;
+  NOTIFICATION_CHANNEL_EMAIL = 2;
+  NOTIFICATION_CHANNEL_PUSH = 3;
+  NOTIFICATION_CHANNEL_SMS = 4;
+}
+
+// Notification status
+enum NotificationStatus {
+  NOTIFICATION_STATUS_UNSPECIFIED = 0;
+  NOTIFICATION_STATUS_PENDING = 1;
+  NOTIFICATION_STATUS_PROCESSING = 2;
+  NOTIFICATION_STATUS_DELIVERED = 3;
+  NOTIFICATION_STATUS_FAILED = 4;
+  NOTIFICATION_STATUS_DLQ = 5;
+  NOTIFICATION_STATUS_CANCELLED = 6;
+}
+
+// Telegram-specific payload
+message TelegramPayload {
+  string chat_id = 1;
+  string text = 2;
+  string parse_mode = 3;  // "Markdown" or "HTML"
+  string reply_markup = 4; // JSON-encoded inline keyboard
+}
+
+// Email-specific payload (for future use)
+message EmailPayload {
+  string to = 1;
+  string subject = 2;
+  string body = 3;
+  string template_id = 4;
+}
+
+// Generic notification payload
+message NotificationPayload {
+  oneof payload {
+    TelegramPayload telegram = 1;
+    EmailPayload email = 2;
+  }
+}
+
+message EnqueueNotificationRequest {
+  string user_id = 1;
+  NotificationType type = 2;
+  NotificationChannel channel = 3;
+  NotificationPayload payload = 4;
+  int32 priority = 5;  // 0-10, higher = more urgent
+  string idempotency_key = 6;  // Optional, prevents duplicates
+  string related_match_id = 7;
+  string related_user_id = 8;
+}
+
+message EnqueueNotificationResponse {
+  string notification_id = 1;
+  NotificationStatus status = 2;
+}
+
+message GetNotificationRequest {
+  string notification_id = 1;
+}
+
+message GetNotificationResponse {
+  string id = 1;
+  string user_id = 2;
+  NotificationType type = 3;
+  NotificationChannel channel = 4;
+  NotificationStatus status = 5;
+  int32 attempt_count = 6;
+  int32 max_attempts = 7;
+  string last_error = 8;
+  google.protobuf.Timestamp created_at = 9;
+  google.protobuf.Timestamp next_retry_at = 10;
+  google.protobuf.Timestamp delivered_at = 11;
+}
+
+message GetDLQStatsRequest {}
+
+message GetDLQStatsResponse {
+  int64 total_count = 1;
+  map<string, int64> count_by_type = 2;      // e.g., {"mutual_match": 5}
+  map<string, int64> count_by_error = 3;     // e.g., {"USER_BLOCKED": 10}
+  google.protobuf.Timestamp oldest_item = 4;
+}
+
+message ReplayDLQRequest {
+  // Filter criteria
+  NotificationType type = 1;       // Optional: filter by type
+  string error_code = 2;           // Optional: filter by error code
+  int32 limit = 3;                 // Max items to replay (default 100)
+  google.protobuf.Timestamp since = 4; // Optional: only items since this time
+}
+
+message ReplayDLQResponse {
+  int32 replayed_count = 1;
+  int32 failed_count = 2;
+}
+
+message GetQueueStatsRequest {}
+
+message GetQueueStatsResponse {
+  int64 pending_count = 1;
+  int64 delayed_count = 2;
+  int64 dlq_count = 3;
+}
+
+// ============================================================================
+// Re-engagement notification messages (Worker <-> Bot <-> API)
+// ============================================================================
+
+// Button for inline keyboard
+message InlineButton {
+  string text = 1;
+  string callback_data = 2;
+}
+
+// Send notification request (Worker -> Bot)
+message SendNotificationRequest {
+  string user_id = 1;           // Telegram chat_id
+  NotificationType type = 2;
+  string message = 3;           // Pre-formatted message text
+  repeated InlineButton buttons = 4;
+  map<string, string> metadata = 5;  // days_inactive, pending_likes, etc.
+}
+
+message SendNotificationResponse {
+  bool success = 1;
+  int64 telegram_message_id = 2;
+  string error = 3;
+  string error_code = 4;  // blocked_by_user, rate_limited, network_error, bot_blocked, invalid_chat
+}
+
+// Re-engagement candidate (inactive user eligible for reminder)
+message ReengagementCandidate {
+  string user_id = 1;
+  string first_name = 2;
+  int32 days_inactive = 3;
+  int32 pending_likes_count = 4;
+  bool notifications_enabled = 5;
+  google.protobuf.Timestamp last_active = 6;
+  google.protobuf.Timestamp last_reminded_at = 7;
+}
+
+message GetReengagementCandidatesRequest {
+  int32 min_inactive_days = 1;       // e.g., 3 days
+  int32 max_inactive_days = 2;       // e.g., 21 days
+  int32 reminder_cooldown_days = 3;  // Minimum days since last reminder
+  int32 limit = 4;
+  int32 offset = 5;
+}
+
+message GetReengagementCandidatesResponse {
+  repeated ReengagementCandidate candidates = 1;
+  int32 total = 2;
+}
+
+// Log notification result (Worker -> API for audit trail)
+message LogNotificationResultRequest {
+  string user_id = 1;
+  NotificationType type = 2;
+  NotificationStatus status = 3;
+  int64 telegram_message_id = 4;
+  string error_message = 5;
+  string error_code = 6;
+  map<string, string> metadata = 7;
+}
+
+message LogNotificationResultResponse {
+  string notification_id = 1;
+  bool success = 2;
+}

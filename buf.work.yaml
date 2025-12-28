@@ -1,0 +1,5 @@
+version: v1
+
+# Keep contracts as a standalone module alongside the existing Python app.
+directories:
+  - packages/contracts

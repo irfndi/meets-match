@@ -12,9 +12,10 @@
 ## Project Overview
 Our Telegram bot helps users find and schedule meetups using AI-powered matching. Built with:
 - Python 3.10+
-- python-telegram-bot v20.3
-- Redis for caching
-- Supabase for persistent storage
+- python-telegram-bot v20.3+
+- Redis (optional) for caching and session data
+- PostgreSQL for persistent relational data
+- Deployed on a VPS as a systemd service
 
 ## Development Environment Setup
 
@@ -42,36 +43,33 @@ source .venv/bin/activate  # Linux/macOS
 .venv\Scripts\activate     # Windows
 
 # Install project dependencies
-uv pip install -r requirements.txt
+# This installs all dependencies including dev dependencies from pyproject.toml
+uv sync
 ```
 
 ### Development Tools
 ```bash
-# Install core dev tools
-uv pip install ruff pylyzer pytest pre-commit
+# Development tools (like ruff, pytest, ty) are installed via pyproject.toml's [dev] extra
 
-# Setup pre-commit hooks
+# Setup pre-commit hooks (if using pre-commit)
 pre-commit install
 ```
 
-### Local Supabase Setup
+### Local Development
 
-1. Install Supabase CLI:
+Use `uv` for local development:
+
 ```bash
-npm install -g supabase
+# Sync dependencies
+uv sync
+
+# Run the bot
+uv run python main.py
 ```
 
-2. Start local environment:
-```bash
-supabase init
-supabase start
-```
-
-3. Configure environment variables:
-```bash
-SUPABASE_URL=http://localhost:54321
-SUPABASE_KEY=your-anon-key
-```
+Optional services:
+- Ensure Redis is running if caching is enabled (`REDIS_URL` configured).
+- Ensure PostgreSQL is running and `DATABASE_URL` is configured.
 
 ## Project Structure
 ```
@@ -89,7 +87,7 @@ scripts/               # Deployment/maintenance scripts
 ## Coding Conventions
 1. **Type Annotations**:
    - Use Python 3.10+ syntax
-   - Strict mypy validation
+   - Strict type validation with ty
 
 2. **Error Handling**:
    - Use custom exceptions from `errors.py`
@@ -98,38 +96,67 @@ scripts/               # Deployment/maintenance scripts
 3. **Telegram Bot Specific**:
    - Use PTB's ContextTypes
    - Isolate handler logic in `/bot/handlers`
+   - When polling, pass `allowed_updates=Update.ALL_TYPES` (see `BotApplication`) so Telegram doesn’t reuse an old webhook allowlist and silently drop callback queries.
 
 ## Testing & Quality Assurance
+- Goal: Achieve >95% test coverage, tracked via Codecov.
 ```bash
-# Run all tests with coverage
-pytest --cov=src --cov-report=html
+# Run all tests with coverage report
+pytest --cov=src --cov-report=term-missing --cov-fail-under=95
 
 # Linting & formatting
-ruff check .  # Static analysis
-ruff format .  # Auto-formatting
+ruff check .
+ruff format .
 
 # Type checking
-pylyzer src/
+ty check
 ```
 
 ## Deployment
-### Staging Environment
+The bot is deployed on a VPS and managed via `systemd`.
+
+### Environment Configuration
+- Use `.env` for both local and production configuration.
+- Critical variables include `TELEGRAM_BOT_TOKEN`, `DATABASE_URL`, and `REDIS_URL` (optional).
+
+### Deployment Steps
 ```bash
-# Deploy to staging
-./scripts/deploy.sh --env staging
+# Prepare the VPS (PostgreSQL, Redis, uv)
+ssh root@<SERVER_IP>
+cd /opt/meetsmatch
+# Copy project files to /opt/meetsmatch
+
+# Create and fill .env
+cp .env.example .env
+vi .env
+
+# Sync dependencies
+uv sync
+
+# Install and start systemd service
+sudo cp meetsmatch.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now meetsmatch
+
+# View logs
+journalctl -u meetsmatch -f
 ```
 
-### Production Checklist
-- [ ] Verify database migrations
-- [ ] Run smoke tests
-- [ ] Monitor error tracking
+### CI/CD
+- GitHub Actions are configured to automatically run tests and coverage on pushes.
+- Codecov reports are generated and uploaded during the CI process.
 
 ## Contributing
-1. Create feature branch:
+We use [GitHub Issues](https://github.com/irfndi/meetsmatch-py/issues) to track tasks, bugs, and features.
+
+1. **Check for an existing Issue:** Before starting work, check if an issue already exists for the task. If not, consider creating one to discuss the proposed changes.
+2. **Create feature branch:**
    ```bash
    git checkout -b feat/your-feature-name
    ```
-2. Commit messages follow [Conventional Commits](https://www.conventionalcommits.org)
-3. Open PR with:
-   - Test coverage report
-   - Updated documentation
+3. **Commit messages** follow [Conventional Commits](https://www.conventionalcommits.org).
+4. **Open PR** against the `main` branch with:
+   - A clear description of the changes.
+   - A link to the relevant GitHub Issue (e.g., `Fixes #123` or `Relates to #456`).
+   - Ensure tests pass and maintain >95% coverage.
+   - Updated documentation if applicable.
