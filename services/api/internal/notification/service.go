@@ -364,9 +364,9 @@ func (s *Service) captureNotificationDLQ(_ context.Context, n *Notification, err
 		Message:  fmt.Sprintf("Notification moved to DLQ: %s", n.ID),
 		Level:    sentry.LevelWarning,
 		Data: map[string]interface{}{
-			"type":         n.Type,
-			"channel":      n.Channel,
-			"error_code":   errorCode,
+			"type":          n.Type,
+			"channel":       n.Channel,
+			"error_code":    errorCode,
 			"attempt_count": n.AttemptCount,
 		},
 	}, nil)
