@@ -582,7 +582,7 @@ func (r *PostgresRepository) scanNotifications(rows *sql.Rows) ([]*Notification,
 // isUniqueViolation checks if error is a unique constraint violation.
 func isUniqueViolation(err error) bool {
 	// PostgreSQL unique violation error code is 23505
-	return err != nil && (errors.Is(err, sql.ErrNoRows) == false) &&
+	return err != nil && !errors.Is(err, sql.ErrNoRows) &&
 		(containsString(err.Error(), "23505") || containsString(err.Error(), "unique constraint"))
 }
 
