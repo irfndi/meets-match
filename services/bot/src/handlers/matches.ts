@@ -46,34 +46,40 @@ export const matchesCommand = (ctx: Context) =>
     const matchLines: string[] = [];
     const keyboard = new InlineKeyboard();
 
-    for (let i = 0; i < Math.min(matches.length, 10); i++) {
-      const match = matches[i];
-      // Determine the other user's ID
+    const matchesToDisplay = matches.slice(0, 10);
+
+    const userEffects = matchesToDisplay.map((match) => {
       const otherUserId = match.user1Id === userId ? match.user2Id : match.user1Id;
+      return userService.getUser(otherUserId).pipe(
+        Effect.map((res) => ({ otherUserId, otherUser: res.user })),
+        Effect.catchAll((e) => {
+          console.error(`Failed to fetch user ${otherUserId}:`, e);
+          return Effect.succeed({ otherUserId, otherUser: null });
+        }),
+      );
+    });
 
-      try {
-        const userRes = yield* _(userService.getUser(otherUserId));
-        const otherUser = userRes.user;
+    const userResults = yield* _(Effect.all(userEffects, { concurrency: 5 }));
 
-        if (otherUser) {
-          const name = otherUser.firstName || 'Unknown';
-          const age = otherUser.age || '?';
-          const matchDate = match.matchedAt
-            ? new Date(Number(match.matchedAt.seconds) * 1000).toLocaleDateString()
-            : 'Unknown';
+    for (let i = 0; i < userResults.length; i++) {
+      const { otherUserId, otherUser } = userResults[i];
+      const match = matchesToDisplay[i];
 
-          matchLines.push(`${i + 1}. *${name}*, ${age} - matched ${matchDate}`);
+      if (otherUser) {
+        const name = otherUser.firstName || 'Unknown';
+        const age = otherUser.age || '?';
+        const matchDate = match.matchedAt
+          ? new Date(Number(match.matchedAt.seconds) * 1000).toLocaleDateString()
+          : 'Unknown';
 
-          // Add view button for each match
-          if (i % 2 === 0) {
-            keyboard.text(`👤 ${name}`, `view_match_user_${otherUserId}`);
-          } else {
-            keyboard.text(`👤 ${name}`, `view_match_user_${otherUserId}`).row();
-          }
+        matchLines.push(`${i + 1}. *${name}*, ${age} - matched ${matchDate}`);
+
+        // Add view button for each match
+        if (i % 2 === 0) {
+          keyboard.text(`👤 ${name}`, `view_match_user_${otherUserId}`);
+        } else {
+          keyboard.text(`👤 ${name}`, `view_match_user_${otherUserId}`).row();
         }
-      } catch (e) {
-        // Skip if we can't fetch user
-        console.error(`Failed to fetch user ${otherUserId}:`, e);
       }
     }
 
