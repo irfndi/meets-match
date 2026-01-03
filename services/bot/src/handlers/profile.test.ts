@@ -108,4 +108,68 @@ describe('Profile Handler', () => {
       expect.any(Object),
     );
   });
+
+  it('should display location with only city', async () => {
+    const mockContext = {
+      from: { id: 12345 },
+      reply: vi.fn().mockResolvedValue({}),
+    } as unknown as Context;
+
+    const mockUser = createMockUser({
+      firstName: 'Alex',
+      location: createMockLocation({ city: 'Tokyo', country: '' }),
+    });
+
+    vi.mocked(userService.getUser).mockReturnValue(Effect.succeed(createGetUserResponse(mockUser)));
+
+    await profileCommand(mockContext);
+
+    expect(mockContext.reply).toHaveBeenCalledWith(
+      expect.stringContaining('Tokyo'),
+      expect.any(Object),
+    );
+  });
+
+  it('should show Unknown location when location is missing city', async () => {
+    const mockContext = {
+      from: { id: 12345 },
+      reply: vi.fn().mockResolvedValue({}),
+    } as unknown as Context;
+
+    const mockUser = createMockUser({
+      firstName: 'Sam',
+      location: createMockLocation({ city: '', country: 'Japan' }),
+    });
+
+    vi.mocked(userService.getUser).mockReturnValue(Effect.succeed(createGetUserResponse(mockUser)));
+
+    await profileCommand(mockContext);
+
+    expect(mockContext.reply).toHaveBeenCalled();
+  });
+
+  it('should handle user with username only', async () => {
+    const mockContext = {
+      from: { id: 12345 },
+      reply: vi.fn().mockResolvedValue({}),
+    } as unknown as Context;
+
+    const mockUser = createMockUser({
+      firstName: 'Test',
+      lastName: '',
+      username: 'testonly',
+      age: 0,
+      gender: '',
+      bio: '',
+    });
+
+    vi.mocked(userService.getUser).mockReturnValue(Effect.succeed(createGetUserResponse(mockUser)));
+
+    await profileCommand(mockContext);
+
+    expect(mockContext.reply).toHaveBeenCalledWith(
+      expect.stringContaining('@testonly'),
+      expect.any(Object),
+    );
+  });
 });
