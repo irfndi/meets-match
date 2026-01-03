@@ -6,7 +6,7 @@
  */
 
 import {
-  SendNotificationRequest,
+  type SendNotificationRequest,
   SendNotificationResponse,
 } from '@meetsmatch/contracts/proto/meetsmatch/v1/notification_pb.js';
 import type { Bot } from 'grammy';

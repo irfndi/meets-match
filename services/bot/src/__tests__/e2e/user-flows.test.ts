@@ -8,22 +8,22 @@
  * For true integration tests, see ../integration/bot-api.test.ts
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { Effect } from 'effect';
 import { Code, ConnectError } from '@connectrpc/connect';
+import { Effect } from 'effect';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  createMockContext,
-  createMockCallbackContext,
-  createMockUser,
-  createMockMatch,
-  createGetUserResponse,
-  createGetPotentialMatchesResponse,
   createCreateMatchResponse,
-  createLikeMatchResponse,
   createDislikeMatchResponse,
   createGetMatchListResponse,
   createGetMatchResponse,
+  createGetPotentialMatchesResponse,
+  createGetUserResponse,
+  createLikeMatchResponse,
+  createMockCallbackContext,
+  createMockContext,
+  createMockMatch,
+  createMockUser,
   createUpdateUserResponse,
   replyContains,
 } from '../../test/fixtures.js';
@@ -49,14 +49,14 @@ vi.mock('../../services/matchService.js', () => ({
   },
 }));
 
+import { handleDislike, handleLike, matchCallbacks, matchCommand } from '../../handlers/match.js';
+import { matchesCallbacks, matchesCommand } from '../../handlers/matches.js';
+import { profileCommand } from '../../handlers/profile.js';
+import { settingsCallbacks, settingsCommand } from '../../handlers/settings.js';
 // Import handlers after mocking
 import { startCommand } from '../../handlers/start.js';
-import { profileCommand } from '../../handlers/profile.js';
-import { matchCommand, handleLike, handleDislike, matchCallbacks } from '../../handlers/match.js';
-import { matchesCommand, matchesCallbacks } from '../../handlers/matches.js';
-import { settingsCommand, settingsCallbacks } from '../../handlers/settings.js';
-import { userService } from '../../services/userService.js';
 import { matchService } from '../../services/matchService.js';
+import { userService } from '../../services/userService.js';
 
 describe('E2E: New User Onboarding Flow', () => {
   beforeEach(() => {

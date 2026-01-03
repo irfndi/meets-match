@@ -143,10 +143,10 @@ export const createUpdateUserResponse = (user?: User): UpdateUserResponse =>
     user,
   }) as unknown as UpdateUserResponse;
 
+import type { SkipMatchResponse } from '@meetsmatch/contracts/proto/meetsmatch/v1/match_pb.js';
+import type { CreateUserResponse } from '@meetsmatch/contracts/proto/meetsmatch/v1/user_pb.js';
 // Import vi from vitest for the mock context helper
 import { vi } from 'vitest';
-import type { CreateUserResponse } from '@meetsmatch/contracts/proto/meetsmatch/v1/user_pb.js';
-import type { SkipMatchResponse } from '@meetsmatch/contracts/proto/meetsmatch/v1/match_pb.js';
 
 // Additional response fixtures
 export const createCreateUserResponse = (user?: User): CreateUserResponse =>
