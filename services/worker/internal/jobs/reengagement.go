@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
+	"strconv"
 	"time"
 
 	"github.com/hibiken/asynq"
@@ -12,18 +14,51 @@ import (
 	"github.com/irfndi/match-bot/services/worker/internal/clients"
 )
 
+// Rate limiting configuration for Telegram API
+// Telegram allows ~30 messages/second globally, we stay conservative
+const (
+	defaultBatchSize      = 25  // Messages per batch before delay
+	defaultMessageDelayMs = 35  // ~28 messages/sec to stay under Telegram limit
+	defaultBatchDelayMs   = 500 // Additional delay between batches
+)
+
 // ReengagementHandler processes re-engagement notification tasks.
 type ReengagementHandler struct {
-	apiClient *clients.APIClient
-	botClient *clients.BotClient
+	apiClient    *clients.APIClient
+	botClient    *clients.BotClient
+	batchSize    int
+	messageDelay time.Duration
+	batchDelay   time.Duration
 }
 
 // NewReengagementHandler creates a new re-engagement job handler.
 func NewReengagementHandler(apiClient *clients.APIClient, botClient *clients.BotClient) *ReengagementHandler {
-	return &ReengagementHandler{
-		apiClient: apiClient,
-		botClient: botClient,
+	h := &ReengagementHandler{
+		apiClient:    apiClient,
+		botClient:    botClient,
+		batchSize:    defaultBatchSize,
+		messageDelay: defaultMessageDelayMs * time.Millisecond,
+		batchDelay:   defaultBatchDelayMs * time.Millisecond,
 	}
+
+	// Allow configuration via environment variables
+	if v := os.Getenv("REENGAGEMENT_BATCH_SIZE"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			h.batchSize = n
+		}
+	}
+	if v := os.Getenv("REENGAGEMENT_MESSAGE_DELAY_MS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			h.messageDelay = time.Duration(n) * time.Millisecond
+		}
+	}
+	if v := os.Getenv("REENGAGEMENT_BATCH_DELAY_MS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			h.batchDelay = time.Duration(n) * time.Millisecond
+		}
+	}
+
+	return h
 }
 
 // ProcessTask handles the re-engagement task.
@@ -60,10 +95,34 @@ func (h *ReengagementHandler) processInactivityRange(ctx context.Context, minDay
 	log.Printf("Found %d candidates for %s (%d-%d days inactive)",
 		len(candidates), notificationType.String(), minDays, maxDays)
 
-	for _, candidate := range candidates {
+	// Process with rate limiting to avoid hitting Telegram API limits
+	sentInBatch := 0
+	for i, candidate := range candidates {
+		// Check for context cancellation
+		select {
+		case <-ctx.Done():
+			log.Printf("Context cancelled, stopping re-engagement processing")
+			return ctx.Err()
+		default:
+		}
+
 		if err := h.sendReengagementNotification(ctx, candidate, notificationType); err != nil {
 			log.Printf("Failed to send notification to user %s: %v", candidate.UserId, err)
 			// Continue with next user - don't fail the entire batch
+		}
+
+		sentInBatch++
+
+		// Apply message delay between each message
+		if h.messageDelay > 0 && i < len(candidates)-1 {
+			time.Sleep(h.messageDelay)
+		}
+
+		// Apply batch delay after each batch
+		if sentInBatch >= h.batchSize && i < len(candidates)-1 {
+			log.Printf("Processed batch of %d messages, pausing for rate limiting", h.batchSize)
+			time.Sleep(h.batchDelay)
+			sentInBatch = 0
 		}
 	}
 

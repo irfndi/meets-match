@@ -27,6 +27,9 @@ type Config struct {
 	// Maximum concurrent workers
 	Concurrency int
 
+	// Health check server port
+	HealthPort string
+
 	// Enable debug logging
 	Debug bool
 }
@@ -37,9 +40,10 @@ func Load() (*Config, error) {
 		RedisURL:             getEnv("REDIS_URL", "redis://localhost:6379/0"),
 		APIAddress:           getEnv("API_GRPC_ADDRESS", "localhost:50051"),
 		BotAddress:           getEnv("BOT_GRPC_ADDRESS", "localhost:50052"),
-		ReengagementSchedule: getEnv("REENGAGEMENT_SCHEDULE", "0 10 * * *"), // 10 AM daily
+		ReengagementSchedule: getEnv("REENGAGEMENT_SCHEDULE", "0 10 * * *"),   // 10 AM daily
 		DLQProcessorSchedule: getEnv("DLQ_PROCESSOR_SCHEDULE", "*/5 * * * *"), // Every 5 minutes
 		Concurrency:          getEnvInt("WORKER_CONCURRENCY", 10),
+		HealthPort:           getEnv("HEALTH_PORT", "8081"),
 		Debug:                getEnv("DEBUG", "false") == "true",
 	}
 

@@ -23,6 +23,8 @@ export interface HealthServer {
   setHealthy: (healthy: boolean) => void;
   setShuttingDown: (shuttingDown: boolean) => void;
   stop: () => void;
+  /** Get the actual port the server is listening on (useful when using port 0) */
+  getPort: () => number;
 }
 
 // Use a wrapper object to ensure state changes are visible in the closure
@@ -83,6 +85,13 @@ export function createHealthServer(options: HealthServerOptions): HealthServer {
     },
     stop() {
       server.close();
+    },
+    getPort() {
+      const addr = server.address();
+      if (addr && typeof addr === 'object') {
+        return addr.port;
+      }
+      return port;
     },
   };
 }

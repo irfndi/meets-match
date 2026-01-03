@@ -25,9 +25,10 @@ type TelegramSenderConfig struct {
 
 // TelegramSender sends notifications via Telegram Bot API.
 type TelegramSender struct {
-	botToken   string
-	httpClient *http.Client
-	apiBaseURL string
+	botToken       string
+	maskedBotToken string // For safe logging (first 5 chars + "...")
+	httpClient     *http.Client
+	apiBaseURL     string
 }
 
 // NewTelegramSender creates a Telegram notification sender.
@@ -42,8 +43,15 @@ func NewTelegramSender(config TelegramSenderConfig) *TelegramSender {
 		baseURL = "https://api.telegram.org"
 	}
 
+	// Create masked token for safe logging
+	maskedToken := "***"
+	if len(config.BotToken) > 5 {
+		maskedToken = config.BotToken[:5] + "***"
+	}
+
 	return &TelegramSender{
-		botToken: config.BotToken,
+		botToken:       config.BotToken,
+		maskedBotToken: maskedToken,
 		httpClient: &http.Client{
 			Timeout: timeout,
 		},
@@ -94,14 +102,14 @@ func (s *TelegramSender) Send(ctx context.Context, n *Notification) SendResult {
 		}
 	}
 
-	// Make API request
+	// Make API request (URL contains token but errors use masked version)
 	url := fmt.Sprintf("%s/bot%s/sendMessage", s.apiBaseURL, s.botToken)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return SendResult{
 			Success:   false,
 			ErrorCode: ErrorCodeNetworkError,
-			Error:     fmt.Errorf("failed to create request: %w", err),
+			Error:     fmt.Errorf("failed to create request for bot %s: %w", s.maskedBotToken, err),
 		}
 	}
 	req.Header.Set("Content-Type", "application/json")
