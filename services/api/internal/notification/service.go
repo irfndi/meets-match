@@ -424,6 +424,10 @@ func (s *Service) Reconcile(ctx context.Context) (int, error) {
 
 		// We got the lock, notification is orphaned
 		// Decide: if notification is too old (>1 hour) or has max attempts, move to DLQ
+		// Note: We use createdAt (absolute age) rather than updatedAt (staleness) intentionally.
+		// The query already filters for notifications stuck 10+ minutes (via updated_at).
+		// Here we check if the notification was created 1+ hour ago to determine if it should
+		// be moved to DLQ permanently vs re-enqueued for another attempt.
 		if time.Since(createdAt) > time.Hour || attemptCount >= maxAttempts {
 			if err := s.repo.MoveToDLQ(ctx, id, time.Now(), "orphaned notification", ErrorCodeServiceDown); err != nil {
 				log.Printf("[reconciler] Failed to move orphaned notification %s to DLQ: %v", id, err)

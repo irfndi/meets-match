@@ -1,23 +1,22 @@
 -- Archive notifications before dropping
--- Create archive tables if they don't exist
-CREATE TABLE IF NOT EXISTS notifications_archive (
-    LIKE notifications INCLUDING ALL
-);
-
-CREATE TABLE IF NOT EXISTS notification_attempts_archive (
-    LIKE notification_attempts INCLUDING ALL
-);
-
--- Move data to archive tables if source tables exist
+-- Create archive tables and move data if source tables exist
 DO $$
 BEGIN
+  -- Create notifications_archive and copy data if notifications exists
   IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'notifications') THEN
+    CREATE TABLE IF NOT EXISTS notifications_archive (
+        LIKE notifications INCLUDING ALL
+    );
     INSERT INTO notifications_archive
     SELECT * FROM notifications
     ON CONFLICT DO NOTHING;
   END IF;
 
+  -- Create notification_attempts_archive and copy data if notification_attempts exists
   IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'notification_attempts') THEN
+    CREATE TABLE IF NOT EXISTS notification_attempts_archive (
+        LIKE notification_attempts INCLUDING ALL
+    );
     INSERT INTO notification_attempts_archive
     SELECT * FROM notification_attempts
     ON CONFLICT DO NOTHING;
