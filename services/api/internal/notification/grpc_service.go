@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -470,7 +471,7 @@ func (s *GRPCService) LogNotificationResult(ctx context.Context, req *pb.LogNoti
 	// Format: audit:{type}:{user_id}:{telegram_message_id}
 	idempotencyKey := Ptr("audit:" + string(protoTypeToType(req.Type)) + ":" + req.UserId)
 	if req.TelegramMessageId > 0 {
-		idempotencyKey = Ptr(*idempotencyKey + ":" + string(rune(req.TelegramMessageId)))
+		idempotencyKey = Ptr(*idempotencyKey + ":" + strconv.FormatInt(req.TelegramMessageId, 10))
 	}
 
 	// Create audit record with appropriate status

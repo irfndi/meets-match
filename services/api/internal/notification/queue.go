@@ -129,10 +129,13 @@ func (q *RedisQueue) Enqueue(ctx context.Context, id uuid.UUID, priority int) er
 func (q *RedisQueue) Dequeue(ctx context.Context, limit int) ([]uuid.UUID, error) {
 	// Lua script for atomic pop of highest scored items
 	// ZREVRANGE gets items, ZREM removes them atomically
+	// Uses loop instead of unpack() to avoid Lua stack overflow with large batches
 	script := redis.NewScript(`
 		local items = redis.call("ZREVRANGE", KEYS[1], 0, ARGV[1] - 1)
 		if #items > 0 then
-			redis.call("ZREM", KEYS[1], unpack(items))
+			for i = 1, #items do
+				redis.call("ZREM", KEYS[1], items[i])
+			end
 		end
 		return items
 	`)

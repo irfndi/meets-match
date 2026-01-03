@@ -8,14 +8,21 @@ CREATE TABLE IF NOT EXISTS notification_attempts_archive (
     LIKE notification_attempts INCLUDING ALL
 );
 
--- Move data to archive tables (skip if no data to avoid empty inserts)
-INSERT INTO notifications_archive
-SELECT * FROM notifications
-ON CONFLICT DO NOTHING;
+-- Move data to archive tables if source tables exist
+DO $$
+BEGIN
+  IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'notifications') THEN
+    INSERT INTO notifications_archive
+    SELECT * FROM notifications
+    ON CONFLICT DO NOTHING;
+  END IF;
 
-INSERT INTO notification_attempts_archive
-SELECT * FROM notification_attempts
-ON CONFLICT DO NOTHING;
+  IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'notification_attempts') THEN
+    INSERT INTO notification_attempts_archive
+    SELECT * FROM notification_attempts
+    ON CONFLICT DO NOTHING;
+  END IF;
+END $$;
 
 -- Drop tables first (reverse order of creation)
 DROP TABLE IF EXISTS notification_attempts;

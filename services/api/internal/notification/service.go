@@ -394,7 +394,12 @@ func (s *Service) Reconcile(ctx context.Context) (int, error) {
 		LIMIT 100
 	`
 
-	rows, err := s.repo.(*PostgresRepository).db.QueryContext(ctx, query)
+	pgRepo, ok := s.repo.(*PostgresRepository)
+	if !ok {
+		log.Printf("[reconciler] Reconcile requires PostgresRepository, skipping")
+		return 0, nil
+	}
+	rows, err := pgRepo.db.QueryContext(ctx, query)
 	if err != nil {
 		return 0, fmt.Errorf("failed to find orphaned notifications: %w", err)
 	}
