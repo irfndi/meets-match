@@ -118,6 +118,10 @@ CREATE INDEX idx_notifications_expires ON notifications(expires_at)
 -- Query: Attempts by notification
 CREATE INDEX idx_notification_attempts_notification ON notification_attempts(notification_id);
 
+-- Query: Recent notifications by user and type (for deduplication)
+CREATE INDEX idx_notifications_user_type_created ON notifications(user_id, type, created_at DESC)
+    WHERE status IN ('pending', 'processing', 'delivered');
+
 -- Comments for documentation
 COMMENT ON TABLE notifications IS 'Notification queue with full audit trail. Supports multiple channels and retry logic.';
 COMMENT ON COLUMN notifications.payload IS 'Channel-specific payload. Structure varies by channel type.';

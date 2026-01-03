@@ -374,6 +374,79 @@ func (s *Service) captureNotificationDLQ(_ context.Context, n *Notification, err
 	hub.CaptureMessage(fmt.Sprintf("Notification moved to DLQ: %s (%s)", errorCode, errMsg))
 }
 
+// Reconcile syncs the database with Redis queue.
+// It finds orphaned notifications (in processing state in DB but not in Redis)
+// and either requeues them or moves them to DLQ based on age.
+// This should be run periodically (e.g., every 5 minutes) to handle
+// cases where Redis lost data or workers crashed.
+func (s *Service) Reconcile(ctx context.Context) (int, error) {
+	// Find notifications that are stuck in processing for too long
+	// These are likely orphaned (Redis lost the entry or worker crashed)
+	staleThreshold := 10 * time.Minute // Notifications processing for >10 min are likely stuck
+
+	query := `
+		SELECT id, attempt_count, max_attempts, created_at
+		FROM notifications
+		WHERE status IN ('pending', 'processing', 'failed')
+		  AND updated_at < NOW() - INTERVAL '10 minutes'
+		  AND (expires_at IS NULL OR expires_at > NOW())
+		ORDER BY updated_at ASC
+		LIMIT 100
+	`
+
+	rows, err := s.repo.(*PostgresRepository).db.QueryContext(ctx, query)
+	if err != nil {
+		return 0, fmt.Errorf("failed to find orphaned notifications: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	reconciled := 0
+	for rows.Next() {
+		var id uuid.UUID
+		var attemptCount, maxAttempts int
+		var createdAt time.Time
+
+		if err := rows.Scan(&id, &attemptCount, &maxAttempts, &createdAt); err != nil {
+			continue
+		}
+
+		// Check if notification is really orphaned (not in Redis)
+		// Try to acquire lock - if we can, it means no worker is processing it
+		acquired, err := s.queue.AcquireLock(ctx, id, "reconciler", staleThreshold)
+		if err != nil || !acquired {
+			continue // Either error or another worker has it
+		}
+
+		// We got the lock, notification is orphaned
+		// Decide: if notification is too old (>1 hour) or has max attempts, move to DLQ
+		if time.Since(createdAt) > time.Hour || attemptCount >= maxAttempts {
+			if err := s.repo.MoveToDLQ(ctx, id, time.Now(), "orphaned notification", ErrorCodeServiceDown); err != nil {
+				log.Printf("[reconciler] Failed to move orphaned notification %s to DLQ: %v", id, err)
+			} else {
+				log.Printf("[reconciler] Moved orphaned notification %s to DLQ", id)
+				reconciled++
+			}
+		} else {
+			// Re-enqueue for processing
+			if err := s.queue.Enqueue(ctx, id, 0); err != nil {
+				log.Printf("[reconciler] Failed to requeue orphaned notification %s: %v", id, err)
+			} else {
+				log.Printf("[reconciler] Requeued orphaned notification %s", id)
+				reconciled++
+			}
+		}
+
+		// Release the lock
+		_ = s.queue.ReleaseLock(ctx, id, "reconciler")
+	}
+
+	if reconciled > 0 {
+		log.Printf("[reconciler] Reconciled %d orphaned notifications", reconciled)
+	}
+
+	return reconciled, nil
+}
+
 // CheckDLQHealth checks DLQ size and reports alerts to Sentry.
 // Called periodically by the worker or monitoring.
 func (s *Service) CheckDLQHealth(ctx context.Context) error {

@@ -11,27 +11,36 @@ import (
 	"github.com/google/uuid"
 )
 
+// Adaptive polling configuration
+const (
+	minPollInterval = 50 * time.Millisecond   // Minimum polling interval when busy
+	maxPollInterval = 2 * time.Second         // Maximum polling interval when idle
+	pollBackoffRate = 1.5                     // Rate at which to increase interval
+)
+
 // Worker processes notifications from the queue.
 // It runs multiple goroutines to handle concurrent processing.
 type Worker struct {
-	service   *Service
-	queue     Queue
-	config    WorkerConfig
-	workerID  string
-	stopCh    chan struct{}
-	wg        sync.WaitGroup
-	isRunning bool
-	mu        sync.Mutex
+	service      *Service
+	queue        Queue
+	config       WorkerConfig
+	workerID     string
+	stopCh       chan struct{}
+	wg           sync.WaitGroup
+	isRunning    bool
+	mu           sync.Mutex
+	pollInterval time.Duration // Current adaptive polling interval
 }
 
 // NewWorker creates a notification worker.
 func NewWorker(service *Service, queue Queue, config WorkerConfig) *Worker {
 	return &Worker{
-		service:  service,
-		queue:    queue,
-		config:   config,
-		workerID: fmt.Sprintf("%s-%s", config.WorkerPrefix, uuid.New().String()[:8]),
-		stopCh:   make(chan struct{}),
+		service:      service,
+		queue:        queue,
+		config:       config,
+		workerID:     fmt.Sprintf("%s-%s", config.WorkerPrefix, uuid.New().String()[:8]),
+		stopCh:       make(chan struct{}),
+		pollInterval: minPollInterval, // Start with minimum interval
 	}
 }
 
@@ -74,9 +83,9 @@ func (w *Worker) Start(ctx context.Context) error {
 	w.wg.Add(1)
 	go w.promoteDelayedLoop(ctx)
 
-	// Main loop - fetch from pending queue
-	ticker := time.NewTicker(100 * time.Millisecond)
-	defer ticker.Stop()
+	// Main loop - fetch from pending queue with adaptive polling
+	timer := time.NewTimer(w.pollInterval)
+	defer timer.Stop()
 
 	for {
 		select {
@@ -86,12 +95,21 @@ func (w *Worker) Start(ctx context.Context) error {
 		case <-w.stopCh:
 			close(notificationCh)
 			return nil
-		case <-ticker.C:
+		case <-timer.C:
 			// Fetch batch from pending queue
 			ids, err := w.queue.Dequeue(ctx, w.config.BatchSize)
 			if err != nil {
 				log.Printf("[%s] Error fetching from queue: %v", w.workerID, err)
+				w.adaptPollInterval(false) // Backoff on errors
+				timer.Reset(w.pollInterval)
 				continue
+			}
+
+			// Adapt polling interval based on queue activity
+			if len(ids) > 0 {
+				w.adaptPollInterval(true) // Speed up when busy
+			} else {
+				w.adaptPollInterval(false) // Slow down when idle
 			}
 
 			// Send to processing channel
@@ -103,7 +121,29 @@ func (w *Worker) Start(ctx context.Context) error {
 					return nil
 				}
 			}
+
+			timer.Reset(w.pollInterval)
 		}
+	}
+}
+
+// adaptPollInterval adjusts the polling interval based on queue activity.
+// When busy (hasWork=true), interval decreases towards minPollInterval.
+// When idle (hasWork=false), interval increases towards maxPollInterval.
+func (w *Worker) adaptPollInterval(hasWork bool) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	if hasWork {
+		// Speed up polling when there's work
+		w.pollInterval = minPollInterval
+	} else {
+		// Gradually slow down when idle
+		newInterval := time.Duration(float64(w.pollInterval) * pollBackoffRate)
+		if newInterval > maxPollInterval {
+			newInterval = maxPollInterval
+		}
+		w.pollInterval = newInterval
 	}
 }
 
@@ -142,6 +182,10 @@ func (w *Worker) promoteDelayedLoop(ctx context.Context) {
 	dlqCheckTicker := time.NewTicker(5 * time.Minute)
 	defer dlqCheckTicker.Stop()
 
+	// Reconciliation ticker (every 5 minutes)
+	reconcileTicker := time.NewTicker(5 * time.Minute)
+	defer reconcileTicker.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -164,6 +208,14 @@ func (w *Worker) promoteDelayedLoop(ctx context.Context) {
 			// Periodic DLQ health check
 			if err := w.service.CheckDLQHealth(ctx); err != nil {
 				log.Printf("[%s] Error checking DLQ health: %v", w.workerID, err)
+			}
+		case <-reconcileTicker.C:
+			// Periodic reconciliation to sync Redis and PostgreSQL
+			reconciled, err := w.service.Reconcile(ctx)
+			if err != nil {
+				log.Printf("[%s] Error during reconciliation: %v", w.workerID, err)
+			} else if reconciled > 0 {
+				log.Printf("[%s] Reconciled %d orphaned notifications", w.workerID, reconciled)
 			}
 		}
 	}

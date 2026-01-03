@@ -123,19 +123,32 @@ func (q *RedisQueue) Enqueue(ctx context.Context, id uuid.UUID, priority int) er
 	return nil
 }
 
-// Dequeue retrieves notifications ready for processing.
+// Dequeue atomically retrieves and removes notifications ready for processing.
 // Returns notification IDs in priority order (highest priority, oldest first).
+// Uses Lua script for atomic pop to prevent race conditions between workers.
 func (q *RedisQueue) Dequeue(ctx context.Context, limit int) ([]uuid.UUID, error) {
-	// Get items with highest scores (highest priority)
-	// ZREVRANGE returns items from highest to lowest score
-	results, err := q.client.ZRevRange(ctx, keyPendingQueue, 0, int64(limit-1)).Result()
+	// Lua script for atomic pop of highest scored items
+	// ZREVRANGE gets items, ZREM removes them atomically
+	script := redis.NewScript(`
+		local items = redis.call("ZREVRANGE", KEYS[1], 0, ARGV[1] - 1)
+		if #items > 0 then
+			redis.call("ZREM", KEYS[1], unpack(items))
+		end
+		return items
+	`)
+
+	results, err := script.Run(ctx, q.client, []string{keyPendingQueue}, limit).Slice()
 	if err != nil {
 		return nil, fmt.Errorf("failed to dequeue notifications: %w", err)
 	}
 
 	ids := make([]uuid.UUID, 0, len(results))
 	for _, r := range results {
-		id, err := uuid.Parse(r)
+		idStr, ok := r.(string)
+		if !ok {
+			continue
+		}
+		id, err := uuid.Parse(idStr)
 		if err != nil {
 			continue
 		}

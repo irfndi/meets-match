@@ -20,7 +20,11 @@ export type NotificationErrorCode =
   | 'rate_limited'
   | 'network_error'
   | 'invalid_chat'
+  | 'message_too_long'
   | 'unknown';
+
+// Telegram message length limit
+const MAX_MESSAGE_LENGTH = 4096;
 
 /**
  * Creates a notification handler bound to a bot instance.
@@ -35,6 +39,16 @@ export function createNotificationHandler(bot: Bot<MyContext>) {
         telegramMessageId: BigInt(0),
         error: 'user_id is required',
         errorCode: 'invalid_chat',
+      });
+    }
+
+    // Validate message length before sending
+    if (req.message.length > MAX_MESSAGE_LENGTH) {
+      return new SendNotificationResponse({
+        success: false,
+        telegramMessageId: BigInt(0),
+        error: `Message too long: ${req.message.length} chars (max ${MAX_MESSAGE_LENGTH})`,
+        errorCode: 'message_too_long',
       });
     }
 

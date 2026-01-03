@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
@@ -109,7 +110,7 @@ func (s *GRPCService) GetNotification(ctx context.Context, req *pb.GetNotificati
 
 	notification, err := s.service.GetNotification(ctx, id)
 	if err != nil {
-		if err == ErrNotFound {
+		if errors.Is(err, ErrNotFound) {
 			return nil, status.Error(codes.NotFound, "notification not found")
 		}
 		return nil, status.Errorf(codes.Internal, "failed to get notification: %v", err)
@@ -342,6 +343,8 @@ func (s *GRPCService) GetReengagementCandidates(ctx context.Context, req *pb.Get
 	// - Have notifications enabled
 	// - Haven't been reminded recently (cooldown)
 	// - Have been inactive for min-max days
+	// - Haven't already received this type of notification recently (deduplication)
+	// - Are in appropriate timezone hours for notifications (9 AM - 9 PM local time)
 	// Uses LEFT JOIN with aggregation instead of correlated subquery for better performance
 	query := `
 		SELECT
@@ -359,15 +362,26 @@ func (s *GRPCService) GetReengagementCandidates(ctx context.Context, req *pb.Get
 			WHERE m.user1_action = 'like' AND m.user2_action = 'none'
 			GROUP BY m.user2_id
 		) pending_likes ON pending_likes.user2_id = u.id
+		-- Exclude users who received any reengagement notification recently (deduplication)
+		LEFT JOIN LATERAL (
+			SELECT 1 FROM notifications n
+			WHERE n.user_id = u.id
+			  AND n.type IN ('reengagement_gentle', 'reengagement_urgent', 'reengagement_last_chance')
+			  AND n.created_at > NOW() - INTERVAL '1 day' * $3::integer
+			LIMIT 1
+		) recent_notif ON true
 		WHERE u.is_active = true
 		  AND u.is_sleeping = false
 		  AND COALESCE((u.preferences->>'notifications_enabled')::boolean, true) = true
-		  AND u.last_active < NOW() - INTERVAL '1 day' * $1
-		  AND u.last_active > NOW() - INTERVAL '1 day' * $2
+		  AND u.last_active < NOW() - INTERVAL '1 day' * $1::integer
+		  AND u.last_active > NOW() - INTERVAL '1 day' * $2::integer
 		  AND (
 			u.last_reminded_at IS NULL
-			OR u.last_reminded_at < NOW() - INTERVAL '1 day' * $3
+			OR u.last_reminded_at < NOW() - INTERVAL '1 day' * $3::integer
 		  )
+		  AND recent_notif IS NULL  -- Exclude users with recent notifications
+		  -- Timezone-aware check: only notify during reasonable hours (9 AM - 9 PM local time)
+		  AND EXTRACT(HOUR FROM NOW() AT TIME ZONE COALESCE(u.preferences->>'timezone', 'UTC')) BETWEEN 9 AND 21
 		ORDER BY u.last_active ASC
 		LIMIT $4 OFFSET $5
 	`
@@ -409,19 +423,28 @@ func (s *GRPCService) GetReengagementCandidates(ctx context.Context, req *pb.Get
 		return nil, status.Errorf(codes.Internal, "error iterating candidates: %v", err)
 	}
 
-	// Get total count for pagination
+	// Get total count for pagination (matches main query conditions)
 	countQuery := `
 		SELECT COUNT(*)
 		FROM users u
+		LEFT JOIN LATERAL (
+			SELECT 1 FROM notifications n
+			WHERE n.user_id = u.id
+			  AND n.type IN ('reengagement_gentle', 'reengagement_urgent', 'reengagement_last_chance')
+			  AND n.created_at > NOW() - INTERVAL '1 day' * $3::integer
+			LIMIT 1
+		) recent_notif ON true
 		WHERE u.is_active = true
 		  AND u.is_sleeping = false
 		  AND COALESCE((u.preferences->>'notifications_enabled')::boolean, true) = true
-		  AND u.last_active < NOW() - INTERVAL '1 day' * $1
-		  AND u.last_active > NOW() - INTERVAL '1 day' * $2
+		  AND u.last_active < NOW() - INTERVAL '1 day' * $1::integer
+		  AND u.last_active > NOW() - INTERVAL '1 day' * $2::integer
 		  AND (
 			u.last_reminded_at IS NULL
-			OR u.last_reminded_at < NOW() - INTERVAL '1 day' * $3
+			OR u.last_reminded_at < NOW() - INTERVAL '1 day' * $3::integer
 		  )
+		  AND recent_notif IS NULL
+		  AND EXTRACT(HOUR FROM NOW() AT TIME ZONE COALESCE(u.preferences->>'timezone', 'UTC')) BETWEEN 9 AND 21
 	`
 	var total int32
 	if err := s.db.QueryRowContext(ctx, countQuery, minDays, maxDays, cooldownDays).Scan(&total); err != nil {
@@ -436,33 +459,69 @@ func (s *GRPCService) GetReengagementCandidates(ctx context.Context, req *pb.Get
 }
 
 // LogNotificationResult logs a notification delivery result for audit.
+// This creates an audit record for notifications sent directly by the Bot/Worker
+// without going through the API's queue system.
 func (s *GRPCService) LogNotificationResult(ctx context.Context, req *pb.LogNotificationResultRequest) (*pb.LogNotificationResultResponse, error) {
-	// Create a notification record for audit purposes
+	if req.UserId == "" {
+		return nil, status.Error(codes.InvalidArgument, "user_id is required")
+	}
+
+	// Generate idempotency key to prevent duplicate audit records
+	// Format: audit:{type}:{user_id}:{telegram_message_id}
+	idempotencyKey := Ptr("audit:" + string(protoTypeToType(req.Type)) + ":" + req.UserId)
+	if req.TelegramMessageId > 0 {
+		idempotencyKey = Ptr(*idempotencyKey + ":" + string(rune(req.TelegramMessageId)))
+	}
+
+	// Create audit record with appropriate status
 	createReq := CreateRequest{
-		UserID:   req.UserId,
-		Type:     protoTypeToType(req.Type),
-		Channel:  ChannelTelegram,
-		Priority: 0,
+		UserID:         req.UserId,
+		Type:           protoTypeToType(req.Type),
+		Channel:        ChannelTelegram,
+		Priority:       0,
+		IdempotencyKey: idempotencyKey,
 	}
 
 	n, err := s.service.Enqueue(ctx, createReq)
 	if err != nil {
+		// If conflict (duplicate), that's fine - the record already exists
+		if IsConflictError(err) {
+			return &pb.LogNotificationResultResponse{
+				Success: true,
+			}, nil
+		}
 		return &pb.LogNotificationResultResponse{
 			Success: false,
 		}, nil
 	}
 
-	// If the notification was already delivered (from Bot), mark it as delivered
-	if req.Status == pb.NotificationStatus_NOTIFICATION_STATUS_DELIVERED {
-		if err := s.service.repo.MarkDelivered(ctx, n.ID, n.CreatedAt); err != nil {
-			// Log but don't fail - the notification was created for audit purposes
-			// and the Bot already delivered it successfully
+	// Update the notification status based on the reported result
+	now := time.Now()
+	switch req.Status {
+	case pb.NotificationStatus_NOTIFICATION_STATUS_DELIVERED:
+		if err := s.service.repo.MarkDelivered(ctx, n.ID, now); err != nil {
+			// Log but don't fail - the audit record was created
 			return &pb.LogNotificationResultResponse{
 				NotificationId: n.ID.String(),
-				Success:        true, // Still success since Bot delivered it
+				Success:        true,
+			}, nil
+		}
+	case pb.NotificationStatus_NOTIFICATION_STATUS_FAILED:
+		errorCode := ErrorCode(req.ErrorCode)
+		if req.ErrorCode == "" {
+			errorCode = ErrorCodeUnknown
+		}
+		if err := s.service.repo.MoveToDLQ(ctx, n.ID, now, req.ErrorMessage, errorCode); err != nil {
+			// Log but don't fail
+			return &pb.LogNotificationResultResponse{
+				NotificationId: n.ID.String(),
+				Success:        true,
 			}, nil
 		}
 	}
+
+	// Remove from Redis queue since this is just an audit record
+	_ = s.service.queue.Remove(ctx, n.ID)
 
 	return &pb.LogNotificationResultResponse{
 		NotificationId: n.ID.String(),
