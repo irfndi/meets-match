@@ -10,6 +10,12 @@ service UserService {
   rpc GetUser(GetUserRequest) returns (GetUserResponse);
   rpc CreateUser(CreateUserRequest) returns (CreateUserResponse);
   rpc UpdateUser(UpdateUserRequest) returns (UpdateUserResponse);
+
+  // Update user's last_active timestamp (called by bot on every interaction)
+  rpc UpdateLastActive(UpdateLastActiveRequest) returns (UpdateLastActiveResponse);
+
+  // Update user's last_reminded_at timestamp (called by worker after sending reminder)
+  rpc UpdateLastRemindedAt(UpdateLastRemindedAtRequest) returns (UpdateLastRemindedAtResponse);
 }
 
 message User {
@@ -76,4 +82,22 @@ message UpdateUserRequest {
 
 message UpdateUserResponse {
   User user = 1;
+}
+
+// Update last_active timestamp (fire-and-forget from bot)
+message UpdateLastActiveRequest {
+  string user_id = 1;
+}
+
+message UpdateLastActiveResponse {
+  bool success = 1;
+}
+
+// Update last_reminded_at timestamp (called after sending reminder)
+message UpdateLastRemindedAtRequest {
+  string user_id = 1;
+}
+
+message UpdateLastRemindedAtResponse {
+  bool success = 1;
 }

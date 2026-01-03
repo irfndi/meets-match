@@ -10,6 +10,8 @@ export interface BotConfig {
   apiUrl: string;
   /** Port for health check HTTP server */
   healthPort: number;
+  /** Port for gRPC server (notifications from Worker) */
+  grpcPort: number;
   /** Sentry/GlitchTip DSN for error tracking */
   sentryDsn: string;
   /** Environment name for Sentry */
@@ -52,6 +54,7 @@ export function loadConfig(): BotConfig {
   // Optional with defaults
   const apiUrl = process.env.API_URL || 'http://localhost:8080';
   const healthPort = Number(process.env.HEALTH_PORT) || 3000;
+  const grpcPort = Number(process.env.GRPC_PORT) || 50052;
 
   // Sentry configuration
   const sentryDsn = process.env.SENTRY_DSN || '';
@@ -76,6 +79,7 @@ export function loadConfig(): BotConfig {
     botToken: botToken as string,
     apiUrl,
     healthPort,
+    grpcPort,
     sentryDsn,
     sentryEnvironment,
     sentryRelease,

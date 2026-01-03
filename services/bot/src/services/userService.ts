@@ -4,6 +4,7 @@ import { UserService } from '@meetsmatch/contracts/proto/meetsmatch/v1/user_conn
 import type {
   CreateUserResponse,
   GetUserResponse,
+  UpdateLastActiveResponse,
   UpdateUserResponse,
 } from '@meetsmatch/contracts/proto/meetsmatch/v1/user_pb.js';
 import { Effect } from 'effect';
@@ -48,6 +49,16 @@ export const userService = {
   updateUser: (userId: string, user: any): Effect.Effect<UpdateUserResponse, unknown> =>
     Effect.tryPromise({
       try: async (): Promise<UpdateUserResponse> => getClient().updateUser({ userId, user }),
+      catch: (e) => e,
+    }),
+
+  /**
+   * Update user's last_active timestamp. Called on every bot interaction.
+   * Fire-and-forget - errors are silently ignored.
+   */
+  updateLastActive: (userId: string): Effect.Effect<UpdateLastActiveResponse, unknown> =>
+    Effect.tryPromise({
+      try: async (): Promise<UpdateLastActiveResponse> => getClient().updateLastActive({ userId }),
       catch: (e) => e,
     }),
 };

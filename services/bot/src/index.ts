@@ -10,12 +10,14 @@ import {
   editLocation,
   editName,
 } from './conversations/profile.js';
+import { startGrpcServer } from './grpc/server.js';
 import { aboutCommand, helpCommand } from './handlers/help.js';
 import { matchCallbacks, matchCommand } from './handlers/match.js';
 import { matchesCallbacks, matchesCommand } from './handlers/matches.js';
 import { profileCommand } from './handlers/profile.js';
 import { settingsCallbacks, settingsCommand } from './handlers/settings.js';
 import { startCommand } from './handlers/start.js';
+import { activityTrackerMiddleware } from './lib/activityTracker.js';
 import { loadConfig } from './lib/config.js';
 import { createHealthServer } from './lib/health.js';
 import { flushSentry, initSentry } from './lib/sentry.js';
@@ -47,6 +49,9 @@ attachSentryErrorHandler(bot);
 
 bot.use(session({ initial: () => ({}) }));
 bot.use(conversations());
+
+// Track user activity on every interaction (fire-and-forget)
+bot.use(activityTrackerMiddleware);
 
 // Register all profile conversations
 bot.use(createConversation(editBio));
@@ -141,6 +146,8 @@ startBotWithRetry(bot, {
   onStart: () => {
     healthServer.setHealthy(true);
     console.log('Bot started successfully');
+    // Start gRPC server for receiving notification requests from Worker
+    startGrpcServer(bot, { port: config.grpcPort });
   },
   onRetry: (attempt) => {
     console.warn(

@@ -4,6 +4,7 @@ import { InlineKeyboard } from 'grammy';
 
 import { captureEffectError } from '../lib/sentry.js';
 import { matchService } from '../services/matchService.js';
+import { userService } from '../services/userService.js';
 import { mainMenuKeyboard } from '../ui/keyboards.js';
 
 const NO_MATCHES_MESSAGE = `
@@ -110,24 +111,38 @@ export const matchCommand = (ctx: Context) =>
     Effect.runPromise,
   );
 
-const MUTUAL_MATCH_MESSAGE = (name: string) => `
+const CONVERSATION_STARTERS = [
+  'Hey! We matched on MeetsMatch, nice to meet you! 👋',
+  "Hi there! Saw we matched - what's up? 😊",
+  'Hello! Great to match with you on MeetsMatch! 🎉',
+  "Hey! Excited we matched - how's your day going? ✨",
+  "Hi! We're a match! Would love to chat 💬",
+  "Hey there! Looks like we vibed - let's talk! 🙌",
+  'Hi! So glad we matched - tell me about yourself! 🌟',
+];
+
+const getRandomStarter = () =>
+  CONVERSATION_STARTERS[Math.floor(Math.random() * CONVERSATION_STARTERS.length)];
+
+const MUTUAL_MATCH_MESSAGE = (name: string, otherUserId: string, template: string) => `
 🎉 *It's a Match!*
 
-You and *${name}* liked each other!
+You and [${name}](tg://user?id=${otherUserId}) liked each other!
 
-Start a conversation now 👋
+💡 *Start with:*
+_"${template}"_
 `;
 
 const LIKED_MESSAGE = `
-👍 *Liked!*
+👍 * Liked! *
 
-We'll let you know if they like you back.
-`;
+  We'll let you know if they like you back.
+    `;
 
 const PASSED_MESSAGE = `
-👎 *Passed*
+👎 * Passed *
 
-Moving on to the next potential match...
+  Moving on to the next potential match...
 `;
 
 // Handle like action
@@ -143,17 +158,31 @@ export const handleLike = (ctx: Context, matchId: string) =>
     if (result.isMutual) {
       // Get match details to show the other user's name
       const matchDetails = yield* _(matchService.getMatch(matchId));
-      const _otherUserId =
-        matchDetails.match?.user1Id === userId
-          ? matchDetails.match?.user2Id
-          : matchDetails.match?.user1Id;
 
-      // For now, show generic mutual message (TODO: fetch other user's name using _otherUserId)
+      // Validate match details exist before accessing properties
+      if (!matchDetails.match) {
+        yield* _(Effect.fail(new Error('Match details not found')));
+        return;
+      }
+
+      const otherUserId =
+        matchDetails.match.user1Id === userId
+          ? matchDetails.match.user2Id
+          : matchDetails.match.user1Id;
+
+      // Fetch other user's details to show their name
+      const otherUserRes = yield* _(userService.getUser(otherUserId));
+      const otherUser = otherUserRes.user;
+      const otherName = otherUser?.firstName || 'your match';
+      const template = getRandomStarter();
+
       yield* _(
         Effect.tryPromise(() =>
-          ctx.editMessageText(MUTUAL_MATCH_MESSAGE('your match'), {
+          ctx.editMessageText(MUTUAL_MATCH_MESSAGE(otherName, otherUserId, template), {
             parse_mode: 'Markdown',
             reply_markup: new InlineKeyboard()
+              .url(`💬 Message ${otherName}`, `tg://user?id=${otherUserId}`)
+              .row()
               .text('🔥 Find More Matches', 'next_match')
               .row()
               .text('📋 View Matches', 'view_matches'),
