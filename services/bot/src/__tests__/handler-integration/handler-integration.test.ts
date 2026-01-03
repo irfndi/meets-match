@@ -1,11 +1,12 @@
 /**
- * E2E Tests for all user flows in the MeetMatch bot.
+ * Handler Integration Tests for all user flows in the MeetMatch bot.
  *
- * These tests simulate complete user journeys through the bot,
- * testing command handlers and callback interactions.
+ * These tests verify that command handlers and callback handlers work correctly
+ * with mocked services. They test the handler logic in isolation without
+ * requiring a running API server.
  *
  * Note: These tests mock the services to control responses.
- * For true integration tests, see ../integration/bot-api.test.ts
+ * For true integration tests against a live API, see ../integration/bot-api.test.ts
  */
 
 import { Code, ConnectError } from '@connectrpc/connect';
@@ -58,7 +59,7 @@ import { startCommand } from '../../handlers/start.js';
 import { matchService } from '../../services/matchService.js';
 import { userService } from '../../services/userService.js';
 
-describe('E2E: New User Onboarding Flow', () => {
+describe('Handler Integration: New User Onboarding Flow', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -103,7 +104,7 @@ describe('E2E: New User Onboarding Flow', () => {
   });
 });
 
-describe('E2E: Profile Management Flow', () => {
+describe('Handler Integration: Profile Management Flow', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -165,7 +166,7 @@ describe('E2E: Profile Management Flow', () => {
   });
 });
 
-describe('E2E: Matching Flow', () => {
+describe('Handler Integration: Matching Flow', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -238,8 +239,10 @@ describe('E2E: Matching Flow', () => {
     // Assert
     expect(matchService.likeMatch).toHaveBeenCalledWith('match123', '12345');
     expect(ctx.answerCallbackQuery).toHaveBeenCalled();
-    expect(ctx.editMessageText).toHaveBeenCalled();
-    // Should show "Liked!" message
+    expect(ctx.editMessageText).toHaveBeenCalledWith(
+      expect.stringContaining('Liked!'),
+      expect.any(Object),
+    );
   });
 
   it('should handle like action -> mutual match notification', async () => {
@@ -264,8 +267,10 @@ describe('E2E: Matching Flow', () => {
 
     // Assert
     expect(matchService.likeMatch).toHaveBeenCalledWith('match123', '12345');
-    expect(ctx.editMessageText).toHaveBeenCalled();
-    // Should show "It's a Match!" message
+    expect(ctx.editMessageText).toHaveBeenCalledWith(
+      expect.stringContaining("It's a Match!"),
+      expect.any(Object),
+    );
   });
 
   it('should handle dislike action -> passed message', async () => {
@@ -281,8 +286,10 @@ describe('E2E: Matching Flow', () => {
     // Assert
     expect(matchService.dislikeMatch).toHaveBeenCalledWith('match123', '12345');
     expect(ctx.answerCallbackQuery).toHaveBeenCalled();
-    expect(ctx.editMessageText).toHaveBeenCalled();
-    // Should show "Passed" message
+    expect(ctx.editMessageText).toHaveBeenCalledWith(
+      expect.stringContaining('Passed'),
+      expect.any(Object),
+    );
   });
 
   it('should handle next_match callback', async () => {
@@ -307,7 +314,7 @@ describe('E2E: Matching Flow', () => {
   });
 });
 
-describe('E2E: Matches List Flow', () => {
+describe('Handler Integration: Matches List Flow', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -398,7 +405,7 @@ describe('E2E: Matches List Flow', () => {
   });
 });
 
-describe('E2E: Settings Flow', () => {
+describe('Handler Integration: Settings Flow', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -578,7 +585,7 @@ describe('E2E: Settings Flow', () => {
   });
 });
 
-describe('E2E: Error Handling', () => {
+describe('Handler Integration: Error Handling', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -625,7 +632,7 @@ describe('E2E: Error Handling', () => {
   });
 });
 
-describe('E2E: Complete User Journey', () => {
+describe('Handler Integration: Complete User Journey', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });

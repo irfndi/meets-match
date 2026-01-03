@@ -1,8 +1,55 @@
 /**
- * Test data management utilities for integration and E2E tests.
+ * Test data management utilities for integration and handler integration tests.
  *
  * Provides consistent test data generation, tracking, and cleanup.
  */
+
+/**
+ * User fixture type for type-safe test data.
+ */
+export interface TestUserFixture {
+  id: string;
+  username: string;
+  firstName: string;
+  lastName: string;
+  bio: string;
+  age: number;
+  gender: string;
+  interests: string[];
+  photos: string[];
+  isActive: boolean;
+  isSleeping: boolean;
+  isProfileComplete: boolean;
+  location: {
+    latitude: number;
+    longitude: number;
+    city: string;
+    country: string;
+  };
+  preferences: {
+    minAge: number;
+    maxAge: number;
+    genderPreference: string[];
+    maxDistance: number;
+    notificationsEnabled: boolean;
+    preferredLanguage: string;
+    preferredCountry: string;
+    premiumTier: string;
+  };
+}
+
+/**
+ * Match fixture type for type-safe test data.
+ */
+export interface TestMatchFixture {
+  id: string;
+  user1Id: string;
+  user2Id: string;
+  status: string;
+  user1Action: string;
+  user2Action: string;
+  score: number;
+}
 
 /**
  * Generate a unique test user ID to avoid collisions across test runs.
@@ -21,39 +68,9 @@ export function generateTestMatchId(): string {
 /**
  * Create a test user fixture with sensible defaults.
  * All values can be overridden via the overrides parameter.
+ * Nested objects (location, preferences) are merged with defaults.
  */
-export function testUserFixture(
-  overrides: Partial<{
-    id: string;
-    username: string;
-    firstName: string;
-    lastName: string;
-    bio: string;
-    age: number;
-    gender: string;
-    interests: string[];
-    photos: string[];
-    isActive: boolean;
-    isSleeping: boolean;
-    isProfileComplete: boolean;
-    location: {
-      latitude: number;
-      longitude: number;
-      city: string;
-      country: string;
-    };
-    preferences: {
-      minAge: number;
-      maxAge: number;
-      genderPreference: string[];
-      maxDistance: number;
-      notificationsEnabled: boolean;
-      preferredLanguage: string;
-      preferredCountry: string;
-      premiumTier: string;
-    };
-  }> = {},
-): Record<string, unknown> {
+export function testUserFixture(overrides: Partial<TestUserFixture> = {}): TestUserFixture {
   const id = overrides.id ?? generateTestUserId();
 
   return {
@@ -61,7 +78,7 @@ export function testUserFixture(
     username: overrides.username ?? `testuser_${id.slice(-6)}`,
     firstName: overrides.firstName ?? 'Test',
     lastName: overrides.lastName ?? 'User',
-    bio: overrides.bio ?? 'A test user for E2E testing',
+    bio: overrides.bio ?? 'A test user for integration testing',
     age: overrides.age ?? 25,
     gender: overrides.gender ?? 'male',
     interests: overrides.interests ?? ['testing', 'coding', 'automation'],
@@ -69,13 +86,14 @@ export function testUserFixture(
     isActive: overrides.isActive ?? true,
     isSleeping: overrides.isSleeping ?? false,
     isProfileComplete: overrides.isProfileComplete ?? true,
-    location: overrides.location ?? {
+    location: {
       latitude: 37.5665,
       longitude: 126.978,
       city: 'Seoul',
       country: 'South Korea',
+      ...(overrides.location || {}),
     },
-    preferences: overrides.preferences ?? {
+    preferences: {
       minAge: 18,
       maxAge: 40,
       genderPreference: ['female'],
@@ -84,6 +102,7 @@ export function testUserFixture(
       preferredLanguage: 'en',
       preferredCountry: '',
       premiumTier: 'free',
+      ...(overrides.preferences || {}),
     },
   };
 }
@@ -91,17 +110,7 @@ export function testUserFixture(
 /**
  * Create a test match fixture with sensible defaults.
  */
-export function testMatchFixture(
-  overrides: Partial<{
-    id: string;
-    user1Id: string;
-    user2Id: string;
-    status: string;
-    user1Action: string;
-    user2Action: string;
-    score: number;
-  }> = {},
-): Record<string, unknown> {
+export function testMatchFixture(overrides: Partial<TestMatchFixture> = {}): TestMatchFixture {
   return {
     id: overrides.id ?? generateTestMatchId(),
     user1Id: overrides.user1Id ?? generateTestUserId(),
@@ -119,9 +128,24 @@ export function testMatchFixture(
  * Usage:
  * ```typescript
  * const tracker = new TestDataTracker();
+ *
+ * // Track created entities
  * tracker.trackUser(userId);
+ * tracker.trackMatch(matchId);
+ *
  * // ... run tests ...
- * await tracker.cleanup(userService); // Deletes all tracked users
+ *
+ * // Manual cleanup using your services
+ * for (const id of tracker.getTrackedUsers()) {
+ *   await userService.deleteUser(id);
+ * }
+ *
+ * for (const id of tracker.getTrackedMatches()) {
+ *   await matchService.deleteMatch(id);
+ * }
+ *
+ * // Optionally clear tracking state
+ * tracker.reset();
  * ```
  */
 export class TestDataTracker {
@@ -182,20 +206,22 @@ export class TestDataTracker {
 export const globalTestDataTracker = new TestDataTracker();
 
 /**
- * Test IDs for the known test user (theprofcrypto).
+ * Dummy test user IDs for integration and handler tests.
+ * Uses anonymized, obviously fake identifiers to avoid real user data.
+ * This is a dedicated test account used only in test environments.
  */
 export const KNOWN_TEST_USER = {
-  telegramId: '1082762347',
-  username: 'theprofcrypto',
-  firstName: 'The Prof.',
+  telegramId: '1000000000',
+  username: 'test_user_known',
+  firstName: 'Test',
 } as const;
 
 /**
  * Helper to create multiple test users for matching scenarios.
  */
 export function createTestUserPair(): {
-  user1: Record<string, unknown>;
-  user2: Record<string, unknown>;
+  user1: TestUserFixture;
+  user2: TestUserFixture;
 } {
   const user1 = testUserFixture({
     gender: 'male',

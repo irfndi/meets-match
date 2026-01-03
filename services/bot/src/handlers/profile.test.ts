@@ -145,7 +145,10 @@ describe('Profile Handler', () => {
 
     await profileCommand(mockContext);
 
-    expect(mockContext.reply).toHaveBeenCalled();
+    expect(mockContext.reply).toHaveBeenCalledWith(
+      expect.stringContaining('Unknown'),
+      expect.any(Object),
+    );
   });
 
   it('should handle user with username only', async () => {

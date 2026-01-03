@@ -1,4 +1,4 @@
-.PHONY: help ci lint format test security api-lint api-fmt api-test api-sec api-build api-tidy api-run bot-run bot-lint bot-fmt bot-test bot-test-e2e bot-test-integration bot-build proto-gen dry-build deploy-app test-all
+.PHONY: help ci lint format test security api-lint api-fmt api-test api-sec api-build api-tidy api-run bot-run bot-lint bot-fmt bot-test bot-test-handler-integration bot-test-integration bot-build proto-gen dry-build deploy-app test-all
 
 # Default target
 help:
@@ -7,8 +7,8 @@ help:
 	@echo "  make api-run         Run Go API locally"
 	@echo "  make bot-run         Run TS Bot locally"
 	@echo "  make test            Run unit tests (Go & TS)"
-	@echo "  make test-all        Run all tests (unit, e2e, integration)"
-	@echo "  make bot-test-e2e    Run TS Bot E2E tests"
+	@echo "  make test-all        Run all tests (unit, handler-integration, integration)"
+	@echo "  make bot-test-handler-integration  Run TS Bot handler integration tests"
 	@echo "  make bot-test-integration  Run TS Bot integration tests"
 	@echo "  make lint            Run all linters"
 	@echo "  make format          Format all code"
@@ -78,9 +78,9 @@ bot-test:
 	@echo "Testing TS Bot (unit tests)..."
 	cd services/bot && bun run test:coverage
 
-bot-test-e2e:
-	@echo "Running TS Bot E2E tests..."
-	cd services/bot && bun run vitest run --config vitest.e2e.config.ts
+bot-test-handler-integration:
+	@echo "Running TS Bot handler integration tests..."
+	cd services/bot && bun run vitest run --config vitest.handler-integration.config.ts
 
 bot-test-integration:
 	@echo "Running TS Bot integration tests..."
@@ -90,7 +90,7 @@ bot-test-integration:
 	cd services/bot && INTEGRATION_TEST_API_URL=$${INTEGRATION_TEST_API_URL:-http://localhost:8080} \
 		bun run vitest run --config vitest.integration.config.ts
 
-test-all: test bot-test-e2e bot-test-integration
+test-all: test bot-test-handler-integration bot-test-integration
 	@echo "✅ All tests completed"
 
 bot-build:
