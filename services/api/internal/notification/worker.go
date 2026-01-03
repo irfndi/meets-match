@@ -13,9 +13,9 @@ import (
 
 // Adaptive polling configuration
 const (
-	minPollInterval = 50 * time.Millisecond   // Minimum polling interval when busy
-	maxPollInterval = 2 * time.Second         // Maximum polling interval when idle
-	pollBackoffRate = 1.5                     // Rate at which to increase interval
+	minPollInterval = 50 * time.Millisecond // Minimum polling interval when busy
+	maxPollInterval = 2 * time.Second       // Maximum polling interval when idle
+	pollBackoffRate = 1.5                   // Rate at which to increase interval
 )
 
 // Worker processes notifications from the queue.
