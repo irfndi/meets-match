@@ -449,6 +449,10 @@ func (s *Service) Reconcile(ctx context.Context) (int, error) {
 		_ = s.queue.ReleaseLock(ctx, id, "reconciler")
 	}
 
+	if err := rows.Err(); err != nil {
+		return reconciled, fmt.Errorf("error iterating orphaned notifications: %w", err)
+	}
+
 	if reconciled > 0 {
 		log.Printf("[reconciler] Reconciled %d orphaned notifications", reconciled)
 	}
