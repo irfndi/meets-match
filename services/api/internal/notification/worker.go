@@ -72,10 +72,16 @@ func (w *Worker) Start(ctx context.Context) error {
 
 	// Channel for notifications to process
 	// Buffer size is configurable to handle varying throughput and memory constraints
-	bufferSize := w.config.BatchSize * w.config.ChannelBufferMultiplier
-	if bufferSize < 1 {
-		bufferSize = w.config.BatchSize * 2 // Fallback to default multiplier
+	// Validate inputs to prevent invalid buffer sizes (0 or negative)
+	batchSize := w.config.BatchSize
+	if batchSize < 1 {
+		batchSize = 10 // Use default batch size
 	}
+	multiplier := w.config.ChannelBufferMultiplier
+	if multiplier < 1 {
+		multiplier = 2 // Use default multiplier
+	}
+	bufferSize := batchSize * multiplier
 	notificationCh := make(chan uuid.UUID, bufferSize)
 
 	// Start worker goroutines

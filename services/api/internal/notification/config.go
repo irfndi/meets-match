@@ -1,6 +1,7 @@
 package notification
 
 import (
+	"log"
 	"os"
 	"strconv"
 	"time"
@@ -126,9 +127,13 @@ type WorkerConfig struct {
 	// ChannelBufferMultiplier controls the notification channel buffer size.
 	// Buffer size = BatchSize * ChannelBufferMultiplier.
 	// Higher values allow more buffering but use more memory.
-	// Default: 2
+	// Default: 2, Maximum: 100
 	ChannelBufferMultiplier int
 }
+
+// MaxChannelBufferMultiplier is the maximum allowed value for ChannelBufferMultiplier.
+// This prevents excessive memory allocation from misconfiguration.
+const MaxChannelBufferMultiplier = 100
 
 // DefaultWorkerConfig returns sensible worker defaults.
 func DefaultWorkerConfig() WorkerConfig {
@@ -170,7 +175,13 @@ func LoadWorkerConfig() WorkerConfig {
 
 	if v := os.Getenv("NOTIFICATION_WORKER_CHANNEL_BUFFER_MULTIPLIER"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			cfg.ChannelBufferMultiplier = n
+			if n > MaxChannelBufferMultiplier {
+				log.Printf("[config] Warning: NOTIFICATION_WORKER_CHANNEL_BUFFER_MULTIPLIER=%d exceeds maximum (%d), clamping to %d",
+					n, MaxChannelBufferMultiplier, MaxChannelBufferMultiplier)
+				cfg.ChannelBufferMultiplier = MaxChannelBufferMultiplier
+			} else {
+				cfg.ChannelBufferMultiplier = n
+			}
 		}
 	}
 
