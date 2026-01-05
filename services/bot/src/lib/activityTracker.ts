@@ -22,14 +22,14 @@ export const activityTrackerMiddleware: MiddlewareFn<MyContext> = async (ctx, ne
   if (ctx.from?.id) {
     const userId = String(ctx.from.id);
 
-    // Fire-and-forget: run in the background without waiting
-    Effect.runPromise(
+    // Fire-and-forget: run in the background without waiting.
+    // Effect.catchAll handles all Effect errors, converting them to void.
+    // This ensures the promise never rejects.
+    void Effect.runPromise(
       userService.updateLastActive(userId).pipe(
         Effect.catchAll(() => Effect.void), // Silently ignore all errors
       ),
-    ).catch(() => {
-      // Ignore promise rejection (extra safety)
-    });
+    );
   }
 
   // Continue to next middleware/handler

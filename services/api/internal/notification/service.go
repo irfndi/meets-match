@@ -382,42 +382,19 @@ func (s *Service) captureNotificationDLQ(_ context.Context, n *Notification, err
 func (s *Service) Reconcile(ctx context.Context) (int, error) {
 	// Find notifications that are stuck in processing for too long
 	// These are likely orphaned (Redis lost the entry or worker crashed)
-	staleThreshold := 10 * time.Minute // Notifications processing for >10 min are likely stuck
+	const staleMinutes = 10
+	staleThreshold := 10 * time.Minute
 
-	query := `
-		SELECT id, attempt_count, max_attempts, created_at
-		FROM notifications
-		WHERE status IN ('pending', 'processing', 'failed')
-		  AND updated_at < NOW() - INTERVAL '10 minutes'
-		  AND (expires_at IS NULL OR expires_at > NOW())
-		ORDER BY updated_at ASC
-		LIMIT 100
-	`
-
-	pgRepo, ok := s.repo.(*PostgresRepository)
-	if !ok {
-		log.Printf("[reconciler] Reconcile requires PostgresRepository, skipping")
-		return 0, nil
-	}
-	rows, err := pgRepo.db.QueryContext(ctx, query)
+	orphaned, err := s.repo.GetOrphanedNotifications(ctx, staleMinutes, 100)
 	if err != nil {
 		return 0, fmt.Errorf("failed to find orphaned notifications: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
 
 	reconciled := 0
-	for rows.Next() {
-		var id uuid.UUID
-		var attemptCount, maxAttempts int
-		var createdAt time.Time
-
-		if err := rows.Scan(&id, &attemptCount, &maxAttempts, &createdAt); err != nil {
-			continue
-		}
-
+	for _, o := range orphaned {
 		// Check if notification is really orphaned (not in Redis)
 		// Try to acquire lock - if we can, it means no worker is processing it
-		acquired, err := s.queue.AcquireLock(ctx, id, "reconciler", staleThreshold)
+		acquired, err := s.queue.AcquireLock(ctx, o.ID, "reconciler", staleThreshold)
 		if err != nil || !acquired {
 			continue // Either error or another worker has it
 		}
@@ -428,29 +405,25 @@ func (s *Service) Reconcile(ctx context.Context) (int, error) {
 		// The query already filters for notifications stuck 10+ minutes (via updated_at).
 		// Here we check if the notification was created 1+ hour ago to determine if it should
 		// be moved to DLQ permanently vs re-enqueued for another attempt.
-		if time.Since(createdAt) > time.Hour || attemptCount >= maxAttempts {
-			if err := s.repo.MoveToDLQ(ctx, id, time.Now(), "orphaned notification", ErrorCodeServiceDown); err != nil {
-				log.Printf("[reconciler] Failed to move orphaned notification %s to DLQ: %v", id, err)
+		if time.Since(o.CreatedAt) > time.Hour || o.AttemptCount >= o.MaxAttempts {
+			if err := s.repo.MoveToDLQ(ctx, o.ID, time.Now(), "orphaned notification", ErrorCodeServiceDown); err != nil {
+				log.Printf("[reconciler] Failed to move orphaned notification %s to DLQ: %v", o.ID, err)
 			} else {
-				log.Printf("[reconciler] Moved orphaned notification %s to DLQ", id)
+				log.Printf("[reconciler] Moved orphaned notification %s to DLQ", o.ID)
 				reconciled++
 			}
 		} else {
 			// Re-enqueue for processing
-			if err := s.queue.Enqueue(ctx, id, 0); err != nil {
-				log.Printf("[reconciler] Failed to requeue orphaned notification %s: %v", id, err)
+			if err := s.queue.Enqueue(ctx, o.ID, 0); err != nil {
+				log.Printf("[reconciler] Failed to requeue orphaned notification %s: %v", o.ID, err)
 			} else {
-				log.Printf("[reconciler] Requeued orphaned notification %s", id)
+				log.Printf("[reconciler] Requeued orphaned notification %s", o.ID)
 				reconciled++
 			}
 		}
 
 		// Release the lock
-		_ = s.queue.ReleaseLock(ctx, id, "reconciler")
-	}
-
-	if err := rows.Err(); err != nil {
-		return reconciled, fmt.Errorf("error iterating orphaned notifications: %w", err)
+		_ = s.queue.ReleaseLock(ctx, o.ID, "reconciler")
 	}
 
 	if reconciled > 0 {

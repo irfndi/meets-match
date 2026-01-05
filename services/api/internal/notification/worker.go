@@ -224,9 +224,8 @@ func (w *Worker) promoteDelayedLoop(ctx context.Context) {
 // Stop gracefully stops the worker.
 func (w *Worker) Stop() {
 	w.mu.Lock()
-	defer w.mu.Unlock()
-
 	if !w.isRunning {
+		w.mu.Unlock()
 		return
 	}
 
@@ -234,11 +233,17 @@ func (w *Worker) Stop() {
 
 	// Signal all goroutines to stop
 	close(w.stopCh)
+	w.mu.Unlock()
 
-	// Wait for all goroutines to finish
+	// Wait for all goroutines to finish (outside lock to avoid deadlock)
 	w.wg.Wait()
 
+	w.mu.Lock()
 	w.isRunning = false
+	// Reset stopCh so the worker can be started again
+	w.stopCh = make(chan struct{})
+	w.mu.Unlock()
+
 	log.Printf("[%s] Notification worker stopped", w.workerID)
 }
 

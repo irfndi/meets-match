@@ -3,6 +3,7 @@ package notification
 import (
 	"context"
 	"fmt"
+	"log"
 	"strconv"
 	"time"
 
@@ -149,10 +150,12 @@ func (q *RedisQueue) Dequeue(ctx context.Context, limit int) ([]uuid.UUID, error
 	for _, r := range results {
 		idStr, ok := r.(string)
 		if !ok {
+			log.Printf("[queue] Warning: unexpected non-string value in queue: %T", r)
 			continue
 		}
 		id, err := uuid.Parse(idStr)
 		if err != nil {
+			log.Printf("[queue] Warning: invalid UUID in queue: %q (error: %v)", idStr, err)
 			continue
 		}
 		ids = append(ids, id)
