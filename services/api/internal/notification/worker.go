@@ -239,6 +239,10 @@ func (w *Worker) Stop() {
 
 	log.Printf("[%s] Stopping notification worker...", w.workerID)
 
+	// Mark as stopping before closing the channel to prevent double-close panic
+	// from concurrent Stop() calls
+	w.isRunning = false
+
 	// Signal all goroutines to stop
 	close(w.stopCh)
 	w.mu.Unlock()
@@ -247,7 +251,6 @@ func (w *Worker) Stop() {
 	w.wg.Wait()
 
 	w.mu.Lock()
-	w.isRunning = false
 	// Reset stopCh so the worker can be started again
 	w.stopCh = make(chan struct{})
 	w.mu.Unlock()
