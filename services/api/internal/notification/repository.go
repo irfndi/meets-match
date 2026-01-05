@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/google/uuid"
@@ -570,10 +571,12 @@ func (r *PostgresRepository) scanNotifications(rows *sql.Rows) ([]*Notification,
 			&n.DeliveredAt, &n.DLQAt, &n.IdempotencyKey, &n.ExpiresAt,
 		)
 		if err != nil {
+			log.Printf("[repository] Warning: failed to scan notification row: %v", err)
 			continue
 		}
 
 		if err := json.Unmarshal(payloadBytes, &n.Payload); err != nil {
+			log.Printf("[repository] Warning: failed to unmarshal notification payload: %v", err)
 			continue
 		}
 

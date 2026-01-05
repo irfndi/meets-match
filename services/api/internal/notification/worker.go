@@ -71,7 +71,12 @@ func (w *Worker) Start(ctx context.Context) error {
 		w.workerID, w.config.Concurrency)
 
 	// Channel for notifications to process
-	notificationCh := make(chan uuid.UUID, w.config.BatchSize*2)
+	// Buffer size is configurable to handle varying throughput and memory constraints
+	bufferSize := w.config.BatchSize * w.config.ChannelBufferMultiplier
+	if bufferSize < 1 {
+		bufferSize = w.config.BatchSize * 2 // Fallback to default multiplier
+	}
+	notificationCh := make(chan uuid.UUID, bufferSize)
 
 	// Start worker goroutines
 	for i := 0; i < w.config.Concurrency; i++ {

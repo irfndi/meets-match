@@ -314,6 +314,13 @@ func (s *GRPCService) SendNotification(_ context.Context, _ *pb.SendNotification
 
 // GetReengagementCandidates retrieves users eligible for re-engagement notifications.
 // Queries users who are inactive, have notifications enabled, and haven't been reminded recently.
+//
+// Performance Note: This query uses LEFT JOIN LATERAL for notification deduplication which
+// provides better performance than correlated subqueries for this use case. However, at very
+// large scale (>1M users), consider:
+// - Adding partial indexes on notifications.type and notifications.created_at
+// - Running EXPLAIN ANALYZE periodically to monitor query plan changes
+// - Potentially moving to batch processing with materialized views for candidate lists
 func (s *GRPCService) GetReengagementCandidates(ctx context.Context, req *pb.GetReengagementCandidatesRequest) (*pb.GetReengagementCandidatesResponse, error) {
 	if s.db == nil {
 		return nil, status.Error(codes.Unavailable, "database not configured for re-engagement queries")
@@ -346,7 +353,16 @@ func (s *GRPCService) GetReengagementCandidates(ctx context.Context, req *pb.Get
 	// - Have been inactive for min-max days
 	// - Haven't already received this type of notification recently (deduplication)
 	// - Are in appropriate timezone hours for notifications (9 AM - 9 PM local time)
-	// Uses LEFT JOIN with aggregation instead of correlated subquery for better performance
+	//
+	// Uses LEFT JOIN with aggregation instead of correlated subquery for better performance.
+	//
+	// Timezone Handling:
+	// The EXTRACT(HOUR FROM NOW() AT TIME ZONE ...) correctly handles timezone transitions including
+	// DST changes since PostgreSQL's AT TIME ZONE operator accounts for these. Users without a
+	// timezone preference default to UTC. The 9-21 (9 AM - 9 PM) range is inclusive on both ends.
+	// Note: This filters based on the server's current time, not the scheduled job run time.
+	// If the worker runs at midnight UTC, this query will only return users in timezones where
+	// it's currently between 9 AM and 9 PM (e.g., UTC+9 to UTC-3).
 	query := `
 		SELECT
 			u.id,

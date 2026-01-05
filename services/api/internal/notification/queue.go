@@ -101,12 +101,28 @@ func NewRedisQueueFromClient(client *redis.Client, config Config) *RedisQueue {
 	}
 }
 
+// MaxPriority is the maximum allowed priority value for notifications.
+// Higher values are clamped to this maximum to prevent floating point precision issues.
+// With float64 and 1e19 multiplier, priorities up to 1000 are safely handled.
+const MaxPriority = 1000
+
 // Enqueue adds a notification to the pending queue.
 // Score is calculated as: priority * 1e19 - timestamp
 // This ensures higher priority items are processed first (larger priority = higher score),
 // and older items within same priority are processed first (subtracting timestamp means
 // older timestamps yield higher scores).
+//
+// Priority values should be in range [0, MaxPriority]. Values above MaxPriority are clamped.
 func (q *RedisQueue) Enqueue(ctx context.Context, id uuid.UUID, priority int) error {
+	// Validate and clamp priority to safe range
+	if priority < 0 {
+		priority = 0
+	}
+	if priority > MaxPriority {
+		log.Printf("[queue] Warning: priority %d exceeds maximum %d, clamping", priority, MaxPriority)
+		priority = MaxPriority
+	}
+
 	// Score: higher priority first, then FIFO (older first)
 	// Multiply priority by 1e19 to ensure it dominates over timestamp (~1.7e18 nanoseconds)
 	// Subtract timestamp so older items have higher scores within same priority

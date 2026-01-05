@@ -173,7 +173,7 @@ export const handleLike = (ctx: Context, matchId: string) =>
       // Fetch other user's details to show their name
       const otherUserRes = yield* _(userService.getUser(otherUserId));
       const otherUser = otherUserRes.user;
-      const otherName = otherUser?.firstName || 'your match';
+      const otherName = otherUser?.firstName?.trim() || 'your match';
       const template = getRandomStarter();
 
       yield* _(
