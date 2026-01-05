@@ -67,7 +67,7 @@ func main() {
 	healthServer := startHealthServer(cfg.HealthPort, worker)
 
 	// Run scheduler and worker concurrently
-	g, gCtx := errgroup.WithContext(ctx)
+	g, _ := errgroup.WithContext(ctx)
 
 	g.Go(func() error {
 		log.Println("Starting task scheduler...")
@@ -85,28 +85,26 @@ func main() {
 		return nil
 	})
 
-	// Wait for shutdown signal in a separate goroutine
-	go func() {
-		<-gCtx.Done()
-		log.Println("Shutting down worker service...")
+	// Wait for shutdown signal
+	<-ctx.Done()
+	log.Println("Shutting down worker service...")
 
-		// Graceful shutdown with timeout
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
+	// Graceful shutdown with timeout
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 
-		// Signal scheduler and worker to stop (they should stop processing new tasks)
-		scheduler.Shutdown()
-		worker.Shutdown()
-
-		// Shutdown health server
-		if err := healthServer.Shutdown(shutdownCtx); err != nil {
-			log.Printf("Health server shutdown error: %v", err)
-		}
-	}()
+	// Signal scheduler and worker to stop (they should stop processing new tasks)
+	scheduler.Shutdown()
+	worker.Shutdown()
 
 	// Wait for all goroutines to complete (including in-flight tasks)
 	if err := g.Wait(); err != nil && err != context.Canceled {
 		log.Printf("Worker service error: %v", err)
+	}
+
+	// Shutdown health server after workers have stopped
+	if err := healthServer.Shutdown(shutdownCtx); err != nil {
+		log.Printf("Health server shutdown error: %v", err)
 	}
 
 	log.Println("Worker service stopped")

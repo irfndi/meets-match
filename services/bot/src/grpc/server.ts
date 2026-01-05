@@ -38,6 +38,21 @@ function isValidSendNotificationRequest(req: unknown): req is SendNotificationRe
     return false;
   }
 
+  // Validate telegram payload exists with required fields
+  const payload = r.payload as Record<string, unknown>;
+  if (typeof payload.telegram !== 'object' || payload.telegram === null) {
+    return false;
+  }
+
+  // Validate telegram has required chatId and text fields
+  const telegram = payload.telegram as Record<string, unknown>;
+  if (typeof telegram.chatId !== 'string' || telegram.chatId.length === 0) {
+    return false;
+  }
+  if (typeof telegram.text !== 'string' || telegram.text.length === 0) {
+    return false;
+  }
+
   return true;
 }
 

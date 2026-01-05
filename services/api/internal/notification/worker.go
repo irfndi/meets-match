@@ -84,7 +84,7 @@ func (w *Worker) Start(ctx context.Context) error {
 	go w.promoteDelayedLoop(ctx)
 
 	// Main loop - fetch from pending queue with adaptive polling
-	timer := time.NewTimer(w.pollInterval)
+	timer := time.NewTimer(w.getPollInterval())
 	defer timer.Stop()
 
 	for {
@@ -101,7 +101,7 @@ func (w *Worker) Start(ctx context.Context) error {
 			if err != nil {
 				log.Printf("[%s] Error fetching from queue: %v", w.workerID, err)
 				w.adaptPollInterval(false) // Backoff on errors
-				timer.Reset(w.pollInterval)
+				timer.Reset(w.getPollInterval())
 				continue
 			}
 
@@ -122,9 +122,17 @@ func (w *Worker) Start(ctx context.Context) error {
 				}
 			}
 
-			timer.Reset(w.pollInterval)
+			timer.Reset(w.getPollInterval())
 		}
 	}
+}
+
+// getPollInterval returns the current poll interval safely.
+// This must be used when reading pollInterval to avoid data races.
+func (w *Worker) getPollInterval() time.Duration {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.pollInterval
 }
 
 // adaptPollInterval adjusts the polling interval based on queue activity.
