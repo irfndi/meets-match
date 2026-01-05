@@ -63,4 +63,28 @@ describe('UserService', () => {
 
     expect(Effect.isEffect(result)).toBe(true);
   });
+
+  it('should return Effect for updateLastActive', async () => {
+    const { userService } = await import('./userService.js');
+
+    const result = userService.updateLastActive('test-user-id');
+
+    expect(Effect.isEffect(result)).toBe(true);
+  });
+
+  it('should have all required service methods', async () => {
+    const { userService } = await import('./userService.js');
+
+    expect(typeof userService.getUser).toBe('function');
+    expect(typeof userService.createUser).toBe('function');
+    expect(typeof userService.updateUser).toBe('function');
+    expect(typeof userService.updateLastActive).toBe('function');
+  });
+
+  it('should reset client when _resetClient is called', async () => {
+    const { _resetClient } = await import('./userService.js');
+
+    // Should not throw
+    expect(() => _resetClient()).not.toThrow();
+  });
 });
