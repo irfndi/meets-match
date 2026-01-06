@@ -4,9 +4,11 @@ package main
 import (
 	"context"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"golang.org/x/sync/errgroup"
 
@@ -61,6 +63,9 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	// Start health check server
+	healthServer := startHealthServer(cfg.HealthPort, worker)
+
 	// Run scheduler and worker concurrently
 	g, _ := errgroup.WithContext(ctx)
 
@@ -84,9 +89,52 @@ func main() {
 	<-ctx.Done()
 	log.Println("Shutting down worker service...")
 
-	// Graceful shutdown
+	// Graceful shutdown with timeout
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Signal scheduler and worker to stop (they should stop processing new tasks)
 	scheduler.Shutdown()
 	worker.Shutdown()
 
+	// Wait for all goroutines to complete (including in-flight tasks)
+	if err := g.Wait(); err != nil && err != context.Canceled {
+		log.Printf("Worker service error: %v", err)
+	}
+
+	// Shutdown health server after workers have stopped
+	if err := healthServer.Shutdown(shutdownCtx); err != nil {
+		log.Printf("Health server shutdown error: %v", err)
+	}
+
 	log.Println("Worker service stopped")
+}
+
+// startHealthServer starts the health check HTTP server.
+func startHealthServer(port string, worker *jobs.Worker) *http.Server {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		if worker.IsHealthy() {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"status":"healthy"}`))
+		} else {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte(`{"status":"unhealthy"}`))
+		}
+	})
+
+	server := &http.Server{
+		Addr:              ":" + port,
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+
+	go func() {
+		log.Printf("Health server listening on :%s", port)
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Printf("Health server error: %v", err)
+		}
+	}()
+
+	return server
 }

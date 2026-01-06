@@ -1,6 +1,7 @@
 package notification
 
 import (
+	"log"
 	"os"
 	"strconv"
 	"time"
@@ -122,15 +123,26 @@ type WorkerConfig struct {
 
 	// Worker identification prefix for logging
 	WorkerPrefix string
+
+	// ChannelBufferMultiplier controls the notification channel buffer size.
+	// Buffer size = BatchSize * ChannelBufferMultiplier.
+	// Higher values allow more buffering but use more memory.
+	// Default: 2, Maximum: 100
+	ChannelBufferMultiplier int
 }
+
+// MaxChannelBufferMultiplier is the maximum allowed value for ChannelBufferMultiplier.
+// This prevents excessive memory allocation from misconfiguration.
+const MaxChannelBufferMultiplier = 100
 
 // DefaultWorkerConfig returns sensible worker defaults.
 func DefaultWorkerConfig() WorkerConfig {
 	return WorkerConfig{
-		Concurrency:         5,
-		DelayedPollInterval: 10 * time.Second,
-		BatchSize:           10,
-		WorkerPrefix:        "notification-worker",
+		Concurrency:             5,
+		DelayedPollInterval:     10 * time.Second,
+		BatchSize:               10,
+		WorkerPrefix:            "notification-worker",
+		ChannelBufferMultiplier: 2,
 	}
 }
 
@@ -139,6 +151,7 @@ func DefaultWorkerConfig() WorkerConfig {
 //   - NOTIFICATION_WORKER_CONCURRENCY: Number of concurrent processors (default: 5)
 //   - NOTIFICATION_WORKER_BATCH_SIZE: Notifications per poll (default: 10)
 //   - NOTIFICATION_WORKER_DELAYED_POLL_SECONDS: Delayed queue poll interval (default: 10)
+//   - NOTIFICATION_WORKER_CHANNEL_BUFFER_MULTIPLIER: Channel buffer size multiplier (default: 2)
 func LoadWorkerConfig() WorkerConfig {
 	cfg := DefaultWorkerConfig()
 
@@ -157,6 +170,18 @@ func LoadWorkerConfig() WorkerConfig {
 	if v := os.Getenv("NOTIFICATION_WORKER_DELAYED_POLL_SECONDS"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			cfg.DelayedPollInterval = time.Duration(n) * time.Second
+		}
+	}
+
+	if v := os.Getenv("NOTIFICATION_WORKER_CHANNEL_BUFFER_MULTIPLIER"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			if n > MaxChannelBufferMultiplier {
+				log.Printf("[config] Warning: NOTIFICATION_WORKER_CHANNEL_BUFFER_MULTIPLIER=%d exceeds maximum (%d), clamping to %d",
+					n, MaxChannelBufferMultiplier, MaxChannelBufferMultiplier)
+				cfg.ChannelBufferMultiplier = MaxChannelBufferMultiplier
+			} else {
+				cfg.ChannelBufferMultiplier = n
+			}
 		}
 	}
 

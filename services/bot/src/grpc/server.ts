@@ -13,6 +13,40 @@ import type { Bot } from 'grammy';
 import type { MyContext } from '../types.js';
 import { createNotificationHandler } from './notificationHandler.js';
 
+/**
+ * Runtime type guard for SendNotificationRequest.
+ * Validates that the request has the required fields before processing.
+ *
+ * SendNotificationRequest fields (from proto):
+ * - user_id (string): Telegram chat_id - required
+ * - type (NotificationType): Notification type enum - required
+ * - message (string): Pre-formatted message text - required
+ * - buttons (InlineButton[]): Optional inline buttons
+ * - metadata (map<string, string>): Optional metadata
+ */
+function isValidSendNotificationRequest(req: unknown): req is SendNotificationRequest {
+  if (typeof req !== 'object' || req === null) {
+    return false;
+  }
+
+  const r = req as Record<string, unknown>;
+
+  // Check required fields per SendNotificationRequest proto definition
+  if (typeof r.userId !== 'string' || r.userId.length === 0) {
+    return false;
+  }
+
+  if (typeof r.message !== 'string' || r.message.length === 0) {
+    return false;
+  }
+
+  if (typeof r.type !== 'number') {
+    return false;
+  }
+
+  return true;
+}
+
 export interface GrpcServerOptions {
   port: number;
 }
@@ -45,9 +79,14 @@ export function startGrpcServer(bot: Bot<MyContext>, options: GrpcServerOptions)
       NotificationService as any,
       {
         // Only implement SendNotification - other methods are handled by API service.
-        // Cast request type to access properties safely after Connect deserializes it.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        sendNotification: async (req: any) => notificationHandler(req as SendNotificationRequest),
+        sendNotification: async (req: any) => {
+          // Runtime validation before processing
+          if (!isValidSendNotificationRequest(req)) {
+            throw new Error('Invalid SendNotificationRequest: missing required fields');
+          }
+          return notificationHandler(req);
+        },
 
         // Stub implementations for methods not used by Bot service.
         // These throw errors to clearly indicate they should be called on API service instead.

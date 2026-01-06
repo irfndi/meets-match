@@ -79,9 +79,10 @@ func main() {
 	notifCfg := notification.LoadConfig()
 	workerCfg := notification.LoadWorkerConfig()
 
-	// Try to connect to Redis for notification queue
-	redisQueue, err := notification.NewRedisQueue(cfg.RedisURL, notifCfg)
-	if err != nil {
+	// Validate Redis URL before attempting connection
+	if cfg.RedisURL == "" {
+		logger.Println("WARNING: REDIS_URL not set, notification queue disabled")
+	} else if redisQueue, err := notification.NewRedisQueue(cfg.RedisURL, notifCfg); err != nil {
 		logger.Printf("WARNING: Redis connection failed, notification queue disabled: %v", err)
 	} else {
 		logger.Println("Redis connection established for notification queue")

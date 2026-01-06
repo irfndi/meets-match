@@ -134,15 +134,15 @@ _"${template}"_
 `;
 
 const LIKED_MESSAGE = `
-👍 * Liked! *
+👍 *Liked!*
 
-  We'll let you know if they like you back.
-    `;
+We'll let you know if they like you back.
+`;
 
 const PASSED_MESSAGE = `
-👎 * Passed *
+👎 *Passed*
 
-  Moving on to the next potential match...
+Moving on to the next potential match...
 `;
 
 // Handle like action
@@ -173,7 +173,7 @@ export const handleLike = (ctx: Context, matchId: string) =>
       // Fetch other user's details to show their name
       const otherUserRes = yield* _(userService.getUser(otherUserId));
       const otherUser = otherUserRes.user;
-      const otherName = otherUser?.firstName || 'your match';
+      const otherName = otherUser?.firstName?.trim() || 'your match';
       const template = getRandomStarter();
 
       yield* _(

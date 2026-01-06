@@ -1,4 +1,4 @@
-.PHONY: help ci lint format test security api-lint api-fmt api-test api-sec api-build api-tidy api-run bot-run bot-lint bot-fmt bot-test bot-build proto-gen dry-build deploy-app
+.PHONY: help ci lint format test security api-lint api-fmt api-test api-sec api-build api-tidy api-run bot-run bot-lint bot-fmt bot-test bot-test-handler-integration bot-test-integration bot-build proto-gen dry-build deploy-app test-all
 
 # Default target
 help:
@@ -6,7 +6,10 @@ help:
 	@echo "  make ci              Run full local CI (Lint, Format, Security, Test, Build)"
 	@echo "  make api-run         Run Go API locally"
 	@echo "  make bot-run         Run TS Bot locally"
-	@echo "  make test            Run all tests (Go & TS)"
+	@echo "  make test            Run unit tests (Go & TS)"
+	@echo "  make test-all        Run all tests (unit, handler-integration, integration)"
+	@echo "  make bot-test-handler-integration  Run TS Bot handler integration tests"
+	@echo "  make bot-test-integration  Run TS Bot integration tests"
 	@echo "  make lint            Run all linters"
 	@echo "  make format          Format all code"
 	@echo "  make deploy-app      Deploy to server via rsync"
@@ -72,8 +75,23 @@ bot-fmt:
 	cd services/bot && bun run format
 
 bot-test:
-	@echo "Testing TS Bot..."
+	@echo "Testing TS Bot (unit tests)..."
 	cd services/bot && bun run test:coverage
+
+bot-test-handler-integration:
+	@echo "Running TS Bot handler integration tests..."
+	cd services/bot && bun run vitest run --config vitest.handler-integration.config.ts
+
+bot-test-integration:
+	@echo "Running TS Bot integration tests..."
+	@if [ -z "$$INTEGRATION_TEST_API_URL" ]; then \
+		echo "⚠️ INTEGRATION_TEST_API_URL not set, using default http://localhost:8080"; \
+	fi
+	cd services/bot && INTEGRATION_TEST_API_URL=$${INTEGRATION_TEST_API_URL:-http://localhost:8080} \
+		bun run vitest run --config vitest.integration.config.ts
+
+test-all: test bot-test-handler-integration bot-test-integration
+	@echo "✅ All tests completed"
 
 bot-build:
 	@echo "Building TS Bot..."

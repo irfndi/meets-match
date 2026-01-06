@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/google/uuid"
@@ -50,6 +51,18 @@ type Repository interface {
 
 	// CleanupExpired removes expired notifications.
 	CleanupExpired(ctx context.Context) (int64, error)
+
+	// GetOrphanedNotifications retrieves notifications stuck in processing state.
+	// Used by the reconciler to find and recover orphaned notifications.
+	GetOrphanedNotifications(ctx context.Context, staleMinutes int, limit int) ([]OrphanedNotification, error)
+}
+
+// OrphanedNotification contains minimal data for reconciliation.
+type OrphanedNotification struct {
+	ID           uuid.UUID
+	AttemptCount int
+	MaxAttempts  int
+	CreatedAt    time.Time
 }
 
 // PostgresRepository implements Repository using PostgreSQL.
@@ -558,10 +571,12 @@ func (r *PostgresRepository) scanNotifications(rows *sql.Rows) ([]*Notification,
 			&n.DeliveredAt, &n.DLQAt, &n.IdempotencyKey, &n.ExpiresAt,
 		)
 		if err != nil {
+			log.Printf("[repository] Warning: failed to scan notification row: %v", err)
 			continue
 		}
 
 		if err := json.Unmarshal(payloadBytes, &n.Payload); err != nil {
+			log.Printf("[repository] Warning: failed to unmarshal notification payload: %v", err)
 			continue
 		}
 
@@ -578,6 +593,40 @@ func (r *PostgresRepository) scanNotifications(rows *sql.Rows) ([]*Notification,
 	}
 
 	return notifications, nil
+}
+
+// GetOrphanedNotifications retrieves notifications stuck in processing state.
+func (r *PostgresRepository) GetOrphanedNotifications(ctx context.Context, staleMinutes int, limit int) ([]OrphanedNotification, error) {
+	query := `
+		SELECT id, attempt_count, max_attempts, created_at
+		FROM notifications
+		WHERE status IN ('pending', 'processing', 'failed')
+		  AND updated_at < NOW() - INTERVAL '1 minute' * $1
+		  AND (expires_at IS NULL OR expires_at > NOW())
+		ORDER BY updated_at ASC
+		LIMIT $2
+	`
+
+	rows, err := r.db.QueryContext(ctx, query, staleMinutes, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find orphaned notifications: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var orphaned []OrphanedNotification
+	for rows.Next() {
+		var o OrphanedNotification
+		if err := rows.Scan(&o.ID, &o.AttemptCount, &o.MaxAttempts, &o.CreatedAt); err != nil {
+			continue
+		}
+		orphaned = append(orphaned, o)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating orphaned notifications: %w", err)
+	}
+
+	return orphaned, nil
 }
 
 // isUniqueViolation checks if error is a unique constraint violation.

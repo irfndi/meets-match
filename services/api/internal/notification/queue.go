@@ -3,6 +3,7 @@ package notification
 import (
 	"context"
 	"fmt"
+	"log"
 	"strconv"
 	"time"
 
@@ -100,12 +101,28 @@ func NewRedisQueueFromClient(client *redis.Client, config Config) *RedisQueue {
 	}
 }
 
+// MaxPriority is the maximum allowed priority value for notifications.
+// Higher values are clamped to this maximum to prevent floating point precision issues.
+// With float64 and 1e19 multiplier, priorities up to 1000 are safely handled.
+const MaxPriority = 1000
+
 // Enqueue adds a notification to the pending queue.
 // Score is calculated as: priority * 1e19 - timestamp
 // This ensures higher priority items are processed first (larger priority = higher score),
 // and older items within same priority are processed first (subtracting timestamp means
 // older timestamps yield higher scores).
+//
+// Priority values should be in range [0, MaxPriority]. Values above MaxPriority are clamped.
 func (q *RedisQueue) Enqueue(ctx context.Context, id uuid.UUID, priority int) error {
+	// Validate and clamp priority to safe range
+	if priority < 0 {
+		priority = 0
+	}
+	if priority > MaxPriority {
+		log.Printf("[queue] Warning: priority %d exceeds maximum %d, clamping", priority, MaxPriority)
+		priority = MaxPriority
+	}
+
 	// Score: higher priority first, then FIFO (older first)
 	// Multiply priority by 1e19 to ensure it dominates over timestamp (~1.7e18 nanoseconds)
 	// Subtract timestamp so older items have higher scores within same priority
@@ -123,20 +140,38 @@ func (q *RedisQueue) Enqueue(ctx context.Context, id uuid.UUID, priority int) er
 	return nil
 }
 
-// Dequeue retrieves notifications ready for processing.
+// Dequeue atomically retrieves and removes notifications ready for processing.
 // Returns notification IDs in priority order (highest priority, oldest first).
+// Uses Lua script for atomic pop to prevent race conditions between workers.
 func (q *RedisQueue) Dequeue(ctx context.Context, limit int) ([]uuid.UUID, error) {
-	// Get items with highest scores (highest priority)
-	// ZREVRANGE returns items from highest to lowest score
-	results, err := q.client.ZRevRange(ctx, keyPendingQueue, 0, int64(limit-1)).Result()
+	// Lua script for atomic pop of highest scored items
+	// ZREVRANGE gets items, ZREM removes them atomically
+	// Uses loop instead of unpack() to avoid Lua stack overflow with large batches
+	script := redis.NewScript(`
+		local items = redis.call("ZREVRANGE", KEYS[1], 0, ARGV[1] - 1)
+		if #items > 0 then
+			for i = 1, #items do
+				redis.call("ZREM", KEYS[1], items[i])
+			end
+		end
+		return items
+	`)
+
+	results, err := script.Run(ctx, q.client, []string{keyPendingQueue}, limit).Slice()
 	if err != nil {
 		return nil, fmt.Errorf("failed to dequeue notifications: %w", err)
 	}
 
 	ids := make([]uuid.UUID, 0, len(results))
 	for _, r := range results {
-		id, err := uuid.Parse(r)
+		idStr, ok := r.(string)
+		if !ok {
+			log.Printf("[queue] Warning: unexpected non-string value in queue: %T", r)
+			continue
+		}
+		id, err := uuid.Parse(idStr)
 		if err != nil {
+			log.Printf("[queue] Warning: invalid UUID in queue: %q (error: %v)", idStr, err)
 			continue
 		}
 		ids = append(ids, id)

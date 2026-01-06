@@ -11,27 +11,36 @@ import (
 	"github.com/google/uuid"
 )
 
+// Adaptive polling configuration
+const (
+	minPollInterval = 50 * time.Millisecond // Minimum polling interval when busy
+	maxPollInterval = 2 * time.Second       // Maximum polling interval when idle
+	pollBackoffRate = 1.5                   // Rate at which to increase interval
+)
+
 // Worker processes notifications from the queue.
 // It runs multiple goroutines to handle concurrent processing.
 type Worker struct {
-	service   *Service
-	queue     Queue
-	config    WorkerConfig
-	workerID  string
-	stopCh    chan struct{}
-	wg        sync.WaitGroup
-	isRunning bool
-	mu        sync.Mutex
+	service      *Service
+	queue        Queue
+	config       WorkerConfig
+	workerID     string
+	stopCh       chan struct{}
+	wg           sync.WaitGroup
+	isRunning    bool
+	mu           sync.Mutex
+	pollInterval time.Duration // Current adaptive polling interval
 }
 
 // NewWorker creates a notification worker.
 func NewWorker(service *Service, queue Queue, config WorkerConfig) *Worker {
 	return &Worker{
-		service:  service,
-		queue:    queue,
-		config:   config,
-		workerID: fmt.Sprintf("%s-%s", config.WorkerPrefix, uuid.New().String()[:8]),
-		stopCh:   make(chan struct{}),
+		service:      service,
+		queue:        queue,
+		config:       config,
+		workerID:     fmt.Sprintf("%s-%s", config.WorkerPrefix, uuid.New().String()[:8]),
+		stopCh:       make(chan struct{}),
+		pollInterval: minPollInterval, // Start with minimum interval
 	}
 }
 
@@ -62,7 +71,18 @@ func (w *Worker) Start(ctx context.Context) error {
 		w.workerID, w.config.Concurrency)
 
 	// Channel for notifications to process
-	notificationCh := make(chan uuid.UUID, w.config.BatchSize*2)
+	// Buffer size is configurable to handle varying throughput and memory constraints
+	// Validate inputs to prevent invalid buffer sizes (0 or negative)
+	batchSize := w.config.BatchSize
+	if batchSize < 1 {
+		batchSize = 10 // Use default batch size
+	}
+	multiplier := w.config.ChannelBufferMultiplier
+	if multiplier < 1 {
+		multiplier = 2 // Use default multiplier
+	}
+	bufferSize := batchSize * multiplier
+	notificationCh := make(chan uuid.UUID, bufferSize)
 
 	// Start worker goroutines
 	for i := 0; i < w.config.Concurrency; i++ {
@@ -74,9 +94,9 @@ func (w *Worker) Start(ctx context.Context) error {
 	w.wg.Add(1)
 	go w.promoteDelayedLoop(ctx)
 
-	// Main loop - fetch from pending queue
-	ticker := time.NewTicker(100 * time.Millisecond)
-	defer ticker.Stop()
+	// Main loop - fetch from pending queue with adaptive polling
+	timer := time.NewTimer(w.getPollInterval())
+	defer timer.Stop()
 
 	for {
 		select {
@@ -86,12 +106,21 @@ func (w *Worker) Start(ctx context.Context) error {
 		case <-w.stopCh:
 			close(notificationCh)
 			return nil
-		case <-ticker.C:
+		case <-timer.C:
 			// Fetch batch from pending queue
 			ids, err := w.queue.Dequeue(ctx, w.config.BatchSize)
 			if err != nil {
 				log.Printf("[%s] Error fetching from queue: %v", w.workerID, err)
+				w.adaptPollInterval(false) // Backoff on errors
+				timer.Reset(w.getPollInterval())
 				continue
+			}
+
+			// Adapt polling interval based on queue activity
+			if len(ids) > 0 {
+				w.adaptPollInterval(true) // Speed up when busy
+			} else {
+				w.adaptPollInterval(false) // Slow down when idle
 			}
 
 			// Send to processing channel
@@ -103,7 +132,37 @@ func (w *Worker) Start(ctx context.Context) error {
 					return nil
 				}
 			}
+
+			timer.Reset(w.getPollInterval())
 		}
+	}
+}
+
+// getPollInterval returns the current poll interval safely.
+// This must be used when reading pollInterval to avoid data races.
+func (w *Worker) getPollInterval() time.Duration {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.pollInterval
+}
+
+// adaptPollInterval adjusts the polling interval based on queue activity.
+// When busy (hasWork=true), interval decreases towards minPollInterval.
+// When idle (hasWork=false), interval increases towards maxPollInterval.
+func (w *Worker) adaptPollInterval(hasWork bool) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	if hasWork {
+		// Speed up polling when there's work
+		w.pollInterval = minPollInterval
+	} else {
+		// Gradually slow down when idle
+		newInterval := time.Duration(float64(w.pollInterval) * pollBackoffRate)
+		if newInterval > maxPollInterval {
+			newInterval = maxPollInterval
+		}
+		w.pollInterval = newInterval
 	}
 }
 
@@ -142,6 +201,10 @@ func (w *Worker) promoteDelayedLoop(ctx context.Context) {
 	dlqCheckTicker := time.NewTicker(5 * time.Minute)
 	defer dlqCheckTicker.Stop()
 
+	// Reconciliation ticker (every 5 minutes)
+	reconcileTicker := time.NewTicker(5 * time.Minute)
+	defer reconcileTicker.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -165,6 +228,14 @@ func (w *Worker) promoteDelayedLoop(ctx context.Context) {
 			if err := w.service.CheckDLQHealth(ctx); err != nil {
 				log.Printf("[%s] Error checking DLQ health: %v", w.workerID, err)
 			}
+		case <-reconcileTicker.C:
+			// Periodic reconciliation to sync Redis and PostgreSQL
+			reconciled, err := w.service.Reconcile(ctx)
+			if err != nil {
+				log.Printf("[%s] Error during reconciliation: %v", w.workerID, err)
+			} else if reconciled > 0 {
+				log.Printf("[%s] Reconciled %d orphaned notifications", w.workerID, reconciled)
+			}
 		}
 	}
 }
@@ -172,21 +243,29 @@ func (w *Worker) promoteDelayedLoop(ctx context.Context) {
 // Stop gracefully stops the worker.
 func (w *Worker) Stop() {
 	w.mu.Lock()
-	defer w.mu.Unlock()
-
 	if !w.isRunning {
+		w.mu.Unlock()
 		return
 	}
 
 	log.Printf("[%s] Stopping notification worker...", w.workerID)
 
+	// Mark as stopping before closing the channel to prevent double-close panic
+	// from concurrent Stop() calls
+	w.isRunning = false
+
 	// Signal all goroutines to stop
 	close(w.stopCh)
+	w.mu.Unlock()
 
-	// Wait for all goroutines to finish
+	// Wait for all goroutines to finish (outside lock to avoid deadlock)
 	w.wg.Wait()
 
-	w.isRunning = false
+	w.mu.Lock()
+	// Reset stopCh so the worker can be started again
+	w.stopCh = make(chan struct{})
+	w.mu.Unlock()
+
 	log.Printf("[%s] Notification worker stopped", w.workerID)
 }
 
