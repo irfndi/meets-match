@@ -102,4 +102,22 @@ describe('MatchService', () => {
 
     expect(Effect.isEffect(result)).toBe(true);
   });
+
+  it('should reset client when _resetClient is called', async () => {
+    const { _resetClient } = await import('./matchService.js');
+
+    // Should not throw
+    expect(() => _resetClient()).not.toThrow();
+  });
+
+  it('should have all required service methods', async () => {
+    const { matchService } = await import('./matchService.js');
+
+    expect(typeof matchService.getPotentialMatches).toBe('function');
+    expect(typeof matchService.createMatch).toBe('function');
+    expect(typeof matchService.likeMatch).toBe('function');
+    expect(typeof matchService.dislikeMatch).toBe('function');
+    expect(typeof matchService.getMatch).toBe('function');
+    expect(typeof matchService.getMatchList).toBe('function');
+  });
 });

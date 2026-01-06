@@ -15,6 +15,7 @@ import (
 	"github.com/irfndi/match-bot/services/api/internal/config"
 	"github.com/irfndi/match-bot/services/api/internal/grpcserver"
 	"github.com/irfndi/match-bot/services/api/internal/httpserver"
+	"github.com/irfndi/match-bot/services/api/internal/notification"
 	sentrypkg "github.com/irfndi/match-bot/services/api/internal/sentry"
 
 	_ "github.com/lib/pq"
@@ -57,7 +58,7 @@ func main() {
 		}
 	}()
 
-	// Wait for DB with retry
+	// Wait for DB with retry - allows DB to start up in containerized environments
 	maxRetries := 30
 	for i := 0; i < maxRetries; i++ {
 		if err := db.Ping(); err == nil {
@@ -68,11 +69,56 @@ func main() {
 			log.Fatalf("failed to connect to database after %d retries", maxRetries)
 		}
 		logger.Printf("Waiting for database... (%d/%d)", i+1, maxRetries)
-		time.Sleep(1 * time.Second)
+		time.Sleep(1 * time.Second) // Retry delay between connection attempts
+	}
+
+	// Initialize notification system (optional - graceful degradation if Redis unavailable)
+	var notificationService *notification.Service
+	var notificationWorker *notification.Worker
+
+	notifCfg := notification.LoadConfig()
+	workerCfg := notification.LoadWorkerConfig()
+
+	// Validate Redis URL before attempting connection
+	if cfg.RedisURL == "" {
+		logger.Println("WARNING: REDIS_URL not set, notification queue disabled")
+	} else if redisQueue, err := notification.NewRedisQueue(cfg.RedisURL, notifCfg); err != nil {
+		logger.Printf("WARNING: Redis connection failed, notification queue disabled: %v", err)
+	} else {
+		logger.Println("Redis connection established for notification queue")
+
+		// Create notification repository and service
+		notifRepo := notification.NewPostgresRepository(db, notifCfg)
+		notificationService = notification.NewService(notifRepo, redisQueue, notifCfg)
+
+		// Register Telegram sender (bot token from env)
+		if botToken := os.Getenv("TELEGRAM_BOT_TOKEN"); botToken != "" {
+			// Configurable timeout (default 10s, useful for slow networks)
+			telegramTimeout := 10 * time.Second
+			if timeoutStr := os.Getenv("TELEGRAM_SENDER_TIMEOUT_SECONDS"); timeoutStr != "" {
+				if secs, err := time.ParseDuration(timeoutStr + "s"); err == nil && secs > 0 {
+					telegramTimeout = secs
+				}
+			}
+
+			telegramSender := notification.NewTelegramSender(notification.TelegramSenderConfig{
+				BotToken: botToken,
+				Timeout:  telegramTimeout,
+			})
+			notificationService.RegisterSender(telegramSender)
+			logger.Println("Telegram sender registered for notifications")
+		} else {
+			logger.Println("WARNING: TELEGRAM_BOT_TOKEN not set, Telegram notifications disabled")
+		}
+
+		// Create worker (will be started in errgroup)
+		notificationWorker = notification.NewWorker(notificationService, redisQueue, workerCfg)
 	}
 
 	httpApp := httpserver.New()
-	grpcServer := grpcserver.New(db)
+	grpcServer := grpcserver.New(db, &grpcserver.Options{
+		NotificationService: notificationService,
+	})
 
 	group, groupCtx := errgroup.WithContext(ctx)
 
@@ -102,12 +148,31 @@ func main() {
 		return nil
 	})
 
+	// Start notification worker if available
+	if notificationWorker != nil {
+		group.Go(func() error {
+			logger.Println("Starting notification worker...")
+			if err := notificationWorker.Start(groupCtx); err != nil {
+				if groupCtx.Err() != nil {
+					return nil
+				}
+				return err
+			}
+			return nil
+		})
+	}
+
 	group.Go(func() error {
 		<-groupCtx.Done()
 
 		// Create shutdown context with timeout
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
+
+		// Stop notification worker first
+		if notificationWorker != nil {
+			notificationWorker.Stop()
+		}
 
 		// Shutdown HTTP with timeout
 		if err := httpApp.ShutdownWithContext(shutdownCtx); err != nil {

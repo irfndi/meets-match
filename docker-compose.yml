@@ -37,9 +37,12 @@ services:
     environment:
       - BOT_TOKEN=${BOT_TOKEN:?BOT_TOKEN is required}
       - API_URL=http://api:8080
+      - GRPC_PORT=50052
       - SENTRY_DSN=${SENTRY_DSN:-}
       - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-development}
       - ENABLE_SENTRY=${ENABLE_SENTRY:-false}
+    ports:
+      - "50052:50052"
     depends_on:
       api:
         condition: service_healthy
@@ -51,6 +54,35 @@ services:
       timeout: 5s
       retries: 3
       start_period: 30s
+
+  worker:
+    build:
+      context: .
+      dockerfile: services/worker/Dockerfile
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - API_GRPC_ADDRESS=api:50051
+      - BOT_GRPC_ADDRESS=bot:50052
+      - REENGAGEMENT_SCHEDULE=${REENGAGEMENT_SCHEDULE:-0 10 * * *}
+      - DLQ_PROCESSOR_SCHEDULE=${DLQ_PROCESSOR_SCHEDULE:-*/5 * * * *}
+      - WORKER_CONCURRENCY=${WORKER_CONCURRENCY:-10}
+      - HEALTH_PORT=8081
+    ports:
+      - "8081:8081"
+    depends_on:
+      api:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - meetsmatch-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8081/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
   postgres:
     image: postgres:17

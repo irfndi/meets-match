@@ -241,6 +241,54 @@ func (s *UserService) UpdateUser(ctx context.Context, req *pb.UpdateUserRequest)
 	return &pb.UpdateUserResponse{User: resp.User}, nil
 }
 
+// UpdateLastActive updates the user's last_active timestamp to now.
+// This is called by the bot on every user interaction (fire-and-forget).
+func (s *UserService) UpdateLastActive(ctx context.Context, req *pb.UpdateLastActiveRequest) (*pb.UpdateLastActiveResponse, error) {
+	if req.UserId == "" {
+		return nil, status.Error(codes.InvalidArgument, "user_id is required")
+	}
+
+	query := `UPDATE users SET last_active = NOW(), updated_at = NOW() WHERE id = $1`
+	result, err := s.db.ExecContext(ctx, query, req.UserId)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to update last_active: %v", err)
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to get rows affected: %v", err)
+	}
+	if rows == 0 {
+		return nil, status.Error(codes.NotFound, "user not found")
+	}
+
+	return &pb.UpdateLastActiveResponse{Success: true}, nil
+}
+
+// UpdateLastRemindedAt updates the user's last_reminded_at timestamp to now.
+// This is called by the worker after sending a re-engagement reminder.
+func (s *UserService) UpdateLastRemindedAt(ctx context.Context, req *pb.UpdateLastRemindedAtRequest) (*pb.UpdateLastRemindedAtResponse, error) {
+	if req.UserId == "" {
+		return nil, status.Error(codes.InvalidArgument, "user_id is required")
+	}
+
+	query := `UPDATE users SET last_reminded_at = NOW(), updated_at = NOW() WHERE id = $1`
+	result, err := s.db.ExecContext(ctx, query, req.UserId)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to update last_reminded_at: %v", err)
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to get rows affected: %v", err)
+	}
+	if rows == 0 {
+		return nil, status.Error(codes.NotFound, "user not found")
+	}
+
+	return &pb.UpdateLastRemindedAtResponse{Success: true}, nil
+}
+
 // Helpers
 
 func modelToProto(u *models.User) *pb.User {

@@ -7,6 +7,7 @@ import {
   createDislikeMatchResponse,
   createGetMatchResponse,
   createGetPotentialMatchesResponse,
+  createGetUserResponse,
   createLikeMatchResponse,
   createMockContext,
   createMockLocation,
@@ -32,6 +33,7 @@ vi.mock('../services/userService.js', () => ({
 }));
 
 import { matchService } from '../services/matchService.js';
+import { userService } from '../services/userService.js';
 import { handleDislike, handleLike, matchCallbacks, matchCommand } from './match.js';
 
 describe('Match Handler', () => {
@@ -173,12 +175,21 @@ describe('Match Handler', () => {
         status: 'matched',
       });
 
+      const otherUser = createMockUser({
+        id: 'user2',
+        firstName: 'Jane',
+      });
+
       vi.mocked(matchService.likeMatch).mockReturnValue(
         Effect.succeed(createLikeMatchResponse(true, match)),
       );
 
       vi.mocked(matchService.getMatch).mockReturnValue(
         Effect.succeed(createGetMatchResponse(match)),
+      );
+
+      vi.mocked(userService.getUser).mockReturnValue(
+        Effect.succeed(createGetUserResponse(otherUser)),
       );
 
       await handleLike(mockCtx as unknown as Context, 'match123');
