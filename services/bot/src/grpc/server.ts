@@ -16,6 +16,13 @@ import { createNotificationHandler } from './notificationHandler.js';
 /**
  * Runtime type guard for SendNotificationRequest.
  * Validates that the request has the required fields before processing.
+ *
+ * SendNotificationRequest fields (from proto):
+ * - user_id (string): Telegram chat_id - required
+ * - type (NotificationType): Notification type enum - required
+ * - message (string): Pre-formatted message text - required
+ * - buttons (InlineButton[]): Optional inline buttons
+ * - metadata (map<string, string>): Optional metadata
  */
 function isValidSendNotificationRequest(req: unknown): req is SendNotificationRequest {
   if (typeof req !== 'object' || req === null) {
@@ -24,32 +31,16 @@ function isValidSendNotificationRequest(req: unknown): req is SendNotificationRe
 
   const r = req as Record<string, unknown>;
 
-  // Check required fields
-  if (typeof r.notificationId !== 'string' || r.notificationId.length === 0) {
-    return false;
-  }
-
+  // Check required fields per SendNotificationRequest proto definition
   if (typeof r.userId !== 'string' || r.userId.length === 0) {
     return false;
   }
 
-  // Payload should exist and have a telegram field for our use case
-  if (typeof r.payload !== 'object' || r.payload === null) {
+  if (typeof r.message !== 'string' || r.message.length === 0) {
     return false;
   }
 
-  // Validate telegram payload exists with required fields
-  const payload = r.payload as Record<string, unknown>;
-  if (typeof payload.telegram !== 'object' || payload.telegram === null) {
-    return false;
-  }
-
-  // Validate telegram has required chatId and text fields
-  const telegram = payload.telegram as Record<string, unknown>;
-  if (typeof telegram.chatId !== 'string' || telegram.chatId.length === 0) {
-    return false;
-  }
-  if (typeof telegram.text !== 'string' || telegram.text.length === 0) {
+  if (typeof r.type !== 'number') {
     return false;
   }
 
