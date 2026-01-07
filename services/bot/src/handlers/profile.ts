@@ -1,5 +1,6 @@
 import { Effect, Either } from 'effect';
 import type { Context } from 'grammy';
+import { logger } from '../lib/logger.js';
 import { profileMenu } from '../menus/profile.js';
 import { userService } from '../services/userService.js';
 
@@ -11,7 +12,7 @@ export const profileCommand = (ctx: Context) =>
       const result = yield* _(userService.getUser(String(ctx.from.id)).pipe(Effect.either));
 
       if (Either.isLeft(result)) {
-        console.error('Error fetching profile:', result.left);
+        logger.error('Error fetching profile', result.left);
         yield* Effect.tryPromise(() =>
           ctx.reply(
             'Could not load profile. Please make sure you have started the bot with /start.',

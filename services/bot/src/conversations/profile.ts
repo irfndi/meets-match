@@ -1,6 +1,7 @@
 import type { Conversation } from '@grammyjs/conversations';
 import { Effect } from 'effect';
 import { Keyboard } from 'grammy';
+import { logger } from '../lib/logger.js';
 import { userService } from '../services/userService.js';
 import type { MyContext } from '../types.js';
 
@@ -34,7 +35,7 @@ export async function editBio(conversation: Conversation<MyContext, MyContext>, 
     await ctx.reply('Failed to update bio. Please try again later.', {
       reply_markup: { remove_keyboard: true },
     });
-    console.error(result.left);
+    logger.error('Failed to update bio', result.left);
     return;
   }
 
@@ -72,7 +73,7 @@ export async function editAge(conversation: Conversation<MyContext, MyContext>, 
     await ctx.reply('Failed to update age. Please try again later.', {
       reply_markup: { remove_keyboard: true },
     });
-    console.error(result.left);
+    logger.error('Failed to update age', result.left);
     return;
   }
 
@@ -109,7 +110,7 @@ export async function editName(conversation: Conversation<MyContext, MyContext>,
     await ctx.reply('Failed to update name. Please try again later.', {
       reply_markup: { remove_keyboard: true },
     });
-    console.error(result.left);
+    logger.error('Failed to update name', result.left);
     return;
   }
 
@@ -158,7 +159,7 @@ export async function editGender(conversation: Conversation<MyContext, MyContext
     await ctx.reply('Failed to update gender. Please try again later.', {
       reply_markup: { remove_keyboard: true },
     });
-    console.error(result.left);
+    logger.error('Failed to update gender', result.left);
     return;
   }
 
@@ -209,7 +210,7 @@ export async function editInterests(
     await ctx.reply('Failed to update interests. Please try again later.', {
       reply_markup: { remove_keyboard: true },
     });
-    console.error(result.left);
+    logger.error('Failed to update interests', result.left);
     return;
   }
 
@@ -282,7 +283,7 @@ export async function editLocation(
     await ctx.reply('Failed to update location. Please try again later.', {
       reply_markup: { remove_keyboard: true },
     });
-    console.error(result.left);
+    logger.error('Failed to update location', result.left);
     return;
   }
 

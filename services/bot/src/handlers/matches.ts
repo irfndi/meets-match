@@ -2,6 +2,7 @@ import { Effect } from 'effect';
 import type { Context } from 'grammy';
 import { InlineKeyboard } from 'grammy';
 
+import { logger } from '../lib/logger.js';
 import { captureEffectError } from '../lib/sentry.js';
 import { matchService } from '../services/matchService.js';
 import { userService } from '../services/userService.js';
@@ -73,7 +74,7 @@ export const matchesCommand = (ctx: Context) =>
         }
       } catch (e) {
         // Skip if we can't fetch user
-        console.error(`Failed to fetch user ${otherUserId}:`, e);
+        logger.error(`Failed to fetch user ${otherUserId}`, e);
       }
     }
 
