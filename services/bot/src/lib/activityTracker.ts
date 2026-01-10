@@ -10,6 +10,14 @@ import type { MiddlewareFn } from 'grammy';
 import { userService } from '../services/userService.js';
 import type { MyContext } from '../types.js';
 
+// Cache for last active timestamp
+const lastActiveCache = new Map<string, number>();
+const UPDATE_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+const MAX_CACHE_SIZE = 10000;
+
+// Reset cache for testing
+export const _resetCache = () => lastActiveCache.clear();
+
 /**
  * Middleware that updates user's last_active timestamp on every interaction.
  *
@@ -21,15 +29,27 @@ export const activityTrackerMiddleware: MiddlewareFn<MyContext> = async (ctx, ne
   // Only track activity for messages from users (not groups/channels)
   if (ctx.from?.id) {
     const userId = String(ctx.from.id);
+    const now = Date.now();
+    const lastUpdate = lastActiveCache.get(userId);
 
-    // Fire-and-forget: run in the background without waiting
-    Effect.runPromise(
-      userService.updateLastActive(userId).pipe(
-        Effect.catchAll(() => Effect.void), // Silently ignore all errors
-      ),
-    ).catch(() => {
-      // Ignore promise rejection (extra safety)
-    });
+    // Simple cache eviction strategy: clear if too big
+    if (lastActiveCache.size > MAX_CACHE_SIZE) {
+      lastActiveCache.clear();
+    }
+
+    // Only update if never updated or interval has passed
+    if (!lastUpdate || now - lastUpdate > UPDATE_INTERVAL_MS) {
+      lastActiveCache.set(userId, now);
+
+      // Fire-and-forget: run in the background without waiting
+      Effect.runPromise(
+        userService.updateLastActive(userId).pipe(
+          Effect.catchAll(() => Effect.void), // Silently ignore all errors
+        ),
+      ).catch(() => {
+        // Ignore promise rejection (extra safety)
+      });
+    }
   }
 
   // Continue to next middleware/handler
