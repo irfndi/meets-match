@@ -343,6 +343,20 @@ describe('Profile Conversations', () => {
         expect.any(Object),
       );
     });
+
+    it('should reject interests longer than 30 characters', async () => {
+      const longInterest = 'a'.repeat(31);
+      mockConversation = {
+        wait: vi.fn().mockResolvedValue({ message: { text: longInterest } }),
+      };
+
+      await editInterests(mockConversation, mockCtx);
+
+      expect(mockCtx.reply).toHaveBeenCalledWith(
+        expect.stringContaining('Interests must be 30 characters or less'),
+        expect.any(Object),
+      );
+    });
   });
 
   describe('editLocation', () => {
@@ -372,6 +386,20 @@ describe('Profile Conversations', () => {
 
       expect(mockCtx.reply).toHaveBeenCalledWith(
         expect.stringContaining('Location updated to Seoul, South Korea'),
+        expect.any(Object),
+      );
+    });
+
+    it('should reject city or country longer than 50 characters', async () => {
+      const longName = 'a'.repeat(51);
+      mockConversation = {
+        wait: vi.fn().mockResolvedValue({ message: { text: `${longName}, Country` } }),
+      };
+
+      await editLocation(mockConversation, mockCtx);
+
+      expect(mockCtx.reply).toHaveBeenCalledWith(
+        expect.stringContaining('City and Country must be 50 characters or less'),
         expect.any(Object),
       );
     });

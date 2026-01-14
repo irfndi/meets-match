@@ -199,6 +199,14 @@ export async function editInterests(
     return;
   }
 
+  // Validate interest length to prevent abuse (max 30 chars each)
+  if (interests.some((i) => i.length > 30)) {
+    await ctx.reply('Interests must be 30 characters or less. Cancelled.', {
+      reply_markup: { remove_keyboard: true },
+    });
+    return;
+  }
+
   const userId = String(ctx.from?.id);
 
   const result = await conversation.external(() =>
@@ -256,9 +264,20 @@ export async function editLocation(
     // User entered text location
     const parts = response.message.text.split(',').map((p) => p.trim());
     if (parts.length >= 2) {
+      const city = parts[0];
+      const country = parts[1];
+
+      // Validate length (max 50 chars)
+      if (city.length > 50 || country.length > 50) {
+        await ctx.reply('City and Country must be 50 characters or less. Cancelled.', {
+          reply_markup: { remove_keyboard: true },
+        });
+        return;
+      }
+
       locationData = {
-        city: parts[0],
-        country: parts[1],
+        city,
+        country,
       };
       // TODO: Geocode to get coordinates from API
     } else {
