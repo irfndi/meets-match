@@ -2,6 +2,7 @@ import { Effect } from 'effect';
 import type { Context } from 'grammy';
 import { InlineKeyboard } from 'grammy';
 
+import { escapeMarkdown } from '../lib/security.js';
 import { captureEffectError } from '../lib/sentry.js';
 import { matchService } from '../services/matchService.js';
 import { userService } from '../services/userService.js';
@@ -72,12 +73,12 @@ export const matchCommand = (ctx: Context) =>
 
     const message = MATCH_PROFILE_TEMPLATE(
       // Helper function or string literal
-      matchUser.firstName,
+      escapeMarkdown(matchUser.firstName),
       matchUser.age,
-      matchUser.gender,
-      matchUser.bio || 'No bio',
-      interests,
-      location,
+      escapeMarkdown(matchUser.gender),
+      escapeMarkdown(matchUser.bio || 'No bio'),
+      escapeMarkdown(interests),
+      escapeMarkdown(location),
     );
 
     // 4. Send Message with Buttons
@@ -178,7 +179,7 @@ export const handleLike = (ctx: Context, matchId: string) =>
 
       yield* _(
         Effect.tryPromise(() =>
-          ctx.editMessageText(MUTUAL_MATCH_MESSAGE(otherName, otherUserId, template), {
+          ctx.editMessageText(MUTUAL_MATCH_MESSAGE(escapeMarkdown(otherName), otherUserId, template), {
             parse_mode: 'Markdown',
             reply_markup: new InlineKeyboard()
               .url(`💬 Message ${otherName}`, `tg://user?id=${otherUserId}`)

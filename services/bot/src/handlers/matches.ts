@@ -2,6 +2,7 @@ import { Effect } from 'effect';
 import type { Context } from 'grammy';
 import { InlineKeyboard } from 'grammy';
 
+import { escapeMarkdown } from '../lib/security.js';
 import { captureEffectError } from '../lib/sentry.js';
 import { matchService } from '../services/matchService.js';
 import { userService } from '../services/userService.js';
@@ -62,7 +63,7 @@ export const matchesCommand = (ctx: Context) =>
             ? new Date(Number(match.matchedAt.seconds) * 1000).toLocaleDateString()
             : 'Unknown';
 
-          matchLines.push(`${i + 1}. *${name}*, ${age} - matched ${matchDate}`);
+          matchLines.push(`${i + 1}. *${escapeMarkdown(name)}*, ${age} - matched ${matchDate}`);
 
           // Add view button for each match
           if (i % 2 === 0) {
@@ -149,14 +150,14 @@ export const matchesCallbacks = (ctx: Context) =>
         : 'Unknown';
 
       const profileText = `
-👤 *${user.firstName}*, ${user.age || '?'}
-⚧ ${user.gender || 'Unknown'}
+👤 *${escapeMarkdown(user.firstName)}*, ${user.age || '?'}
+⚧ ${escapeMarkdown(user.gender || 'Unknown')}
 
-📝 ${user.bio || 'No bio'}
+📝 ${escapeMarkdown(user.bio || 'No bio')}
 
-🌟 Interests: ${interests}
+🌟 Interests: ${escapeMarkdown(interests)}
 
-📍 ${location}
+📍 ${escapeMarkdown(location)}
 `;
 
       const keyboard = new InlineKeyboard()
