@@ -179,15 +179,18 @@ export const handleLike = (ctx: Context, matchId: string) =>
 
       yield* _(
         Effect.tryPromise(() =>
-          ctx.editMessageText(MUTUAL_MATCH_MESSAGE(escapeMarkdown(otherName), otherUserId, template), {
-            parse_mode: 'Markdown',
-            reply_markup: new InlineKeyboard()
-              .url(`💬 Message ${otherName}`, `tg://user?id=${otherUserId}`)
-              .row()
-              .text('🔥 Find More Matches', 'next_match')
-              .row()
-              .text('📋 View Matches', 'view_matches'),
-          }),
+          ctx.editMessageText(
+            MUTUAL_MATCH_MESSAGE(escapeMarkdown(otherName), otherUserId, template),
+            {
+              parse_mode: 'Markdown',
+              reply_markup: new InlineKeyboard()
+                .url(`💬 Message ${otherName}`, `tg://user?id=${otherUserId}`)
+                .row()
+                .text('🔥 Find More Matches', 'next_match')
+                .row()
+                .text('📋 View Matches', 'view_matches'),
+            },
+          ),
         ),
       );
     } else {
