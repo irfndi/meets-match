@@ -137,6 +137,13 @@ describe('Matches List Handler', () => {
     it('should show user profile on view_match_user_', async () => {
       mockCtx.callbackQuery = { data: 'view_match_user_user2' } as any;
 
+      // Mock that they are matched
+      vi.mocked(matchService.getMatchList).mockReturnValue(
+        Effect.succeed(
+          createGetMatchListResponse([createMockMatch({ user1Id: '12345', user2Id: 'user2' })]),
+        ),
+      );
+
       const otherUser = createMockUser({
         id: 'user2',
         firstName: 'Jane',
@@ -159,8 +166,31 @@ describe('Matches List Handler', () => {
       );
     });
 
+    it('should deny access if users are not matched', async () => {
+      mockCtx.callbackQuery = { data: 'view_match_user_user2' } as any;
+
+      // Mock that they are NOT matched (empty list)
+      vi.mocked(matchService.getMatchList).mockReturnValue(
+        Effect.succeed(createGetMatchListResponse([])),
+      );
+
+      await matchesCallbacks(mockCtx as unknown as Context);
+
+      expect(mockCtx.editMessageText).toHaveBeenCalledWith(
+        expect.stringContaining('Access denied'),
+      );
+      expect(userService.getUser).not.toHaveBeenCalled();
+    });
+
     it("should show not found message if user doesn't exist", async () => {
       mockCtx.callbackQuery = { data: 'view_match_user_unknown' } as any;
+
+      // Mock that they are matched (so we pass the auth check)
+      vi.mocked(matchService.getMatchList).mockReturnValue(
+        Effect.succeed(
+          createGetMatchListResponse([createMockMatch({ user1Id: '12345', user2Id: 'unknown' })]),
+        ),
+      );
 
       vi.mocked(userService.getUser).mockReturnValue(Effect.succeed(createGetUserResponse(null)));
 
@@ -191,6 +221,13 @@ describe('Matches List Handler', () => {
 
     it('should handle errors gracefully when viewing user', async () => {
       mockCtx.callbackQuery = { data: 'view_match_user_user2' } as any;
+
+      // Mock that they are matched
+      vi.mocked(matchService.getMatchList).mockReturnValue(
+        Effect.succeed(
+          createGetMatchListResponse([createMockMatch({ user1Id: '12345', user2Id: 'user2' })]),
+        ),
+      );
 
       vi.mocked(userService.getUser).mockReturnValue(Effect.fail(new Error('Network error')));
 

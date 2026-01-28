@@ -3,6 +3,7 @@ import type { Context } from 'grammy';
 import { InlineKeyboard } from 'grammy';
 
 import { captureEffectError } from '../lib/sentry.js';
+import { escapeMarkdown } from '../lib/security.js';
 import { matchService } from '../services/matchService.js';
 import { userService } from '../services/userService.js';
 import { mainMenuKeyboard } from '../ui/keyboards.js';
@@ -56,7 +57,7 @@ export const matchesCommand = (ctx: Context) =>
         const otherUser = userRes.user;
 
         if (otherUser) {
-          const name = otherUser.firstName || 'Unknown';
+          const name = escapeMarkdown(otherUser.firstName || 'Unknown');
           const age = otherUser.age || '?';
           const matchDate = match.matchedAt
             ? new Date(Number(match.matchedAt.seconds) * 1000).toLocaleDateString()
@@ -135,6 +136,23 @@ export const matchesCallbacks = (ctx: Context) =>
     if (data.startsWith('view_match_user_')) {
       const targetUserId = data.replace('view_match_user_', '');
 
+      // Authorization Check: Ensure the users are actually matched
+      const currentUserId = String(ctx.from.id);
+      const matchesRes = yield* _(matchService.getMatchList(currentUserId));
+      const matches = matchesRes.matches || [];
+      const isMatched = matches.some(
+        (m) => m.user1Id === targetUserId || m.user2Id === targetUserId,
+      );
+
+      if (!isMatched) {
+        yield* _(
+          Effect.tryPromise(() =>
+            ctx.editMessageText('Access denied: You are not matched with this user.'),
+          ),
+        );
+        return;
+      }
+
       const res = yield* _(userService.getUser(targetUserId));
       const user = res.user;
 
@@ -143,16 +161,19 @@ export const matchesCallbacks = (ctx: Context) =>
         return;
       }
 
-      const interests = user.interests?.join(', ') || 'None';
-      const location = user.location
-        ? `${user.location.city}, ${user.location.country}`
-        : 'Unknown';
+      const firstName = escapeMarkdown(user.firstName || 'Unknown');
+      const bio = escapeMarkdown(user.bio || 'No bio');
+      const interests = escapeMarkdown(user.interests?.join(', ') || 'None');
+      let location = 'Unknown';
+      if (user.location) {
+        location = escapeMarkdown(`${user.location.city}, ${user.location.country}`);
+      }
 
       const profileText = `
-👤 *${user.firstName}*, ${user.age || '?'}
-⚧ ${user.gender || 'Unknown'}
+👤 *${firstName}*, ${user.age || '?'}
+⚧ ${escapeMarkdown(user.gender || 'Unknown')}
 
-📝 ${user.bio || 'No bio'}
+📝 ${bio}
 
 🌟 Interests: ${interests}
 
