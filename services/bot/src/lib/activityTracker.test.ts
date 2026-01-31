@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Effect } from 'effect';
-import { activityTrackerMiddleware } from './activityTracker.js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { userService } from '../services/userService.js';
+import { activityTrackerMiddleware } from './activityTracker.js';
 
 // Mock userService
 vi.mock('../services/userService.js', () => ({
