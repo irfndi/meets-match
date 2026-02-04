@@ -1,9 +1,8 @@
 import { Effect } from 'effect';
 import type { Context } from 'grammy';
 import { InlineKeyboard } from 'grammy';
-
-import { captureEffectError } from '../lib/sentry.js';
 import { escapeMarkdown } from '../lib/security.js';
+import { captureEffectError } from '../lib/sentry.js';
 import { matchService } from '../services/matchService.js';
 import { userService } from '../services/userService.js';
 import { mainMenuKeyboard } from '../ui/keyboards.js';
