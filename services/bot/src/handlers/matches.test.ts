@@ -137,6 +137,19 @@ describe('Matches List Handler', () => {
     it('should show user profile on view_match_user_', async () => {
       mockCtx.callbackQuery = { data: 'view_match_user_user2' } as any;
 
+      // Mock successful match check
+      const match = createMockMatch({
+        id: 'match1',
+        user1Id: String(mockCtx.from?.id),
+        user2Id: 'user2',
+        status: 'matched',
+        matchedAt: createMockTimestamp(),
+      });
+
+      vi.mocked(matchService.getMatchList).mockReturnValue(
+        Effect.succeed(createGetMatchListResponse([match])),
+      );
+
       const otherUser = createMockUser({
         id: 'user2',
         firstName: 'Jane',
@@ -159,8 +172,78 @@ describe('Matches List Handler', () => {
       );
     });
 
+    it('should deny viewing profile if users are not matched (IDOR protection)', async () => {
+      mockCtx.callbackQuery = { data: 'view_match_user_attacker' } as any;
+
+      // Return match list that does NOT include 'attacker'
+      vi.mocked(matchService.getMatchList).mockReturnValue(
+        Effect.succeed(createGetMatchListResponse([])),
+      );
+
+      await matchesCallbacks(mockCtx as unknown as Context);
+
+      expect(mockCtx.editMessageText).toHaveBeenCalledWith('You are not matched with this user.');
+      expect(userService.getUser).not.toHaveBeenCalled();
+    });
+
+    it('should escape markdown characters in user profile', async () => {
+      mockCtx.callbackQuery = { data: 'view_match_user_user2' } as any;
+
+      // Mock successful match check
+      const match = createMockMatch({
+        id: 'match1',
+        user1Id: String(mockCtx.from?.id),
+        user2Id: 'user2',
+        status: 'matched',
+        matchedAt: createMockTimestamp(),
+      });
+
+      vi.mocked(matchService.getMatchList).mockReturnValue(
+        Effect.succeed(createGetMatchListResponse([match])),
+      );
+
+      const otherUser = createMockUser({
+        id: 'user2',
+        firstName: 'Jane_Doe', // Underscore
+        age: 25,
+        gender: 'female',
+        bio: 'Hello *World*', // Star
+        interests: ['[coding]'], // Brackets
+        location: createMockLocation({ city: 'Seoul', country: 'South Korea' }),
+      });
+
+      vi.mocked(userService.getUser).mockReturnValue(
+        Effect.succeed(createGetUserResponse(otherUser)),
+      );
+
+      await matchesCallbacks(mockCtx as unknown as Context);
+
+      // Verify escaping
+      expect(mockCtx.editMessageText).toHaveBeenCalledWith(
+        expect.stringContaining('Jane\\_Doe'),
+        expect.any(Object),
+      );
+      expect(mockCtx.editMessageText).toHaveBeenCalledWith(
+        expect.stringContaining('Hello \\*World\\*'),
+        expect.any(Object),
+      );
+    });
+
     it("should show not found message if user doesn't exist", async () => {
       mockCtx.callbackQuery = { data: 'view_match_user_unknown' } as any;
+
+      // Mock successful match check
+      const match = createMockMatch({
+        id: 'match1',
+        user1Id: String(mockCtx.from?.id),
+        user2Id: 'unknown',
+        status: 'matched',
+        matchedAt: createMockTimestamp(),
+      });
+
+      vi.mocked(matchService.getMatchList).mockReturnValue(
+        Effect.succeed(createGetMatchListResponse([match])),
+      );
 
       vi.mocked(userService.getUser).mockReturnValue(Effect.succeed(createGetUserResponse(null)));
 
@@ -191,6 +274,19 @@ describe('Matches List Handler', () => {
 
     it('should handle errors gracefully when viewing user', async () => {
       mockCtx.callbackQuery = { data: 'view_match_user_user2' } as any;
+
+      // Mock match check to pass so we can test getUser error
+      const match = createMockMatch({
+        id: 'match1',
+        user1Id: String(mockCtx.from?.id),
+        user2Id: 'user2',
+        status: 'matched',
+        matchedAt: createMockTimestamp(),
+      });
+
+      vi.mocked(matchService.getMatchList).mockReturnValue(
+        Effect.succeed(createGetMatchListResponse([match])),
+      );
 
       vi.mocked(userService.getUser).mockReturnValue(Effect.fail(new Error('Network error')));
 
