@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { AddressInfo } from 'node:net';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createHealthServer, type HealthServer, type HealthStatus } from './health.js';
 
 // Helper to wait for server to be listening
