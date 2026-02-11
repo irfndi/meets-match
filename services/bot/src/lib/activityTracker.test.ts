@@ -1,12 +1,12 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Effect } from 'effect';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { userService } from '../services/userService.js';
 import {
   activityTrackerMiddleware,
-  lastActiveCache,
   DEBOUNCE_WINDOW_MS,
+  lastActiveCache,
   MAX_CACHE_SIZE,
 } from './activityTracker.js';
-import { userService } from '../services/userService.js';
 
 // Mock userService
 vi.mock('../services/userService.js', () => ({
