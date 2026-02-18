@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { escapeMarkdown } from './security';
+import { escapeMarkdown } from './security.js';
 
 describe('escapeMarkdown', () => {
   it('escapes special characters correctly', () => {
