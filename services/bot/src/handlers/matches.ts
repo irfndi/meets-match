@@ -2,6 +2,7 @@ import { Effect } from 'effect';
 import type { Context } from 'grammy';
 import { InlineKeyboard } from 'grammy';
 
+import { escapeMarkdown } from '../lib/security.js';
 import { captureEffectError } from '../lib/sentry.js';
 import { matchService } from '../services/matchService.js';
 import { userService } from '../services/userService.js';
@@ -56,7 +57,7 @@ export const matchesCommand = (ctx: Context) =>
         const otherUser = userRes.user;
 
         if (otherUser) {
-          const name = otherUser.firstName || 'Unknown';
+          const name = otherUser.firstName ? escapeMarkdown(otherUser.firstName) : 'Unknown';
           const age = otherUser.age || '?';
           const matchDate = match.matchedAt
             ? new Date(Number(match.matchedAt.seconds) * 1000).toLocaleDateString()
@@ -143,16 +144,16 @@ export const matchesCallbacks = (ctx: Context) =>
         return;
       }
 
-      const interests = user.interests?.join(', ') || 'None';
+      const interests = user.interests?.map(escapeMarkdown).join(', ') || 'None';
       const location = user.location
-        ? `${user.location.city}, ${user.location.country}`
+        ? `${escapeMarkdown(user.location.city)}, ${escapeMarkdown(user.location.country)}`
         : 'Unknown';
 
       const profileText = `
-👤 *${user.firstName}*, ${user.age || '?'}
-⚧ ${user.gender || 'Unknown'}
+👤 *${escapeMarkdown(user.firstName || '')}*, ${user.age || '?'}
+⚧ ${escapeMarkdown(user.gender || 'Unknown')}
 
-📝 ${user.bio || 'No bio'}
+📝 ${escapeMarkdown(user.bio || 'No bio')}
 
 🌟 Interests: ${interests}
 
