@@ -1,6 +1,6 @@
+import type { AddressInfo } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createHealthServer, type HealthServer, type HealthStatus } from './health.js';
-import type { AddressInfo } from 'node:net';
 
 // Helper to wait for server to be listening
 function waitForServer(server: HealthServer['server']): Promise<void> {
