@@ -2,6 +2,7 @@ import { Effect } from 'effect';
 import type { Context } from 'grammy';
 import { InlineKeyboard } from 'grammy';
 
+import { escapeMarkdown } from '../lib/security.js';
 import { captureEffectError } from '../lib/sentry.js';
 import { userService } from '../services/userService.js';
 
@@ -21,10 +22,10 @@ const formatPreferences = (prefs: any) => {
     lines.push(`📍 Max Distance: ${prefs.maxDistance} km`);
   }
   if (prefs?.genderPreference?.length) {
-    lines.push(`⚧ Looking for: ${prefs.genderPreference.join(', ')}`);
+    lines.push(`⚧ Looking for: ${prefs.genderPreference.map(escapeMarkdown).join(', ')}`);
   }
   if (prefs?.preferredLanguage) {
-    lines.push(`🌐 Language: ${prefs.preferredLanguage}`);
+    lines.push(`🌐 Language: ${escapeMarkdown(prefs.preferredLanguage)}`);
   }
   if (prefs?.notificationsEnabled !== undefined) {
     lines.push(`🔔 Notifications: ${prefs.notificationsEnabled ? 'On' : 'Off'}`);

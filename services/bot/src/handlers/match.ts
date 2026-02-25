@@ -2,6 +2,7 @@ import { Effect } from 'effect';
 import type { Context } from 'grammy';
 import { InlineKeyboard } from 'grammy';
 
+import { escapeMarkdown } from '../lib/security.js';
 import { captureEffectError } from '../lib/sentry.js';
 import { matchService } from '../services/matchService.js';
 import { userService } from '../services/userService.js';
@@ -65,17 +66,18 @@ export const matchCommand = (ctx: Context) =>
     }
 
     // 3. Format Message
-    const interests = matchUser.interests.join(', ') || 'None';
+    const interests =
+      matchUser.interests.length > 0 ? matchUser.interests.map(escapeMarkdown).join(', ') : 'None';
     const location = matchUser.location
-      ? `${matchUser.location.city}, ${matchUser.location.country}`
+      ? `${escapeMarkdown(matchUser.location.city || '')}, ${escapeMarkdown(matchUser.location.country || '')}`
       : 'Unknown';
 
     const message = MATCH_PROFILE_TEMPLATE(
       // Helper function or string literal
-      matchUser.firstName,
+      escapeMarkdown(matchUser.firstName),
       matchUser.age,
-      matchUser.gender,
-      matchUser.bio || 'No bio',
+      escapeMarkdown(matchUser.gender),
+      escapeMarkdown(matchUser.bio || 'No bio'),
       interests,
       location,
     );
@@ -173,8 +175,8 @@ export const handleLike = (ctx: Context, matchId: string) =>
       // Fetch other user's details to show their name
       const otherUserRes = yield* _(userService.getUser(otherUserId));
       const otherUser = otherUserRes.user;
-      const otherName = otherUser?.firstName || 'your match';
-      const template = getRandomStarter();
+      const otherName = otherUser?.firstName ? escapeMarkdown(otherUser.firstName) : 'your match';
+      const template = escapeMarkdown(getRandomStarter());
 
       yield* _(
         Effect.tryPromise(() =>

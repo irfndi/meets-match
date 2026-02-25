@@ -24,19 +24,18 @@ function waitForClose(server: HealthServer['server']): Promise<void> {
   });
 }
 
-// Track port usage to avoid conflicts - use random offset to prevent conflicts between .ts and .js test runs
-const portOffset = Math.floor(Math.random() * 10000);
-let portCounter = 0;
-const getUniquePort = () => 45000 + portOffset + portCounter++;
+import type { AddressInfo } from 'node:net';
 
 describe('Health Server', { sequential: true }, () => {
   let healthServer: HealthServer;
   let testPort: number;
 
   beforeEach(async () => {
-    testPort = getUniquePort();
-    healthServer = createHealthServer({ port: testPort, serviceName: 'test-service' });
+    // Use port 0 to let OS assign a random available port
+    healthServer = createHealthServer({ port: 0, serviceName: 'test-service' });
     await waitForServer(healthServer.server);
+    const address = healthServer.server.address() as AddressInfo;
+    testPort = address.port;
   });
 
   afterEach(async () => {
@@ -140,9 +139,10 @@ describe('Health Server', { sequential: true }, () => {
 
   describe('default service name', () => {
     it('should use default service name when not provided', async () => {
-      const defaultPort = getUniquePort();
-      const defaultServer = createHealthServer({ port: defaultPort });
+      const defaultServer = createHealthServer({ port: 0 });
       await waitForServer(defaultServer.server);
+      const address = defaultServer.server.address() as AddressInfo;
+      const defaultPort = address.port;
 
       const response = await fetch(`http://localhost:${defaultPort}/health`);
       const body: HealthStatus = await response.json();
