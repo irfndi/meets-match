@@ -1,0 +1,3 @@
+## 2024-05-24 - N+1 API Calls in Bot Handlers
+**Learning:** Sequential, blocking network requests inside simple `for` loops in Telegram bot handlers (like displaying a list of matched users) result in an N+1 query problem, slowing down command response times significantly. The codebase uses `effect` for functional error handling, and `UserService.getUser` does not support batch retrieval.
+**Action:** When mapping over items that require individual API calls, transform them into an array of Effects and use `Effect.all(effects, { concurrency: 'unbounded' })` to execute them concurrently instead of yielding inside a `for` loop. Make sure to wrap individual effects with `Effect.catchAll` so partial failures don't fail the entire concurrent batch.
