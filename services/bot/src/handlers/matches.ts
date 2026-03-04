@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 import type { Context } from 'grammy';
 import { InlineKeyboard } from 'grammy';
-
+import { escapeMarkdown } from '../lib/security.js';
 import { captureEffectError } from '../lib/sentry.js';
 import { matchService } from '../services/matchService.js';
 import { userService } from '../services/userService.js';
@@ -135,6 +135,25 @@ export const matchesCallbacks = (ctx: Context) =>
     if (data.startsWith('view_match_user_')) {
       const targetUserId = data.replace('view_match_user_', '');
 
+      const userId = String(ctx.from.id);
+
+      // Verify authorization: current user must be mutually matched with the target user
+      const matchListRes = yield* _(matchService.getMatchList(userId));
+      const isMatched = matchListRes.matches?.some(
+        (m) =>
+          (m.user1Id === userId && m.user2Id === targetUserId) ||
+          (m.user2Id === userId && m.user1Id === targetUserId),
+      );
+
+      if (!isMatched) {
+        yield* _(
+          Effect.tryPromise(() =>
+            ctx.editMessageText('You are not authorized to view this profile.'),
+          ),
+        );
+        return;
+      }
+
       const res = yield* _(userService.getUser(targetUserId));
       const user = res.user;
 
@@ -148,15 +167,21 @@ export const matchesCallbacks = (ctx: Context) =>
         ? `${user.location.city}, ${user.location.country}`
         : 'Unknown';
 
+      const escapedFirstName = escapeMarkdown(user.firstName || 'Unknown');
+      const escapedBio = escapeMarkdown(user.bio || 'No bio');
+      const escapedInterests = escapeMarkdown(interests);
+      const escapedLocation = escapeMarkdown(location);
+      const escapedGender = escapeMarkdown(user.gender || 'Unknown');
+
       const profileText = `
-👤 *${user.firstName}*, ${user.age || '?'}
-⚧ ${user.gender || 'Unknown'}
+👤 *${escapedFirstName}*, ${user.age || '?'}
+⚧ ${escapedGender}
 
-📝 ${user.bio || 'No bio'}
+📝 ${escapedBio}
 
-🌟 Interests: ${interests}
+🌟 Interests: ${escapedInterests}
 
-📍 ${location}
+📍 ${escapedLocation}
 `;
 
       const keyboard = new InlineKeyboard()
