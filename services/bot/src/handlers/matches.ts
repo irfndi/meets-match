@@ -46,35 +46,43 @@ export const matchesCommand = (ctx: Context) =>
     const matchLines: string[] = [];
     const keyboard = new InlineKeyboard();
 
-    for (let i = 0; i < Math.min(matches.length, 10); i++) {
-      const match = matches[i];
-      // Determine the other user's ID
+    // ⚡ Bolt Optimization: Fetch users concurrently instead of sequentially
+    // Reduces latency from O(n) to O(1) for n matches
+    const topMatches = matches.slice(0, 10);
+    const userEffects = topMatches.map((match) => {
       const otherUserId = match.user1Id === userId ? match.user2Id : match.user1Id;
+      return userService.getUser(otherUserId).pipe(
+        Effect.map((res) => ({ match, otherUser: res.user, otherUserId })),
+        Effect.catchAll((e) => {
+          console.error(`Failed to fetch user ${otherUserId}:`, e);
+          return Effect.succeed(null);
+        }),
+      );
+    });
 
-      try {
-        const userRes = yield* _(userService.getUser(otherUserId));
-        const otherUser = userRes.user;
+    const results = yield* _(Effect.all(userEffects, { concurrency: 'unbounded' }));
 
-        if (otherUser) {
-          const name = otherUser.firstName || 'Unknown';
-          const age = otherUser.age || '?';
-          const matchDate = match.matchedAt
-            ? new Date(Number(match.matchedAt.seconds) * 1000).toLocaleDateString()
-            : 'Unknown';
+    let validMatchIndex = 0;
+    for (const result of results) {
+      if (!result || !result.otherUser) continue;
 
-          matchLines.push(`${i + 1}. *${name}*, ${age} - matched ${matchDate}`);
+      const { match, otherUser, otherUserId } = result;
+      const name = otherUser.firstName || 'Unknown';
+      const age = otherUser.age || '?';
+      const matchDate = match.matchedAt
+        ? new Date(Number(match.matchedAt.seconds) * 1000).toLocaleDateString()
+        : 'Unknown';
 
-          // Add view button for each match
-          if (i % 2 === 0) {
-            keyboard.text(`👤 ${name}`, `view_match_user_${otherUserId}`);
-          } else {
-            keyboard.text(`👤 ${name}`, `view_match_user_${otherUserId}`).row();
-          }
-        }
-      } catch (e) {
-        // Skip if we can't fetch user
-        console.error(`Failed to fetch user ${otherUserId}:`, e);
+      matchLines.push(`${validMatchIndex + 1}. *${name}*, ${age} - matched ${matchDate}`);
+
+      // Add view button for each match
+      if (validMatchIndex % 2 === 0) {
+        keyboard.text(`👤 ${name}`, `view_match_user_${otherUserId}`);
+      } else {
+        keyboard.text(`👤 ${name}`, `view_match_user_${otherUserId}`).row();
       }
+
+      validMatchIndex++;
     }
 
     if (matchLines.length === 0) {
