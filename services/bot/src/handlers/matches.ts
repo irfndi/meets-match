@@ -134,6 +134,22 @@ export const matchesCallbacks = (ctx: Context) =>
 
     if (data.startsWith('view_match_user_')) {
       const targetUserId = data.replace('view_match_user_', '');
+      const userId = String(ctx.from.id);
+
+      // Verify authorization: check if the users are actually matched
+      const matchesRes = yield* _(matchService.getMatchList(userId));
+      const isMatched = matchesRes.matches.some(
+        (match) => match.user1Id === targetUserId || match.user2Id === targetUserId,
+      );
+
+      if (!isMatched) {
+        yield* _(
+          Effect.tryPromise(() =>
+            ctx.editMessageText('You are not authorized to view this profile.'),
+          ),
+        );
+        return;
+      }
 
       const res = yield* _(userService.getUser(targetUserId));
       const user = res.user;
