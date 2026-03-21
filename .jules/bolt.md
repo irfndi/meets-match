@@ -1,0 +1,3 @@
+## 2024-03-21 - Effect.all Concurrency Default in v3
+**Learning:** In Effect v3, `Effect.all` runs sequentially by default when passed an iterable (like an array). This can lead to silent performance bottlenecks when assuming it behaves like `Promise.all`.
+**Action:** Always pass `{ concurrency: 'unbounded' }` (or a specific concurrency limit) to `Effect.all` when aiming to parallelize independent tasks (e.g., batching concurrent database or API calls like resolving users for matches) to achieve expected concurrency. Also use `Effect.catchAll` on the individual effects to prevent partial failures from rejecting the entire batch.

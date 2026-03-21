@@ -46,35 +46,48 @@ export const matchesCommand = (ctx: Context) =>
     const matchLines: string[] = [];
     const keyboard = new InlineKeyboard();
 
-    for (let i = 0; i < Math.min(matches.length, 10); i++) {
-      const match = matches[i];
-      // Determine the other user's ID
+    // ⚡ Bolt Performance Optimization:
+    // Process up to 10 user fetches concurrently instead of sequentially (N+1 query problem).
+    // Effect.all with iterables runs sequentially by default in v3, so we explicitly
+    // request unbounded concurrency. Individual failures are caught to prevent partial
+    // failures from rejecting the entire batch.
+    const limitedMatches = matches.slice(0, 10);
+    const userFetchEffects = limitedMatches.map((match) => {
       const otherUserId = match.user1Id === userId ? match.user2Id : match.user1Id;
+      return userService.getUser(otherUserId).pipe(
+        Effect.map((res) => ({ match, user: res.user, otherUserId })),
+        Effect.catchAll((e) => {
+          console.error(`Failed to fetch user ${otherUserId}:`, e);
+          return Effect.succeed({ match, user: null, otherUserId });
+        }),
+      );
+    });
 
-      try {
-        const userRes = yield* _(userService.getUser(otherUserId));
-        const otherUser = userRes.user;
+    const userResults = yield* _(Effect.all(userFetchEffects, { concurrency: 'unbounded' }));
 
-        if (otherUser) {
-          const name = otherUser.firstName || 'Unknown';
-          const age = otherUser.age || '?';
-          const matchDate = match.matchedAt
-            ? new Date(Number(match.matchedAt.seconds) * 1000).toLocaleDateString()
-            : 'Unknown';
+    let displayedCount = 0;
+    for (const result of userResults) {
+      if (!result.user) continue;
 
-          matchLines.push(`${i + 1}. *${name}*, ${age} - matched ${matchDate}`);
+      const otherUser = result.user;
+      const match = result.match;
+      const otherUserId = result.otherUserId;
 
-          // Add view button for each match
-          if (i % 2 === 0) {
-            keyboard.text(`👤 ${name}`, `view_match_user_${otherUserId}`);
-          } else {
-            keyboard.text(`👤 ${name}`, `view_match_user_${otherUserId}`).row();
-          }
-        }
-      } catch (e) {
-        // Skip if we can't fetch user
-        console.error(`Failed to fetch user ${otherUserId}:`, e);
+      const name = otherUser.firstName || 'Unknown';
+      const age = otherUser.age || '?';
+      const matchDate = match.matchedAt
+        ? new Date(Number(match.matchedAt.seconds) * 1000).toLocaleDateString()
+        : 'Unknown';
+
+      matchLines.push(`${displayedCount + 1}. *${name}*, ${age} - matched ${matchDate}`);
+
+      // Add view button for each match
+      if (displayedCount % 2 === 0) {
+        keyboard.text(`👤 ${name}`, `view_match_user_${otherUserId}`);
+      } else {
+        keyboard.text(`👤 ${name}`, `view_match_user_${otherUserId}`).row();
       }
+      displayedCount++;
     }
 
     if (matchLines.length === 0) {
