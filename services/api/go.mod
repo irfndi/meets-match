@@ -1,12 +1,12 @@
 module github.com/irfndi/match-bot/services/api
 
-go 1.25.5
+go 1.24.0
 
 require (
 	github.com/getsentry/sentry-go v0.27.0
-	github.com/gofiber/fiber/v2 v2.52.10
+	github.com/gofiber/fiber/v2 v2.52.12
 	github.com/google/uuid v1.6.0
-	github.com/irfndi/match-bot/packages/contracts v0.0.0
+	github.com/irfndi/match-bot/packages/contracts v0.0.0-00010101000000-000000000000
 	github.com/lib/pq v1.10.9
 	github.com/redis/go-redis/v9 v9.17.2
 	golang.org/x/sync v0.19.0
@@ -25,7 +25,8 @@ require (
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.19 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
-	github.com/valyala/fasthttp v1.68.0 // indirect
+	github.com/valyala/fasthttp v1.52.0 // indirect
+	github.com/valyala/tcplisten v1.0.0 // indirect
 	golang.org/x/net v0.48.0 // indirect
 	golang.org/x/sys v0.39.0 // indirect
 	golang.org/x/text v0.32.0 // indirect
