@@ -147,6 +147,15 @@ describe('Matches List Handler', () => {
         location: createMockLocation({ city: 'Seoul', country: 'South Korea' }),
       });
 
+      // Mock mutual match to pass authorization
+      vi.mocked(matchService.getMatchList).mockReturnValue(
+        Effect.succeed(
+          createGetMatchListResponse([
+            createMockMatch({ id: 'match1', user1Id: '12345', user2Id: 'user2' }),
+          ]),
+        ),
+      );
+
       vi.mocked(userService.getUser).mockReturnValue(
         Effect.succeed(createGetUserResponse(otherUser)),
       );
@@ -161,6 +170,15 @@ describe('Matches List Handler', () => {
 
     it("should show not found message if user doesn't exist", async () => {
       mockCtx.callbackQuery = { data: 'view_match_user_unknown' } as any;
+
+      // Mock mutual match to pass authorization
+      vi.mocked(matchService.getMatchList).mockReturnValue(
+        Effect.succeed(
+          createGetMatchListResponse([
+            createMockMatch({ id: 'match1', user1Id: '12345', user2Id: 'unknown' }),
+          ]),
+        ),
+      );
 
       vi.mocked(userService.getUser).mockReturnValue(Effect.succeed(createGetUserResponse(null)));
 
@@ -192,11 +210,39 @@ describe('Matches List Handler', () => {
     it('should handle errors gracefully when viewing user', async () => {
       mockCtx.callbackQuery = { data: 'view_match_user_user2' } as any;
 
+      // Mock mutual match to pass authorization
+      vi.mocked(matchService.getMatchList).mockReturnValue(
+        Effect.succeed(
+          createGetMatchListResponse([
+            createMockMatch({ id: 'match1', user1Id: '12345', user2Id: 'user2' }),
+          ]),
+        ),
+      );
+
       vi.mocked(userService.getUser).mockReturnValue(Effect.fail(new Error('Network error')));
 
       await matchesCallbacks(mockCtx as unknown as Context);
 
       expect(mockCtx.answerCallbackQuery).toHaveBeenCalledWith('Something went wrong');
+    });
+
+    it('should not show user profile if not mutually matched', async () => {
+      mockCtx.callbackQuery = { data: 'view_match_user_user3' } as any;
+
+      // Return empty matches to simulate not being matched
+      vi.mocked(matchService.getMatchList).mockReturnValue(
+        Effect.succeed(createGetMatchListResponse([])),
+      );
+
+      await matchesCallbacks(mockCtx as unknown as Context);
+
+      expect(mockCtx.answerCallbackQuery).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text: expect.stringContaining('Unauthorized'),
+          show_alert: true,
+        }),
+      );
+      expect(userService.getUser).not.toHaveBeenCalled();
     });
   });
 });
