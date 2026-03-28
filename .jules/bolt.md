@@ -1,0 +1,3 @@
+## 2024-05-14 - Batch API calls with Effect.all
+**Learning:** Sequential map/try-catch API calls inside `Effect.gen` loops cause significant N+1 query performance issues.
+**Action:** Replace `for...of` loops that fetch external resources via `Effect` with `Effect.all(effects, { concurrency: 'unbounded' })` and wrap each element in an `Effect.catchAll` to prevent single-element failures from aborting the entire batch.
