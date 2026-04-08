@@ -135,6 +135,20 @@ export const matchesCallbacks = (ctx: Context) =>
     if (data.startsWith('view_match_user_')) {
       const targetUserId = data.replace('view_match_user_', '');
 
+      // 🛡️ Sentinel: Authorization check to prevent IDOR
+      // Verify that the target user is actually matched with the current user
+      const matchListRes = yield* _(matchService.getMatchList(String(ctx.from.id)));
+      const isMatched = matchListRes.matches?.some(
+        (m) => m.user1Id === targetUserId || m.user2Id === targetUserId,
+      );
+
+      if (!isMatched) {
+        yield* _(
+          Effect.tryPromise(() => ctx.editMessageText('Unauthorized to view this profile.')),
+        );
+        return;
+      }
+
       const res = yield* _(userService.getUser(targetUserId));
       const user = res.user;
 

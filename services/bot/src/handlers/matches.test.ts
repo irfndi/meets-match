@@ -147,6 +147,16 @@ describe('Matches List Handler', () => {
         location: createMockLocation({ city: 'Seoul', country: 'South Korea' }),
       });
 
+      const match = createMockMatch({
+        id: 'match1',
+        user1Id: '12345',
+        user2Id: 'user2',
+        status: 'matched',
+      });
+      vi.mocked(matchService.getMatchList).mockReturnValue(
+        Effect.succeed(createGetMatchListResponse([match])),
+      );
+
       vi.mocked(userService.getUser).mockReturnValue(
         Effect.succeed(createGetUserResponse(otherUser)),
       );
@@ -159,8 +169,37 @@ describe('Matches List Handler', () => {
       );
     });
 
+    it('should prevent viewing user profile if not matched', async () => {
+      mockCtx.callbackQuery = { data: 'view_match_user_user3' } as any;
+
+      const match = createMockMatch({
+        id: 'match1',
+        user1Id: '12345',
+        user2Id: 'user2',
+        status: 'matched',
+      });
+      vi.mocked(matchService.getMatchList).mockReturnValue(
+        Effect.succeed(createGetMatchListResponse([match])),
+      );
+
+      await matchesCallbacks(mockCtx as unknown as Context);
+
+      expect(userService.getUser).not.toHaveBeenCalled();
+      expect(mockCtx.editMessageText).toHaveBeenCalledWith('Unauthorized to view this profile.');
+    });
+
     it("should show not found message if user doesn't exist", async () => {
       mockCtx.callbackQuery = { data: 'view_match_user_unknown' } as any;
+
+      const match = createMockMatch({
+        id: 'match1',
+        user1Id: '12345',
+        user2Id: 'unknown',
+        status: 'matched',
+      });
+      vi.mocked(matchService.getMatchList).mockReturnValue(
+        Effect.succeed(createGetMatchListResponse([match])),
+      );
 
       vi.mocked(userService.getUser).mockReturnValue(Effect.succeed(createGetUserResponse(null)));
 
@@ -191,6 +230,16 @@ describe('Matches List Handler', () => {
 
     it('should handle errors gracefully when viewing user', async () => {
       mockCtx.callbackQuery = { data: 'view_match_user_user2' } as any;
+
+      const match = createMockMatch({
+        id: 'match1',
+        user1Id: '12345',
+        user2Id: 'user2',
+        status: 'matched',
+      });
+      vi.mocked(matchService.getMatchList).mockReturnValue(
+        Effect.succeed(createGetMatchListResponse([match])),
+      );
 
       vi.mocked(userService.getUser).mockReturnValue(Effect.fail(new Error('Network error')));
 
