@@ -1,6 +1,8 @@
 module github.com/irfndi/match-bot/services/worker
 
-go 1.25.5
+go 1.24.0
+
+toolchain go1.24.3
 
 require (
 	github.com/hibiken/asynq v0.25.0
