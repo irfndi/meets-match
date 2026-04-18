@@ -46,34 +46,47 @@ export const matchesCommand = (ctx: Context) =>
     const matchLines: string[] = [];
     const keyboard = new InlineKeyboard();
 
-    for (let i = 0; i < Math.min(matches.length, 10); i++) {
-      const match = matches[i];
-      // Determine the other user's ID
+    // ⚡ Bolt: Fetch all needed user profiles concurrently instead of sequentially
+    // Expected impact: Eliminates N+1 query bottleneck (reduces up to 10 sequential API calls to 1 concurrent batch)
+    // using Effect.all with unlimited concurrency and isolated error catching
+    const matchesToProcess = matches.slice(0, 10);
+
+    const userFetchEffects = matchesToProcess.map((match) => {
       const otherUserId = match.user1Id === userId ? match.user2Id : match.user1Id;
+      return userService.getUser(otherUserId).pipe(
+        // Catch errors for individual fetches so one failure doesn't reject the whole batch
+        Effect.catchAll((e) => {
+          console.error(`Failed to fetch user ${otherUserId}:`, e);
+          return Effect.succeed(null);
+        }),
+      );
+    });
 
-      try {
-        const userRes = yield* _(userService.getUser(otherUserId));
+    // Run fetches concurrently
+    const userResponses = yield* _(Effect.all(userFetchEffects, { concurrency: 'unbounded' }));
+
+    for (let i = 0; i < matchesToProcess.length; i++) {
+      const match = matchesToProcess[i];
+      const otherUserId = match.user1Id === userId ? match.user2Id : match.user1Id;
+      const userRes = userResponses[i];
+
+      if (userRes?.user) {
         const otherUser = userRes.user;
+        const name = otherUser.firstName || 'Unknown';
+        const age = otherUser.age || '?';
+        const matchDate = match.matchedAt
+          ? new Date(Number(match.matchedAt.seconds) * 1000).toLocaleDateString()
+          : 'Unknown';
 
-        if (otherUser) {
-          const name = otherUser.firstName || 'Unknown';
-          const age = otherUser.age || '?';
-          const matchDate = match.matchedAt
-            ? new Date(Number(match.matchedAt.seconds) * 1000).toLocaleDateString()
-            : 'Unknown';
+        matchLines.push(`${i + 1}. *${name}*, ${age} - matched ${matchDate}`);
 
-          matchLines.push(`${i + 1}. *${name}*, ${age} - matched ${matchDate}`);
-
-          // Add view button for each match
-          if (i % 2 === 0) {
-            keyboard.text(`👤 ${name}`, `view_match_user_${otherUserId}`);
-          } else {
-            keyboard.text(`👤 ${name}`, `view_match_user_${otherUserId}`).row();
-          }
+        // Add view button for each match
+        if (matchLines.length % 2 === 1) {
+          // 1st, 3rd, etc. of valid matches (0-indexed internally)
+          keyboard.text(`👤 ${name}`, `view_match_user_${otherUserId}`);
+        } else {
+          keyboard.text(`👤 ${name}`, `view_match_user_${otherUserId}`).row();
         }
-      } catch (e) {
-        // Skip if we can't fetch user
-        console.error(`Failed to fetch user ${otherUserId}:`, e);
       }
     }
 
