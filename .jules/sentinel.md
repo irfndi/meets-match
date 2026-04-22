@@ -2,3 +2,8 @@
 **Vulnerability:** Insecure Direct Object Reference (IDOR) in `handle_view_match`.
 **Learning:** Checking object ownership is critical even when using hard-to-guess IDs (UUIDs). Defense in depth requires explicit authorization checks.
 **Prevention:** Always verify that the current user is authorized to access the requested resource (e.g., is a participant in the match) before returning sensitive data.
+
+## 2026-04-22 - Outdated Dependencies with CVEs in Fiber and gRPC
+**Vulnerability:** Denial of Service via Route Parameter Overflow in Fiber (GO-2026-4543) and Authorization bypass in gRPC-Go via missing leading slash in :path (GO-2026-4762).
+**Learning:** Outdated dependencies can expose applications to known vulnerabilities. Regular scans with `govulncheck` are essential to identify and mitigate these risks.
+**Prevention:** Regularly run `govulncheck ./...` in Go projects to detect and update packages with known vulnerabilities.
