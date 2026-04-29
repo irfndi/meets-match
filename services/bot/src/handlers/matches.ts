@@ -134,6 +134,27 @@ export const matchesCallbacks = (ctx: Context) =>
 
     if (data.startsWith('view_match_user_')) {
       const targetUserId = data.replace('view_match_user_', '');
+      const userId = String(ctx.from.id);
+
+      // Verify authorization: User must be mutually matched to view this profile
+      const matchListRes = yield* _(matchService.getMatchList(userId));
+      const matches = matchListRes.matches || [];
+
+      const isMatched = matches.some(
+        (match) => match.user1Id === targetUserId || match.user2Id === targetUserId,
+      );
+
+      if (!isMatched) {
+        yield* _(
+          Effect.tryPromise(() =>
+            ctx.answerCallbackQuery({
+              text: 'Unauthorized',
+              show_alert: true,
+            }),
+          ),
+        );
+        return;
+      }
 
       const res = yield* _(userService.getUser(targetUserId));
       const user = res.user;
