@@ -6,7 +6,7 @@ require (
 	github.com/hibiken/asynq v0.25.0
 	github.com/irfndi/match-bot/packages/contracts v0.0.0
 	golang.org/x/sync v0.19.0
-	google.golang.org/grpc v1.77.0
+	google.golang.org/grpc v1.79.3
 )
 
 require (
