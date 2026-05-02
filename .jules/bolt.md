@@ -1,0 +1,3 @@
+## 2025-05-02 - Effect.all Concurrency Defaults
+**Learning:** In `effect` v3, `Effect.all` runs sequentially by default when given an iterable (like an array of Effects). This can silently cause blocking O(n) performance issues if you expect parallel execution.
+**Action:** Always explicitly provide `{ concurrency: 'unbounded' }` (or a specific concurrency limit) to `Effect.all()` when batching concurrent operations to ensure they actually run in parallel.
