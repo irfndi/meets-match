@@ -1,0 +1,5 @@
+⚡ Bolt: Refactor matchesCommand to fetch users concurrently
+
+Resolves an N+1 query problem by replacing the sequential Effect generator loop
+with a concurrent `Effect.all` call, significantly improving performance when
+viewing matches. Also ensures individual failures don't reject the batch.
