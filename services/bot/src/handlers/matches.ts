@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 import type { Context } from 'grammy';
 import { InlineKeyboard } from 'grammy';
-
+import { escapeMarkdown } from '../lib/markdown.js';
 import { captureEffectError } from '../lib/sentry.js';
 import { matchService } from '../services/matchService.js';
 import { userService } from '../services/userService.js';
@@ -62,7 +62,9 @@ export const matchesCommand = (ctx: Context) =>
             ? new Date(Number(match.matchedAt.seconds) * 1000).toLocaleDateString()
             : 'Unknown';
 
-          matchLines.push(`${i + 1}. *${name}*, ${age} - matched ${matchDate}`);
+          matchLines.push(
+            `${i + 1}. *${escapeMarkdown(name)}*, ${age} - matched ${escapeMarkdown(matchDate)}`,
+          );
 
           // Add view button for each match
           if (i % 2 === 0) {
@@ -134,6 +136,21 @@ export const matchesCallbacks = (ctx: Context) =>
 
     if (data.startsWith('view_match_user_')) {
       const targetUserId = data.replace('view_match_user_', '');
+      const userId = String(ctx.from.id);
+
+      // SECURITY: Authorization check to prevent IDOR
+      // Verify that the target user is actually in the current user's match list
+      const matchListRes = yield* _(matchService.getMatchList(userId));
+      const isAuthorized = matchListRes.matches?.some(
+        (match) => match.user1Id === targetUserId || match.user2Id === targetUserId,
+      );
+
+      if (!isAuthorized) {
+        yield* _(
+          Effect.tryPromise(() => ctx.answerCallbackQuery('Unauthorized to view this profile.')),
+        );
+        return;
+      }
 
       const res = yield* _(userService.getUser(targetUserId));
       const user = res.user;
@@ -149,14 +166,14 @@ export const matchesCallbacks = (ctx: Context) =>
         : 'Unknown';
 
       const profileText = `
-👤 *${user.firstName}*, ${user.age || '?'}
-⚧ ${user.gender || 'Unknown'}
+👤 *${escapeMarkdown(user.firstName)}*, ${user.age || '?'}
+⚧ ${escapeMarkdown(user.gender || 'Unknown')}
 
-📝 ${user.bio || 'No bio'}
+📝 ${escapeMarkdown(user.bio || 'No bio')}
 
-🌟 Interests: ${interests}
+🌟 Interests: ${escapeMarkdown(interests)}
 
-📍 ${location}
+📍 ${escapeMarkdown(location)}
 `;
 
       const keyboard = new InlineKeyboard()
