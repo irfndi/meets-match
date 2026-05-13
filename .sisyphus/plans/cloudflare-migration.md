@@ -506,7 +506,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
 
   **Commit**: YES (group with 7, 8) — `feat(cf): port user, match, geocoding models`
 
-- [ ] 7. Models Layer — Match
+- [x] 7. Models Layer — Match
 
   Port `services/api/internal/models/match.go` and `services/api/internal/services/match.go` to Effect TS.
   Create `services/cf-api/src/models/match.ts` with Match Effect Schema + D1 repository (CreateMatch, GetMatch, ListMatches, UpdateMatchStatus, FindPotentialMatches).
@@ -525,7 +525,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
 
   **Commit**: YES (group with 6, 8)
 
-- [ ] 8. Models Layer — Geocoding
+- [x] 8. Models Layer — Geocoding
 
   Port `services/api/internal/services/geocoding/` to Effect TS.
   Create `services/cf-api/src/models/geocoding.ts` with GeocodingService + KV cache layer.
