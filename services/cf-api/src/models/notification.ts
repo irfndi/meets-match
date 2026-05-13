@@ -151,8 +151,8 @@ export class NotificationRepository {
     return {
       id: String(row.id),
       userId: String(row.user_id),
-      type: String(row.type) as typeof Notification.Type,
-      channel: row.channel ? String(row.channel) as typeof Notification.Type : undefined,
+      type: String(row.type) as typeof import("@meetsmatch/cf-shared").NotificationType.Type,
+      channel: row.channel ? String(row.channel) as typeof import("@meetsmatch/cf-shared").NotificationChannel.Type : undefined,
       status: String(row.status).toUpperCase() as typeof NotificationStatus.Type,
       payload: row.payload ? String(row.payload) : undefined,
       retryCount: row.attempt_count ? Number(row.attempt_count) : 0,

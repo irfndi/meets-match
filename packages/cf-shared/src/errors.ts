@@ -1,9 +1,9 @@
-import { Schema } from "@effect/schema";
+import { Struct, String, optional } from "effect/Schema";
 
-export const AppError = Schema.Struct({
-  code: Schema.String,
-  message: Schema.String,
-  details: Schema.optional(Schema.String),
+export const AppError = Struct({
+  code: String,
+  message: String,
+  details: optional(String),
 });
 export type AppError = typeof AppError.Type;
 

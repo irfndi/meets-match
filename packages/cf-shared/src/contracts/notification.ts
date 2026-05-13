@@ -1,8 +1,8 @@
-import { Schema } from "@effect/schema";
+import { Array, Boolean, Literal, Number, String, Struct, optional } from "effect/Schema";
 
 // --- Enums ---
 
-export const NotificationType = Schema.Literal(
+export const NotificationType = Literal(
   "UNSPECIFIED",
   "MUTUAL_MATCH",
   "NEW_LIKE",
@@ -16,7 +16,7 @@ export const NotificationType = Schema.Literal(
 );
 export type NotificationType = typeof NotificationType.Type;
 
-export const NotificationChannel = Schema.Literal(
+export const NotificationChannel = Literal(
   "UNSPECIFIED",
   "TELEGRAM",
   "EMAIL",
@@ -25,7 +25,7 @@ export const NotificationChannel = Schema.Literal(
 );
 export type NotificationChannel = typeof NotificationChannel.Type;
 
-export const NotificationStatus = Schema.Literal(
+export const NotificationStatus = Literal(
   "UNSPECIFIED",
   "PENDING",
   "PROCESSING",
@@ -37,120 +37,120 @@ export type NotificationStatus = typeof NotificationStatus.Type;
 
 // --- Main Notification Type ---
 
-export const Notification = Schema.Struct({
-  id: Schema.String,
-  userId: Schema.String,
+export const Notification = Struct({
+  id: String,
+  userId: String,
   type: NotificationType,
-  channel: Schema.optional(NotificationChannel),
-  status: Schema.optional(NotificationStatus),
-  title: Schema.optional(Schema.String),
-  body: Schema.optional(Schema.String),
-  payload: Schema.optional(Schema.String), // JSON string
-  retryCount: Schema.optional(Schema.Number),
-  maxRetries: Schema.optional(Schema.Number),
-  createdAt: Schema.optional(Schema.String),
-  scheduledAt: Schema.optional(Schema.String),
-  deliveredAt: Schema.optional(Schema.String),
-  failedAt: Schema.optional(Schema.String),
-  errorMessage: Schema.optional(Schema.String),
+  channel: optional(NotificationChannel),
+  status: optional(NotificationStatus),
+  title: optional(String),
+  body: optional(String),
+  payload: optional(String), // JSON string
+  retryCount: optional(Number),
+  maxRetries: optional(Number),
+  createdAt: optional(String),
+  scheduledAt: optional(String),
+  deliveredAt: optional(String),
+  failedAt: optional(String),
+  errorMessage: optional(String),
 });
 export type Notification = typeof Notification.Type;
 
 // --- Request/Response Types ---
 
-export const EnqueueNotificationRequest = Schema.Struct({
-  userId: Schema.String,
+export const EnqueueNotificationRequest = Struct({
+  userId: String,
   type: NotificationType,
-  channel: Schema.optional(NotificationChannel),
-  title: Schema.optional(Schema.String),
-  body: Schema.optional(Schema.String),
-  payload: Schema.optional(Schema.String),
-  scheduledAt: Schema.optional(Schema.String),
+  channel: optional(NotificationChannel),
+  title: optional(String),
+  body: optional(String),
+  payload: optional(String),
+  scheduledAt: optional(String),
 });
 export type EnqueueNotificationRequest = typeof EnqueueNotificationRequest.Type;
 
-export const EnqueueNotificationResponse = Schema.Struct({
-  notificationId: Schema.String,
+export const EnqueueNotificationResponse = Struct({
+  notificationId: String,
   status: NotificationStatus,
 });
 export type EnqueueNotificationResponse = typeof EnqueueNotificationResponse.Type;
 
-export const GetNotificationRequest = Schema.Struct({
-  notificationId: Schema.String,
+export const GetNotificationRequest = Struct({
+  notificationId: String,
 });
 export type GetNotificationRequest = typeof GetNotificationRequest.Type;
 
-export const GetNotificationResponse = Schema.Struct({
-  notification: Schema.optional(Notification),
+export const GetNotificationResponse = Struct({
+  notification: optional(Notification),
 });
 export type GetNotificationResponse = typeof GetNotificationResponse.Type;
 
-export const GetDLQStatsRequest = Schema.Struct({});
+export const GetDLQStatsRequest = Struct({});
 export type GetDLQStatsRequest = typeof GetDLQStatsRequest.Type;
 
-export const GetDLQStatsResponse = Schema.Struct({
-  totalMessages: Schema.Number,
-  oldestMessageAge: Schema.optional(Schema.String),
+export const GetDLQStatsResponse = Struct({
+  totalMessages: Number,
+  oldestMessageAge: optional(String),
 });
 export type GetDLQStatsResponse = typeof GetDLQStatsResponse.Type;
 
-export const ReplayDLQRequest = Schema.Struct({
-  limit: Schema.optional(Schema.Number),
+export const ReplayDLQRequest = Struct({
+  limit: optional(Number),
 });
 export type ReplayDLQRequest = typeof ReplayDLQRequest.Type;
 
-export const ReplayDLQResponse = Schema.Struct({
-  replayedCount: Schema.Number,
+export const ReplayDLQResponse = Struct({
+  replayedCount: Number,
 });
 export type ReplayDLQResponse = typeof ReplayDLQResponse.Type;
 
-export const GetQueueStatsRequest = Schema.Struct({});
+export const GetQueueStatsRequest = Struct({});
 export type GetQueueStatsRequest = typeof GetQueueStatsRequest.Type;
 
-export const GetQueueStatsResponse = Schema.Struct({
-  pendingCount: Schema.Number,
-  processingCount: Schema.Number,
-  deliveredCount: Schema.Number,
-  failedCount: Schema.Number,
-  dlqCount: Schema.Number,
+export const GetQueueStatsResponse = Struct({
+  pendingCount: Number,
+  processingCount: Number,
+  deliveredCount: Number,
+  failedCount: Number,
+  dlqCount: Number,
 });
 export type GetQueueStatsResponse = typeof GetQueueStatsResponse.Type;
 
-export const SendNotificationRequest = Schema.Struct({
-  userId: Schema.String,
+export const SendNotificationRequest = Struct({
+  userId: String,
   type: NotificationType,
-  title: Schema.optional(Schema.String),
-  body: Schema.optional(Schema.String),
-  payload: Schema.optional(Schema.String),
+  title: optional(String),
+  body: optional(String),
+  payload: optional(String),
 });
 export type SendNotificationRequest = typeof SendNotificationRequest.Type;
 
-export const SendNotificationResponse = Schema.Struct({
-  success: Schema.Boolean,
+export const SendNotificationResponse = Struct({
+  success: Boolean,
 });
 export type SendNotificationResponse = typeof SendNotificationResponse.Type;
 
-export const GetReengagementCandidatesRequest = Schema.Struct({
-  minInactiveDays: Schema.optional(Schema.Number),
-  maxInactiveDays: Schema.optional(Schema.Number),
-  limit: Schema.optional(Schema.Number),
+export const GetReengagementCandidatesRequest = Struct({
+  minInactiveDays: optional(Number),
+  maxInactiveDays: optional(Number),
+  limit: optional(Number),
 });
 export type GetReengagementCandidatesRequest = typeof GetReengagementCandidatesRequest.Type;
 
-export const GetReengagementCandidatesResponse = Schema.Struct({
-  userIds: Schema.Array(Schema.String),
+export const GetReengagementCandidatesResponse = Struct({
+  userIds: Array(String),
 });
 export type GetReengagementCandidatesResponse = typeof GetReengagementCandidatesResponse.Type;
 
-export const LogNotificationResultRequest = Schema.Struct({
-  notificationId: Schema.String,
+export const LogNotificationResultRequest = Struct({
+  notificationId: String,
   status: NotificationStatus,
-  errorMessage: Schema.optional(Schema.String),
+  errorMessage: optional(String),
 });
 export type LogNotificationResultRequest = typeof LogNotificationResultRequest.Type;
 
-export const LogNotificationResultResponse = Schema.Struct({
-  success: Schema.Boolean,
+export const LogNotificationResultResponse = Struct({
+  success: Boolean,
 });
 export type LogNotificationResultResponse = typeof LogNotificationResultResponse.Type;
 
@@ -167,4 +167,4 @@ export interface NotificationService {
   readonly logNotificationResult: (req: LogNotificationResultRequest) => Promise<LogNotificationResultResponse>;
 }
 
-export const NotificationService = Schema.Tag<NotificationService>("NotificationService");
+

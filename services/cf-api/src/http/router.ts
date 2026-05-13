@@ -188,8 +188,8 @@ export class ApiRouter {
     try {
       const result = await Effect.runPromise(this.notificationRepo.create({
         userId: String(body.userId),
-        type: String(body.type),
-        channel: body.channel ? String(body.channel) : undefined,
+        type: String(body.type) as typeof import("@meetsmatch/cf-shared").NotificationType.Type,
+        channel: body.channel ? String(body.channel) as typeof import("@meetsmatch/cf-shared").NotificationChannel.Type : undefined,
         payload: body.payload ? JSON.stringify(body.payload) : undefined,
         scheduledAt: body.scheduledAt ? String(body.scheduledAt) : undefined,
       }));

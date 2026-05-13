@@ -1,8 +1,9 @@
-import { Schema } from "@effect/schema";
+import { Array, Boolean, Literal, Number, String, Struct, optional } from "effect/Schema";
 import type { UserService } from "./user.js";
 import type { MatchService } from "./match.js";
 import type { NotificationService } from "./notification.js";
 import type { HealthService } from "./health.js";
+import type { Request, Response } from "@cloudflare/workers-types";
 
 // --- Service Binding Type Registry ---
 // Maps binding names to their service interfaces for type-safe RPC

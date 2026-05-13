@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import type { Queue, ServiceBinding } from "@cloudflare/workers-types";
+import type { Queue, Fetcher } from "@cloudflare/workers-types";
 
 export interface NotificationMessage {
   notificationId: string;
@@ -24,7 +24,7 @@ export class NotificationQueueProducer {
 export class NotificationQueueConsumer {
   constructor(
     private readonly db: D1Database,
-    private readonly botService: ServiceBinding
+    private readonly botService: Fetcher
   ) {}
 
   async processBatch(batch: MessageBatch): Promise<void> {

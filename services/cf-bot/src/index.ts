@@ -123,7 +123,7 @@ export default {
       }
 
       try {
-        const update = await request.json();
+        const update = await request.json() as import("@grammyjs/types").Update;
         const bot = createBot(env);
         await bot.handleUpdate(update);
         return new Response('OK', { status: 200 });

@@ -1,108 +1,108 @@
-import { Schema } from "@effect/schema";
+import { Array, Boolean, Literal, Number, String, Struct, optional } from "effect/Schema";
 
 // --- Enums ---
 
-export const Gender = Schema.Literal("male", "female", "other", "prefer_not_to_say");
+export const Gender = Literal("male", "female", "other", "prefer_not_to_say");
 export type Gender = typeof Gender.Type;
 
 // --- Nested Types ---
 
-export const Location = Schema.Struct({
-  latitude: Schema.Number,
-  longitude: Schema.Number,
-  city: Schema.optional(Schema.String),
-  country: Schema.optional(Schema.String),
-  lastUpdated: Schema.optional(Schema.String), // ISO 8601
+export const Location = Struct({
+  latitude: Number,
+  longitude: Number,
+  city: optional(String),
+  country: optional(String),
+  lastUpdated: optional(String), // ISO 8601
 });
 export type Location = typeof Location.Type;
 
-export const Preferences = Schema.Struct({
-  minAge: Schema.optional(Schema.Number),
-  maxAge: Schema.optional(Schema.Number),
-  genderPreference: Schema.optional(Schema.Array(Schema.String)),
-  relationshipType: Schema.optional(Schema.Array(Schema.String)),
-  maxDistance: Schema.optional(Schema.Number),
-  notificationsEnabled: Schema.optional(Schema.Boolean),
-  preferredLanguage: Schema.optional(Schema.String),
-  preferredCountry: Schema.optional(Schema.String),
-  premiumTier: Schema.optional(Schema.String),
+export const Preferences = Struct({
+  minAge: optional(Number),
+  maxAge: optional(Number),
+  genderPreference: optional(Array(String)),
+  relationshipType: optional(Array(String)),
+  maxDistance: optional(Number),
+  notificationsEnabled: optional(Boolean),
+  preferredLanguage: optional(String),
+  preferredCountry: optional(String),
+  premiumTier: optional(String),
 });
 export type Preferences = typeof Preferences.Type;
 
 // --- Main User Type ---
 
-export const User = Schema.Struct({
-  id: Schema.String,
-  username: Schema.optional(Schema.String),
-  firstName: Schema.optional(Schema.String),
-  lastName: Schema.optional(Schema.String),
-  bio: Schema.optional(Schema.String),
-  age: Schema.optional(Schema.Number),
-  gender: Schema.optional(Gender),
-  interests: Schema.optional(Schema.Array(Schema.String)),
-  photos: Schema.optional(Schema.Array(Schema.String)),
-  location: Schema.optional(Location),
-  preferences: Schema.optional(Preferences),
-  isActive: Schema.optional(Schema.Boolean),
-  isSleeping: Schema.optional(Schema.Boolean),
-  isProfileComplete: Schema.optional(Schema.Boolean),
-  createdAt: Schema.optional(Schema.String), // ISO 8601
-  updatedAt: Schema.optional(Schema.String),
-  lastActive: Schema.optional(Schema.String),
+export const User = Struct({
+  id: String,
+  username: optional(String),
+  firstName: optional(String),
+  lastName: optional(String),
+  bio: optional(String),
+  age: optional(Number),
+  gender: optional(Gender),
+  interests: optional(Array(String)),
+  photos: optional(Array(String)),
+  location: optional(Location),
+  preferences: optional(Preferences),
+  isActive: optional(Boolean),
+  isSleeping: optional(Boolean),
+  isProfileComplete: optional(Boolean),
+  createdAt: optional(String), // ISO 8601
+  updatedAt: optional(String),
+  lastActive: optional(String),
 });
 export type User = typeof User.Type;
 
 // --- Request/Response Types ---
 
-export const GetUserRequest = Schema.Struct({
-  userId: Schema.String,
+export const GetUserRequest = Struct({
+  userId: String,
 });
 export type GetUserRequest = typeof GetUserRequest.Type;
 
-export const GetUserResponse = Schema.Struct({
+export const GetUserResponse = Struct({
   user: User,
 });
 export type GetUserResponse = typeof GetUserResponse.Type;
 
-export const CreateUserRequest = Schema.Struct({
+export const CreateUserRequest = Struct({
   user: User,
 });
 export type CreateUserRequest = typeof CreateUserRequest.Type;
 
-export const CreateUserResponse = Schema.Struct({
+export const CreateUserResponse = Struct({
   user: User,
 });
 export type CreateUserResponse = typeof CreateUserResponse.Type;
 
-export const UpdateUserRequest = Schema.Struct({
-  userId: Schema.String,
+export const UpdateUserRequest = Struct({
+  userId: String,
   user: User,
-  updateMask: Schema.optional(Schema.Array(Schema.String)),
+  updateMask: optional(Array(String)),
 });
 export type UpdateUserRequest = typeof UpdateUserRequest.Type;
 
-export const UpdateUserResponse = Schema.Struct({
+export const UpdateUserResponse = Struct({
   user: User,
 });
 export type UpdateUserResponse = typeof UpdateUserResponse.Type;
 
-export const UpdateLastActiveRequest = Schema.Struct({
-  userId: Schema.String,
+export const UpdateLastActiveRequest = Struct({
+  userId: String,
 });
 export type UpdateLastActiveRequest = typeof UpdateLastActiveRequest.Type;
 
-export const UpdateLastActiveResponse = Schema.Struct({
-  success: Schema.Boolean,
+export const UpdateLastActiveResponse = Struct({
+  success: Boolean,
 });
 export type UpdateLastActiveResponse = typeof UpdateLastActiveResponse.Type;
 
-export const UpdateLastRemindedAtRequest = Schema.Struct({
-  userId: Schema.String,
+export const UpdateLastRemindedAtRequest = Struct({
+  userId: String,
 });
 export type UpdateLastRemindedAtRequest = typeof UpdateLastRemindedAtRequest.Type;
 
-export const UpdateLastRemindedAtResponse = Schema.Struct({
-  success: Schema.Boolean,
+export const UpdateLastRemindedAtResponse = Struct({
+  success: Boolean,
 });
 export type UpdateLastRemindedAtResponse = typeof UpdateLastRemindedAtResponse.Type;
 
@@ -116,4 +116,4 @@ export interface UserService {
   readonly updateLastRemindedAt: (req: UpdateLastRemindedAtRequest) => Promise<UpdateLastRemindedAtResponse>;
 }
 
-export const UserService = Schema.Tag<UserService>("UserService");
+

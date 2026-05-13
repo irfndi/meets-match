@@ -1,10 +1,10 @@
-import { Schema } from "@effect/schema";
+import { Array, Boolean, Literal, Number, String, Struct, optional } from "effect/Schema";
 
-export const HealthCheckRequest = Schema.Struct({});
+export const HealthCheckRequest = Struct({});
 export type HealthCheckRequest = typeof HealthCheckRequest.Type;
 
-export const HealthCheckResponse = Schema.Struct({
-  status: Schema.String,
+export const HealthCheckResponse = Struct({
+  status: String,
 });
 export type HealthCheckResponse = typeof HealthCheckResponse.Type;
 
@@ -12,4 +12,4 @@ export interface HealthService {
   readonly check: (req: HealthCheckRequest) => Promise<HealthCheckResponse>;
 }
 
-export const HealthService = Schema.Tag<HealthService>("HealthService");
+

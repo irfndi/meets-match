@@ -216,7 +216,7 @@ export class MatchRepository {
       lastName: row.last_name ? String(row.last_name) : undefined,
       bio: row.bio ? String(row.bio) : undefined,
       age: row.age ? Number(row.age) : undefined,
-      gender: row.gender ? String(row.gender) : undefined,
+      gender: row.gender ? String(row.gender) as typeof import("@meetsmatch/cf-shared").Gender.Type : undefined,
       interests: row.interests ? JSON.parse(String(row.interests)) : [],
       photos: row.photos ? JSON.parse(String(row.photos)) : [],
       location: row.location ? JSON.parse(String(row.location)) : undefined,

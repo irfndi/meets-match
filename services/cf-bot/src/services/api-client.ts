@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import type { ServiceBinding } from "@cloudflare/workers-types";
+import type { Fetcher } from "@cloudflare/workers-types";
 import {
   type GetUserRequest,
   type GetUserResponse,
@@ -15,7 +15,7 @@ import {
 } from "@meetsmatch/cf-shared";
 
 export class ApiServiceClient implements IUserService {
-  constructor(private readonly binding: ServiceBinding) {}
+  constructor(private readonly binding: Fetcher) {}
 
   async getUser(req: GetUserRequest): Promise<GetUserResponse> {
     const response = await this.binding.fetch(new Request(`http://api/users/${req.userId}`, { method: "GET" }));
