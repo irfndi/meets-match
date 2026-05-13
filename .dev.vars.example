@@ -1,0 +1,6 @@
+BOT_TOKEN=your_telegram_bot_token_here
+SENTRY_DSN=https://your-key@your-sentry-url/project-id
+SENTRY_ENVIRONMENT=development
+ENABLE_SENTRY=false
+SENTRY_RELEASE=meetsmatch@dev
+DATABASE_URL=local-meetsmatch.db

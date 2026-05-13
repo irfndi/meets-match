@@ -1,0 +1,28 @@
+{
+  "name": "@meetsmatch/cf-bot",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "effect": "^3.21.2",
+    "@effect/platform": "^0.96.1",
+    "grammy": "^1.42.0",
+    "@grammyjs/conversations": "^2.1.1",
+    "@grammyjs/menu": "^1.3.1",
+    "@meetsmatch/cf-shared": "file:../../packages/cf-shared"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260511.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.6",
+    "wrangler": "^4.90.1"
+  }
+}

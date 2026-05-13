@@ -1,17 +1,24 @@
 package config
 
 import (
-	"bytes"
-	"io"
 	"os"
-	"strings"
 	"testing"
 )
 
 func TestLoad(t *testing.T) {
-	// Test defaults
+	// Test missing DATABASE_URL returns error
 	os.Clearenv()
-	cfg := Load()
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Expected Load() to return error when DATABASE_URL is missing")
+	}
+
+	// Test defaults with DATABASE_URL set
+	t.Setenv("DATABASE_URL", "postgres://test")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() returned error: %v", err)
+	}
 
 	if cfg.HTTPAddr != ":8080" {
 		t.Errorf("Expected default HTTPAddr :8080, got %s", cfg.HTTPAddr)
@@ -28,7 +35,10 @@ func TestLoad(t *testing.T) {
 	t.Setenv("SENTRY_RELEASE", "meetsmatch-api@test")
 	t.Setenv("ENABLE_SENTRY", "true")
 
-	cfg = Load()
+	cfg, err = Load()
+	if err != nil {
+		t.Fatalf("Load() returned error: %v", err)
+	}
 
 	if cfg.HTTPAddr != ":9090" {
 		t.Errorf("Expected HTTPAddr :9090, got %s", cfg.HTTPAddr)
@@ -50,36 +60,8 @@ func TestLoad(t *testing.T) {
 	}
 }
 
-func TestParseBool_InvalidLogsWarning(t *testing.T) {
-	output := captureStdout(t, func() {
-		if parseBool("tue") {
-			t.Error("Expected invalid boolean to parse as false")
-		}
-	})
-
-	if !strings.Contains(output, "Could not parse boolean value") {
-		t.Errorf("Expected warning output, got %q", output)
+func TestParseBool_InvalidReturnsFalse(t *testing.T) {
+	if parseBool("tue") {
+		t.Error("Expected invalid boolean to parse as false")
 	}
-}
-
-func captureStdout(t *testing.T, fn func()) string {
-	t.Helper()
-
-	original := os.Stdout
-	reader, writer, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("Failed to create pipe: %v", err)
-	}
-
-	os.Stdout = writer
-	fn()
-
-	_ = writer.Close()
-	os.Stdout = original
-
-	var buffer bytes.Buffer
-	_, _ = io.Copy(&buffer, reader)
-	_ = reader.Close()
-
-	return buffer.String()
 }

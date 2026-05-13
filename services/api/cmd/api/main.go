@@ -22,7 +22,10 @@ import (
 )
 
 func main() {
-	cfg := config.Load()
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatalf("configuration error: %v", err)
+	}
 	logger := log.New(os.Stdout, "", log.LstdFlags)
 
 	// Initialize Sentry (graceful degradation if disabled or DSN not set)

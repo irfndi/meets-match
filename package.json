@@ -1,0 +1,25 @@
+{
+  "name": "@meetsmatch/monorepo",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "services/cf-*"
+  ],
+  "scripts": {
+    "dev:api": "cd services/cf-api && npm run dev",
+    "dev:bot": "cd services/cf-bot && npm run dev",
+    "dev:worker": "cd services/cf-worker && npm run dev",
+    "deploy:api": "cd services/cf-api && npm run deploy",
+    "deploy:bot": "cd services/cf-bot && npm run deploy",
+    "deploy:worker": "cd services/cf-worker && npm run deploy",
+    "test": "vitest",
+    "lint": "tsc --build --force",
+    "format": "prettier --write \"**/*.{ts,tsx,json,md}\""
+  },
+  "devDependencies": {
+    "prettier": "^3.5.3",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.6"
+  }
+}

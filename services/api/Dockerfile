@@ -31,11 +31,11 @@ RUN apk add --no-cache curl
 
 WORKDIR /app
 
-COPY --from=builder /app/bin/api /app/api
-
-# Create non-root user and switch to it for security
+# Create non-root user
 RUN addgroup -g 1000 appgroup && adduser -u 1000 -G appgroup -s /bin/sh -D appuser
 USER appuser
+
+COPY --from=builder /app/bin/api /app/api
 
 EXPOSE 8080 50051
 
