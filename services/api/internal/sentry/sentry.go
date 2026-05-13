@@ -50,8 +50,8 @@ func CaptureError(err error, tags map[string]string, extras map[string]interface
 	for k, v := range tags {
 		scope.SetTag(k, v)
 	}
-	for k, v := range extras {
-		scope.SetExtra(k, v)
+	if len(extras) > 0 {
+		scope.SetContext("extras", extras)
 	}
 
 	hub.CaptureException(err)
@@ -81,8 +81,8 @@ func CaptureErrorWithContext(ctx context.Context, err error, tags map[string]str
 	for k, v := range tags {
 		scope.SetTag(k, v)
 	}
-	for k, v := range extras {
-		scope.SetExtra(k, v)
+	if len(extras) > 0 {
+		scope.SetContext("extras", extras)
 	}
 
 	hub.CaptureException(err)

@@ -128,7 +128,12 @@ func (q *RedisQueue) Enqueue(ctx context.Context, id uuid.UUID, priority int) er
 func (q *RedisQueue) Dequeue(ctx context.Context, limit int) ([]uuid.UUID, error) {
 	// Get items with highest scores (highest priority)
 	// ZREVRANGE returns items from highest to lowest score
-	results, err := q.client.ZRevRange(ctx, keyPendingQueue, 0, int64(limit-1)).Result()
+	results, err := q.client.ZRangeArgs(ctx, redis.ZRangeArgs{
+		Key:   keyPendingQueue,
+		Start: 0,
+		Stop:  int64(limit - 1),
+		Rev:   true,
+	}).Result()
 	if err != nil {
 		return nil, fmt.Errorf("failed to dequeue notifications: %w", err)
 	}
@@ -195,10 +200,12 @@ func (q *RedisQueue) MoveToDLQ(ctx context.Context, id uuid.UUID) error {
 // Returns the number of notifications promoted.
 func (q *RedisQueue) PromoteDelayed(ctx context.Context, now time.Time) (int, error) {
 	// Get all delayed notifications that are due
-	results, err := q.client.ZRangeByScore(ctx, keyDelayedQueue, &redis.ZRangeBy{
-		Min:   "-inf",
-		Max:   strconv.FormatInt(now.Unix(), 10),
-		Count: 100, // Process in batches
+	results, err := q.client.ZRangeArgs(ctx, redis.ZRangeArgs{
+		Key:     keyDelayedQueue,
+		Start:   "-inf",
+		Stop:    strconv.FormatInt(now.Unix(), 10),
+		ByScore: true,
+		Count:   100, // Process in batches
 	}).Result()
 
 	if err != nil {
