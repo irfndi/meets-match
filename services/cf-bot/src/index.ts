@@ -44,9 +44,9 @@ function createBot(env: Env): Bot<MyContext> {
   bot.command('help', helpCommand);
   bot.command('about', aboutCommand);
   bot.command('profile', (ctx) => profileCommand(ctx, env));
-  bot.command('match', matchCommand);
-  bot.command('matches', matchesCommand);
-  bot.command('settings', settingsCommand);
+  bot.command('match', (ctx) => matchCommand(ctx, env));
+  bot.command('matches', (ctx) => matchesCommand(ctx, env));
+  bot.command('settings', (ctx) => settingsCommand(ctx, env));
 
   bot.on('callback_query:data', async (ctx) => {
     const data = ctx.callbackQuery.data;
@@ -59,10 +59,9 @@ function createBot(env: Env): Bot<MyContext> {
     if (
       data === 'next_match' ||
       data === 'view_matches' ||
-      data.startsWith('like_') ||
-      data.startsWith('dislike_')
+      data.startsWith('match:')
     ) {
-      return matchCallbacks(ctx);
+      return matchCallbacks(ctx, env);
     }
 
     if (
@@ -70,17 +69,13 @@ function createBot(env: Env): Bot<MyContext> {
       data === 'back_to_matches' ||
       data.startsWith('view_match_user_')
     ) {
-      return matchesCallbacks(ctx);
+      return matchesCallbacks(ctx, env);
     }
 
     if (
-      data.startsWith('settings_') ||
-      data.startsWith('age_') ||
-      data.startsWith('dist_') ||
-      data.startsWith('gender_pref_') ||
-      data.startsWith('lang_')
+      data.startsWith('settings:')
     ) {
-      return settingsCallbacks(ctx);
+      return settingsCallbacks(ctx, env);
     }
   });
 

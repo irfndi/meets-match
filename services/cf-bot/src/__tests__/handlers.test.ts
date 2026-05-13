@@ -11,10 +11,10 @@ function mockCtx(text?: string): MyContext {
     reply: vi.fn().mockResolvedValue(undefined),
     answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
     deleteMessage: vi.fn().mockResolvedValue(undefined),
-    from: { id: 123, first_name: "Test", is_bot: false },
-    message: text ? { text, message_id: 1, date: 1, chat: { id: 123, type: "private" } } : undefined,
+    from: { id: 123, first_name: "Test", is_bot: false, language_code: "en" },
+    message: text ? { text, message_id: 1, date: 1, chat: { id: 123, type: "private" as const } } : undefined,
     callbackQuery: undefined,
-    chat: { id: 123, type: "private" },
+    chat: { id: 123, type: "private" as const },
   } as unknown as MyContext;
 }
 
@@ -65,31 +65,30 @@ describe("Bot Handlers", () => {
   });
 
   describe("matchCommand", () => {
-    it("should reply with coming soon message", async () => {
+    it("should reply with finding matches message", async () => {
       const ctx = mockCtx();
-      await matchCommand(ctx);
-      expect(ctx.reply).toHaveBeenCalledWith(
-        expect.stringContaining("coming soon"),
-      );
+      await matchCommand(ctx, { API_SERVICE: { fetch: vi.fn().mockResolvedValue(new Response(JSON.stringify({ potentialMatches: [] }))) } } as any);
+      expect(ctx.reply).toHaveBeenCalled();
     });
   });
 
   describe("matchesCommand", () => {
-    it("should reply with coming soon message", async () => {
+    it("should reply with no matches message when empty", async () => {
       const ctx = mockCtx();
-      await matchesCommand(ctx);
+      await matchesCommand(ctx, { API_SERVICE: { fetch: vi.fn().mockResolvedValue(new Response(JSON.stringify({ potentialMatches: [] }))) } } as any);
       expect(ctx.reply).toHaveBeenCalledWith(
-        expect.stringContaining("soon"),
+        expect.stringContaining("No matches"),
       );
     });
   });
 
   describe("settingsCommand", () => {
-    it("should reply with coming soon message", async () => {
+    it("should show settings menu", async () => {
       const ctx = mockCtx();
-      await settingsCommand(ctx);
+      await settingsCommand(ctx, { KV: {} } as any);
       expect(ctx.reply).toHaveBeenCalledWith(
-        expect.stringContaining("coming soon"),
+        expect.stringContaining("Settings"),
+        expect.any(Object),
       );
     });
   });
