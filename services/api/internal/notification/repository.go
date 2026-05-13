@@ -6,10 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/lib/pq"
 )
 
 // Repository handles PostgreSQL operations for notifications.
@@ -580,16 +580,9 @@ func (r *PostgresRepository) scanNotifications(rows *sql.Rows) ([]*Notification,
 	return notifications, nil
 }
 
-// isUniqueViolation checks if error is a unique constraint violation.
-// Uses proper pq.Error type assertion for PostgreSQL error code 23505.
 func isUniqueViolation(err error) bool {
 	if err == nil {
 		return false
 	}
-	var pqErr *pq.Error
-	if errors.As(err, &pqErr) {
-		// PostgreSQL error code 23505 = unique_violation
-		return pqErr.Code == "23505"
-	}
-	return false
+	return strings.Contains(err.Error(), "UNIQUE constraint failed")
 }

@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/lib/pq"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -99,7 +98,7 @@ func (s *MatchService) GetPotentialMatches(ctx context.Context, req *pb.GetPoten
 	}
 	if len(currentUser.Preferences.GenderPreference) > 0 {
 		query += fmt.Sprintf(" AND gender = ANY($%d)", argID)
-		args = append(args, pq.Array(currentUser.Preferences.GenderPreference))
+		args = append(args, currentUser.Preferences.GenderPreference)
 	}
 
 	// Fetch more candidates than limit to allow for scoring and re-ranking
@@ -118,7 +117,7 @@ func (s *MatchService) GetPotentialMatches(ctx context.Context, req *pb.GetPoten
 		var u models.User
 		err := rows.Scan(
 			&u.ID, &u.Username, &u.FirstName, &u.LastName, &u.Bio, &u.Age, &u.Gender,
-			pq.Array(&u.Interests), pq.Array(&u.Photos), &u.Location, &u.Preferences,
+			&u.Interests, &u.Photos, &u.Location, &u.Preferences,
 			&u.IsActive, &u.IsProfileComplete,
 		)
 		if err != nil {

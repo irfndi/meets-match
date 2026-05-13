@@ -8,7 +8,7 @@ import (
 	"time"
 
 	pb "github.com/irfndi/match-bot/packages/contracts/gen/go/proto/meetsmatch/v1"
-	_ "github.com/lib/pq"
+	_ "modernc.org/sqlite"
 )
 
 func setupTestDB(t *testing.T) *sql.DB {
@@ -17,9 +17,15 @@ func setupTestDB(t *testing.T) *sql.DB {
 		t.Skip("DATABASE_URL not set")
 	}
 
-	db, err := sql.Open("postgres", dbURL)
+	db, err := sql.Open("sqlite", dbURL)
 	if err != nil {
 		t.Fatalf("failed to open db: %v", err)
+	}
+	if _, err := db.Exec("PRAGMA journal_mode = WAL"); err != nil {
+		t.Fatalf("failed to enable WAL mode: %v", err)
+	}
+	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
+		t.Fatalf("failed to enable foreign keys: %v", err)
 	}
 
 	if err := db.Ping(); err != nil {
