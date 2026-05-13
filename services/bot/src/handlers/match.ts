@@ -122,8 +122,7 @@ const CONVERSATION_STARTERS = [
   'Hi! So glad we matched - tell me about yourself! 🌟',
 ];
 
-const getRandomStarter = () =>
-  CONVERSATION_STARTERS[randomInt(CONVERSATION_STARTERS.length)];
+const getRandomStarter = () => CONVERSATION_STARTERS[randomInt(CONVERSATION_STARTERS.length)];
 
 const MUTUAL_MATCH_MESSAGE = (name: string, otherUserId: string, template: string) => `
 🎉 *It's a Match!*
