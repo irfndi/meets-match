@@ -196,7 +196,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
 
 ## TODOs
 
-- [ ] 1. Project Scaffolding + Wrangler Configuration
+- [x] 1. Project Scaffolding + Wrangler Configuration
 
   **What to do**:
   - Create `services/cf-api/`, `services/cf-bot/`, `services/cf-worker/` directories alongside existing Go services
