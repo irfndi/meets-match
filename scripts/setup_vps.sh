@@ -32,7 +32,7 @@ export PATH="$BUN_INSTALL/bin:$PATH"
 
 # 5. Install buf
 echo "Installing buf..."
-BUF_VERSION="1.47.2"
+BUF_VERSION="1.69.0"
 curl -sSL "https://github.com/bufbuild/buf/releases/download/v${BUF_VERSION}/buf-Linux-x86_64" -o /usr/local/bin/buf
 chmod +x /usr/local/bin/buf
 
