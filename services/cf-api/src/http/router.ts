@@ -101,7 +101,11 @@ export class ApiRouter {
     if (!userId) {
       return jsonResponse({ error: "user_id is required" }, 400);
     }
-    const limit = Math.min(Number(searchParams.get("limit") ?? 10), 50);
+    const limitRaw = searchParams.get("limit");
+    const limit = limitRaw ? Number(limitRaw) : 10;
+    if (Number.isNaN(limit) || limit < 1 || limit > 50) {
+      return jsonResponse({ error: "limit must be a number between 1 and 50" }, 400);
+    }
     try {
       const result = await runEffect(this.matchRepo.getPotentialMatches({ userId, limit }));
       return jsonResponse({ potentialMatches: result });
@@ -197,7 +201,7 @@ export class ApiRouter {
         userId: String(body.userId),
         type: String(body.type) as typeof import("@meetsmatch/cf-shared").NotificationType.Type,
         channel: body.channel ? String(body.channel) as typeof import("@meetsmatch/cf-shared").NotificationChannel.Type : undefined,
-        payload: body.payload ? JSON.stringify(body.payload) : undefined,
+        payload: body.payload ? (typeof body.payload === "string" ? body.payload : JSON.stringify(body.payload)) : undefined,
         scheduledAt: body.scheduledAt ? String(body.scheduledAt) : undefined,
       }));
 
@@ -224,11 +228,21 @@ export class ApiRouter {
 
     try {
       if (query) {
-        const results = await runEffect(this.geoService.searchCities(query, { limit: Number(params.get("limit") ?? 5) }));
+        const limitRaw = params.get("limit");
+        const limit = limitRaw ? Number(limitRaw) : 5;
+        if (Number.isNaN(limit) || limit < 1 || limit > 50) {
+          return jsonResponse({ error: "limit must be a number between 1 and 50" }, 400);
+        }
+        const results = await runEffect(this.geoService.searchCities(query, { limit }));
         return jsonResponse({ results });
       }
       if (lat && lon) {
-        const result = await runEffect(this.geoService.reverseGeocode(Number(lat), Number(lon)));
+        const latNum = Number(lat);
+        const lonNum = Number(lon);
+        if (Number.isNaN(latNum) || Number.isNaN(lonNum) || latNum < -90 || latNum > 90 || lonNum < -180 || lonNum > 180) {
+          return jsonResponse({ error: "lat must be between -90 and 90, lon between -180 and 180" }, 400);
+        }
+        const result = await runEffect(this.geoService.reverseGeocode(latNum, lonNum));
         return jsonResponse({ result });
       }
       return jsonResponse({ error: "Missing query or lat/lon" }, 400);

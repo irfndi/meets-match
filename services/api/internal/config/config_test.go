@@ -6,8 +6,15 @@ import (
 )
 
 func TestLoad(t *testing.T) {
-	// Test defaults
+	// Test missing DATABASE_URL returns error
 	os.Clearenv()
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Expected Load() to return error when DATABASE_URL is missing")
+	}
+
+	// Test defaults with DATABASE_URL set
+	t.Setenv("DATABASE_URL", "postgres://test")
 	cfg, err := Load()
 	if err != nil {
 		t.Fatalf("Load() returned error: %v", err)
