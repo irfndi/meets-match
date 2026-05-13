@@ -486,7 +486,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
 
   **Commit**: YES (group with Tasks 3, 4)
 
-- [ ] 6. Models Layer — User
+- [x] 6. Models Layer — User
 
   Port `services/api/internal/models/user.go` and `services/api/internal/services/user.go` to Effect TS.
   Create `services/cf-api/src/models/user.ts` with User Effect Schema + D1 repository (CreateUser, GetUser, UpdateUser, ListUsers, DeleteUser).
