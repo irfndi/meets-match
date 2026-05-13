@@ -1,0 +1,33 @@
+name = "meetsmatch-api"
+main = "src/index.ts"
+compatibility_date = "2024-05-01"
+
+# D1 Database
+[[d1_databases]]
+binding = "DB"
+database_name = "meetsmatch"
+database_id = "<your-d1-database-id>"
+
+# KV Namespace for caching
+[[kv_namespaces]]
+binding = "KV"
+id = "<your-kv-namespace-id>"
+
+# Queue producer for notifications
+[[queues.producers]]
+binding = "NOTIFICATION_QUEUE"
+queue = "notification-queue"
+
+# Service Binding — this service is exported as "api"
+# Other services import it via [[services]] in their wrangler.toml
+
+[vars]
+ENVIRONMENT = "development"
+ENABLE_SENTRY = "false"
+
+# Cron triggers are handled by cf-worker, not cf-api
+
+# Secrets (set via wrangler secret put or .dev.vars):
+# SENTRY_DSN
+# SENTRY_ENVIRONMENT
+# SENTRY_RELEASE

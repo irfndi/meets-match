@@ -1,0 +1,51 @@
+name = "meetsmatch-worker"
+main = "src/index.ts"
+compatibility_date = "2024-05-01"
+
+# D1 Database
+[[d1_databases]]
+binding = "DB"
+database_name = "meetsmatch"
+database_id = "<your-d1-database-id>"
+
+# KV Namespace
+[[kv_namespaces]]
+binding = "KV"
+id = "<your-kv-namespace-id>"
+
+# Queue consumers
+[[queues.consumers]]
+queue = "notification-queue"
+max_batch_size = 10
+max_batch_timeout = 30
+max_retries = 3
+dead_letter_queue = "dlq"
+
+[[queues.consumers]]
+queue = "dlq"
+max_batch_size = 1
+max_retries = 0
+
+# Service Bindings — imports api and bot services
+[[services]]
+binding = "API_SERVICE"
+service = "meetsmatch-api"
+
+[[services]]
+binding = "BOT_SERVICE"
+service = "meetsmatch-bot"
+
+# Cron Triggers
+[triggers]
+crons = ["0 10 * * *", "*/5 * * * *"]
+
+[vars]
+ENVIRONMENT = "development"
+REENGAGEMENT_SCHEDULE = "0 10 * * *"
+DLQ_PROCESSOR_SCHEDULE = "*/5 * * * *"
+WORKER_CONCURRENCY = "10"
+
+# Secrets (set via wrangler secret put or .dev.vars):
+# SENTRY_DSN
+# SENTRY_ENVIRONMENT
+# SENTRY_RELEASE

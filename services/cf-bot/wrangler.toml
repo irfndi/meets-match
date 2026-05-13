@@ -1,0 +1,27 @@
+name = "meetsmatch-bot"
+main = "src/index.ts"
+compatibility_date = "2024-05-01"
+
+# D1 Database
+[[d1_databases]]
+binding = "DB"
+database_name = "meetsmatch"
+database_id = "<your-d1-database-id>"
+
+# KV Namespace for session caching
+[[kv_namespaces]]
+binding = "KV"
+id = "<your-kv-namespace-id>"
+
+# Service Binding — this service is exported as "bot"
+# Other services import it via [[services]] in their wrangler.toml
+
+[vars]
+ENVIRONMENT = "development"
+ENABLE_SENTRY = "false"
+
+# Secrets (set via wrangler secret put or .dev.vars):
+# BOT_TOKEN
+# SENTRY_DSN
+# SENTRY_ENVIRONMENT
+# SENTRY_RELEASE
