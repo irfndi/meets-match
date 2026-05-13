@@ -78,3 +78,9 @@ service = "meetsmatch-bot-dev"
 
 [env.production]
 name = "meetsmatch-worker"
+
+
+# ── Observability ──
+[observability]
+enabled = true
+head_sampling_rate = 1

@@ -49,3 +49,9 @@ service = "meetsmatch-api-dev"
 # ── Production environment (deploy on release tag) ──
 [env.production]
 name = "meetsmatch-bot"
+
+
+# ── Observability ──
+[observability]
+enabled = true
+head_sampling_rate = 1

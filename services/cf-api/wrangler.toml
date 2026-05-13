@@ -47,3 +47,9 @@ queue = "notification-queue-dev"
 
 [env.production]
 name = "meetsmatch-api"
+
+
+# ── Observability ──
+[observability]
+enabled = true
+head_sampling_rate = 1
