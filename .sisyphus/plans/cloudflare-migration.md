@@ -380,7 +380,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
 
   **Commit**: YES (group with Tasks 4, 5)
 
-- [ ] 4. Effect Config + Environment Layers
+- [x] 4. Effect Config + Environment Layers
 
   **What to do**:
   - Create `packages/cf-shared/src/config/` directory
@@ -432,7 +432,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
 
   **Commit**: YES (group with Tasks 3, 5)
 
-- [ ] 5. Shared Utilities (Logging, Error Schemas)
+- [x] 5. Shared Utilities (Logging, Error Schemas)
 
   **What to do**:
   - Create `packages/cf-shared/src/utils/` directory
