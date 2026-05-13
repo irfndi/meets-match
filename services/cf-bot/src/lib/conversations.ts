@@ -68,6 +68,12 @@ export async function handleConversationMessage(ctx: MyContext, env: Env): Promi
       return handleInterestsConversation(ctx, env, state, text);
     case 'location':
       return handleLocationConversation(ctx, env, state, text);
+    case 'age-range':
+      return handleAgeRangeConversation(ctx, env, state, text);
+    case 'distance':
+      return handleDistanceConversation(ctx, env, state, text);
+    case 'gender-pref':
+      return handleGenderPrefConversation(ctx, env, state, text);
     default:
       await clearConversationState(env.KV, userId);
       return false;
@@ -171,6 +177,61 @@ async function handleLocationConversation(ctx: MyContext, env: Env, state: Conve
     await ctx.reply(`Location updated to ${city}, ${country}!`, { reply_markup: { remove_keyboard: true } });
   } else {
     await ctx.reply('Failed to update location. Please try again later.', { reply_markup: { remove_keyboard: true } });
+  }
+  return true;
+}
+
+async function handleAgeRangeConversation(ctx: MyContext, env: Env, state: ConversationState, text: string): Promise<boolean> {
+  const match = text.match(/(\d+)\s*-\s*(\d+)/);
+  if (!match) {
+    await ctx.reply('Invalid format. Enter age range like "18-30". Try again or type Cancel.');
+    return true;
+  }
+  const min = parseInt(match[1], 10);
+  const max = parseInt(match[2], 10);
+  if (min < 18 || max > 65 || min > max) {
+    await ctx.reply('Age must be between 18-65 and min must be less than max. Try again or type Cancel.');
+    return true;
+  }
+  const success = await updateUser(env, state.userId, { preferences: { minAge: min, maxAge: max } });
+  await clearConversationState(env.KV, state.userId);
+  if (success) {
+    await ctx.reply(`Age range set to ${min}-${max}!`, { reply_markup: { remove_keyboard: true } });
+  } else {
+    await ctx.reply('Failed to update age range. Please try again later.', { reply_markup: { remove_keyboard: true } });
+  }
+  return true;
+}
+
+async function handleDistanceConversation(ctx: MyContext, env: Env, state: ConversationState, text: string): Promise<boolean> {
+  const distance = parseInt(text, 10);
+  if (Number.isNaN(distance) || distance < 1 || distance > 500) {
+    await ctx.reply('Enter a valid distance in km (1-500). Try again or type Cancel.');
+    return true;
+  }
+  const success = await updateUser(env, state.userId, { preferences: { maxDistance: distance } });
+  await clearConversationState(env.KV, state.userId);
+  if (success) {
+    await ctx.reply(`Max distance set to ${distance}km!`, { reply_markup: { remove_keyboard: true } });
+  } else {
+    await ctx.reply('Failed to update distance. Please try again later.', { reply_markup: { remove_keyboard: true } });
+  }
+  return true;
+}
+
+async function handleGenderPrefConversation(ctx: MyContext, env: Env, state: ConversationState, text: string): Promise<boolean> {
+  const genders = text.split(',').map((s) => s.trim()).filter(Boolean);
+  const valid = genders.every((g) => ["Male", "Female", "Non-binary", "Other"].some((v) => v.toLowerCase() === g.toLowerCase()));
+  if (!valid || genders.length === 0) {
+    await ctx.reply('Enter valid genders separated by commas (Male, Female, Non-binary, Other). Try again or type Cancel.');
+    return true;
+  }
+  const success = await updateUser(env, state.userId, { preferences: { genderPreference: genders } });
+  await clearConversationState(env.KV, state.userId);
+  if (success) {
+    await ctx.reply(`Gender preference set to: ${genders.join(', ')}!`, { reply_markup: { remove_keyboard: true } });
+  } else {
+    await ctx.reply('Failed to update gender preference. Please try again later.', { reply_markup: { remove_keyboard: true } });
   }
   return true;
 }
