@@ -1,6 +1,7 @@
 import type { MiddlewareFn } from 'grammy';
 import type { MyContext } from '../types.js';
 import type { Env } from '../index.js';
+import { ApiServiceClient } from '../services/api-client.js';
 
 const DEBOUNCE_WINDOW_MS = 5 * 60 * 1000;
 const MAX_CACHE_SIZE = 10000;
@@ -21,9 +22,8 @@ export function activityTrackerMiddleware(env: Env): MiddlewareFn<MyContext> {
         lastActiveCache.set(userId, now);
 
         try {
-          await env.API_SERVICE.fetch(new Request('http://api/users/' + userId + '/last-active', {
-            method: 'POST',
-          }));
+          const client = new ApiServiceClient(env.API_SERVICE);
+          await client.updateLastActive({ userId });
         } catch {
         }
       }
