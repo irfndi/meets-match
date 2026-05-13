@@ -40,6 +40,8 @@ export class ApiRouter {
           return this.handleGetPotentialMatches(url.pathname, url.searchParams);
         case url.pathname.startsWith("/users/") && method === "GET":
           return this.handleGetUser(url.pathname);
+        case url.pathname.startsWith("/users/") && url.pathname.endsWith("/last-active") && method === "POST":
+          return this.handleUpdateLastActive(url.pathname);
         case url.pathname.startsWith("/users/") && method === "PUT":
           return this.handleUpdateUser(url.pathname, request);
         case url.pathname === "/matches" && method === "POST":
@@ -93,6 +95,16 @@ export class ApiRouter {
       return jsonResponse({ potentialMatches: result });
     } catch (error) {
       return jsonResponse({ error: "Failed to get potential matches" }, 500);
+    }
+  }
+
+  private async handleUpdateLastActive(path: string): Promise<Response> {
+    const userId = path.replace("/users/", "").replace("/last-active", "");
+    try {
+      await Effect.runPromise(this.userRepo.updateLastActive({ userId }));
+      return jsonResponse({ success: true });
+    } catch (error) {
+      return jsonResponse({ error: "Database error" }, 500);
     }
   }
 

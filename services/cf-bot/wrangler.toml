@@ -16,12 +16,18 @@ id = "<your-kv-namespace-id>"
 # Service Binding — this service is exported as "bot"
 # Other services import it via [[services]] in their wrangler.toml
 
+# Service Binding to API
+[[services]]
+binding = "API_SERVICE"
+service = "meetsmatch-api"
+
 [vars]
 ENVIRONMENT = "development"
 ENABLE_SENTRY = "false"
 
 # Secrets (set via wrangler secret put or .dev.vars):
 # BOT_TOKEN
+# TELEGRAM_WEBHOOK_SECRET
 # SENTRY_DSN
 # SENTRY_ENVIRONMENT
 # SENTRY_RELEASE
