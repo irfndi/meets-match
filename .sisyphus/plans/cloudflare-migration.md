@@ -325,7 +325,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
 
   **Commit**: YES (group with Task 1)
 
-- [ ] 3. D1 Schema + Migrations
+- [x] 3. D1 Schema + Migrations
 
   **What to do**:
   - Read Go database models (`services/api/internal/models/`)
