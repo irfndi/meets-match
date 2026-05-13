@@ -7,6 +7,8 @@ import { matchCommand, matchCallbacks } from './handlers/match.js';
 import { matchesCommand, matchesCallbacks } from './handlers/matches.js';
 import { settingsCommand, settingsCallbacks } from './handlers/settings.js';
 import { activityTrackerMiddleware } from './lib/activityTracker.js';
+import { handleConversationMessage } from './lib/conversations.js';
+import { handleProfileCallback } from './menus/profile.js';
 
 export interface Env {
   DB: D1Database;
@@ -41,13 +43,18 @@ function createBot(env: Env): Bot<MyContext> {
   bot.command('start', startCommand);
   bot.command('help', helpCommand);
   bot.command('about', aboutCommand);
-  bot.command('profile', profileCommand);
+  bot.command('profile', (ctx) => profileCommand(ctx, env));
   bot.command('match', matchCommand);
   bot.command('matches', matchesCommand);
   bot.command('settings', settingsCommand);
 
   bot.on('callback_query:data', async (ctx) => {
     const data = ctx.callbackQuery.data;
+
+    if (data.startsWith('profile:')) {
+      const handled = await handleProfileCallback(ctx, env, data);
+      if (handled) return;
+    }
 
     if (
       data === 'next_match' ||
@@ -78,6 +85,8 @@ function createBot(env: Env): Bot<MyContext> {
   });
 
   bot.on('message:text', async (ctx) => {
+    const handled = await handleConversationMessage(ctx, env);
+    if (handled) return;
     await ctx.reply('Got it. Use /help to see available commands.');
   });
 

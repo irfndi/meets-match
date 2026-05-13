@@ -663,7 +663,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
 
   **Commit**: YES (group with 14) — `feat(cf): add notification delivery attempts`
 
-- [ ] 12. Bot Worker — Webhook Entry + Routing
+- [x] 12. Bot Worker — Webhook Entry + Routing
 
   Port `services/bot/src/index.ts` and handlers from grammy polling to CF Worker webhook.
   Create `services/cf-bot/src/` with webhook entry, update router, session middleware (KV), activity middleware.
