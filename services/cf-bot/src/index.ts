@@ -136,6 +136,31 @@ export default {
       }
     }
 
+    if (url.pathname === '/send-notification' && request.method === 'POST') {
+      try {
+        const body = await request.json() as Record<string, unknown>;
+        const userId = String(body.userId);
+        const type = String(body.type);
+        const payload = body.payload ? JSON.parse(String(body.payload)) : {};
+
+        const bot = createBot(env);
+        const message = payload.message || `You have a new ${type} notification!`;
+        await bot.api.sendMessage(userId, message);
+
+        return new Response(JSON.stringify({ success: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('Send notification error:', errorMessage);
+        return new Response(JSON.stringify({ error: errorMessage }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
     return new Response(JSON.stringify({ error: 'Not Found' }), {
       status: 404,
       headers: { 'Content-Type': 'application/json' },
