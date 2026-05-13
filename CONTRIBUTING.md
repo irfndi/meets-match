@@ -2,63 +2,98 @@
 
 ## Environment Setup
 
-1. **Install Go 1.25+**:
-   ```bash
-   # macOS
-   brew install go
-   # Linux
-   wget https://go.dev/dl/go1.25.linux-amd64.tar.gz
-   sudo tar -C /usr/local -xzf go1.25.linux-amd64.tar.gz
-   ```
+### Prerequisites
 
-2. **Install Bun**:
-   ```bash
-   curl -fsSL https://bun.sh/install | bash
-   ```
+- Go 1.25+
+- Bun 1.3+
+- Buf CLI (for protobuf generation)
+- SQLite (embedded, no separate install needed)
 
-3. **Install buf**:
-   ```bash
-   brew install bufbuild/buf/buf
-   ```
+### Install Tools
 
-4. **Generate protobufs**:
+```bash
+# Go (via https://go.dev/dl/ or your package manager)
+# Bun (via https://bun.sh/)
+curl -fsSL https://bun.sh/install | bash
+
+# Buf
+curl -sSL "https://github.com/bufbuild/buf/releases/latest/download/buf-$(uname -s)-$(uname -m)" -o /usr/local/bin/buf
+chmod +x /usr/local/bin/buf
+```
+
+### Setup
+
+1. **Generate protobufs**:
    ```bash
    buf generate
    ```
 
+2. **Install Go dependencies**:
+   ```bash
+   cd services/api && go mod tidy
+   cd services/worker && go mod tidy
+   ```
+
+3. **Install Bot dependencies**:
+   ```bash
+   cd services/bot && bun install
+   ```
+
 ## Development Workflow
 
-- Go code in `services/api/` and `services/worker/` uses `go mod` for dependencies
-- TypeScript code in `services/bot/` uses Bun for runtime and package management
-- Protobuf contracts in `packages/contracts/` are shared across services
-- Run `make ci` before pushing to verify lint, format, security, tests, and build
-- Use `make lint` for linting, `make format` for formatting, `make test` for tests
+### Running Locally
 
-### Adding dependencies
+```bash
+# Terminal 1: Start API
+cd services/api && go run cmd/api/main.go
+
+# Terminal 2: Start Bot
+cd services/bot && bun run dev
+
+# Terminal 3: Start Worker (optional)
+cd services/worker && go run cmd/worker/main.go
+```
+
+### Testing
+
+```bash
+# Go API
+cd services/api && go test ./...
+
+# Bot
+cd services/bot && bun run test
+
+# Full CI
+cd services/api && make ci
+```
+
+### Linting
 
 ```bash
 # Go
-cd services/api && go get <package>
+cd services/api && go fmt ./...
 
-# TypeScript
-cd services/bot && bun add <package>
+# Bot
+cd services/bot && bun run lint
 ```
 
-### Updating protobuf contracts
+## Database
 
-1. Edit `.proto` files in `packages/contracts/proto/`
-2. Run `buf generate`
-3. Regenerated code goes to `packages/contracts/gen/`
+The project uses SQLite (via `modernc.org/sqlite`). The database file is created automatically on first run.
 
-## Testing
+To apply migrations manually:
 
 ```bash
-# Go API tests
-cd services/api && go test ./...
-
-# TypeScript Bot tests
-cd services/bot && bun run test
-
-# All tests
-make test
+cd services/api
+sqlite3 meetsmatch.db < migrations/000001_init_schema.up.sql
+sqlite3 meetsmatch.db < migrations/000002_add_matches.up.sql
+sqlite3 meetsmatch.db < migrations/000003_add_notifications.up.sql
+sqlite3 meetsmatch.db < migrations/000004_add_reengagement_notifications.up.sql
 ```
+
+## Project Guidelines
+
+- Follow existing code style
+- Add tests for new features
+- Update documentation for API changes
+- Use conventional commits (`feat:`, `fix:`, `docs:`, etc.)

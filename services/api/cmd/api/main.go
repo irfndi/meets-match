@@ -18,7 +18,7 @@ import (
 	"github.com/irfndi/match-bot/services/api/internal/notification"
 	sentrypkg "github.com/irfndi/match-bot/services/api/internal/sentry"
 
-	_ "github.com/lib/pq"
+	_ "modernc.org/sqlite"
 )
 
 func main() {
@@ -44,16 +44,20 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	db, err := sql.Open("postgres", cfg.DatabaseURL)
+	db, err := sql.Open("sqlite", cfg.DatabaseURL)
 	if err != nil {
 		log.Fatalf("failed to open db: %v", err)
 	}
 
-	// Configure connection pool for production use
-	db.SetMaxOpenConns(25)
-	db.SetMaxIdleConns(5)
-	db.SetConnMaxLifetime(5 * time.Minute)
-	db.SetConnMaxIdleTime(1 * time.Minute)
+	if _, err := db.Exec("PRAGMA journal_mode = WAL"); err != nil {
+		log.Fatalf("failed to enable WAL mode: %v", err)
+	}
+	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
+		log.Fatalf("failed to enable foreign keys: %v", err)
+	}
+
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
 
 	defer func() {
 		if err := db.Close(); err != nil {

@@ -1,24 +1,24 @@
 CREATE TABLE IF NOT EXISTS users (
-    id VARCHAR(255) PRIMARY KEY,
-    username VARCHAR(255),
-    first_name VARCHAR(255) NOT NULL,
-    last_name VARCHAR(255),
+    id TEXT PRIMARY KEY,
+    username TEXT,
+    first_name TEXT NOT NULL,
+    last_name TEXT,
     bio TEXT,
-    age INT,
-    gender VARCHAR(50),
-    interests TEXT[],
-    photos TEXT[],
-    location JSONB,
-    preferences JSONB DEFAULT '{}'::jsonb,
-    is_active BOOLEAN DEFAULT TRUE,
-    is_sleeping BOOLEAN DEFAULT FALSE,
-    is_profile_complete BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
-    last_active TIMESTAMPTZ DEFAULT NOW(),
-    last_reminded_at TIMESTAMPTZ
+    age INTEGER,
+    gender TEXT,
+    interests TEXT DEFAULT '[]',
+    photos TEXT DEFAULT '[]',
+    location TEXT DEFAULT '{}',
+    preferences TEXT DEFAULT '{}',
+    is_active INTEGER DEFAULT 1,
+    is_sleeping INTEGER DEFAULT 0,
+    is_profile_complete INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    last_active TEXT DEFAULT CURRENT_TIMESTAMP,
+    last_reminded_at TEXT
 );
 
-CREATE INDEX idx_users_username ON users(username);
-CREATE INDEX idx_users_age ON users(age);
-CREATE INDEX idx_users_gender ON users(gender);
+CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+CREATE INDEX IF NOT EXISTS idx_users_age ON users(age);
+CREATE INDEX IF NOT EXISTS idx_users_gender ON users(gender);

@@ -545,7 +545,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
 
   **Commit**: YES (group with 6, 7)
 
-- [ ] 9. Notification System Porting
+- [x] 9. Notification System Porting
 
   Read ALL files in `services/api/internal/notification/`. This is the most complex module.
   Create `services/cf-api/src/models/notification.ts` + `services/cf-worker/src/notifications/`.

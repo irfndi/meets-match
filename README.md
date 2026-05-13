@@ -2,101 +2,147 @@
 
 A Telegram-based matchmaking bot that helps users find and connect with compatible matches based on interests, location, and preferences.
 
-## Tech Stack
+## Overview
 
-- **Go 1.25** — API service (Fiber HTTP + gRPC) and Worker service (background jobs)
-- **TypeScript / Bun** — Telegram bot frontend (grammy framework)
-- **Protocol Buffers** — Service contracts via buf
-- **PostgreSQL** — Primary database
-- **Redis** — Caching, KV store, and job queues
-- **Sentry** — Error tracking across all services
+MeetMatch is a Telegram matchmaking bot built with Go and TypeScript that facilitates user matching based on:
+- Location proximity
+- Shared interests
+- User preferences (age, gender, relationship type)
 
 ## Architecture
 
+The project uses a microservices architecture with three main components:
+
+- **API Service** (`services/api/`) - Go-based gRPC/HTTP API with SQLite database
+- **Bot Service** (`services/bot/`) - TypeScript/Bun Telegram bot client
+- **Worker Service** (`services/worker/`) - Go background job processor (optional)
+
+### Communication Flow
+
 ```
-services/
-├── api/          # Go HTTP/gRPC API server
-│   ├── cmd/api/  # Entry point
-│   └── internal/ # Config, HTTP server, gRPC server, services
-├── bot/          # TypeScript Telegram bot (Bun runtime)
-│   └── src/      # Handlers, conversations, menus, services
-├── worker/       # Go background job processor (Redis queues)
-│   └── internal/ # Jobs, scheduler, clients
-packages/
-└── contracts/    # Protobuf definitions (shared by all services)
+Telegram → Bot Service (TS/Bun) → gRPC → API Service (Go/SQLite)
+                                           ↓
+                                    Worker Service (Go/Redis)
 ```
+
+## Tech Stack
+
+- **Go 1.25+** - API and Worker services
+- **TypeScript 5+** - Bot service
+- **Bun** - JavaScript runtime for bot
+- **SQLite** - Database (via modernc.org/sqlite)
+- **Redis** - Job queue (for notifications)
+- **gRPC + ConnectRPC** - Inter-service communication
+- **Grammy** - Telegram Bot framework
+- **Fiber** - HTTP framework for API
 
 ## Local Development
 
 ### Prerequisites
 
-- **Go 1.25+**
-- **Bun 1.3+**
-- **PostgreSQL** (17 recommended)
-- **Redis** (7+)
-- **buf** (install: `brew install bufbuild/buf/buf` or see [buf.build](https://buf.build))
+- Go 1.25+
+- Bun 1.3+
+- SQLite (embedded, no separate install needed)
+- Redis (optional, for notifications)
+- Buf (for protobuf generation)
 
 ### Setup
 
-1. **Generate protobufs**:
+1. **Clone the repository**:
+   ```bash
+   git clone <repository-url>
+   cd meetsmatch
+   ```
+
+2. **Generate protobufs**:
    ```bash
    buf generate
    ```
 
-2. **Configure environment**:
-   ```bash
-   cp .env.example .env
-   # Edit .env with your credentials
-   ```
-
 3. **Install dependencies**:
    ```bash
+   # Go services
+   cd services/api && go mod tidy
+   cd services/worker && go mod tidy
+
+   # Bot service
    cd services/bot && bun install
-   cd services/api && go mod download
    ```
 
-4. **Run database migrations** (if applicable):
+4. **Configure Environment**:
+   Copy `.env.example` to `.env` and fill in your credentials.
    ```bash
-   # Migrations are located in services/api/migrations/
-   cd services/api && go run cmd/migrate/main.go up
+   cp .env.example .env
    ```
 
-5. **Start services**:
+5. **Start the API**:
    ```bash
-   make api-run   # Terminal 1: API server
-   make bot-run   # Terminal 2: Bot
+   cd services/api && go run cmd/api/main.go
    ```
 
-## Useful Commands
+6. **Start the Bot** (in another terminal):
+   ```bash
+   cd services/bot && bun run dev
+   ```
 
-```bash
-make help       # Show all available commands
-make ci         # Lint, format, security check, test, build
-make test       # Run all tests
-make lint       # Run all linters
-make format     # Format all code
-make deploy-app # Deploy to server via rsync
+## Project Structure
+
+```text
+services/
+├── api/               # Go API service (gRPC + HTTP)
+│   ├── cmd/api/       # Main entry point
+│   ├── internal/      # Internal packages
+│   │   ├── services/  # Business logic (user, match, notification)
+│   │   ├── models/    # Data models
+│   │   └── config/    # Configuration
+│   └── migrations/    # SQLite schema migrations
+├── bot/               # TypeScript Telegram bot
+│   ├── src/handlers/  # Command and callback handlers
+│   ├── src/services/  # Bot services
+│   └── src/lib/       # Utilities
+└── worker/            # Go background worker
+    ├── cmd/worker/    # Main entry point
+    └── internal/      # Job processors
+
+packages/
+└── contracts/         # Shared protobuf definitions
 ```
 
 ## Deployment
 
-### Native (binary + systemd)
+### Docker / Coolify
 
-Go services compile to static binaries. The bot runs directly with Bun.
+The project includes a `Dockerfile` for containerized deployment via Coolify:
 
 ```bash
-# Build API binary
-cd services/api && CGO_ENABLED=0 go build -o bin/api cmd/api/main.go
-
-# Build Worker binary
-cd services/worker && CGO_ENABLED=0 go build -o bin/worker cmd/worker/main.go
-
-# Run bot
-cd services/bot && bun run start
+docker build -t meetsmatch-bot .
+docker run -e BOT_TOKEN=<token> -p 3000:3000 meetsmatch-bot
 ```
 
-Use `scripts/setup_vps.sh` for automated VPS provisioning (PostgreSQL, Redis, systemd).
+### Environment Variables
 
-### Docker (Coolify / docker-compose)
+Key environment variables (see `.env.example` for full list):
 
-Dockerfiles and `docker-compose.yml` are provided for container-based deployment.
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `BOT_TOKEN` | Telegram bot token | Required |
+| `DATABASE_URL` | SQLite database path | `file:meetsmatch.db` |
+| `API_URL` | API service URL | `http://localhost:8080` |
+| `REDIS_URL` | Redis connection | `redis://localhost:6379` |
+
+## Testing
+
+```bash
+# Go API tests
+cd services/api && go test ./...
+
+# Bot tests
+cd services/bot && bun run test
+
+# Full CI
+cd services/api && make ci
+```
+
+## License
+
+MIT

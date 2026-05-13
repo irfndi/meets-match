@@ -51,7 +51,7 @@ func CaptureError(err error, tags map[string]string, extras map[string]interface
 		scope.SetTag(k, v)
 	}
 	if len(extras) > 0 {
-		scope.SetContext("extra", extras)
+		scope.SetContext("extras", extras)
 	}
 
 	hub.CaptureException(err)
@@ -82,7 +82,7 @@ func CaptureErrorWithContext(ctx context.Context, err error, tags map[string]str
 		scope.SetTag(k, v)
 	}
 	if len(extras) > 0 {
-		scope.SetContext("extra", extras)
+		scope.SetContext("extras", extras)
 	}
 
 	hub.CaptureException(err)
@@ -106,19 +106,19 @@ const (
 	contextKeyRequestID contextKey = "request_id"
 )
 
-// WithUserID adds user ID to context.
+// WithUserID returns a new context with the user ID set.
 func WithUserID(ctx context.Context, userID string) context.Context {
 	return context.WithValue(ctx, contextKeyUserID, userID)
 }
 
-// WithRequestID adds request ID to context.
+// WithRequestID returns a new context with the request ID set.
 func WithRequestID(ctx context.Context, requestID string) context.Context {
 	return context.WithValue(ctx, contextKeyRequestID, requestID)
 }
 
 // sanitizeEvent removes sensitive data from Sentry events.
 func sanitizeEvent(event *sentry.Event) {
-	if event.Request != nil && event.Request.Headers != nil {
+	if event.Request != nil {
 		delete(event.Request.Headers, "Authorization")
 		delete(event.Request.Headers, "Cookie")
 		delete(event.Request.Headers, "X-Api-Key")
