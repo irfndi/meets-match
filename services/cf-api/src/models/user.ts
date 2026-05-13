@@ -69,6 +69,15 @@ export class UserRepository {
     return Effect.tryPromise({
       try: async () => {
         const user = req.user;
+
+        // Ensure user exists (upsert — create if missing)
+        const existing = await this.db.prepare("SELECT id FROM users WHERE id = ?").bind(req.userId).first();
+        if (!existing) {
+          await this.db.prepare(
+            `INSERT INTO users (id, first_name) VALUES (?, ?)`
+          ).bind(req.userId, user.firstName ?? "User").run();
+        }
+
         const fields: string[] = [];
         const values: unknown[] = [];
 
