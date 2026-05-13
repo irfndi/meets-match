@@ -16,7 +16,6 @@
     "@effect/schema": "^0.64.0",
     "@effect/platform": "^0.53.0",
     "@effect/sql": "^0.1.0",
-    "@effect/sql-sqlite3": "^0.1.0",
     "effectful-cloudflare": "^0.1.0",
     "@meetsmatch/cf-shared": "file:../../packages/cf-shared"
   },

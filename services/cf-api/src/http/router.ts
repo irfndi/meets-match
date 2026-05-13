@@ -20,7 +20,7 @@ export class ApiRouter {
 
   constructor(private readonly env: ApiEnv) {
     this.userRepo = new UserRepository(env.DB);
-    this.matchRepo = new MatchRepository(env.DB);
+    this.matchRepo = new MatchRepository(env.DB, this.userRepo);
     this.notificationRepo = new NotificationRepository(env.DB);
     this.geoService = new GeocodingService(env.KV);
   }
@@ -36,6 +36,8 @@ export class ApiRouter {
 
         case url.pathname === "/users" && method === "POST":
           return this.handleCreateUser(request);
+        case url.pathname.startsWith("/users/") && url.pathname.endsWith("/potential-matches") && method === "GET":
+          return this.handleGetPotentialMatches(url.pathname, url.searchParams);
         case url.pathname.startsWith("/users/") && method === "GET":
           return this.handleGetUser(url.pathname);
         case url.pathname.startsWith("/users/") && method === "PUT":
@@ -77,6 +79,20 @@ export class ApiRouter {
     } catch (error) {
       if (error instanceof NotFoundError) return jsonResponse({ error: error.message }, 404);
       return jsonResponse({ error: "Database error" }, 500);
+    }
+  }
+
+  private async handleGetPotentialMatches(path: string, searchParams: URLSearchParams): Promise<Response> {
+    const userId = path.replace("/users/", "").replace("/potential-matches", "");
+    if (!userId) {
+      return jsonResponse({ error: "user_id is required" }, 400);
+    }
+    const limit = Math.min(Number(searchParams.get("limit") ?? 10), 50);
+    try {
+      const result = await Effect.runPromise(this.matchRepo.getPotentialMatches({ userId, limit }));
+      return jsonResponse({ potentialMatches: result });
+    } catch (error) {
+      return jsonResponse({ error: "Failed to get potential matches" }, 500);
     }
   }
 
