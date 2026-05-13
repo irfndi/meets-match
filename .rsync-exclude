@@ -1,15 +1,21 @@
 # Version control
 .git
 
-# Python
-.venv
-__pycache__
-.pytest_cache
-.ruff_cache
-.mypy_cache
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+vendor/
 
-# Node.js
+# Node.js / Bun
 node_modules
+
+# DeepSec
+.deepsec/data/
 
 # Environment and secrets
 .env
@@ -17,6 +23,7 @@ node_modules
 .env.*.local
 
 # Build artifacts and caches
+bin/
 db
 cache
 data

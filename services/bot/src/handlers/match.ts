@@ -1,3 +1,4 @@
+import { randomInt } from 'node:crypto';
 import { Effect } from 'effect';
 import type { Context } from 'grammy';
 import { InlineKeyboard } from 'grammy';
@@ -122,7 +123,7 @@ const CONVERSATION_STARTERS = [
 ];
 
 const getRandomStarter = () =>
-  CONVERSATION_STARTERS[Math.floor(Math.random() * CONVERSATION_STARTERS.length)];
+  CONVERSATION_STARTERS[randomInt(CONVERSATION_STARTERS.length)];
 
 const MUTUAL_MATCH_MESSAGE = (name: string, otherUserId: string, template: string) => `
 🎉 *It's a Match!*

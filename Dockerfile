@@ -2,7 +2,7 @@
 # Dockerfile for MeetsMatch Telegram Bot
 # Used by Coolify for deployment
 
-FROM oven/bun:1 AS base
+FROM oven/bun:1@sha256:50317d83cd5a5ae1d8b35b3379c69f57ce1a0dbf4def91f0965653d767851834 AS base
 WORKDIR /app
 
 # Install buf for protobuf generation with checksum verification
@@ -29,7 +29,7 @@ WORKDIR /app/services/bot
 RUN bun install --frozen-lockfile
 
 # Final Stage - Use slim debian variant to avoid musl/glibc segfaults with Bun
-FROM oven/bun:1-slim
+FROM oven/bun:1-slim@sha256:621f249399228db47cf34611ee662585e77e015250ed29d5d0932b2d3282f0b0
 WORKDIR /app
 
 # Install curl for health checks (wget not available in debian-slim)
@@ -41,6 +41,9 @@ COPY --from=base /app/packages /app/packages
 
 WORKDIR /app/services/bot
 ENV NODE_ENV=production
+
+# Run as non-root user
+USER bun
 
 # Health check for container orchestration
 # Increased start-period for initial startup (buf generate, npm install, etc.)

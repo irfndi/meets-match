@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM golang:1.25.9-alpine AS builder
+FROM golang:1.25.9-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f AS builder
 
 WORKDIR /app
 
@@ -24,12 +24,16 @@ RUN go mod download
 RUN CGO_ENABLED=0 GOOS=linux go build -o /app/bin/api ./cmd/api
 
 # Final Stage
-FROM alpine:3.19
+FROM alpine:3.19@sha256:6baf43584bcb78f2e5847d1de515f23499913ac9f12bdf834811a3145eb11ca1
 
 # Install curl for health checks
 RUN apk add --no-cache curl
 
 WORKDIR /app
+
+# Create non-root user
+RUN adduser -D -g '' appuser
+USER appuser
 
 COPY --from=builder /app/bin/api /app/api
 

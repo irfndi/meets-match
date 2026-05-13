@@ -2,109 +2,101 @@
 
 A Telegram-based matchmaking bot that helps users find and connect with compatible matches based on interests, location, and preferences.
 
-## Overview
-
-MeetMatch is an AI-powered Telegram bot built with Python 3.13+ that facilitates user matching based on:
-- Location proximity
-- Shared interests
-- User preferences (age, gender, relationship type)
-
 ## Tech Stack
 
-- **Python 3.13+**
-- **uv** - Fast Python package installer and resolver
-- **python-telegram-bot v21+** - Telegram Bot API
-- **SQLAlchemy** - ORM for PostgreSQL
-- **Pydantic** - Data validation
-- **PostgreSQL** - Database
-- **Redis** - Caching and KV store
+- **Go 1.25** — API service (Fiber HTTP + gRPC) and Worker service (background jobs)
+- **TypeScript / Bun** — Telegram bot frontend (grammy framework)
+- **Protocol Buffers** — Service contracts via buf
+- **PostgreSQL** — Primary database
+- **Redis** — Caching, KV store, and job queues
+- **Sentry** — Error tracking across all services
+
+## Architecture
+
+```
+services/
+├── api/          # Go HTTP/gRPC API server
+│   ├── cmd/api/  # Entry point
+│   └── internal/ # Config, HTTP server, gRPC server, services
+├── bot/          # TypeScript Telegram bot (Bun runtime)
+│   └── src/      # Handlers, conversations, menus, services
+├── worker/       # Go background job processor (Redis queues)
+│   └── internal/ # Jobs, scheduler, clients
+packages/
+└── contracts/    # Protobuf definitions (shared by all services)
+```
 
 ## Local Development
 
 ### Prerequisites
 
-- Python 3.13+
-- `uv` (Install: `curl -LsSf https://astral.sh/uv/install.sh | sh`)
-- PostgreSQL
-- Redis
+- **Go 1.25+**
+- **Bun 1.3+**
+- **PostgreSQL** (17 recommended)
+- **Redis** (7+)
+- **buf** (install: `brew install bufbuild/buf/buf` or see [buf.build](https://buf.build))
 
 ### Setup
 
-1.  **Clone the repository**:
-    ```bash
-    git clone <repository-url>
-    cd meetsmatch
-    ```
+1. **Generate protobufs**:
+   ```bash
+   buf generate
+   ```
 
-2.  **Configure Environment**:
-    Copy `.env.example` to `.env` and fill in your credentials.
-    ```bash
-    cp .env.example .env
-    ```
+2. **Configure environment**:
+   ```bash
+   cp .env.example .env
+   # Edit .env with your credentials
+   ```
 
-3.  **Install Dependencies**:
-    ```bash
-    uv sync
-    ```
+3. **Install dependencies**:
+   ```bash
+   cd services/bot && bun install
+   cd services/api && go mod download
+   ```
 
-4.  **Run Migrations**:
-    ```bash
-    uv run alembic upgrade head
-    ```
+4. **Run database migrations** (if applicable):
+   ```bash
+   # Migrations are located in services/api/migrations/
+   cd services/api && go run cmd/migrate/main.go up
+   ```
 
-5.  **Start the Bot**:
-    You can use the helper script:
-    ```bash
-    ./scripts/start_local.sh
-    ```
-    Or run manually:
-    ```bash
-    uv run python main.py
-    ```
+5. **Start services**:
+   ```bash
+   make api-run   # Terminal 1: API server
+   make bot-run   # Terminal 2: Bot
+   ```
 
-## VPS Deployment (Native)
+## Useful Commands
 
-1.  **Provision VPS**: Ubuntu 22.04/24.04 or Debian 12 recommended.
-2.  **Run Setup Script**:
-    Copy `scripts/setup_vps.sh` to your VPS and run it to install dependencies.
-    ```bash
-    ./scripts/setup_vps.sh
-    ```
-3.  **Deploy Code**: Copy your code to `/opt/meetsmatch`.
-4.  **Configure Service**:
-    -   Update `.env` with production credentials.
-    -   Install the systemd service:
-        ```bash
-        sudo cp meetsmatch.service /etc/systemd/system/
-        sudo systemctl daemon-reload
-        sudo systemctl enable --now meetsmatch
-        ```
-5.  **Monitor**:
-    ```bash
-    sudo systemctl status meetsmatch
-    journalctl -u meetsmatch -f
-    ```
-
-## Project Structure
-
-```text
-src/
-├── api/               # FastAPI endpoints for health checks and management
-├── bot/               # Telegram bot handlers, middleware, and application logic
-│   ├── handlers/      # Command and callback handlers
-│   ├── middleware/    # Authentication and rate limiting middleware
-│   └── ui/            # Keyboards and UI elements
-├── models/            # Pydantic data models and enums
-├── services/          # Business logic layer (User, Matching, Geocoding)
-├── utils/             # Helper utilities (DB, Cache, Logging, Media)
-└── config.py          # Environment configuration
+```bash
+make help       # Show all available commands
+make ci         # Lint, format, security check, test, build
+make test       # Run all tests
+make lint       # Run all linters
+make format     # Format all code
+make deploy-app # Deploy to server via rsync
 ```
 
-## Documentation
+## Deployment
 
-The codebase is fully documented with docstrings.
-- **Handlers**: located in `src/bot/handlers`, covering `/start`, `/match`, `/profile`, etc.
-- **Services**: core logic in `src/services`, handling user management and matching algorithms.
-- **Models**: data structures in `src/models`.
+### Native (binary + systemd)
 
-Use `pydoc` or your IDE to explore specific function documentation.
+Go services compile to static binaries. The bot runs directly with Bun.
+
+```bash
+# Build API binary
+cd services/api && CGO_ENABLED=0 go build -o bin/api cmd/api/main.go
+
+# Build Worker binary
+cd services/worker && CGO_ENABLED=0 go build -o bin/worker cmd/worker/main.go
+
+# Run bot
+cd services/bot && bun run start
+```
+
+Use `scripts/setup_vps.sh` for automated VPS provisioning (PostgreSQL, Redis, systemd).
+
+### Docker (Coolify / docker-compose)
+
+Dockerfiles and `docker-compose.yml` are provided for container-based deployment.
