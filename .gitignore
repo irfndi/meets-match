@@ -56,3 +56,7 @@ packages/contracts/gen/
 # Go build artifacts
 services/api/bin/
 services/api/coverage.out
+
+# Cloudflare Workers
+.wrangler/
+.dev.vars
