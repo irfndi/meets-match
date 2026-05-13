@@ -4,107 +4,145 @@ A Telegram-based matchmaking bot that helps users find and connect with compatib
 
 ## Overview
 
-MeetMatch is an AI-powered Telegram bot built with Python 3.13+ that facilitates user matching based on:
+MeetMatch is a Telegram matchmaking bot built with Go and TypeScript that facilitates user matching based on:
 - Location proximity
 - Shared interests
 - User preferences (age, gender, relationship type)
 
+## Architecture
+
+The project uses a microservices architecture with three main components:
+
+- **API Service** (`services/api/`) - Go-based gRPC/HTTP API with SQLite database
+- **Bot Service** (`services/bot/`) - TypeScript/Bun Telegram bot client
+- **Worker Service** (`services/worker/`) - Go background job processor (optional)
+
+### Communication Flow
+
+```
+Telegram → Bot Service (TS/Bun) → gRPC → API Service (Go/SQLite)
+                                           ↓
+                                    Worker Service (Go/Redis)
+```
+
 ## Tech Stack
 
-- **Python 3.13+**
-- **uv** - Fast Python package installer and resolver
-- **python-telegram-bot v21+** - Telegram Bot API
-- **SQLAlchemy** - ORM for PostgreSQL
-- **Pydantic** - Data validation
-- **PostgreSQL** - Database
-- **Redis** - Caching and KV store
+- **Go 1.25+** - API and Worker services
+- **TypeScript 5+** - Bot service
+- **Bun** - JavaScript runtime for bot
+- **SQLite** - Database (via modernc.org/sqlite)
+- **Redis** - Job queue (for notifications)
+- **gRPC + ConnectRPC** - Inter-service communication
+- **Grammy** - Telegram Bot framework
+- **Fiber** - HTTP framework for API
 
 ## Local Development
 
 ### Prerequisites
 
-- Python 3.13+
-- `uv` (Install: `curl -LsSf https://astral.sh/uv/install.sh | sh`)
-- PostgreSQL
-- Redis
+- Go 1.25+
+- Bun 1.3+
+- SQLite (embedded, no separate install needed)
+- Redis (optional, for notifications)
+- Buf (for protobuf generation)
 
 ### Setup
 
-1.  **Clone the repository**:
-    ```bash
-    git clone <repository-url>
-    cd meetsmatch
-    ```
+1. **Clone the repository**:
+   ```bash
+   git clone <repository-url>
+   cd meetsmatch
+   ```
 
-2.  **Configure Environment**:
-    Copy `.env.example` to `.env` and fill in your credentials.
-    ```bash
-    cp .env.example .env
-    ```
+2. **Generate protobufs**:
+   ```bash
+   buf generate
+   ```
 
-3.  **Install Dependencies**:
-    ```bash
-    uv sync
-    ```
+3. **Install dependencies**:
+   ```bash
+   # Go services
+   cd services/api && go mod tidy
+   cd services/worker && go mod tidy
 
-4.  **Run Migrations**:
-    ```bash
-    uv run alembic upgrade head
-    ```
+   # Bot service
+   cd services/bot && bun install
+   ```
 
-5.  **Start the Bot**:
-    You can use the helper script:
-    ```bash
-    ./scripts/start_local.sh
-    ```
-    Or run manually:
-    ```bash
-    uv run python main.py
-    ```
+4. **Configure Environment**:
+   Copy `.env.example` to `.env` and fill in your credentials.
+   ```bash
+   cp .env.example .env
+   ```
 
-## VPS Deployment (Native)
+5. **Start the API**:
+   ```bash
+   cd services/api && go run cmd/api/main.go
+   ```
 
-1.  **Provision VPS**: Ubuntu 22.04/24.04 or Debian 12 recommended.
-2.  **Run Setup Script**:
-    Copy `scripts/setup_vps.sh` to your VPS and run it to install dependencies.
-    ```bash
-    ./scripts/setup_vps.sh
-    ```
-3.  **Deploy Code**: Copy your code to `/opt/meetsmatch`.
-4.  **Configure Service**:
-    -   Update `.env` with production credentials.
-    -   Install the systemd service:
-        ```bash
-        sudo cp meetsmatch.service /etc/systemd/system/
-        sudo systemctl daemon-reload
-        sudo systemctl enable --now meetsmatch
-        ```
-5.  **Monitor**:
-    ```bash
-    sudo systemctl status meetsmatch
-    journalctl -u meetsmatch -f
-    ```
+6. **Start the Bot** (in another terminal):
+   ```bash
+   cd services/bot && bun run dev
+   ```
 
 ## Project Structure
 
 ```text
-src/
-├── api/               # FastAPI endpoints for health checks and management
-├── bot/               # Telegram bot handlers, middleware, and application logic
-│   ├── handlers/      # Command and callback handlers
-│   ├── middleware/    # Authentication and rate limiting middleware
-│   └── ui/            # Keyboards and UI elements
-├── models/            # Pydantic data models and enums
-├── services/          # Business logic layer (User, Matching, Geocoding)
-├── utils/             # Helper utilities (DB, Cache, Logging, Media)
-└── config.py          # Environment configuration
+services/
+├── api/               # Go API service (gRPC + HTTP)
+│   ├── cmd/api/       # Main entry point
+│   ├── internal/      # Internal packages
+│   │   ├── services/  # Business logic (user, match, notification)
+│   │   ├── models/    # Data models
+│   │   └── config/    # Configuration
+│   └── migrations/    # SQLite schema migrations
+├── bot/               # TypeScript Telegram bot
+│   ├── src/handlers/  # Command and callback handlers
+│   ├── src/services/  # Bot services
+│   └── src/lib/       # Utilities
+└── worker/            # Go background worker
+    ├── cmd/worker/    # Main entry point
+    └── internal/      # Job processors
+
+packages/
+└── contracts/         # Shared protobuf definitions
 ```
 
-## Documentation
+## Deployment
 
-The codebase is fully documented with docstrings.
-- **Handlers**: located in `src/bot/handlers`, covering `/start`, `/match`, `/profile`, etc.
-- **Services**: core logic in `src/services`, handling user management and matching algorithms.
-- **Models**: data structures in `src/models`.
+### Docker / Coolify
 
-Use `pydoc` or your IDE to explore specific function documentation.
+The project includes a `Dockerfile` for containerized deployment via Coolify:
+
+```bash
+docker build -t meetsmatch-bot .
+docker run -e BOT_TOKEN=<token> -p 3000:3000 meetsmatch-bot
+```
+
+### Environment Variables
+
+Key environment variables (see `.env.example` for full list):
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `BOT_TOKEN` | Telegram bot token | Required |
+| `DATABASE_URL` | SQLite database path | `file:meetsmatch.db` |
+| `API_URL` | API service URL | `http://localhost:8080` |
+| `REDIS_URL` | Redis connection | `redis://localhost:6379` |
+
+## Testing
+
+```bash
+# Go API tests
+cd services/api && go test ./...
+
+# Bot tests
+cd services/bot && bun run test
+
+# Full CI
+cd services/api && make ci
+```
+
+## License
+
+MIT
