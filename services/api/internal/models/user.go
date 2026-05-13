@@ -65,15 +65,15 @@ func (l *Location) Scan(value interface{}) error {
 }
 
 type Preferences struct {
-	MinAge               *int     `json:"min_age,omitempty"`
-	MaxAge               *int     `json:"max_age,omitempty"`
+	MinAge               *int        `json:"min_age,omitempty"`
+	MaxAge               *int        `json:"max_age,omitempty"`
 	GenderPreference     GenderArray `json:"gender_preference,omitempty"`
-	RelationshipType     []string `json:"relationship_type,omitempty"`
-	MaxDistance          *int     `json:"max_distance,omitempty"`
-	NotificationsEnabled bool     `json:"notifications_enabled"`
-	PreferredLanguage    string   `json:"preferred_language,omitempty"`
-	PreferredCountry     string   `json:"preferred_country,omitempty"`
-	PremiumTier          string   `json:"premium_tier,omitempty"`
+	RelationshipType     []string    `json:"relationship_type,omitempty"`
+	MaxDistance          *int        `json:"max_distance,omitempty"`
+	NotificationsEnabled bool        `json:"notifications_enabled"`
+	PreferredLanguage    string      `json:"preferred_language,omitempty"`
+	PreferredCountry     string      `json:"preferred_country,omitempty"`
+	PremiumTier          string      `json:"premium_tier,omitempty"`
 }
 
 // Make Preferences implement driver.Valuer
