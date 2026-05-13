@@ -70,14 +70,14 @@ Port MeetMatch from Go+Docker to Effect TS+Cloudflare using a strangler fig patt
 - Deployment configuration (wrangler.toml) for all Workers
 
 ### Definition of Done
-- [ ] All 3 Go services ported to Effect TS Cloudflare Workers
-- [ ] Bot receives Telegram updates via webhook (not polling)
-- [ ] Workers communicate via Service Bindings (not gRPC)
-- [ ] Data stored in D1 (not PostgreSQL/Redis)
-- [ ] Cron jobs trigger on schedule (not long-running worker)
-- [ ] Background jobs processed via Cloudflare Queues (not Redis)
-- [ ] All services deployable via `wrangler deploy`
-- [ ] Go services can be deleted without functional loss
+- [x] All 3 Go services ported to Effect TS Cloudflare Workers
+- [x] Bot receives Telegram updates via webhook (not polling)
+- [x] Workers communicate via Service Bindings (not gRPC)
+- [x] Data stored in D1 (not PostgreSQL/Redis)
+- [x] Cron jobs trigger on schedule (not long-running worker)
+- [x] Background jobs processed via Cloudflare Queues (not Redis)
+- [x] All services deployable via `wrangler deploy`
+- [x] Go services can be deleted without functional loss
 
 ### Must Have
 - All Effect TS — no raw Promises, no Zod, no ad-hoc error handling
@@ -618,7 +618,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
 
   **Commit**: YES (group with 10)
 
-- [ ] 10b. API Worker — GetPotentialMatches Algorithm (POST-MERGE GAP)
+- [x] 10b. API Worker — GetPotentialMatches Algorithm (POST-MERGE GAP)
 
   **Why added**: Post-merge audit found Go `services/api/internal/services/match.go:51-180` has a full `GetPotentialMatches` algorithm with haversine distance, interest overlap scoring, and preferences filtering. The TS port completely lacks this. The Bot `/match` command depends on it.
 
@@ -646,7 +646,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
 
   **Commit**: YES — `feat(cf): add GetPotentialMatches algorithm`
 
-- [ ] 9b. Notification Delivery Attempts Table (POST-MERGE GAP)
+- [x] 9b. Notification Delivery Attempts Table (POST-MERGE GAP)
 
   **Why added**: Post-merge audit found Go has `notification_delivery_attempts` table (`migrations/000003_add_notifications.up.sql:44-53`) which is completely missing from D1. This table records every delivery attempt for audit trail.
 
@@ -689,7 +689,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
 
   **Commit**: YES (group with 13)
 
-- [ ] 13. Bot Worker — Handlers + Conversations Porting
+- [x] 13. Bot Worker — Handlers + Conversations Porting
 
   Port all handlers (start, help, profile, match, matches, settings) and conversations (editBio, editAge, editName, editGender, editInterests, editLocation).
   All handlers use Effect for error handling, Service Binding client for API calls.
@@ -729,7 +729,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
 
   **Commit**: YES — `feat(cf): port worker cron triggers and queue consumers`
 
-- [ ] 15. Bot Worker — gRPC → Service Binding Client Migration
+- [x] 15. Bot Worker — gRPC → Service Binding Client Migration
 
   Replace `services/bot/src/grpc/` with `services/cf-bot/src/bindings/api-client.ts`.
   All handlers updated to use Service Binding client instead of gRPC.
@@ -749,7 +749,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
 
   **Commit**: YES — `feat(cf): replace gRPC with Service Binding client in bot`
 
-- [ ] 16. KV Cache Layer (Replacing Redis)
+- [x] 16. KV Cache Layer (Replacing Redis)
 
   Create `packages/cf-shared/src/kv/` with generic KV cache (TTL support), session store, and geocoding cache.
   All entries must have TTL. Accept eventual consistency for KV.
@@ -834,16 +834,16 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
 
 > 4 review agents run in PARALLEL. ALL must APPROVE.
 
-- [ ] F1. **Plan Compliance Audit** — `oracle`
+- [x] F1. **Plan Compliance Audit** — `oracle`
   Read plan end-to-end. Verify all Must Have present, all Must NOT Have absent. Check evidence files.
 
-- [ ] F2. **Code Quality Review** — `unspecified-high`
+- [x] F2. **Code Quality Review** — `unspecified-high`
   Run vitest + tsc --noEmit + eslint. Check for: raw Promises, Zod, gRPC references, untyped code.
 
-- [ ] F3. **Real Manual QA** — `unspecified-high`
+- [x] F3. **Real Manual QA** — `unspecified-high`
   Deploy all Workers to staging. Execute ALL QA scenarios. Test cross-service integration.
 
-- [ ] F4. **Scope Fidelity Check** — `deep`
+- [x] F4. **Scope Fidelity Check** — `deep`
   Verify 1:1 porting — no missing features, no scope creep, no "nice-to-have" refactors.
 
 ---
@@ -872,8 +872,8 @@ wrangler d1 execute meetsmatch-db --command="SELECT count(*) FROM users"
 ```
 
 ### Final Checklist
-- [ ] All "Must Have" present (Effect, D1, Service Bindings, webhooks, toggles)
-- [ ] All "Must NOT Have" absent (gRPC, Redis, Docker, feature changes, raw Promises, Zod)
-- [ ] All tests pass
-- [ ] Go services deletable without functional loss
-- [ ] `wrangler deploy` succeeds for all Workers
+- [x] All "Must Have" present (Effect, D1, Service Bindings, webhooks, toggles)
+- [x] All "Must NOT Have" absent (gRPC, Redis, Docker, feature changes, raw Promises, Zod)
+- [x] All tests pass
+- [x] Go services deletable without functional loss
+- [x] `wrangler deploy` succeeds for all Workers
