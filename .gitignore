@@ -48,6 +48,7 @@ coolify.env
 
 # Node
 node_modules/
+*.tsbuildinfo
 
 # Generated protobuf output
 packages/contracts/gen/

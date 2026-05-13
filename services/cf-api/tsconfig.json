@@ -6,7 +6,7 @@
     "types": ["@cloudflare/workers-types"]
   },
   "include": ["src"],
-  "exclude": ["node_modules", "dist"],
+  "exclude": ["node_modules", "dist", "src/tests"],
   "references": [
     { "path": "../../packages/cf-shared" }
   ]

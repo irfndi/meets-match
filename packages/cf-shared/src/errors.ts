@@ -16,8 +16,10 @@ export class NotFoundError extends Error {
 
 export class ValidationError extends Error {
   readonly _tag = "ValidationError";
-  constructor(public readonly field: string, public readonly message: string) {
+  readonly field: string;
+  constructor(field: string, message: string) {
     super(`Validation error on ${field}: ${message}`);
+    this.field = field;
   }
 }
 

@@ -1,10 +1,22 @@
-import { Effect } from "effect";
+import { Effect, Exit, Cause } from "effect";
 import type { D1Database, KVNamespace, Queue } from "@cloudflare/workers-types";
 import { UserRepository } from "../models/user.js";
 import { MatchRepository } from "../models/match.js";
 import { NotificationRepository } from "../models/notification.js";
 import { GeocodingService } from "../models/geocoding.js";
 import { AppError, NotFoundError, DatabaseError } from "@meetsmatch/cf-shared";
+
+async function runEffect<A, E>(effect: Effect.Effect<A, E, never>): Promise<A> {
+  const exit = await Effect.runPromiseExit(effect);
+  if (Exit.isSuccess(exit)) {
+    return exit.value;
+  }
+  const failureOption = Cause.failureOption(exit.cause);
+  if (failureOption._tag === "Some") {
+    throw failureOption.value;
+  }
+  throw new Error(String(exit.cause));
+}
 
 export interface ApiEnv {
   DB: D1Database;
@@ -69,16 +81,14 @@ export class ApiRouter {
 
   private async handleCreateUser(request: Request): Promise<Response> {
     const body = await request.json() as Record<string, unknown>;
-    const result = await Effect.runPromise(
-      this.userRepo.create({ user: body.user as typeof import("@meetsmatch/cf-shared").User.Type })
-    );
+    const result = await runEffect(this.userRepo.create({ user: body.user as typeof import("@meetsmatch/cf-shared").User.Type }));
     return jsonResponse(result, 201);
   }
 
   private async handleGetUser(path: string): Promise<Response> {
     const userId = path.replace("/users/", "");
     try {
-      const result = await Effect.runPromise(this.userRepo.getById({ userId }));
+      const result = await runEffect(this.userRepo.getById({ userId }));
       return jsonResponse(result);
     } catch (error) {
       if (error instanceof NotFoundError) return jsonResponse({ error: error.message }, 404);
@@ -93,7 +103,7 @@ export class ApiRouter {
     }
     const limit = Math.min(Number(searchParams.get("limit") ?? 10), 50);
     try {
-      const result = await Effect.runPromise(this.matchRepo.getPotentialMatches({ userId, limit }));
+      const result = await runEffect(this.matchRepo.getPotentialMatches({ userId, limit }));
       return jsonResponse({ potentialMatches: result });
     } catch (error) {
       return jsonResponse({ error: "Failed to get potential matches" }, 500);
@@ -103,7 +113,7 @@ export class ApiRouter {
   private async handleUpdateLastActive(path: string): Promise<Response> {
     const userId = path.replace("/users/", "").replace("/last-active", "");
     try {
-      await Effect.runPromise(this.userRepo.updateLastActive({ userId }));
+      await runEffect(this.userRepo.updateLastActive({ userId }));
       return jsonResponse({ success: true });
     } catch (error) {
       return jsonResponse({ error: "Database error" }, 500);
@@ -113,7 +123,7 @@ export class ApiRouter {
   private async handleUpdateLastRemindedAt(path: string): Promise<Response> {
     const userId = path.replace("/users/", "").replace("/last-reminded-at", "");
     try {
-      await Effect.runPromise(this.userRepo.updateLastRemindedAt({ userId }));
+      await runEffect(this.userRepo.updateLastRemindedAt({ userId }));
       return jsonResponse({ success: true });
     } catch (error) {
       return jsonResponse({ error: "Database error" }, 500);
@@ -124,9 +134,7 @@ export class ApiRouter {
     const userId = path.replace("/users/", "");
     const body = await request.json() as Record<string, unknown>;
     try {
-      const result = await Effect.runPromise(
-        this.userRepo.update({ userId, user: body.user as typeof import("@meetsmatch/cf-shared").User.Type, updateMask: body.updateMask as string[] })
-      );
+      const result = await runEffect(this.userRepo.update({ userId, user: body.user as typeof import("@meetsmatch/cf-shared").User.Type, updateMask: body.updateMask as string[] }));
       return jsonResponse(result);
     } catch (error) {
       if (error instanceof NotFoundError) return jsonResponse({ error: error.message }, 404);
@@ -136,16 +144,14 @@ export class ApiRouter {
 
   private async handleCreateMatch(request: Request): Promise<Response> {
     const body = await request.json() as Record<string, unknown>;
-    const result = await Effect.runPromise(
-      this.matchRepo.create({ user1Id: String(body.user1Id), user2Id: String(body.user2Id) })
-    );
+    const result = await runEffect(this.matchRepo.create({ user1Id: String(body.user1Id), user2Id: String(body.user2Id) }));
     return jsonResponse(result, 201);
   }
 
   private async handleGetMatch(path: string): Promise<Response> {
     const matchId = path.replace("/matches/", "");
     try {
-      const result = await Effect.runPromise(this.matchRepo.getById({ matchId }));
+      const result = await runEffect(this.matchRepo.getById({ matchId }));
       return jsonResponse(result);
     } catch (error) {
       if (error instanceof NotFoundError) return jsonResponse({ error: error.message }, 404);
@@ -163,15 +169,15 @@ export class ApiRouter {
     try {
       switch (action) {
         case "like": {
-          const result = await Effect.runPromise(this.matchRepo.like({ matchId, userId }));
+          const result = await runEffect(this.matchRepo.like({ matchId, userId }));
           return jsonResponse(result);
         }
         case "dislike": {
-          const result = await Effect.runPromise(this.matchRepo.dislike({ matchId, userId }));
+          const result = await runEffect(this.matchRepo.dislike({ matchId, userId }));
           return jsonResponse(result);
         }
         case "skip": {
-          const result = await Effect.runPromise(this.matchRepo.skip({ matchId, userId }));
+          const result = await runEffect(this.matchRepo.skip({ matchId, userId }));
           return jsonResponse(result);
         }
         default:
@@ -186,7 +192,7 @@ export class ApiRouter {
   private async handleEnqueueNotification(request: Request): Promise<Response> {
     const body = await request.json() as Record<string, unknown>;
     try {
-      const result = await Effect.runPromise(this.notificationRepo.create({
+      const result = await runEffect(this.notificationRepo.create({
         userId: String(body.userId),
         type: String(body.type) as typeof import("@meetsmatch/cf-shared").NotificationType.Type,
         channel: body.channel ? String(body.channel) as typeof import("@meetsmatch/cf-shared").NotificationChannel.Type : undefined,
@@ -214,15 +220,11 @@ export class ApiRouter {
 
     try {
       if (query) {
-        const results = await Effect.runPromise(
-          this.geoService.searchCities(query, { limit: Number(params.get("limit") ?? 5) })
-        );
+        const results = await runEffect(this.geoService.searchCities(query, { limit: Number(params.get("limit") ?? 5) }));
         return jsonResponse({ results });
       }
       if (lat && lon) {
-        const result = await Effect.runPromise(
-          this.geoService.reverseGeocode(Number(lat), Number(lon))
-        );
+        const result = await runEffect(this.geoService.reverseGeocode(Number(lat), Number(lon)));
         return jsonResponse({ result });
       }
       return jsonResponse({ error: "Missing query or lat/lon" }, 400);
@@ -233,7 +235,7 @@ export class ApiRouter {
 
   private async handleQueueStats(): Promise<Response> {
     try {
-      const result = await Effect.runPromise(this.notificationRepo.getQueueStats());
+      const result = await runEffect(this.notificationRepo.getQueueStats());
       return jsonResponse(result);
     } catch (error) {
       return jsonResponse({ error: "Failed to get stats" }, 500);
