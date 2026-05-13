@@ -3,14 +3,18 @@ import type { MyContext } from "../types.js";
 import type { Env } from "../index.js";
 
 async function fetchMatches(env: Env, userId: string) {
-  const res = await env.API_SERVICE.fetch(
-    new Request(`http://api/users/${userId}/potential-matches?limit=10`)
-  );
-  if (!res.ok) return [];
-  const data = await res.json() as { potentialMatches?: Array<Record<string, unknown>> };
-  return (data.potentialMatches ?? []).filter(
-    (m: Record<string, unknown>) => m.status === "matched"
-  );
+  try {
+    const res = await env.API_SERVICE.fetch(
+      new Request(`http://api/users/${userId}/potential-matches?limit=20`)
+    );
+    if (!res.ok) return [];
+    const data = await res.json() as { potentialMatches?: Array<Record<string, unknown>> };
+    return (data.potentialMatches ?? []).filter(
+      (m: Record<string, unknown>) => m.status === "matched"
+    );
+  } catch {
+    return [];
+  }
 }
 
 function formatMatch(match: Record<string, unknown>): string {

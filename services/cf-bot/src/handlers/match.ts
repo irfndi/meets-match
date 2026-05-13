@@ -3,20 +3,24 @@ import type { MyContext } from "../types.js";
 import type { Env } from "../index.js";
 
 async function fetchPotentialMatches(env: Env, userId: string, limit = 5) {
-  const res = await env.API_SERVICE.fetch(
-    new Request(`http://api/users/${userId}/potential-matches?limit=${limit}`)
-  );
-  if (!res.ok) return [];
-  const data = await res.json() as { potentialMatches?: Array<Record<string, unknown>> };
-  return data.potentialMatches ?? [];
+  try {
+    const res = await env.API_SERVICE.fetch(
+      new Request(`http://api/users/${userId}/potential-matches?limit=${limit}`)
+    );
+    if (!res.ok) return [];
+    const data = await res.json() as { potentialMatches?: Array<Record<string, unknown>> };
+    return data.potentialMatches ?? [];
+  } catch {
+    return [];
+  }
 }
 
-function buildMatchKeyboard(matchId: string) {
+function buildMatchKeyboard(targetUserId: string) {
   return new InlineKeyboard()
-    .text("❤️ Like", `match:like:${matchId}`)
-    .text("👎 Dislike", `match:dislike:${matchId}`)
+    .text("❤️ Like", `match:like:${targetUserId}`)
+    .text("👎 Dislike", `match:dislike:${targetUserId}`)
     .row()
-    .text("⏩ Skip", `match:skip:${matchId}`);
+    .text("⏩ Skip", `match:skip:${targetUserId}`);
 }
 
 function formatProfile(user: Record<string, unknown>, index: number): string {
@@ -36,19 +40,19 @@ export const matchCommand = async (ctx: MyContext, env: Env): Promise<void> => {
 
   await ctx.reply("🔍 Finding matches for you...");
 
-  const matches = await fetchPotentialMatches(env, userId, 5);
-  if (matches.length === 0) {
+  const users = await fetchPotentialMatches(env, userId, 5);
+  if (users.length === 0) {
     await ctx.reply(
       "No potential matches found right now. Complete your profile with /profile and try again!"
     );
     return;
   }
 
-  for (let i = 0; i < matches.length; i++) {
-    const match = matches[i];
-    const text = formatProfile(match, i + 1);
+  for (let i = 0; i < users.length; i++) {
+    const user = users[i];
+    const text = formatProfile(user, i + 1);
     await ctx.reply(text, {
-      reply_markup: buildMatchKeyboard(String(match.id)),
+      reply_markup: buildMatchKeyboard(String(user.id)),
     });
   }
 };
@@ -57,35 +61,63 @@ async function handleMatchAction(
   ctx: MyContext,
   env: Env,
   action: string,
-  matchId: string
+  targetUserId: string
 ) {
-  if (!ctx.from) return;
+  if (!ctx.from) {
+    await ctx.answerCallbackQuery("Could not identify you.");
+    return;
+  }
   const userId = String(ctx.from.id);
 
-  const res = await env.API_SERVICE.fetch(
-    new Request(`http://api/matches/${matchId}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId, action }),
-    })
-  );
+  try {
+    const createRes = await env.API_SERVICE.fetch(
+      new Request("http://api/matches", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user1Id: userId, user2Id: targetUserId }),
+      })
+    );
+    if (!createRes.ok) {
+      await ctx.answerCallbackQuery("Failed to process. Try again.");
+      return;
+    }
+    const created = await createRes.json() as { id?: string };
+    const matchId = created.id;
+    if (!matchId) {
+      await ctx.answerCallbackQuery("Failed to create match. Try again.");
+      return;
+    }
 
-  const result = await res.json() as { isMutual?: boolean; error?: string };
+    const actionRes = await env.API_SERVICE.fetch(
+      new Request(`http://api/matches/${matchId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, action }),
+      })
+    );
 
-  if (action === "like" && result.isMutual) {
-    await ctx.reply("💕 It's a match! You can now chat with each other.");
-  } else if (action === "like") {
-    await ctx.reply("❤️ You liked this profile!");
-  } else if (action === "dislike") {
-    await ctx.reply("👎 Profile skipped.");
-  } else {
-    await ctx.reply("⏩ Skipped.");
+    const result = await actionRes.json() as { isMutual?: boolean };
+
+    if (action === "like" && result.isMutual) {
+      await ctx.reply("💕 It's a match! You can now chat with each other.");
+    } else if (action === "like") {
+      await ctx.reply("❤️ You liked this profile!");
+    } else if (action === "dislike") {
+      await ctx.reply("👎 Profile skipped.");
+    } else {
+      await ctx.reply("⏩ Skipped.");
+    }
+  } catch {
+    await ctx.reply("Something went wrong. Please try again.");
   }
   await ctx.answerCallbackQuery("Done!");
 }
 
 export const matchCallbacks = async (ctx: MyContext, env: Env): Promise<void> => {
-  if (!ctx.callbackQuery?.data) return;
+  if (!ctx.callbackQuery?.data) {
+    await ctx.answerCallbackQuery().catch(() => {});
+    return;
+  }
   const data = ctx.callbackQuery.data;
 
   if (data.startsWith("match:like:")) {
@@ -94,5 +126,7 @@ export const matchCallbacks = async (ctx: MyContext, env: Env): Promise<void> =>
     await handleMatchAction(ctx, env, "dislike", data.replace("match:dislike:", ""));
   } else if (data.startsWith("match:skip:")) {
     await handleMatchAction(ctx, env, "skip", data.replace("match:skip:", ""));
+  } else {
+    await ctx.answerCallbackQuery("Unknown action.");
   }
 };
