@@ -768,7 +768,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
 
   **Commit**: YES — `feat(cf): add KV cache, session, and geo-cache layers`
 
-- [ ] 17. End-to-End Integration Testing
+- [x] 17. End-to-End Integration Testing
 
   Create cross-service integration tests: Bot→API→D1, Cron→Queue→API, full match flow.
   Test Service Binding communication, D1 operations across services, Queue flow, KV session persistence.
@@ -788,7 +788,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
 
   **Commit**: YES — `feat(cf): end-to-end integration tests`
 
-- [ ] 18. Cutover Deployment Plan
+- [x] 18. Cutover Deployment Plan
 
   Create `docs/cutover-plan.md` documenting deployment sequence for each service.
   Include rollback procedures with kill switches (env var toggles).
@@ -808,7 +808,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
 
   **Commit**: YES — `docs(cf): cutover deployment plan`
 
-- [ ] 19. Go Service Deletion + Cleanup
+- [x] 19. Go Service Deletion + Cleanup
 
   ONLY after full cutover verification. Delete `services/api/` (Go), `services/worker/` (Go), bot gRPC code, protobuf contracts, Go workspace files, Docker files.
   Verify `services/cf-*` Workers build and deploy cleanly without Go references.
