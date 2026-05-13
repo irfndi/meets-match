@@ -1,6 +1,6 @@
 module github.com/irfndi/match-bot/services/api
 
-go 1.25.5
+go 1.25.9
 
 require (
 	github.com/getsentry/sentry-go v0.27.0

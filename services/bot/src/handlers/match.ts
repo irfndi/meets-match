@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 import type { Context } from 'grammy';
 import { InlineKeyboard } from 'grammy';
-
+import { escapeMarkdown } from '../lib/markdown.js';
 import { captureEffectError } from '../lib/sentry.js';
 import { matchService } from '../services/matchService.js';
 import { userService } from '../services/userService.js';
@@ -21,14 +21,14 @@ const MATCH_PROFILE_TEMPLATE = (
   interests: string,
   location: string,
 ) => `
-👤 *${name}*, ${age}
-⚧ ${gender}
+👤 *${escapeMarkdown(name)}*, ${age}
+⚧ ${escapeMarkdown(gender)}
 
-📝 ${bio}
+📝 ${escapeMarkdown(bio)}
 
-🌟 Interests: ${interests}
+🌟 Interests: ${escapeMarkdown(interests)}
 
-📍 ${location}
+📍 ${escapeMarkdown(location)}
 
 Do you like this match?
 `;
@@ -127,10 +127,10 @@ const getRandomStarter = () =>
 const MUTUAL_MATCH_MESSAGE = (name: string, otherUserId: string, template: string) => `
 🎉 *It's a Match!*
 
-You and [${name}](tg://user?id=${otherUserId}) liked each other!
+You and [${escapeMarkdown(name)}](tg://user?id=${otherUserId}) liked each other!
 
 💡 *Start with:*
-_"${template}"_
+_"${escapeMarkdown(template)}"_
 `;
 
 const LIKED_MESSAGE = `
