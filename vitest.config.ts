@@ -8,7 +8,9 @@ export default defineConfig({
       "**/node_modules/**",
       "**/.deepsec/**",
       "**/dist/**",
-      "services/**",
+      "services/bot/**",
+      "services/api/**",
+      "services/worker/**",
     ],
   },
 });
