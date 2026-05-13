@@ -264,7 +264,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
   - Message: `feat(cf): scaffold project and contracts`
   - Files: `services/cf-api/*, services/cf-bot/*, services/cf-worker/*, packages/cf-shared/*, package.json, tsconfig.json`
 
-- [ ] 2. Effect Schema Contract Definitions
+- [x] 2. Effect Schema Contract Definitions
 
   **What to do**:
   - Read all `.proto` files in `packages/contracts/proto/` to understand contract surface
