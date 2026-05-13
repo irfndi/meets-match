@@ -572,7 +572,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
 
   **Commit**: YES — `feat(cf): port notification system with queues and retry`
 
-- [ ] 10. API Worker — HTTP Endpoints
+- [x] 10. API Worker — HTTP Endpoints
 
   Port `services/api/internal/httpserver/server.go` HTTP routes to Effect TS using `@effect/platform/HttpServer`.
   Create `services/cf-api/src/http/` with health, user, match, notification, geocoding endpoints.
@@ -598,7 +598,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
 
   **Commit**: YES (group with 11) — `feat(cf): port API HTTP endpoints and Service Binding server`
 
-- [ ] 11. API Worker — Service Binding Server
+- [x] 11. API Worker — Service Binding Server
 
   Port `services/api/internal/grpcserver/` gRPC methods as Service Binding RPC handlers.
   Create `services/cf-api/src/bindings/` with typed handlers for User, Match, Notification, Health services.
@@ -617,6 +617,51 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
   ```
 
   **Commit**: YES (group with 10)
+
+- [ ] 10b. API Worker — GetPotentialMatches Algorithm (POST-MERGE GAP)
+
+  **Why added**: Post-merge audit found Go `services/api/internal/services/match.go:51-180` has a full `GetPotentialMatches` algorithm with haversine distance, interest overlap scoring, and preferences filtering. The TS port completely lacks this. The Bot `/match` command depends on it.
+
+  **What to do**:
+  - Add `getPotentialMatches(userId, limit)` method to `MatchRepository` in `services/cf-api/src/models/match.ts`
+  - Implement haversine distance calculation (reuse from `geocoding.ts` or inline)
+  - Implement interest overlap scoring (Jaccard index or simple intersection count)
+  - Implement preferences filtering (age range, gender, max distance)
+  - Add `GET /users/:id/potential-matches?limit=` endpoint to `ApiRouter`
+  - Return scored and sorted candidates
+
+  **Reference Implementation**: `services/api/internal/services/match.go:51-180`
+
+  **Must NOT do**: Change the scoring weights (Location 0.3, Interests 0.4, Preferences 0.3), skip any filter criteria.
+  **Category**: `deep` | **Depends on**: 6,7,8 | **Blocks**: 12
+
+  **QA Scenarios:**
+  ```
+  Scenario: Get potential matches for a user
+    Tool: Bash (curl)
+    Steps: GET /users/123/potential-matches?limit=5
+    Expected: Returns array of scored users, excludes existing matches, respects preferences
+    Evidence: .sisyphus/evidence/task-10b-potential-matches.txt
+  ```
+
+  **Commit**: YES — `feat(cf): add GetPotentialMatches algorithm`
+
+- [ ] 9b. Notification Delivery Attempts Table (POST-MERGE GAP)
+
+  **Why added**: Post-merge audit found Go has `notification_delivery_attempts` table (`migrations/000003_add_notifications.up.sql:44-53`) which is completely missing from D1. This table records every delivery attempt for audit trail.
+
+  **What to do**:
+  - Create `services/cf-api/migrations/0005_add_delivery_attempts.sql`
+  - Add `notification_delivery_attempts` table with: id, notification_id, attempted_at, status, error_message, error_code, duration_ms, metadata
+  - Add indexes: notification_id, status
+  - Add `createAttempt()` method to `NotificationRepository`
+  - Call `createAttempt()` from queue consumer before/after delivery
+
+  **Reference Implementation**: `services/api/migrations/000003_add_notifications.up.sql:44-57`
+
+  **Category**: `quick` | **Depends on**: 9 | **Blocks**: 14
+
+  **Commit**: YES (group with 14) — `feat(cf): add notification delivery attempts`
 
 - [ ] 12. Bot Worker — Webhook Entry + Routing
 
