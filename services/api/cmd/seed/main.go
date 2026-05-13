@@ -7,7 +7,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/lib/pq"
+	_ "modernc.org/sqlite"
 )
 
 type Location struct {
@@ -36,9 +36,15 @@ func main() {
 		log.Fatal("DATABASE_URL environment variable is required")
 	}
 
-	db, err := sql.Open("postgres", dbURL)
+	db, err := sql.Open("sqlite", dbURL)
 	if err != nil {
 		log.Fatal(err)
+	}
+	if _, err := db.Exec("PRAGMA journal_mode = WAL"); err != nil {
+		log.Fatalf("failed to enable WAL mode: %v", err)
+	}
+	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
+		log.Fatalf("failed to enable foreign keys: %v", err)
 	}
 	defer func() {
 		if err := db.Close(); err != nil {
@@ -84,7 +90,7 @@ func main() {
 		ON CONFLICT (id) DO UPDATE SET
 			first_name = EXCLUDED.first_name,
 			username = EXCLUDED.username,
-			updated_at = NOW();
+			updated_at = CURRENT_TIMESTAMP;
 	`
 
 	_, err = db.Exec(query,
@@ -93,16 +99,15 @@ func main() {
 		"testuser",
 		25,
 		"male",
-		pq.Array([]string{"coding", "coffee"}),
-		pq.Array([]string{"photo1.jpg"}),
+		[]string{"coding", "coffee"},
+		[]string{"photo1.jpg"},
 		locJSON,
 		prefJSON,
 		true,
 	)
-
 	if err != nil {
-		log.Fatalf("Failed to seed user: %v", err)
+		log.Fatalf("Error seeding user: %v", err)
 	}
 
-	log.Println("Seeding completed successfully.")
+	log.Println("Database seeded successfully!")
 }
