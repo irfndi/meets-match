@@ -18,6 +18,15 @@
       "agent": "Sisyphus-Junior",
       "category": "deep",
       "updated_at": "2026-05-13T06:32:58.953Z"
+    },
+    "todo:12": {
+      "task_key": "todo:12",
+      "task_label": "12",
+      "task_title": "Bot Worker — Webhook Entry + Routing",
+      "session_id": "ses_1df8ce6dfffefGa3B2fbRKOS0q",
+      "agent": "Sisyphus-Junior",
+      "category": "deep",
+      "updated_at": "2026-05-13T08:27:56.916Z"
     }
   }
 }
