@@ -50,7 +50,7 @@ if ! sudo -u postgres psql -t -c '\du' | cut -d \| -f 1 | grep -qw meetsmatch; t
     sudo -u postgres psql -c "CREATE USER meetsmatch WITH PASSWORD '$DB_PASSWORD';"
     sudo -u postgres psql -c "CREATE DATABASE meetsmatch OWNER meetsmatch;"
     umask 077
-    printf "DATABASE_URL=postgres://meetsmatch:%s@localhost:5432/meetsmatch?sslmode=disable\n" "$DB_PASSWORD" > /opt/meetsmatch/.env
+    printf "DATABASE_URL=postgres://meetsmatch:%s@localhost:5432/meetsmatch?sslmode=require\n" "$DB_PASSWORD" > /opt/meetsmatch/.env
     echo "Database created. DATABASE_URL written to /opt/meetsmatch/.env"
 else
     echo "Database user already exists."

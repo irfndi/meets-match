@@ -70,14 +70,14 @@ Port MeetMatch from Go+Docker to Effect TS+Cloudflare using a strangler fig patt
 - Deployment configuration (wrangler.toml) for all Workers
 
 ### Definition of Done
-- [x] All 3 Go services ported to Effect TS Cloudflare Workers
-- [x] Bot receives Telegram updates via webhook (not polling)
-- [x] Workers communicate via Service Bindings (not gRPC)
-- [x] Data stored in D1 (not PostgreSQL/Redis)
-- [x] Cron jobs trigger on schedule (not long-running worker)
-- [x] Background jobs processed via Cloudflare Queues (not Redis)
-- [x] All services deployable via `wrangler deploy`
-- [x] Go services can be deleted without functional loss
+- [ ] All 3 Go services ported to Effect TS Cloudflare Workers
+- [ ] Bot receives Telegram updates via webhook (not polling)
+- [ ] Workers communicate via Service Bindings (not gRPC)
+- [ ] Data stored in D1 (not PostgreSQL/Redis)
+- [ ] Cron jobs trigger on schedule (not long-running worker)
+- [ ] Background jobs processed via Cloudflare Queues (not Redis)
+- [ ] All services deployable via `wrangler deploy`
+- [ ] Go services can be deleted without functional loss
 
 ### Must Have
 - All Effect TS — no raw Promises, no Zod, no ad-hoc error handling
@@ -636,7 +636,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
   **Category**: `deep` | **Depends on**: 6,7,8 | **Blocks**: 12
 
   **QA Scenarios:**
-  ```
+  ```text
   Scenario: Get potential matches for a user
     Tool: Bash (curl)
     Steps: GET /users/123/potential-matches?limit=5

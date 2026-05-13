@@ -139,9 +139,15 @@ export default {
     if (url.pathname === '/send-notification' && request.method === 'POST') {
       try {
         const body = await request.json() as Record<string, unknown>;
-        const userId = String(body.userId);
-        const type = String(body.type);
-        const payload = body.payload ? JSON.parse(String(body.payload)) : {};
+        if (typeof body.userId !== 'string' || typeof body.type !== 'string') {
+          return new Response(JSON.stringify({ error: 'Invalid request: userId and type are required strings' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+        const userId = body.userId;
+        const type = body.type;
+        const payload = typeof body.payload === 'string' ? JSON.parse(body.payload) : (body.payload ?? {});
 
         const bot = createBot(env);
         const message = payload.message || `You have a new ${type} notification!`;

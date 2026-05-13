@@ -191,8 +191,9 @@ export class ApiRouter {
 
   private async handleEnqueueNotification(request: Request): Promise<Response> {
     const body = await request.json() as Record<string, unknown>;
+    let notification: typeof import("@meetsmatch/cf-shared").Notification.Type | null = null;
     try {
-      const result = await runEffect(this.notificationRepo.create({
+      notification = await runEffect(this.notificationRepo.create({
         userId: String(body.userId),
         type: String(body.type) as typeof import("@meetsmatch/cf-shared").NotificationType.Type,
         channel: body.channel ? String(body.channel) as typeof import("@meetsmatch/cf-shared").NotificationChannel.Type : undefined,
@@ -201,14 +202,17 @@ export class ApiRouter {
       }));
 
       await this.env.NOTIFICATION_QUEUE.send(JSON.stringify({
-        notificationId: result.id,
-        userId: result.userId,
-        type: result.type,
-        payload: result.payload,
+        notificationId: notification.id,
+        userId: notification.userId,
+        type: notification.type,
+        payload: notification.payload,
       }));
 
-      return jsonResponse(result, 202);
+      return jsonResponse(notification, 202);
     } catch (error) {
+      if (notification) {
+        await runEffect(this.notificationRepo.markFailed(notification.id, "Queue send failed")).catch(() => {});
+      }
       return jsonResponse({ error: "Failed to enqueue notification" }, 500);
     }
   }

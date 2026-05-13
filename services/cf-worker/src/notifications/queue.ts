@@ -29,12 +29,13 @@ export class NotificationQueueConsumer {
 
   async processBatch(batch: MessageBatch): Promise<void> {
     for (const message of batch.messages) {
-      const body = JSON.parse(message.body as string) as NotificationMessage;
       try {
+        const body = JSON.parse(message.body as string) as NotificationMessage;
         await this.processMessage(body);
         message.ack();
       } catch (error) {
-        console.error(`Failed to process notification ${body.notificationId}:`, error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error(`Failed to process notification:`, errorMessage);
         message.retry();
       }
     }

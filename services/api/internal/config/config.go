@@ -24,12 +24,12 @@ type Config struct {
 // Required variables: DATABASE_URL
 // Optional variables with defaults: HTTP_ADDR, GRPC_ADDR, REDIS_URL, ENVIRONMENT, LOG_LEVEL
 // Sentry variables: SENTRY_DSN, SENTRY_ENVIRONMENT, SENTRY_RELEASE, ENABLE_SENTRY
-func Load() Config {
+func Load() (Config, error) {
 	env := envOr("ENVIRONMENT", "development")
-	return Config{
+	cfg := Config{
 		HTTPAddr:          envOr("HTTP_ADDR", ":8080"),
 		GRPCAddr:          envOr("GRPC_ADDR", ":50051"),
-		DatabaseURL:       envOr("DATABASE_URL", "file:meetsmatch.db?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)"),
+		DatabaseURL:       os.Getenv("DATABASE_URL"),
 		RedisURL:          envOr("REDIS_URL", "redis://localhost:6379/0"),
 		Environment:       env,
 		LogLevel:          envOr("LOG_LEVEL", "info"),
@@ -38,6 +38,10 @@ func Load() Config {
 		SentryRelease:     envOr("SENTRY_RELEASE", "meetsmatch-api@dev"),
 		EnableSentry:      parseBool(envOr("ENABLE_SENTRY", "false")),
 	}
+	if err := cfg.Validate(); err != nil {
+		return Config{}, err
+	}
+	return cfg, nil
 }
 
 // Validate checks that all required configuration is present and valid.

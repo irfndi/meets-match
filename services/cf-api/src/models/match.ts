@@ -13,7 +13,7 @@ import {
   type SkipMatchRequest,
   type GetPotentialMatchesRequest,
 } from "@meetsmatch/cf-shared";
-import { NotFoundError, DatabaseError } from "@meetsmatch/cf-shared";
+import { NotFoundError, DatabaseError, ValidationError } from "@meetsmatch/cf-shared";
 import { UserRepository } from "./user.js";
 
 export class MatchRepository {
@@ -63,13 +63,16 @@ export class MatchRepository {
     });
   }
 
-  like(req: LikeMatchRequest): Effect.Effect<{ isMutual: boolean; match: typeof Match.Type }, NotFoundError | DatabaseError, never> {
+  like(req: LikeMatchRequest): Effect.Effect<{ isMutual: boolean; match: typeof Match.Type }, NotFoundError | DatabaseError | ValidationError, never> {
     return Effect.tryPromise({
       try: async () => {
         const match = await this.db.prepare("SELECT * FROM matches WHERE id = ?").bind(req.matchId).first();
         if (!match) throw new NotFoundError("Match", req.matchId);
 
         const row = this.toMatch(match);
+        if (req.userId !== row.user1Id && req.userId !== row.user2Id) {
+          throw new ValidationError("userId", "User is not part of this match");
+        }
         const isUser1 = row.user1Id === req.userId;
         const actionCol = isUser1 ? "user1_action" : "user2_action";
         const otherAction = isUser1 ? row.user2Action : row.user1Action;
@@ -84,37 +87,45 @@ export class MatchRepository {
         const updated = await this.db.prepare("SELECT * FROM matches WHERE id = ?").bind(req.matchId).first();
         return { isMutual, match: this.toMatch(updated!) };
       },
-      catch: (error) => (error instanceof NotFoundError ? error : new DatabaseError("like", error)),
+      catch: (error) => (error instanceof NotFoundError || error instanceof ValidationError ? error : new DatabaseError("like", error)),
     });
   }
 
-  dislike(req: DislikeMatchRequest): Effect.Effect<typeof Match.Type, NotFoundError | DatabaseError, never> {
+  dislike(req: DislikeMatchRequest): Effect.Effect<typeof Match.Type, NotFoundError | DatabaseError | ValidationError, never> {
     return Effect.tryPromise({
       try: async () => {
         const match = await this.db.prepare("SELECT * FROM matches WHERE id = ?").bind(req.matchId).first();
         if (!match) throw new NotFoundError("Match", req.matchId);
-        const isUser1 = String((match as Record<string, unknown>).user1_id) === req.userId;
+        const row = this.toMatch(match);
+        if (req.userId !== row.user1Id && req.userId !== row.user2Id) {
+          throw new ValidationError("userId", "User is not part of this match");
+        }
+        const isUser1 = row.user1Id === req.userId;
         const actionCol = isUser1 ? "user1_action" : "user2_action";
         await this.db.prepare(`UPDATE matches SET ${actionCol} = 'dislike', status = 'rejected', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).bind(req.matchId).run();
         const updated = await this.db.prepare("SELECT * FROM matches WHERE id = ?").bind(req.matchId).first();
         return this.toMatch(updated!);
       },
-      catch: (error) => (error instanceof NotFoundError ? error : new DatabaseError("dislike", error)),
+      catch: (error) => (error instanceof NotFoundError || error instanceof ValidationError ? error : new DatabaseError("dislike", error)),
     });
   }
 
-  skip(req: SkipMatchRequest): Effect.Effect<typeof Match.Type, NotFoundError | DatabaseError, never> {
+  skip(req: SkipMatchRequest): Effect.Effect<typeof Match.Type, NotFoundError | DatabaseError | ValidationError, never> {
     return Effect.tryPromise({
       try: async () => {
         const match = await this.db.prepare("SELECT * FROM matches WHERE id = ?").bind(req.matchId).first();
         if (!match) throw new NotFoundError("Match", req.matchId);
-        const isUser1 = String((match as Record<string, unknown>).user1_id) === req.userId;
+        const row = this.toMatch(match);
+        if (req.userId !== row.user1Id && req.userId !== row.user2Id) {
+          throw new ValidationError("userId", "User is not part of this match");
+        }
+        const isUser1 = row.user1Id === req.userId;
         const actionCol = isUser1 ? "user1_action" : "user2_action";
         await this.db.prepare(`UPDATE matches SET ${actionCol} = 'skip', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).bind(req.matchId).run();
         const updated = await this.db.prepare("SELECT * FROM matches WHERE id = ?").bind(req.matchId).first();
         return this.toMatch(updated!);
       },
-      catch: (error) => (error instanceof NotFoundError ? error : new DatabaseError("skip", error)),
+      catch: (error) => (error instanceof NotFoundError || error instanceof ValidationError ? error : new DatabaseError("skip", error)),
     });
   }
 
