@@ -89,10 +89,35 @@ export function loadConfig(): BotConfig {
 }
 
 /**
+ * Validate that an API URL is safe to connect to (prevents SSRF).
+ * Only allows HTTP/HTTPS schemes and blocks private/reserved IP ranges.
+ */
+function isSafeApiUrl(urlString: string): boolean {
+  try {
+    const url = new URL(urlString);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+      return false;
+    }
+    // Reject internal/loopback hostnames that could be used for SSRF
+    const blockedHosts = ['localhost', '127.0.0.1', '0.0.0.0', '::1', 'metadata.google.internal'];
+    if (blockedHosts.includes(url.hostname)) {
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Check if the API service is reachable.
  * Useful for startup health checks.
  */
 export async function validateApiConnection(config: BotConfig): Promise<boolean> {
+  if (!isSafeApiUrl(config.apiUrl)) {
+    console.error(`Unsafe API_URL rejected: ${config.apiUrl}`);
+    return false;
+  }
   try {
     const response = await fetch(`${config.apiUrl}/health`, {
       signal: AbortSignal.timeout(5000),
