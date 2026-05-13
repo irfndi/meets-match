@@ -141,7 +141,7 @@ describe('Config Loader', () => {
 
       const result = await validateApiConnection({
         botToken: 'test',
-        apiUrl: 'http://localhost:8080',
+        apiUrl: 'http://example.com:8080',
         healthPort: 3000,
         grpcPort: 50052,
         sentryDsn: '',
@@ -153,7 +153,7 @@ describe('Config Loader', () => {
 
       expect(result).toBe(true);
       expect(mockFetch).toHaveBeenCalledWith(
-        'http://localhost:8080/health',
+        'http://example.com:8080/health',
         expect.objectContaining({ signal: expect.any(AbortSignal) }),
       );
     });
@@ -164,7 +164,7 @@ describe('Config Loader', () => {
 
       const result = await validateApiConnection({
         botToken: 'test',
-        apiUrl: 'http://localhost:8080',
+        apiUrl: 'http://example.com:8080',
         healthPort: 3000,
         grpcPort: 50052,
         sentryDsn: '',
@@ -183,7 +183,7 @@ describe('Config Loader', () => {
 
       const result = await validateApiConnection({
         botToken: 'test',
-        apiUrl: 'http://localhost:8080',
+        apiUrl: 'http://example.com:8080',
         healthPort: 3000,
         grpcPort: 50052,
         sentryDsn: '',
