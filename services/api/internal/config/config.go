@@ -29,7 +29,7 @@ func Load() Config {
 	return Config{
 		HTTPAddr:          envOr("HTTP_ADDR", ":8080"),
 		GRPCAddr:          envOr("GRPC_ADDR", ":50051"),
-		DatabaseURL:       envRequired("DATABASE_URL"),
+		DatabaseURL:       envOr("DATABASE_URL", "file:meetsmatch.db?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)"),
 		RedisURL:          envOr("REDIS_URL", "redis://localhost:6379/0"),
 		Environment:       env,
 		LogLevel:          envOr("LOG_LEVEL", "info"),

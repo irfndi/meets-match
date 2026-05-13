@@ -6,9 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
-	"github.com/lib/pq"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -39,7 +39,7 @@ func (s *UserService) GetUser(ctx context.Context, req *pb.GetUserRequest) (*pb.
 	var u models.User
 	err := s.db.QueryRowContext(ctx, query, req.UserId).Scan(
 		&u.ID, &u.Username, &u.FirstName, &u.LastName, &u.Bio, &u.Age, &u.Gender,
-		pq.Array(&u.Interests), pq.Array(&u.Photos), &u.Location, &u.Preferences,
+		&u.Interests, &u.Photos, &u.Location, &u.Preferences,
 		&u.IsActive, &u.IsSleeping, &u.IsProfileComplete,
 		&u.CreatedAt, &u.UpdatedAt, &u.LastActive,
 	)
@@ -83,13 +83,13 @@ func (s *UserService) CreateUser(ctx context.Context, req *pb.CreateUserRequest)
 
 	_, err = s.db.ExecContext(ctx, query,
 		u.ID, u.Username, u.FirstName, u.LastName, u.Bio, u.Age, u.Gender,
-		pq.Array(u.Interests), pq.Array(u.Photos), locJSON, prefJSON,
+		u.Interests, u.Photos, locJSON, prefJSON,
 		u.IsActive, u.IsSleeping, u.IsProfileComplete,
 		u.CreatedAt, u.UpdatedAt, u.LastActive,
 	)
 
 	if err != nil {
-		if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" { // unique_violation
+		if isUniqueViolation(err) {
 			return nil, status.Error(codes.AlreadyExists, "user already exists")
 		}
 		return nil, status.Errorf(codes.Internal, "failed to create user: %v", err)
@@ -122,7 +122,7 @@ func (s *UserService) UpdateUser(ctx context.Context, req *pb.UpdateUserRequest)
 	uReq := protoToModel(req.User)
 
 	// Build dynamic query
-	query := "UPDATE users SET updated_at = NOW()"
+	query := "UPDATE users SET updated_at = CURRENT_TIMESTAMP"
 	args := []interface{}{}
 	argID := 1
 
@@ -153,12 +153,12 @@ func (s *UserService) UpdateUser(ctx context.Context, req *pb.UpdateUserRequest)
 	}
 	if uReq.Interests != nil { // empty slice is valid update
 		query += fmt.Sprintf(", interests = $%d", argID)
-		args = append(args, pq.Array(uReq.Interests))
+		args = append(args, models.StringArray(uReq.Interests))
 		argID++
 	}
 	if uReq.Photos != nil {
 		query += fmt.Sprintf(", photos = $%d", argID)
-		args = append(args, pq.Array(uReq.Photos))
+		args = append(args, models.StringArray(uReq.Photos))
 		argID++
 	}
 	if uReq.Location != nil {
@@ -248,7 +248,7 @@ func (s *UserService) UpdateLastActive(ctx context.Context, req *pb.UpdateLastAc
 		return nil, status.Error(codes.InvalidArgument, "user_id is required")
 	}
 
-	query := `UPDATE users SET last_active = NOW(), updated_at = NOW() WHERE id = $1`
+	query := `UPDATE users SET last_active = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $1`
 	result, err := s.db.ExecContext(ctx, query, req.UserId)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to update last_active: %v", err)
@@ -272,7 +272,7 @@ func (s *UserService) UpdateLastRemindedAt(ctx context.Context, req *pb.UpdateLa
 		return nil, status.Error(codes.InvalidArgument, "user_id is required")
 	}
 
-	query := `UPDATE users SET last_reminded_at = NOW(), updated_at = NOW() WHERE id = $1`
+	query := `UPDATE users SET last_reminded_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $1`
 	result, err := s.db.ExecContext(ctx, query, req.UserId)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to update last_reminded_at: %v", err)
@@ -453,4 +453,11 @@ func protoToModel(p *pb.User) *models.User {
 	}
 
 	return u
+}
+
+func isUniqueViolation(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(err.Error(), "UNIQUE constraint failed")
 }
