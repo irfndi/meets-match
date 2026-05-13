@@ -128,6 +128,25 @@ export class NotificationRepository {
     });
   }
 
+  createAttempt(notificationId: string, status: string, errorMessage?: string, errorCode?: string, durationMs?: number): Effect.Effect<boolean, DatabaseError, never> {
+    return Effect.tryPromise({
+      try: async () => {
+        await this.db.prepare(
+          `INSERT INTO notification_delivery_attempts (notification_id, status, error_message, error_code, duration_ms)
+           VALUES (?, ?, ?, ?, ?)`
+        ).bind(
+          notificationId,
+          status,
+          errorMessage ?? null,
+          errorCode ?? null,
+          durationMs ?? null
+        ).run();
+        return true;
+      },
+      catch: (error) => new DatabaseError("createAttempt", error),
+    });
+  }
+
   private toNotification(row: Record<string, unknown>): typeof Notification.Type {
     return {
       id: String(row.id),

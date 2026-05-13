@@ -47,6 +47,7 @@ export default {
           "UPDATE notifications SET status = 'processing', updated_at = CURRENT_TIMESTAMP WHERE id = ?"
         ).bind(notificationId).run();
 
+        const startTime = Date.now();
         try {
           const response = await env.BOT_SERVICE.fetch(new Request("http://bot/send-notification", {
             method: "POST",
@@ -54,25 +55,40 @@ export default {
             headers: { "Content-Type": "application/json" },
           }));
 
+          const durationMs = Date.now() - startTime;
+
           if (response.ok) {
             await env.DB.prepare(
               "UPDATE notifications SET status = 'delivered', delivered_at = CURRENT_TIMESTAMP WHERE id = ?"
             ).bind(notificationId).run();
-            console.log(`[queue] Delivered ${notificationId}`);
+            await env.DB.prepare(
+              `INSERT INTO notification_delivery_attempts (notification_id, status, duration_ms)
+               VALUES (?, 'success', ?)`
+            ).bind(notificationId, durationMs).run();
+            console.log(`[queue] Delivered ${notificationId} in ${durationMs}ms`);
             message.ack();
           } else {
             const errorText = await response.text();
             await env.DB.prepare(
               "UPDATE notifications SET status = 'failed', last_error = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
             ).bind(errorText, notificationId).run();
+            await env.DB.prepare(
+              `INSERT INTO notification_delivery_attempts (notification_id, status, error_message, duration_ms)
+               VALUES (?, 'failed', ?, ?)`
+            ).bind(notificationId, errorText, durationMs).run();
             console.error(`[queue] Failed ${notificationId}: ${errorText}`);
             message.retry();
           }
         } catch (error) {
+          const durationMs = Date.now() - startTime;
           const errorMessage = error instanceof Error ? error.message : String(error);
           await env.DB.prepare(
             "UPDATE notifications SET status = 'failed', last_error = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
           ).bind(errorMessage, notificationId).run();
+          await env.DB.prepare(
+            `INSERT INTO notification_delivery_attempts (notification_id, status, error_message, duration_ms)
+             VALUES (?, 'failed', ?, ?)`
+          ).bind(notificationId, errorMessage, durationMs).run();
           console.error(`[queue] Error ${notificationId}:`, errorMessage);
           message.retry();
         }

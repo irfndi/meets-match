@@ -709,7 +709,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
 
   **Commit**: YES (group with 12) — `feat(cf): port bot handlers and conversations`
 
-- [ ] 14. Worker — Cron Triggers + Queue Consumers
+- [x] 14. Worker — Cron Triggers + Queue Consumers
 
   Port `services/worker/internal/jobs/` to CF Cron Triggers + Queue consumers.
   Create reengagement cron, DLQ processor cron, notification queue consumer, retry queue consumer.
