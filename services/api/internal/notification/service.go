@@ -333,8 +333,8 @@ func (s *Service) captureError(_ context.Context, err error, tags map[string]str
 	for k, v := range tags {
 		scope.SetTag(k, v)
 	}
-	for k, v := range extras {
-		scope.SetExtra(k, v)
+	if len(extras) > 0 {
+		scope.SetContext("extra", extras)
 	}
 
 	hub.CaptureException(err)
@@ -353,10 +353,12 @@ func (s *Service) captureNotificationDLQ(_ context.Context, n *Notification, err
 
 	scope.SetUser(sentry.User{ID: n.UserID})
 
-	scope.SetExtra("notification_id", n.ID.String())
-	scope.SetExtra("attempt_count", n.AttemptCount)
-	scope.SetExtra("max_attempts", n.MaxAttempts)
-	scope.SetExtra("error_message", errMsg)
+	scope.SetContext("notification", map[string]interface{}{
+		"notification_id": n.ID.String(),
+		"attempt_count":   n.AttemptCount,
+		"max_attempts":    n.MaxAttempts,
+		"error_message":   errMsg,
+	})
 
 	// Add breadcrumb for the DLQ event
 	hub.AddBreadcrumb(&sentry.Breadcrumb{
@@ -409,9 +411,11 @@ func (s *Service) CheckDLQHealth(ctx context.Context) error {
 			scope.SetTag("alert_type", "dlq_stale")
 			scope.SetLevel(sentry.LevelWarning)
 
-			scope.SetExtra("oldest_item_age_hours", age.Hours())
-			scope.SetExtra("oldest_item", stats.OldestItem.Format(time.RFC3339))
-			scope.SetExtra("threshold_hours", staleHours)
+			scope.SetContext("dlq_stale", map[string]interface{}{
+				"oldest_item_age_hours": age.Hours(),
+				"oldest_item":           stats.OldestItem.Format(time.RFC3339),
+				"threshold_hours":       staleHours,
+			})
 
 			hub.CaptureMessage(fmt.Sprintf("DLQ contains stale items (oldest: %.1f hours)", age.Hours()))
 		}
@@ -429,14 +433,16 @@ func (s *Service) captureDLQAlert(level sentry.Level, message string, count int6
 	scope.SetTag("alert_type", "dlq_threshold")
 	scope.SetLevel(level)
 
-	scope.SetExtra("dlq_count", count)
-	scope.SetExtra("threshold", threshold)
-	scope.SetExtra("count_by_type", stats.CountByType)
-	scope.SetExtra("count_by_error", stats.CountByError)
-
-	if stats.OldestItem != nil {
-		scope.SetExtra("oldest_item", stats.OldestItem.Format(time.RFC3339))
+	dlqCtx := map[string]interface{}{
+		"dlq_count":      count,
+		"threshold":      threshold,
+		"count_by_type":  stats.CountByType,
+		"count_by_error": stats.CountByError,
 	}
+	if stats.OldestItem != nil {
+		dlqCtx["oldest_item"] = stats.OldestItem.Format(time.RFC3339)
+	}
+	scope.SetContext("dlq_alert", dlqCtx)
 
 	hub.CaptureMessage(fmt.Sprintf("%s: %d items (threshold: %d)", message, count, threshold))
 }

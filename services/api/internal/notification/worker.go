@@ -210,7 +210,9 @@ func (w *Worker) captureWorkerError(err error, notificationID uuid.UUID, process
 	scope.SetTag("processor_id", processorID)
 	scope.SetTag("worker_id", w.workerID)
 
-	scope.SetExtra("notification_id", notificationID.String())
+	scope.SetContext("notification", map[string]interface{}{
+		"notification_id": notificationID.String(),
+	})
 
 	hub.CaptureException(err)
 }
