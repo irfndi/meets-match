@@ -39,20 +39,20 @@ export const settingsCallbacks = async (ctx: MyContext, env: Env): Promise<void>
     case "settings:age-range":
       await startConversation(env.KV, userId, "age-range");
       await ctx.reply("Enter your preferred age range (e.g. *18-30*). Type *Cancel* to abort.", { parse_mode: "Markdown" });
-      await ctx.answerCallbackQuery();
+      await ctx.answerCallbackQuery().catch(() => {});
       break;
     case "settings:distance":
       await startConversation(env.KV, userId, "distance");
       await ctx.reply("Enter max distance in km (e.g. *50*). Type *Cancel* to abort.", { parse_mode: "Markdown" });
-      await ctx.answerCallbackQuery();
+      await ctx.answerCallbackQuery().catch(() => {});
       break;
     case "settings:gender-pref":
       await startConversation(env.KV, userId, "gender-pref");
       await ctx.reply("Enter preferred genders separated by commas (*male, female, other, prefer_not_to_say*). Type *Cancel* to abort.", { parse_mode: "Markdown" });
-      await ctx.answerCallbackQuery();
+      await ctx.answerCallbackQuery().catch(() => {});
       break;
     case "settings:close":
-      await ctx.answerCallbackQuery("Settings closed.");
+      await ctx.answerCallbackQuery("Settings closed.").catch(() => {});
       try {
         await ctx.deleteMessage();
       } catch (e) {
@@ -61,6 +61,6 @@ export const settingsCallbacks = async (ctx: MyContext, env: Env): Promise<void>
       }
       break;
     default:
-      await ctx.answerCallbackQuery("Unknown setting.");
+      await ctx.answerCallbackQuery("Unknown setting.").catch(() => {});
   }
 };

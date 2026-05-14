@@ -174,14 +174,14 @@ export const matchesCallbacks = async (ctx: MyContext, env: Env): Promise<void> 
         await removeNotification(env, userId, i);
       }
     }
-    await ctx.answerCallbackQuery("Dismissed.");
+    await ctx.answerCallbackQuery("Dismissed.").catch(() => {});
     await ctx.editMessageText("💕 You can see your likes anytime with /matches.");
     return;
   }
 
   if (data.startsWith("likes:view:")) {
     const targetUserId = data.replace("likes:view:", "");
-    await ctx.answerCallbackQuery("Loading profile...");
+    await ctx.answerCallbackQuery("Loading profile...").catch(() => {});
 
     try {
       const client = new ApiServiceClient(env.API_SERVICE);
@@ -211,5 +211,5 @@ export const matchesCallbacks = async (ctx: MyContext, env: Env): Promise<void> 
     return;
   }
 
-  await ctx.answerCallbackQuery("Unknown action.");
+  await ctx.answerCallbackQuery("Unknown action.").catch(() => {});
 };

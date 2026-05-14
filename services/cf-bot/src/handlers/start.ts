@@ -79,7 +79,7 @@ export const languageCallback = async (ctx: MyContext, env: Env, data: string): 
   // Store language preference
   await setUserLanguage(env, userId, selectedLang);
 
-  await ctx.answerCallbackQuery("Language set to English 🇬🇧");
+  await ctx.answerCallbackQuery("Language set to English 🇬🇧").catch(() => {});
   await ctx.editMessageText(t("welcomeNew", selectedLang), { parse_mode: "Markdown" });
   await ctx.reply("Use the menu below to get started:", { reply_markup: getMainMenuKeyboard() });
   return true;

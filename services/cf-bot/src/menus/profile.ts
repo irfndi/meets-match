@@ -34,27 +34,27 @@ export async function handleProfileCallback(ctx: MyContext, env: Env, data: stri
     case 'profile:bio':
       await startConversation(env.KV, userId, 'bio');
       await ctx.reply(t('bioPrompt', lang));
-      await ctx.answerCallbackQuery();
+      await ctx.answerCallbackQuery().catch(() => {});
       return true;
     case 'profile:age':
       await startConversation(env.KV, userId, 'age');
       await ctx.reply(t('agePrompt', lang));
-      await ctx.answerCallbackQuery();
+      await ctx.answerCallbackQuery().catch(() => {});
       return true;
     case 'profile:name':
       await startConversation(env.KV, userId, 'name');
       await ctx.reply(t('namePrompt', lang));
-      await ctx.answerCallbackQuery();
+      await ctx.answerCallbackQuery().catch(() => {});
       return true;
     case 'profile:gender':
       await startConversation(env.KV, userId, 'gender');
       await ctx.reply(t('genderPrompt', lang));
-      await ctx.answerCallbackQuery();
+      await ctx.answerCallbackQuery().catch(() => {});
       return true;
     case 'profile:interests':
       await startConversation(env.KV, userId, 'interests');
       await ctx.reply(t('interestsPrompt', lang));
-      await ctx.answerCallbackQuery();
+      await ctx.answerCallbackQuery().catch(() => {});
       return true;
     case 'profile:location': {
       await startConversation(env.KV, userId, 'location');
@@ -68,7 +68,7 @@ export async function handleProfileCallback(ctx: MyContext, env: Env, data: stri
         one_time_keyboard: true,
       };
       await ctx.reply(t('locationPrompt', lang), { reply_markup: keyboard });
-      await ctx.answerCallbackQuery();
+      await ctx.answerCallbackQuery().catch(() => {});
       return true;
     }
     case 'profile:close':
