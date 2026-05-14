@@ -153,7 +153,7 @@ async function handleMatchAction(
   targetUserId: string
 ) {
   if (!ctx.from) {
-    await ctx.answerCallbackQuery("Could not identify you.");
+    await ctx.answerCallbackQuery("Could not identify you.").catch(() => {});
     return;
   }
   const userId = String(ctx.from.id);
@@ -233,7 +233,7 @@ async function handleMatchAction(
     console.error("Match action error:", error);
     await ctx.reply(t("matchError", lang), { reply_markup: getMainMenuKeyboard() });
   }
-  await ctx.answerCallbackQuery("Done!");
+  await ctx.answerCallbackQuery("Done!").catch(() => {});
 }
 
 export const matchCallbacks = async (ctx: MyContext, env: Env): Promise<void> => {
@@ -250,6 +250,6 @@ export const matchCallbacks = async (ctx: MyContext, env: Env): Promise<void> =>
   } else if (data.startsWith("match:skip:")) {
     await handleMatchAction(ctx, env, "skip", data.replace("match:skip:", ""));
   } else {
-    await ctx.answerCallbackQuery("Unknown action.");
+    await ctx.answerCallbackQuery("Unknown action.").catch(() => {});
   }
 };
