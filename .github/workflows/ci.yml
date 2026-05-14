@@ -61,7 +61,7 @@ jobs:
   deploy-prod:
     name: Deploy CF Workers (prod)
     if: startsWith(github.ref, 'refs/tags/v') && !contains(github.ref, '-pre') && !contains(github.ref, '-rc') && !contains(github.ref, '-beta')
-    needs: [cf-test]
+    needs: [test]
     runs-on: ubuntu-latest
     concurrency: prod-deploy
     steps:
