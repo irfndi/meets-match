@@ -57,7 +57,9 @@ describe('Profile Handler', () => {
 
     await profileCommand(mockContext);
 
-    expect(mockContext.reply).toHaveBeenLastCalledWith(expect.stringContaining('Profile not found'));
+    expect(mockContext.reply).toHaveBeenLastCalledWith(
+      expect.stringContaining('Profile not found'),
+    );
   });
 
   it('should handle errors when fetching profile', async () => {

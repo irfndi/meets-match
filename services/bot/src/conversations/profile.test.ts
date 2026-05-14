@@ -241,25 +241,20 @@ describe('Profile Conversations', () => {
     });
 
     it('should reject Done with no interests selected', async () => {
-      const replies = [
-        { message: { text: '❌ Done' } },
-        { message: { text: 'Cancel' } },
-      ];
+      const replies = [{ message: { text: '❌ Done' } }, { message: { text: 'Cancel' } }];
       mockConversation = {
         wait: vi.fn().mockImplementation(() => replies.shift() || { message: { text: 'Cancel' } }),
       };
       await editInterests(mockConversation, mockCtx);
       const hasPleaseSelect = mockCtx.reply.mock.calls.some(
-        (call: any[]) => typeof call[0] === 'string' && call[0].includes('Please select at least one interest'),
+        (call: any[]) =>
+          typeof call[0] === 'string' && call[0].includes('Please select at least one interest'),
       );
       expect(hasPleaseSelect).toBe(true);
     });
 
     it('should update interests when selecting and confirming', async () => {
-      const replies = [
-        { message: { text: '🎵 Music' } },
-        { message: { text: '✔️ Done' } },
-      ];
+      const replies = [{ message: { text: '🎵 Music' } }, { message: { text: '✔️ Done' } }];
       mockConversation = {
         wait: vi.fn().mockImplementation(() => replies.shift() || { message: { text: 'Cancel' } }),
         external: vi.fn().mockImplementation((fn) => fn()),
