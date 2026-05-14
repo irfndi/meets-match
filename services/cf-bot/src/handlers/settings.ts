@@ -41,7 +41,7 @@ export const settingsCallbacks = async (ctx: MyContext, env: Env): Promise<void>
       break;
     case "settings:gender-pref":
       await startConversation(env.KV, userId, "gender-pref");
-      await ctx.reply("Enter preferred genders separated by commas (e.g. Male, Female). Type Cancel to abort.");
+      await ctx.reply("Enter preferred genders separated by commas (male, female, other, prefer_not_to_say). Type Cancel to abort.");
       await ctx.answerCallbackQuery();
       break;
     case "settings:close":

@@ -224,13 +224,10 @@ async function handleDistanceConversation(ctx: MyContext, env: Env, state: Conve
 }
 
 async function handleGenderPrefConversation(ctx: MyContext, env: Env, state: ConversationState, text: string): Promise<boolean> {
-  const normalized = text.split(',').map((s) => {
-    const t = s.trim();
-    return t.charAt(0).toUpperCase() + t.slice(1).toLowerCase();
-  }).filter(Boolean);
-  const valid = normalized.every((g) => ["Male", "Female", "Non-binary", "Other"].includes(g));
+  const normalized = text.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
+  const valid = normalized.every((g) => ["male", "female", "other", "prefer_not_to_say"].includes(g));
   if (!valid || normalized.length === 0) {
-    await ctx.reply('Enter valid genders separated by commas (Male, Female, Non-binary, Other). Try again or type Cancel.');
+    await ctx.reply('Enter valid genders separated by commas (male, female, other, prefer_not_to_say). Try again or type Cancel.');
     return true;
   }
   const success = await updateUser(env, state.userId, { preferences: { genderPreference: normalized } });
