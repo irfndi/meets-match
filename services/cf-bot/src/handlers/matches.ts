@@ -175,7 +175,7 @@ export const matchesCallbacks = async (ctx: MyContext, env: Env): Promise<void> 
       }
     }
     await ctx.answerCallbackQuery("Dismissed.").catch(() => {});
-    await ctx.editMessageText("💕 You can see your likes anytime with /matches.");
+    await ctx.editMessageText("💕 You can see your likes anytime with /matches.").catch(() => {});
     return;
   }
 
