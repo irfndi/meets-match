@@ -1,6 +1,6 @@
 import type { MyContext } from '../types.js';
 import { getMainMenuKeyboard } from '../lib/main-menu.js';
-import { versionInfo, formatDuration } from '../lib/version.js';
+import { getVersionInfo, formatDuration } from '../lib/version.js';
 
 export const helpCommand = async (ctx: MyContext): Promise<void> => {
   const msg = [
@@ -27,7 +27,7 @@ export const helpCommand = async (ctx: MyContext): Promise<void> => {
 };
 
 export const aboutCommand = async (ctx: MyContext): Promise<void> => {
-  const { version, environment, builtAt } = versionInfo;
+  const { version, environment, builtAt } = getVersionInfo();
   const serverAge = formatDuration(builtAt);
 
   const msg = [

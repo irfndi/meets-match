@@ -6,8 +6,8 @@
   "main": "./dist/index.js",
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
-    "build": "tsc -p tsconfig.json",
+    "deploy": "npx tsx ../../scripts/generate-version.ts cf-bot && wrangler deploy",
+    "build": "npx tsx ../../scripts/generate-version.ts cf-bot && tsc -p tsconfig.json",
     "test": "vitest",
     "lint": "tsc --noEmit"
   },
