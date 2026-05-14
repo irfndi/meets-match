@@ -1,7 +1,28 @@
 import { InlineKeyboard } from "grammy";
 import type { MyContext } from "../types.js";
 import type { Env } from "../index.js";
-import { ensureUserExists, getProfileCompleteness, getMissingFieldsDisplay } from "../lib/user-utils.js";
+import { ensureUserExists, getProfileCompleteness, getMissingFieldsDisplay, isPhoneVerified, type UserProfile } from "../lib/user-utils.js";
+import { addNotification } from "../lib/notifications.js";
+import { promptPhoneVerification } from "../lib/conversations.js";
+import { ApiServiceClient } from "../services/api-client.js";
+import { t, type Language } from "../lib/i18n.js";
+
+function getLang(user: Record<string, unknown> | UserProfile): Language {
+  return (user.language as Language) ?? "en";
+}
+
+async function fetchUserLang(env: Env, userId: string): Promise<Language> {
+  try {
+    const res = await env.API_SERVICE.fetch(
+      new Request(`http://api/users/${userId}`, { method: "GET" })
+    );
+    if (!res.ok) return "en";
+    const data = (await res.json()) as { user?: Record<string, unknown> };
+    return getLang(data.user ?? {});
+  } catch {
+    return "en";
+  }
+}
 
 async function fetchPotentialMatches(env: Env, userId: string, limit = 5) {
   try {
@@ -9,7 +30,7 @@ async function fetchPotentialMatches(env: Env, userId: string, limit = 5) {
       new Request(`http://api/users/${userId}/potential-matches?limit=${limit}`)
     );
     if (!res.ok) return [];
-    const data = await res.json() as { potentialMatches?: Array<Record<string, unknown>> };
+    const data = (await res.json()) as { potentialMatches?: Array<Record<string, unknown>> };
     return data.potentialMatches ?? [];
   } catch {
     return [];
@@ -34,6 +55,44 @@ function formatProfile(user: Record<string, unknown>, index: number): string {
   return `${index}. ${name}, ${age}${bio}${interests}`;
 }
 
+function getGenderPronoun(gender: string | undefined): string {
+  switch (gender) {
+    case "male": return "him";
+    case "female": return "her";
+    default: return "them";
+  }
+}
+
+function buildMatchCard(otherUser: Record<string, unknown>): string {
+  const name = (otherUser.displayName ?? otherUser.first_name ?? "Someone") as string;
+  const age = otherUser.age ?? "?";
+  const loc = otherUser.location as Record<string, unknown> | undefined;
+  const locationText = loc?.city && loc?.country
+    ? `${loc.city}, ${loc.country}`
+    : loc?.latitude
+      ? "📍 Nearby"
+      : "";
+  const bio = otherUser.bio ? `\n📝 ${otherUser.bio}` : "";
+  const interests = otherUser.interests
+    ? `\n🌟 ${Array.isArray(otherUser.interests) ? (otherUser.interests as string[]).join(", ") : String(otherUser.interests)}`
+    : "";
+
+  const parts = [`👤 ${name}, ${age}`];
+  if (locationText) parts.push(`📍 ${locationText}`);
+  if (bio) parts.push(bio);
+  if (interests) parts.push(interests);
+  return parts.join("\n");
+}
+
+function buildChatLink(otherUser: Record<string, unknown>): string {
+  const username = otherUser.username as string | undefined;
+  const displayName = (otherUser.displayName ?? otherUser.first_name ?? "Someone") as string;
+  if (username) {
+    return `👉 [Start chatting with ${displayName}](https://t.me/${username})`;
+  }
+  return `💬 ${displayName} hasn't set a username yet. You can share your username with them!`;
+}
+
 export const matchCommand = async (ctx: MyContext, env: Env): Promise<void> => {
   if (!ctx.from) {
     await ctx.reply("Could not identify you. Try again.");
@@ -42,29 +101,33 @@ export const matchCommand = async (ctx: MyContext, env: Env): Promise<void> => {
 
   const result = await ensureUserExists(ctx, env);
   if (!result) {
-    await ctx.reply("❌ Sorry, there was an error. Please try /start first.");
+    await ctx.reply(t("genericError"));
     return;
   }
 
   const { user } = result;
+  const lang = getLang(user);
   const { complete, missing } = getProfileCompleteness(user);
 
   if (!complete) {
     await ctx.reply(
-      `⚠️ You need to complete your profile before matching.\n\nMissing fields:\n${getMissingFieldsDisplay(missing)}\n\nUse /profile to update your info.`
+      t("matchProfileIncomplete", lang, { missing: getMissingFieldsDisplay(missing) })
     );
+    return;
+  }
+
+  if (!isPhoneVerified(user)) {
+    await promptPhoneVerification(ctx, env, lang);
     return;
   }
 
   const userId = String(ctx.from.id);
 
-  await ctx.reply("🔍 Finding matches for you...");
+  await ctx.reply(t("matchFinding", lang));
 
   const users = await fetchPotentialMatches(env, userId, 5);
   if (users.length === 0) {
-    await ctx.reply(
-      "No potential matches found right now. Try again later or adjust your preferences in /settings."
-    );
+    await ctx.reply(t("matchNoMatches", lang));
     return;
   }
 
@@ -88,47 +151,81 @@ async function handleMatchAction(
     return;
   }
   const userId = String(ctx.from.id);
+  const myName = ctx.from.first_name ?? "Someone";
+  const lang = await fetchUserLang(env, userId);
 
   try {
-    const createRes = await env.API_SERVICE.fetch(
-      new Request("http://api/matches", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user1Id: userId, user2Id: targetUserId }),
-      })
-    );
-    if (!createRes.ok) {
-      await ctx.answerCallbackQuery("Failed to process. Try again.");
-      return;
-    }
-    const created = await createRes.json() as { id?: string };
-    const matchId = created.id;
-    if (!matchId) {
-      await ctx.answerCallbackQuery("Failed to create match. Try again.");
-      return;
-    }
+    const client = new ApiServiceClient(env.API_SERVICE);
 
-    const actionRes = await env.API_SERVICE.fetch(
-      new Request(`http://api/matches/${matchId}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, action }),
-      })
-    );
+    // Create match (normalized in API layer)
+    const createRes = await client.createMatch({ user1Id: userId, user2Id: targetUserId });
+    const matchId = createRes.match.id;
 
-    const result = await actionRes.json() as { isMutual?: boolean };
+    if (action === "like") {
+      const likeRes = await client.likeMatch({ matchId, userId });
 
-    if (action === "like" && result.isMutual) {
-      await ctx.reply("💕 It's a match! You can now chat with each other.");
-    } else if (action === "like") {
-      await ctx.reply("❤️ You liked this profile!");
+      if (likeRes.isMutual) {
+        // Get other user details for chat link
+        const otherUserRes = await client.getUser({ userId: targetUserId });
+        const otherUser = otherUserRes.user as Record<string, unknown>;
+        const name = (otherUser.displayName ?? otherUser.first_name ?? "Someone") as string;
+        const username = otherUser.username as string | undefined;
+        const pronoun = getGenderPronoun(otherUser.gender as string);
+        const chatLink = buildChatLink(otherUser);
+
+        // Modern, engaging match message
+        await ctx.reply(
+          t("matchItsAMatch", lang, { name }),
+          { parse_mode: "Markdown" }
+        );
+
+        await ctx.reply(
+          `${chatLink}\n\n${t("matchSayHiTo", lang, { pronoun })}`,
+          { parse_mode: "Markdown", link_preview_options: { is_disabled: false } }
+        );
+
+        // Store notification for the other user
+        await addNotification(env, targetUserId, {
+          type: "mutual_match",
+          matchId,
+          otherUserId: userId,
+          otherDisplayName: myName,
+          otherUsername: ctx.from.username ?? undefined,
+          timestamp: new Date().toISOString(),
+        });
+      } else {
+        await ctx.reply(t("matchLikeSuccess", lang));
+
+        // Store like notification for target user
+        await addNotification(env, targetUserId, {
+          type: "like",
+          fromUserId: userId,
+          fromDisplayName: myName,
+          timestamp: new Date().toISOString(),
+        });
+      }
     } else if (action === "dislike") {
-      await ctx.reply("👎 Profile skipped.");
-    } else {
-      await ctx.reply("⏩ Skipped.");
+      await env.API_SERVICE.fetch(
+        new Request(`http://api/matches/${matchId}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId, action: "dislike" }),
+        })
+      );
+      await ctx.reply(t("matchDislikeSuccess", lang));
+    } else if (action === "skip") {
+      await env.API_SERVICE.fetch(
+        new Request(`http://api/matches/${matchId}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId, action: "skip" }),
+        })
+      );
+      await ctx.reply(t("matchSkipSuccess", lang));
     }
-  } catch {
-    await ctx.reply("Something went wrong. Please try again.");
+  } catch (error) {
+    console.error("Match action error:", error);
+    await ctx.reply(t("matchError", lang));
   }
   await ctx.answerCallbackQuery("Done!");
 }

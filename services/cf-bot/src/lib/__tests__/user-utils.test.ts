@@ -11,6 +11,7 @@ describe("getProfileCompleteness", () => {
       bio: "Hello",
       location: { city: "Jakarta", country: "Indonesia" },
       interests: ["Hiking"],
+
     };
     const result = getProfileCompleteness(user as any);
     expect(result.complete).toBe(true);
@@ -33,6 +34,7 @@ describe("getProfileCompleteness", () => {
       bio: "Hello",
       location: { country: "Indonesia" },
       interests: ["Hiking"],
+
     };
     const result = getProfileCompleteness(user as any);
     expect(result.complete).toBe(false);
@@ -48,6 +50,7 @@ describe("getProfileCompleteness", () => {
       bio: "Hello",
       location: { latitude: -6.2, longitude: 106.8 },
       interests: ["Hiking"],
+
     };
     const result = getProfileCompleteness(user as any);
     expect(result.complete).toBe(true);
@@ -63,6 +66,7 @@ describe("getProfileCompleteness", () => {
       bio: "Hello",
       location: { city: "Jakarta", country: "Indonesia" },
       interests: [],
+
     };
     const result = getProfileCompleteness(user as any);
     expect(result.complete).toBe(false);
@@ -78,6 +82,7 @@ describe("getProfileCompleteness", () => {
       bio: "Hello",
       location: { city: "Jakarta", country: "Indonesia" },
       interests: ["Hiking"],
+
     };
     const result = getProfileCompleteness(user as any);
     expect(result.complete).toBe(false);

@@ -50,6 +50,8 @@ export class ApiRouter {
           return this.handleCreateUser(request);
         case url.pathname.startsWith("/users/") && url.pathname.endsWith("/potential-matches") && method === "GET":
           return this.handleGetPotentialMatches(url.pathname, url.searchParams);
+        case url.pathname.startsWith("/users/") && url.pathname.endsWith("/pending-likes") && method === "GET":
+          return this.handleGetPendingLikes(url.pathname);
         case url.pathname.startsWith("/users/") && method === "GET":
           return this.handleGetUser(url.pathname);
         case url.pathname.startsWith("/users/") && url.pathname.endsWith("/last-active") && method === "POST":
@@ -58,6 +60,8 @@ export class ApiRouter {
           return this.handleUpdateLastRemindedAt(url.pathname);
         case url.pathname.startsWith("/users/") && method === "PUT":
           return this.handleUpdateUser(url.pathname, request);
+        case url.pathname === "/matches" && method === "GET":
+          return this.handleGetMatchList(url.searchParams);
         case url.pathname === "/matches" && method === "POST":
           return this.handleCreateMatch(request);
         case url.pathname.startsWith("/matches/") && method === "GET":
@@ -114,6 +118,19 @@ export class ApiRouter {
     }
   }
 
+  private async handleGetPendingLikes(path: string): Promise<Response> {
+    const userId = path.replace("/users/", "").replace("/pending-likes", "");
+    if (!userId) {
+      return jsonResponse({ error: "user_id is required" }, 400);
+    }
+    try {
+      const result = await runEffect(this.matchRepo.getPendingLikes({ userId }));
+      return jsonResponse({ pendingLikes: result });
+    } catch (error) {
+      return jsonResponse({ error: "Failed to get pending likes" }, 500);
+    }
+  }
+
   private async handleUpdateLastActive(path: string): Promise<Response> {
     const userId = path.replace("/users/", "").replace("/last-active", "");
     try {
@@ -150,6 +167,22 @@ export class ApiRouter {
     const body = await request.json() as Record<string, unknown>;
     const result = await runEffect(this.matchRepo.create({ user1Id: String(body.user1Id), user2Id: String(body.user2Id) }));
     return jsonResponse({ match: result }, 201);
+  }
+
+  private async handleGetMatchList(searchParams: URLSearchParams): Promise<Response> {
+    const userId = searchParams.get("userId");
+    if (!userId) {
+      return jsonResponse({ error: "user_id is required" }, 400);
+    }
+    const status = searchParams.get("status") as typeof import("@meetsmatch/cf-shared").MatchStatus.Type | undefined;
+    const limitRaw = searchParams.get("limit");
+    const limit = limitRaw ? Number(limitRaw) : undefined;
+    try {
+      const result = await runEffect(this.matchRepo.getList({ userId, status, limit }));
+      return jsonResponse({ matches: result });
+    } catch (error) {
+      return jsonResponse({ error: "Failed to get matches" }, 500);
+    }
   }
 
   private async handleGetMatch(path: string): Promise<Response> {

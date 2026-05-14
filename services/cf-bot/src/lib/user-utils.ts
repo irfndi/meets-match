@@ -17,6 +17,8 @@ export interface UserProfile {
   isActive?: boolean;
   isSleeping?: boolean;
   isProfileComplete?: boolean;
+  phoneNumber?: string;
+  language?: string;
 }
 
 export const REQUIRED_FIELDS = [
@@ -27,6 +29,10 @@ export const REQUIRED_FIELDS = [
   'location',
   'interests',
 ] as const;
+
+export function isPhoneVerified(user: UserProfile): boolean {
+  return !!user.phoneNumber && user.phoneNumber.trim().length > 0;
+}
 
 export function getProfileCompleteness(user: UserProfile): {
   complete: boolean;
