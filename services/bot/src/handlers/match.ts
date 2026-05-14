@@ -1,3 +1,4 @@
+import { randomInt } from 'node:crypto';
 import { Effect } from 'effect';
 import type { Context } from 'grammy';
 import { InlineKeyboard } from 'grammy';
@@ -72,7 +73,7 @@ export const matchCommand = (ctx: Context) =>
 
     const message = MATCH_PROFILE_TEMPLATE(
       // Helper function or string literal
-      matchUser.firstName,
+      matchUser.displayName,
       matchUser.age,
       matchUser.gender,
       matchUser.bio || 'No bio',
@@ -121,8 +122,7 @@ const CONVERSATION_STARTERS = [
   'Hi! So glad we matched - tell me about yourself! 🌟',
 ];
 
-const getRandomStarter = () =>
-  CONVERSATION_STARTERS[Math.floor(Math.random() * CONVERSATION_STARTERS.length)];
+const getRandomStarter = () => CONVERSATION_STARTERS[randomInt(CONVERSATION_STARTERS.length)];
 
 const MUTUAL_MATCH_MESSAGE = (name: string, otherUserId: string, template: string) => `
 🎉 *It's a Match!*
@@ -173,7 +173,7 @@ export const handleLike = (ctx: Context, matchId: string) =>
       // Fetch other user's details to show their name
       const otherUserRes = yield* _(userService.getUser(otherUserId));
       const otherUser = otherUserRes.user;
-      const otherName = otherUser?.firstName || 'your match';
+      const otherName = otherUser?.displayName || 'your match';
       const template = getRandomStarter();
 
       yield* _(

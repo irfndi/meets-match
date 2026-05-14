@@ -1,0 +1,89 @@
+name = "meetsmatch-worker"
+main = "src/index.ts"
+compatibility_date = "2024-05-01"
+
+# D1 Database
+[[d1_databases]]
+binding = "DB"
+database_name = "meetsmatch"
+database_id = "99d50fd1-a134-4bc6-8c2f-92cba3e437ea"
+
+# KV Namespace
+[[kv_namespaces]]
+binding = "KV"
+id = "d1c3b0d80d3743708f441f39034a308f"
+
+# Queue consumers
+[[queues.consumers]]
+queue = "notification-queue"
+max_batch_size = 10
+max_batch_timeout = 30
+max_retries = 3
+dead_letter_queue = "dlq"
+
+[[queues.consumers]]
+queue = "dlq"
+max_batch_size = 1
+max_retries = 0
+
+# Service Bindings — imports api and bot services
+[[services]]
+binding = "API_SERVICE"
+service = "meetsmatch-api"
+
+[[services]]
+binding = "BOT_SERVICE"
+service = "meetsmatch-bot"
+
+# Cron Triggers
+[triggers]
+crons = ["0 10 * * *"]
+
+[vars]
+ENVIRONMENT = "development"
+REENGAGEMENT_SCHEDULE = "0 10 * * *"
+DLQ_PROCESSOR_SCHEDULE = "*/5 * * * *"
+WORKER_CONCURRENCY = "10"
+
+# Secrets (set via wrangler secret put or .dev.vars):
+# SENTRY_DSN
+# SENTRY_ENVIRONMENT
+# SENTRY_RELEASE
+
+[env.dev]
+name = "meetsmatch-worker-dev"
+[[env.dev.d1_databases]]
+binding = "DB"
+database_name = "meetsmatch-dev"
+database_id = "ee59fbbe-3cb1-4afc-9933-521783d08cde"
+[[env.dev.kv_namespaces]]
+binding = "KV"
+id = "a0d31ccf20fd44b794e3d4e4298efc4e"
+[[env.dev.queues.consumers]]
+queue = "notification-queue-dev"
+max_batch_size = 10
+max_batch_timeout = 30
+max_retries = 3
+dead_letter_queue = "dlq-dev"
+[[env.dev.queues.consumers]]
+queue = "dlq-dev"
+max_batch_size = 1
+max_retries = 0
+[[env.dev.services]]
+binding = "API_SERVICE"
+service = "meetsmatch-api-dev"
+[[env.dev.services]]
+binding = "BOT_SERVICE"
+service = "meetsmatch-bot-dev"
+
+[env.production]
+name = "meetsmatch-worker"
+
+
+
+[observability.logs]
+enabled = true
+invocation_logs = true
+
+[observability.traces]
+enabled = false

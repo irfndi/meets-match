@@ -56,7 +56,7 @@ export const matchesCommand = (ctx: Context) =>
         const otherUser = userRes.user;
 
         if (otherUser) {
-          const name = otherUser.firstName || 'Unknown';
+          const name = otherUser.displayName || 'Unknown';
           const age = otherUser.age || '?';
           const matchDate = match.matchedAt
             ? new Date(Number(match.matchedAt.seconds) * 1000).toLocaleDateString()
@@ -166,7 +166,7 @@ export const matchesCallbacks = (ctx: Context) =>
         : 'Unknown';
 
       const profileText = `
-👤 *${escapeMarkdown(user.firstName)}*, ${user.age || '?'}
+👤 *${escapeMarkdown(user.displayName)}*, ${user.age || '?'}
 ⚧ ${escapeMarkdown(user.gender || 'Unknown')}
 
 📝 ${escapeMarkdown(user.bio || 'No bio')}

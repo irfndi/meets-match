@@ -39,7 +39,7 @@ export const createMockUser = (overrides: Record<string, unknown> = {}): User =>
   ({
     id: 'user123',
     username: 'testuser',
-    firstName: 'Test',
+    displayName: 'Test',
     lastName: 'User',
     bio: 'Test bio',
     age: 25,

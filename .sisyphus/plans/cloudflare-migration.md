@@ -196,7 +196,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
 
 ## TODOs
 
-- [ ] 1. Project Scaffolding + Wrangler Configuration
+- [x] 1. Project Scaffolding + Wrangler Configuration
 
   **What to do**:
   - Create `services/cf-api/`, `services/cf-bot/`, `services/cf-worker/` directories alongside existing Go services
@@ -264,7 +264,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
   - Message: `feat(cf): scaffold project and contracts`
   - Files: `services/cf-api/*, services/cf-bot/*, services/cf-worker/*, packages/cf-shared/*, package.json, tsconfig.json`
 
-- [ ] 2. Effect Schema Contract Definitions
+- [x] 2. Effect Schema Contract Definitions
 
   **What to do**:
   - Read all `.proto` files in `packages/contracts/proto/` to understand contract surface
@@ -325,7 +325,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
 
   **Commit**: YES (group with Task 1)
 
-- [ ] 3. D1 Schema + Migrations
+- [x] 3. D1 Schema + Migrations
 
   **What to do**:
   - Read Go database models (`services/api/internal/models/`)
@@ -380,7 +380,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
 
   **Commit**: YES (group with Tasks 4, 5)
 
-- [ ] 4. Effect Config + Environment Layers
+- [x] 4. Effect Config + Environment Layers
 
   **What to do**:
   - Create `packages/cf-shared/src/config/` directory
@@ -432,7 +432,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
 
   **Commit**: YES (group with Tasks 3, 5)
 
-- [ ] 5. Shared Utilities (Logging, Error Schemas)
+- [x] 5. Shared Utilities (Logging, Error Schemas)
 
   **What to do**:
   - Create `packages/cf-shared/src/utils/` directory
@@ -486,7 +486,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
 
   **Commit**: YES (group with Tasks 3, 4)
 
-- [ ] 6. Models Layer — User
+- [x] 6. Models Layer — User
 
   Port `services/api/internal/models/user.go` and `services/api/internal/services/user.go` to Effect TS.
   Create `services/cf-api/src/models/user.ts` with User Effect Schema + D1 repository (CreateUser, GetUser, UpdateUser, ListUsers, DeleteUser).
@@ -506,7 +506,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
 
   **Commit**: YES (group with 7, 8) — `feat(cf): port user, match, geocoding models`
 
-- [ ] 7. Models Layer — Match
+- [x] 7. Models Layer — Match
 
   Port `services/api/internal/models/match.go` and `services/api/internal/services/match.go` to Effect TS.
   Create `services/cf-api/src/models/match.ts` with Match Effect Schema + D1 repository (CreateMatch, GetMatch, ListMatches, UpdateMatchStatus, FindPotentialMatches).
@@ -525,7 +525,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
 
   **Commit**: YES (group with 6, 8)
 
-- [ ] 8. Models Layer — Geocoding
+- [x] 8. Models Layer — Geocoding
 
   Port `services/api/internal/services/geocoding/` to Effect TS.
   Create `services/cf-api/src/models/geocoding.ts` with GeocodingService + KV cache layer.
@@ -545,7 +545,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
 
   **Commit**: YES (group with 6, 7)
 
-- [ ] 9. Notification System Porting
+- [x] 9. Notification System Porting
 
   Read ALL files in `services/api/internal/notification/`. This is the most complex module.
   Create `services/cf-api/src/models/notification.ts` + `services/cf-worker/src/notifications/`.
@@ -572,7 +572,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
 
   **Commit**: YES — `feat(cf): port notification system with queues and retry`
 
-- [ ] 10. API Worker — HTTP Endpoints
+- [x] 10. API Worker — HTTP Endpoints
 
   Port `services/api/internal/httpserver/server.go` HTTP routes to Effect TS using `@effect/platform/HttpServer`.
   Create `services/cf-api/src/http/` with health, user, match, notification, geocoding endpoints.
@@ -598,7 +598,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
 
   **Commit**: YES (group with 11) — `feat(cf): port API HTTP endpoints and Service Binding server`
 
-- [ ] 11. API Worker — Service Binding Server
+- [x] 11. API Worker — Service Binding Server
 
   Port `services/api/internal/grpcserver/` gRPC methods as Service Binding RPC handlers.
   Create `services/cf-api/src/bindings/` with typed handlers for User, Match, Notification, Health services.
@@ -618,7 +618,52 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
 
   **Commit**: YES (group with 10)
 
-- [ ] 12. Bot Worker — Webhook Entry + Routing
+- [x] 10b. API Worker — GetPotentialMatches Algorithm (POST-MERGE GAP)
+
+  **Why added**: Post-merge audit found Go `services/api/internal/services/match.go:51-180` has a full `GetPotentialMatches` algorithm with haversine distance, interest overlap scoring, and preferences filtering. The TS port completely lacks this. The Bot `/match` command depends on it.
+
+  **What to do**:
+  - Add `getPotentialMatches(userId, limit)` method to `MatchRepository` in `services/cf-api/src/models/match.ts`
+  - Implement haversine distance calculation (reuse from `geocoding.ts` or inline)
+  - Implement interest overlap scoring (Jaccard index or simple intersection count)
+  - Implement preferences filtering (age range, gender, max distance)
+  - Add `GET /users/:id/potential-matches?limit=` endpoint to `ApiRouter`
+  - Return scored and sorted candidates
+
+  **Reference Implementation**: `services/api/internal/services/match.go:51-180`
+
+  **Must NOT do**: Change the scoring weights (Location 0.3, Interests 0.4, Preferences 0.3), skip any filter criteria.
+  **Category**: `deep` | **Depends on**: 6,7,8 | **Blocks**: 12
+
+  **QA Scenarios:**
+  ```text
+  Scenario: Get potential matches for a user
+    Tool: Bash (curl)
+    Steps: GET /users/123/potential-matches?limit=5
+    Expected: Returns array of scored users, excludes existing matches, respects preferences
+    Evidence: .sisyphus/evidence/task-10b-potential-matches.txt
+  ```
+
+  **Commit**: YES — `feat(cf): add GetPotentialMatches algorithm`
+
+- [x] 9b. Notification Delivery Attempts Table (POST-MERGE GAP)
+
+  **Why added**: Post-merge audit found Go has `notification_delivery_attempts` table (`migrations/000003_add_notifications.up.sql:44-53`) which is completely missing from D1. This table records every delivery attempt for audit trail.
+
+  **What to do**:
+  - Create `services/cf-api/migrations/0005_add_delivery_attempts.sql`
+  - Add `notification_delivery_attempts` table with: id, notification_id, attempted_at, status, error_message, error_code, duration_ms, metadata
+  - Add indexes: notification_id, status
+  - Add `createAttempt()` method to `NotificationRepository`
+  - Call `createAttempt()` from queue consumer before/after delivery
+
+  **Reference Implementation**: `services/api/migrations/000003_add_notifications.up.sql:44-57`
+
+  **Category**: `quick` | **Depends on**: 9 | **Blocks**: 14
+
+  **Commit**: YES (group with 14) — `feat(cf): add notification delivery attempts`
+
+- [x] 12. Bot Worker — Webhook Entry + Routing
 
   Port `services/bot/src/index.ts` and handlers from grammy polling to CF Worker webhook.
   Create `services/cf-bot/src/` with webhook entry, update router, session middleware (KV), activity middleware.
@@ -644,7 +689,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
 
   **Commit**: YES (group with 13)
 
-- [ ] 13. Bot Worker — Handlers + Conversations Porting
+- [x] 13. Bot Worker — Handlers + Conversations Porting
 
   Port all handlers (start, help, profile, match, matches, settings) and conversations (editBio, editAge, editName, editGender, editInterests, editLocation).
   All handlers use Effect for error handling, Service Binding client for API calls.
@@ -664,7 +709,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
 
   **Commit**: YES (group with 12) — `feat(cf): port bot handlers and conversations`
 
-- [ ] 14. Worker — Cron Triggers + Queue Consumers
+- [x] 14. Worker — Cron Triggers + Queue Consumers
 
   Port `services/worker/internal/jobs/` to CF Cron Triggers + Queue consumers.
   Create reengagement cron, DLQ processor cron, notification queue consumer, retry queue consumer.
@@ -684,7 +729,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
 
   **Commit**: YES — `feat(cf): port worker cron triggers and queue consumers`
 
-- [ ] 15. Bot Worker — gRPC → Service Binding Client Migration
+- [x] 15. Bot Worker — gRPC → Service Binding Client Migration
 
   Replace `services/bot/src/grpc/` with `services/cf-bot/src/bindings/api-client.ts`.
   All handlers updated to use Service Binding client instead of gRPC.
@@ -704,7 +749,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
 
   **Commit**: YES — `feat(cf): replace gRPC with Service Binding client in bot`
 
-- [ ] 16. KV Cache Layer (Replacing Redis)
+- [x] 16. KV Cache Layer (Replacing Redis)
 
   Create `packages/cf-shared/src/kv/` with generic KV cache (TTL support), session store, and geocoding cache.
   All entries must have TTL. Accept eventual consistency for KV.
@@ -723,7 +768,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
 
   **Commit**: YES — `feat(cf): add KV cache, session, and geo-cache layers`
 
-- [ ] 17. End-to-End Integration Testing
+- [x] 17. End-to-End Integration Testing
 
   Create cross-service integration tests: Bot→API→D1, Cron→Queue→API, full match flow.
   Test Service Binding communication, D1 operations across services, Queue flow, KV session persistence.
@@ -743,7 +788,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
 
   **Commit**: YES — `feat(cf): end-to-end integration tests`
 
-- [ ] 18. Cutover Deployment Plan
+- [x] 18. Cutover Deployment Plan
 
   Create `docs/cutover-plan.md` documenting deployment sequence for each service.
   Include rollback procedures with kill switches (env var toggles).
@@ -763,7 +808,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
 
   **Commit**: YES — `docs(cf): cutover deployment plan`
 
-- [ ] 19. Go Service Deletion + Cleanup
+- [x] 19. Go Service Deletion + Cleanup
 
   ONLY after full cutover verification. Delete `services/api/` (Go), `services/worker/` (Go), bot gRPC code, protobuf contracts, Go workspace files, Docker files.
   Verify `services/cf-*` Workers build and deploy cleanly without Go references.
@@ -789,16 +834,16 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
 
 > 4 review agents run in PARALLEL. ALL must APPROVE.
 
-- [ ] F1. **Plan Compliance Audit** — `oracle`
+- [x] F1. **Plan Compliance Audit** — `oracle`
   Read plan end-to-end. Verify all Must Have present, all Must NOT Have absent. Check evidence files.
 
-- [ ] F2. **Code Quality Review** — `unspecified-high`
+- [x] F2. **Code Quality Review** — `unspecified-high`
   Run vitest + tsc --noEmit + eslint. Check for: raw Promises, Zod, gRPC references, untyped code.
 
-- [ ] F3. **Real Manual QA** — `unspecified-high`
+- [x] F3. **Real Manual QA** — `unspecified-high`
   Deploy all Workers to staging. Execute ALL QA scenarios. Test cross-service integration.
 
-- [ ] F4. **Scope Fidelity Check** — `deep`
+- [x] F4. **Scope Fidelity Check** — `deep`
   Verify 1:1 porting — no missing features, no scope creep, no "nice-to-have" refactors.
 
 ---
@@ -827,8 +872,8 @@ wrangler d1 execute meetsmatch-db --command="SELECT count(*) FROM users"
 ```
 
 ### Final Checklist
-- [ ] All "Must Have" present (Effect, D1, Service Bindings, webhooks, toggles)
-- [ ] All "Must NOT Have" absent (gRPC, Redis, Docker, feature changes, raw Promises, Zod)
-- [ ] All tests pass
-- [ ] Go services deletable without functional loss
-- [ ] `wrangler deploy` succeeds for all Workers
+- [x] All "Must Have" present (Effect, D1, Service Bindings, webhooks, toggles)
+- [x] All "Must NOT Have" absent (gRPC, Redis, Docker, feature changes, raw Promises, Zod)
+- [x] All tests pass
+- [x] Go services deletable without functional loss
+- [x] `wrangler deploy` succeeds for all Workers

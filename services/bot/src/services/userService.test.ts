@@ -51,7 +51,7 @@ describe('UserService', () => {
   it('should return Effect for createUser', async () => {
     const { userService } = await import('./userService.js');
 
-    const result = userService.createUser({ id: 'test', firstName: 'Test' });
+    const result = userService.createUser({ id: 'test', displayName: 'Test' });
 
     expect(Effect.isEffect(result)).toBe(true);
   });
@@ -59,7 +59,7 @@ describe('UserService', () => {
   it('should return Effect for updateUser', async () => {
     const { userService } = await import('./userService.js');
 
-    const result = userService.updateUser('test-user-id', { firstName: 'Updated' });
+    const result = userService.updateUser('test-user-id', { displayName: 'Updated' });
 
     expect(Effect.isEffect(result)).toBe(true);
   });

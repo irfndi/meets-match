@@ -5,8 +5,10 @@ import (
 	"database/sql"
 	"log"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -15,14 +17,19 @@ import (
 	"github.com/irfndi/match-bot/services/api/internal/config"
 	"github.com/irfndi/match-bot/services/api/internal/grpcserver"
 	"github.com/irfndi/match-bot/services/api/internal/httpserver"
+	"github.com/irfndi/match-bot/services/api/internal/migrate"
 	"github.com/irfndi/match-bot/services/api/internal/notification"
 	sentrypkg "github.com/irfndi/match-bot/services/api/internal/sentry"
+	"github.com/irfndi/match-bot/services/api/internal/services"
 
 	_ "modernc.org/sqlite"
 )
 
 func main() {
-	cfg := config.Load()
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatalf("configuration error: %v", err)
+	}
 	logger := log.New(os.Stdout, "", log.LstdFlags)
 
 	// Initialize Sentry (graceful degradation if disabled or DSN not set)
@@ -76,6 +83,18 @@ func main() {
 		time.Sleep(1 * time.Second) // Retry delay between connection attempts
 	}
 
+	migrationsDir := "migrations"
+	if _, err := os.Stat(migrationsDir); os.IsNotExist(err) {
+		migrationsDir = filepath.Join("..", "..", "migrations")
+		if _, err2 := os.Stat(migrationsDir); os.IsNotExist(err2) {
+			migrationsDir = filepath.Join("services", "api", "migrations")
+		}
+	}
+	if err := migrate.Up(db, migrationsDir); err != nil {
+		log.Fatalf("failed to run migrations: %v", err)
+	}
+	logger.Println("Database migrations applied")
+
 	// Initialize notification system (optional - graceful degradation if Redis unavailable)
 	var notificationService *notification.Service
 	var notificationWorker *notification.Worker
@@ -118,16 +137,24 @@ func main() {
 		notificationWorker = notification.NewWorker(notificationService, redisQueue, workerCfg)
 	}
 
-	httpApp := httpserver.New()
+	userSvc := services.NewUserService(db)
+	matchSvc := services.NewMatchService(db)
+
+	httpHandler := httpserver.NewHandler(userSvc, matchSvc)
 	grpcServer := grpcserver.New(db, &grpcserver.Options{
 		NotificationService: notificationService,
 	})
+
+	httpServer := &http.Server{
+		Addr:    cfg.HTTPAddr,
+		Handler: httpHandler,
+	}
 
 	group, groupCtx := errgroup.WithContext(ctx)
 
 	group.Go(func() error {
 		logger.Printf("http listening on %s", cfg.HTTPAddr)
-		if err := httpApp.Listen(cfg.HTTPAddr); err != nil {
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			if groupCtx.Err() != nil {
 				return nil
 			}
@@ -178,7 +205,7 @@ func main() {
 		}
 
 		// Shutdown HTTP with timeout
-		if err := httpApp.ShutdownWithContext(shutdownCtx); err != nil {
+		if err := httpServer.Shutdown(shutdownCtx); err != nil {
 			logger.Printf("HTTP shutdown error: %v", err)
 		}
 

@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022"],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "composite": true,
+    "baseUrl": ".",
+    "paths": {
+      "@meetsmatch/cf-shared": ["packages/cf-shared/src"],
+      "@meetsmatch/cf-shared/*": ["packages/cf-shared/src/*"]
+    }
+  },
+  "include": [],
+  "exclude": ["node_modules", "dist"],
+  "references": [
+    { "path": "packages/cf-shared" },
+    { "path": "services/cf-api" },
+    { "path": "services/cf-bot" },
+    { "path": "services/cf-worker" }
+  ]
+}

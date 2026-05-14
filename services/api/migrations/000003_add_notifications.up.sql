@@ -41,7 +41,7 @@ CREATE INDEX IF NOT EXISTS idx_notifications_idempotency ON notifications(idempo
 CREATE INDEX IF NOT EXISTS idx_notifications_related_match ON notifications(related_match_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_related_user ON notifications(related_user_id);
 
-CREATE TABLE IF NOT EXISTS notification_delivery_attempts (
+CREATE TABLE IF NOT EXISTS notification_attempts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     notification_id TEXT NOT NULL REFERENCES notifications(id) ON DELETE CASCADE,
     attempted_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -52,6 +52,6 @@ CREATE TABLE IF NOT EXISTS notification_delivery_attempts (
     metadata TEXT DEFAULT '{}'
 );
 
-CREATE INDEX IF NOT EXISTS idx_delivery_attempts_notification ON notification_delivery_attempts(notification_id);
-CREATE INDEX IF NOT EXISTS idx_delivery_attempts_status ON notification_delivery_attempts(status);
-CREATE INDEX IF NOT EXISTS idx_delivery_attempts_attempted_at ON notification_delivery_attempts(attempted_at);
+CREATE INDEX IF NOT EXISTS idx_notification_attempts_notification ON notification_attempts(notification_id);
+CREATE INDEX IF NOT EXISTS idx_notification_attempts_status ON notification_attempts(status);
+CREATE INDEX IF NOT EXISTS idx_notification_attempts_attempted_at ON notification_attempts(attempted_at);

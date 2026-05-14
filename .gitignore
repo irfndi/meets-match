@@ -48,6 +48,7 @@ coolify.env
 
 # Node
 node_modules/
+*.tsbuildinfo
 
 # Generated protobuf output
 packages/contracts/gen/
@@ -55,3 +56,7 @@ packages/contracts/gen/
 # Go build artifacts
 services/api/bin/
 services/api/coverage.out
+
+# Cloudflare Workers
+.wrangler/
+.dev.vars
