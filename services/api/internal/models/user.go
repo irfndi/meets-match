@@ -44,10 +44,10 @@ func (st *SQLiteTime) Scan(value interface{}) error {
 }
 
 func (st SQLiteTime) Value() (driver.Value, error) {
-	if st.Time.IsZero() {
+	if st.IsZero() {
 		return nil, nil
 	}
-	return st.Time.Format("2006-01-02 15:04:05.999999"), nil
+	return st.Format("2006-01-02 15:04:05.999999"), nil
 }
 
 type StringArray []string
