@@ -182,7 +182,7 @@ async function handleLocationConversation(ctx: MyContext, env: Env, state: Conve
 }
 
 async function handleAgeRangeConversation(ctx: MyContext, env: Env, state: ConversationState, text: string): Promise<boolean> {
-  const match = text.match(/(\d+)\s*-\s*(\d+)/);
+  const match = text.trim().match(/^(\d+)\s*-\s*(\d+)$/);
   if (!match) {
     await ctx.reply('Invalid format. Enter age range like "18-30". Try again or type Cancel.');
     return true;
@@ -204,6 +204,10 @@ async function handleAgeRangeConversation(ctx: MyContext, env: Env, state: Conve
 }
 
 async function handleDistanceConversation(ctx: MyContext, env: Env, state: ConversationState, text: string): Promise<boolean> {
+  if (!/^\d+$/.test(text.trim())) {
+    await ctx.reply('Enter a valid integer distance in km (1-500). Try again or type Cancel.');
+    return true;
+  }
   const distance = parseInt(text, 10);
   if (Number.isNaN(distance) || distance < 1 || distance > 500) {
     await ctx.reply('Enter a valid distance in km (1-500). Try again or type Cancel.');
@@ -220,16 +224,19 @@ async function handleDistanceConversation(ctx: MyContext, env: Env, state: Conve
 }
 
 async function handleGenderPrefConversation(ctx: MyContext, env: Env, state: ConversationState, text: string): Promise<boolean> {
-  const genders = text.split(',').map((s) => s.trim()).filter(Boolean);
-  const valid = genders.every((g) => ["Male", "Female", "Non-binary", "Other"].some((v) => v.toLowerCase() === g.toLowerCase()));
-  if (!valid || genders.length === 0) {
+  const normalized = text.split(',').map((s) => {
+    const t = s.trim();
+    return t.charAt(0).toUpperCase() + t.slice(1).toLowerCase();
+  }).filter(Boolean);
+  const valid = normalized.every((g) => ["Male", "Female", "Non-binary", "Other"].includes(g));
+  if (!valid || normalized.length === 0) {
     await ctx.reply('Enter valid genders separated by commas (Male, Female, Non-binary, Other). Try again or type Cancel.');
     return true;
   }
-  const success = await updateUser(env, state.userId, { preferences: { genderPreference: genders } });
+  const success = await updateUser(env, state.userId, { preferences: { genderPreference: normalized } });
   await clearConversationState(env.KV, state.userId);
   if (success) {
-    await ctx.reply(`Gender preference set to: ${genders.join(', ')}!`, { reply_markup: { remove_keyboard: true } });
+    await ctx.reply(`Gender preference set to: ${normalized.join(', ')}!`, { reply_markup: { remove_keyboard: true } });
   } else {
     await ctx.reply('Failed to update gender preference. Please try again later.', { reply_markup: { remove_keyboard: true } });
   }

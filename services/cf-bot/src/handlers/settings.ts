@@ -46,7 +46,7 @@ export const settingsCallbacks = async (ctx: MyContext, env: Env): Promise<void>
       break;
     case "settings:close":
       await ctx.answerCallbackQuery("Settings closed.");
-      await ctx.deleteMessage();
+      try { await ctx.deleteMessage(); } catch { /* message may be too old */ }
       break;
     default:
       await ctx.answerCallbackQuery("Unknown setting.");
