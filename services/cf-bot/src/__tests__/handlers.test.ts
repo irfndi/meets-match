@@ -22,7 +22,8 @@ describe("Bot Handlers", () => {
   describe("startCommand", () => {
     it("should send welcome message", async () => {
       const ctx = mockCtx();
-      await startCommand(ctx);
+      const env = { API_SERVICE: { fetch: vi.fn().mockResolvedValue(new Response(JSON.stringify({ user: { id: "123" } }), { status: 201 })) } } as any;
+      await startCommand(ctx, env);
       expect(ctx.reply).toHaveBeenCalled();
       const message = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
       expect(message).toContain("Welcome");

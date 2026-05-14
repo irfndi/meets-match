@@ -109,7 +109,7 @@ describe('API Integration', () => {
       body: JSON.stringify({
         user: {
           id: '123',
-          firstName: 'Test',
+          displayName: 'Test',
           age: 25,
           gender: 'male',
           isActive: true,
