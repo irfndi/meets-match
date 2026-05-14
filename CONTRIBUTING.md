@@ -1,99 +1,80 @@
 # MeetMatch Development Guide
 
-## Environment Setup
+## Prerequisites
 
-### Prerequisites
+- Node 20+
+- pnpm
+- Wrangler CLI
+- Git
 
-- Go 1.25+
-- Bun 1.3+
-- Buf CLI (for protobuf generation)
-- SQLite (embedded, no separate install needed)
-
-### Install Tools
+## Setup
 
 ```bash
-# Go (via https://go.dev/dl/ or your package manager)
-# Bun (via https://bun.sh/)
-curl -fsSL https://bun.sh/install | bash
-
-# Buf
-curl -sSL "https://github.com/bufbuild/buf/releases/latest/download/buf-$(uname -s)-$(uname -m)" -o /usr/local/bin/buf
-chmod +x /usr/local/bin/buf
+git clone <repo-url> && cd brave-knight
+pnpm install
+cp .dev.vars.example .dev.vars
 ```
 
-### Setup
+Edit `.dev.vars` and fill in a valid `BOT_TOKEN` from Telegram's BotFather. The
+other variables can stay as-is for local development.
 
-1. **Generate protobufs**:
-   ```bash
-   buf generate
-   ```
+## Running Locally
 
-2. **Install Go dependencies**:
-   ```bash
-   cd services/api && go mod tidy
-   cd services/worker && go mod tidy
-   ```
-
-3. **Install Bot dependencies**:
-   ```bash
-   cd services/bot && bun install
-   ```
-
-## Development Workflow
-
-### Running Locally
+Each service runs in its own terminal:
 
 ```bash
-# Terminal 1: Start API
-cd services/api && go run cmd/api/main.go
-
-# Terminal 2: Start Bot
-cd services/bot && bun run dev
-
-# Terminal 3: Start Worker (optional)
-cd services/worker && go run cmd/worker/main.go
+pnpm dev:api     # CF API worker    (default port 8787)
+pnpm dev:bot     # CF Bot worker    (default port 8788)
+pnpm dev:worker  # CF Cron worker   (default port 8789)
 ```
 
-### Testing
+## D1 Database (Local)
+
+Seed or migrate your local D1 instance:
 
 ```bash
-# Go API
-cd services/api && go test ./...
-
-# Bot
-cd services/bot && bun run test
-
-# Full CI
-cd services/api && make ci
+wrangler d1 execute meetsmatch-db --local --file=services/cf-api/migrations/001_init.sql
 ```
 
-### Linting
+## Testing
 
 ```bash
-# Go
-cd services/api && go fmt ./...
-
-# Bot
-cd services/bot && bun run lint
+pnpm test    # vitest (workspace-wide)
+pnpm lint    # tsc --noEmit
 ```
 
-## Database
-
-The project uses SQLite (via `modernc.org/sqlite`). The database file is created automatically on first run.
-
-To apply migrations manually:
+## Formatting
 
 ```bash
-cd services/api
-sqlite3 meetsmatch.db < migrations/000001_init_schema.up.sql
-sqlite3 meetsmatch.db < migrations/000002_add_matches.up.sql
-sqlite3 meetsmatch.db < migrations/000003_add_notifications.up.sql
-sqlite3 meetsmatch.db < migrations/000004_add_reengagement_notifications.up.sql
+pnpm format   # prettier
 ```
+
+## Project Structure
+
+```
+brave-knight/
+  packages/          # shared libraries (Effect schemas, contracts)
+  services/
+    cf-api/          # HTTP API worker (Hono + Effect TS)
+    cf-bot/          # Telegram bot webhook handler
+    cf-worker/       # Cron triggers and background jobs
+```
+
+Each service has its own `wrangler.toml`, `package.json`, `tsconfig.json`, and
+`vitest.config.ts`.
 
 ## Project Guidelines
 
-- Follow existing code style
-- Add tests for new features
-- Update documentation for API changes
-- Use conventional commits (`feat:`, `fix:`, `docs:`, etc.)
+- Follow existing Effect TS patterns. Services are built with `Effect.Service`,
+  errors use `Data.TaggedError`, and configuration flows through `Layer`.
+- Use Effect Schema for API contracts and request/response validation.
+- Add tests alongside new code. Prefer property-based tests when the domain
+  warrants it.
+- Keep commits small and focused. Use conventional commits (`feat:`, `fix:`,
+  `refactor:`, `chore:`).
+- Run `pnpm lint` and `pnpm test` before opening a PR.
+
+## CI
+
+GitHub Actions runs lint and test on every push and pull request. Both must pass
+before merging.
