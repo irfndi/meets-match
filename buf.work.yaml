@@ -1,5 +1,0 @@
-version: v1
-
-# Keep contracts as a standalone module alongside Go and TypeScript services.
-directories:
-  - packages/contracts
