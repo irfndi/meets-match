@@ -12,15 +12,15 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "effect": "^3.21.2",
     "@effect/platform": "^0.96.1",
     "@effect/sql": "^0.51.1",
-    "@meetsmatch/cf-shared": "file:../../packages/cf-shared"
+    "@meetsmatch/cf-shared": "file:../../packages/cf-shared",
+    "effect": "^3.21.2"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260511.1",
     "typescript": "^5.9.3",
     "vitest": "^4.1.6",
-    "wrangler": "^4.90.1"
+    "wrangler": "^4.91.0"
   }
 }
