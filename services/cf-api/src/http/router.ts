@@ -174,11 +174,22 @@ export class ApiRouter {
     if (!userId) {
       return jsonResponse({ error: "user_id is required" }, 400);
     }
-    const status = searchParams.get("status") as typeof import("@meetsmatch/cf-shared").MatchStatus.Type | undefined;
+    const statusRaw = searchParams.get("status");
+    const allowedStatuses = new Set(["PENDING", "MATCHED", "REJECTED"]);
+    const status = statusRaw ? statusRaw.toUpperCase() : undefined;
+    if (status && !allowedStatuses.has(status)) {
+      return jsonResponse({ error: "Invalid status" }, 400);
+    }
     const limitRaw = searchParams.get("limit");
-    const limit = limitRaw ? Number(limitRaw) : undefined;
+    let limit: number | undefined;
+    if (limitRaw) {
+      limit = Number(limitRaw);
+      if (Number.isNaN(limit) || limit < 1 || limit > 100) {
+        return jsonResponse({ error: "limit must be between 1 and 100" }, 400);
+      }
+    }
     try {
-      const result = await runEffect(this.matchRepo.getList({ userId, status, limit }));
+      const result = await runEffect(this.matchRepo.getList({ userId, status: status as typeof import("@meetsmatch/cf-shared").MatchStatus.Type | undefined, limit }));
       return jsonResponse({ matches: result });
     } catch (error) {
       return jsonResponse({ error: "Failed to get matches" }, 500);

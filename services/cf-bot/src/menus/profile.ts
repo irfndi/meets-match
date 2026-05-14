@@ -21,28 +21,40 @@ export function getProfileMenu(env: Env) {
 export async function handleProfileCallback(ctx: MyContext, env: Env, data: string): Promise<boolean> {
   if (!ctx.from) return false;
   const userId = String(ctx.from.id);
-  const lang: Language = 'en';
+  const userRes = await env.API_SERVICE.fetch(
+    new Request(`http://api/users/${userId}`, { method: 'GET' })
+  );
+  let lang: Language = 'en';
+  if (userRes.ok) {
+    const userData = await userRes.json() as { user?: Record<string, unknown> };
+    lang = (userData.user?.language as Language) ?? 'en';
+  }
 
   switch (data) {
     case 'profile:bio':
       await startConversation(env.KV, userId, 'bio');
       await ctx.reply(t('bioPrompt', lang));
+      await ctx.answerCallbackQuery();
       return true;
     case 'profile:age':
       await startConversation(env.KV, userId, 'age');
       await ctx.reply(t('agePrompt', lang));
+      await ctx.answerCallbackQuery();
       return true;
     case 'profile:name':
       await startConversation(env.KV, userId, 'name');
       await ctx.reply(t('namePrompt', lang));
+      await ctx.answerCallbackQuery();
       return true;
     case 'profile:gender':
       await startConversation(env.KV, userId, 'gender');
       await ctx.reply(t('genderPrompt', lang));
+      await ctx.answerCallbackQuery();
       return true;
     case 'profile:interests':
       await startConversation(env.KV, userId, 'interests');
       await ctx.reply(t('interestsPrompt', lang));
+      await ctx.answerCallbackQuery();
       return true;
     case 'profile:location': {
       await startConversation(env.KV, userId, 'location');
@@ -56,6 +68,7 @@ export async function handleProfileCallback(ctx: MyContext, env: Env, data: stri
         one_time_keyboard: true,
       };
       await ctx.reply(t('locationPrompt', lang), { reply_markup: keyboard });
+      await ctx.answerCallbackQuery();
       return true;
     }
     case 'profile:close':

@@ -165,6 +165,7 @@ export class MatchRepository {
             u.id, u.username, u.first_name, u.last_name, u.bio, u.age, u.gender,
             u.interests, u.photos, u.location, u.preferences,
             u.is_active, u.is_profile_complete,
+            m.user1_id, m.user2_id,
             m.status as match_status,
             m.user1_action, m.user2_action,
             m.updated_at as match_updated_at,
@@ -181,15 +182,24 @@ export class MatchRepository {
 
         // Exclude profiles where current user already liked (pending) or mutual match
         sql += ` AND (
-          m.id IS NULL OR
-          m.status != 'matched' OR
-          (
-            m.status = 'matched' AND
-            (m.user1_id = ? AND m.user1_action = 'like' AND m.user2_action = 'like') OR
-            (m.user2_id = ? AND m.user2_action = 'like' AND m.user1_action = 'like')
+          m.id IS NULL
+          OR (
+            m.status = 'pending' AND NOT (
+              (m.user1_id = ? AND m.user1_action = 'like' AND m.user2_action = 'none')
+              OR
+              (m.user2_id = ? AND m.user2_action = 'like' AND m.user1_action = 'none')
+            )
           )
+          OR (
+            m.status = 'matched' AND (
+              (m.user1_id = ? AND m.user1_action = 'like' AND m.user2_action = 'like')
+              OR
+              (m.user2_id = ? AND m.user2_action = 'like' AND m.user1_action = 'like')
+            )
+          )
+          OR m.status = 'rejected'
         )`;
-        values.push(currentUser.id, currentUser.id);
+        values.push(currentUser.id, currentUser.id, currentUser.id, currentUser.id);
 
         // Apply preference filters
         if (prefs?.minAge && prefs.minAge > 0) {

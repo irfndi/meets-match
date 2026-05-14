@@ -60,6 +60,7 @@ function createBot(env: Env): Bot<MyContext> {
         t("notificationsCheckMatches", "en", { items: parts.join(" and ") }),
         { reply_markup: keyboard }
       );
+      await clearNotifications(env, userId);
     }
     return next();
   });
@@ -92,6 +93,10 @@ function createBot(env: Env): Bot<MyContext> {
       data.startsWith("match:")
     ) {
       return matchCallbacks(ctx, env);
+    }
+
+    if (data === "matches") {
+      return matchesCommand(ctx, env);
     }
 
     if (

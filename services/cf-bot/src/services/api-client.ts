@@ -97,9 +97,9 @@ export class ApiServiceClient implements IUserService {
   }
 
   async likeMatch(req: LikeMatchRequest): Promise<LikeMatchResponse> {
-    const response = await this.binding.fetch(new Request(`http://api/matches/${req.matchId}`, {
+    const response = await this.binding.fetch(new Request(`http://api/matches/${req.matchId}/like`, {
       method: "POST",
-      body: JSON.stringify({ userId: req.userId, action: "like" }),
+      body: JSON.stringify({ userId: req.userId }),
       headers: { "Content-Type": "application/json" },
     }));
     if (!response.ok) throw new Error(`API error: ${response.status}`);

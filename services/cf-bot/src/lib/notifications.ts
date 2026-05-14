@@ -23,7 +23,14 @@ export type Notification = LikeNotification | MutualMatchNotification;
 export async function addNotification(env: Env, userId: string, notification: Notification): Promise<void> {
   const key = `notifications:${userId}`;
   const existing = await env.KV.get(key);
-  const list: Notification[] = existing ? JSON.parse(existing) : [];
+  let list: Notification[] = [];
+  if (existing) {
+    try {
+      list = JSON.parse(existing);
+    } catch (error) {
+      console.error('Failed to parse notifications, resetting:', error);
+    }
+  }
   list.push(notification);
   await env.KV.put(key, JSON.stringify(list), { expirationTtl: NOTIFICATION_TTL_SECONDS });
 }
@@ -31,7 +38,13 @@ export async function addNotification(env: Env, userId: string, notification: No
 export async function getNotifications(env: Env, userId: string): Promise<Notification[]> {
   const key = `notifications:${userId}`;
   const value = await env.KV.get(key);
-  return value ? JSON.parse(value) : [];
+  if (!value) return [];
+  try {
+    return JSON.parse(value) as Notification[];
+  } catch (error) {
+    console.error('Failed to parse notifications:', error);
+    return [];
+  }
 }
 
 export async function clearNotifications(env: Env, userId: string): Promise<void> {
@@ -42,7 +55,13 @@ export async function removeNotification(env: Env, userId: string, index: number
   const key = `notifications:${userId}`;
   const value = await env.KV.get(key);
   if (!value) return;
-  const list: Notification[] = JSON.parse(value);
+  let list: Notification[] = [];
+  try {
+    list = JSON.parse(value) as Notification[];
+  } catch (error) {
+    console.error('Failed to parse notifications:', error);
+    return;
+  }
   list.splice(index, 1);
   if (list.length === 0) {
     await env.KV.delete(key);

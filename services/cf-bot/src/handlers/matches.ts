@@ -4,6 +4,7 @@ import type { Env } from "../index.js";
 import { ensureUserExists, getProfileCompleteness, getMissingFieldsDisplay, isPhoneVerified } from "../lib/user-utils.js";
 import { promptPhoneVerification } from "../lib/conversations.js";
 import { getNotifications, removeNotification, type LikeNotification, type MutualMatchNotification } from "../lib/notifications.js";
+import { type Language } from "../lib/i18n.js";
 import { ApiServiceClient } from "../services/api-client.js";
 
 function buildChatLink(otherUser: Record<string, unknown>): string {
@@ -70,8 +71,9 @@ export const matchesCommand = async (ctx: MyContext, env: Env): Promise<void> =>
     return;
   }
 
+  const lang = (user.language as Language) ?? 'en';
   if (!isPhoneVerified(user)) {
-    await promptPhoneVerification(ctx, env, 'en');
+    await promptPhoneVerification(ctx, env, lang);
     return;
   }
 
@@ -163,10 +165,11 @@ export const matchesCallbacks = async (ctx: MyContext, env: Env): Promise<void> 
 
   if (data === "likes:dismiss") {
     const notifications = await getNotifications(env, userId);
-    const likesOnly = notifications.filter((n) => n.type === "like");
-    for (const notif of likesOnly) {
-      const idx = notifications.indexOf(notif);
-      if (idx >= 0) await removeNotification(env, userId, idx);
+    // Remove from end to beginning to preserve indices
+    for (let i = notifications.length - 1; i >= 0; i--) {
+      if (notifications[i].type === "like") {
+        await removeNotification(env, userId, i);
+      }
     }
     await ctx.answerCallbackQuery("Dismissed.");
     await ctx.editMessageText("💕 You can see your likes anytime with /matches.");

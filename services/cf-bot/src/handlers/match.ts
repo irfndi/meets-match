@@ -206,19 +206,19 @@ async function handleMatchAction(
       }
     } else if (action === "dislike") {
       await env.API_SERVICE.fetch(
-        new Request(`http://api/matches/${matchId}`, {
+        new Request(`http://api/matches/${matchId}/dislike`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ userId, action: "dislike" }),
+          body: JSON.stringify({ userId }),
         })
       );
       await ctx.reply(t("matchDislikeSuccess", lang));
     } else if (action === "skip") {
       await env.API_SERVICE.fetch(
-        new Request(`http://api/matches/${matchId}`, {
+        new Request(`http://api/matches/${matchId}/skip`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ userId, action: "skip" }),
+          body: JSON.stringify({ userId }),
         })
       );
       await ctx.reply(t("matchSkipSuccess", lang));

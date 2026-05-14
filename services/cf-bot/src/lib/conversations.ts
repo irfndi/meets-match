@@ -87,11 +87,14 @@ interface GeocodeResult {
 
 async function verifyLocation(city: string, country: string): Promise<GeocodeResult | null> {
   try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
     const query = encodeURIComponent(`${city}, ${country}`);
     const res = await fetch(
       `https://nominatim.openstreetmap.org/search?format=json&q=${query}&limit=1`,
-      { headers: { 'User-Agent': 'MeetMatchBot/1.0' } }
+      { headers: { 'User-Agent': 'MeetMatchBot/1.0' }, signal: controller.signal }
     );
+    clearTimeout(timeout);
     if (!res.ok) return null;
     const data = (await res.json()) as GeocodeResult[];
     if (data.length === 0) return null;
@@ -123,7 +126,9 @@ export async function handleConversationMessage(ctx: MyContext, env: Env): Promi
   const text = ctx.message?.text;
   if (!text) return false;
 
-  const lang: Language = 'en';
+  // Fetch user's language preference
+  const user = await getUser(env, userId);
+  const lang: Language = (user?.language as Language) ?? 'en';
 
   if (text === t('genericCancel', lang)) {
     await clearConversationState(env.KV, userId);
