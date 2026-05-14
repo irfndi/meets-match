@@ -206,7 +206,7 @@ function buildInterestsKeyboard(selected: Set<string>): Keyboard {
 }
 
 function interestLabelToValue(label: string): string {
-  return label.replace(/^[✅➕✔️❌]\s*/, '').toLowerCase();
+  return label.replace(/^(✅|➕|✔️|❌)\s*/, '').toLowerCase();
 }
 
 export async function editInterests(
@@ -330,8 +330,8 @@ export async function editLocation(
       Effect.either(
         userService.updateUser(userId, {
           location: {
-            latitude: response.message!.location!.latitude,
-            longitude: response.message!.location!.longitude,
+            latitude: response.message?.location?.latitude,
+            longitude: response.message?.location?.longitude,
           },
         }),
       ),

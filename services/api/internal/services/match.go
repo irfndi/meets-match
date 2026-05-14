@@ -371,6 +371,13 @@ func (s *MatchService) matchToProto(m *models.Match) *pb.GetMatchResponse {
 	if m == nil {
 		return nil
 	}
+	return &pb.GetMatchResponse{Match: matchModelToProto(m)}
+}
+
+func matchModelToProto(m *models.Match) *pb.Match {
+	if m == nil {
+		return nil
+	}
 	pbMatch := &pb.Match{
 		Id:        m.ID,
 		User1Id:   m.User1ID,
@@ -383,15 +390,13 @@ func (s *MatchService) matchToProto(m *models.Match) *pb.GetMatchResponse {
 	if m.MatchedAt != nil {
 		pbMatch.MatchedAt = timestamppb.New(m.MatchedAt.Time)
 	}
-
 	if m.User1Action != nil {
 		pbMatch.User1Action = string(*m.User1Action)
 	}
 	if m.User2Action != nil {
 		pbMatch.User2Action = string(*m.User2Action)
 	}
-
-	return &pb.GetMatchResponse{Match: pbMatch}
+	return pbMatch
 }
 
 func (s *MatchService) LikeMatch(ctx context.Context, req *pb.LikeMatchRequest) (*pb.LikeMatchResponse, error) {
@@ -538,19 +543,7 @@ func (s *MatchService) GetMatchList(ctx context.Context, req *pb.GetMatchListReq
 			m.MatchedAt = &models.SQLiteTime{Time: matchedAt.Time}
 		}
 
-		pbMatch := &pb.Match{
-			Id:        m.ID,
-			User1Id:   m.User1ID,
-			User2Id:   m.User2ID,
-			Status:    string(m.Status),
-			Score:     m.Score.Total,
-			CreatedAt: timestamppb.New(m.CreatedAt.Time),
-			UpdatedAt: timestamppb.New(m.UpdatedAt.Time),
-		}
-		if m.MatchedAt != nil {
-			pbMatch.MatchedAt = timestamppb.New(m.MatchedAt.Time)
-		}
-		matches = append(matches, pbMatch)
+		matches = append(matches, matchModelToProto(&m))
 	}
 
 	// Check for errors from iterating over rows
