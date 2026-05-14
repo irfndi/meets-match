@@ -1,11 +1,54 @@
 package models
 
 import (
+	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 )
+
+type SQLiteTime struct{ time.Time }
+
+var _ sql.Scanner = (*SQLiteTime)(nil)
+var _ driver.Valuer = (*SQLiteTime)(nil)
+
+func (st *SQLiteTime) Scan(value interface{}) error {
+	if value == nil {
+		st.Time = time.Time{}
+		return nil
+	}
+	switch v := value.(type) {
+	case time.Time:
+		st.Time = v
+		return nil
+	case string:
+		layouts := []string{
+			"2006-01-02 15:04:05.999999",
+			"2006-01-02 15:04:05",
+			time.RFC3339,
+			time.RFC3339Nano,
+		}
+		for _, layout := range layouts {
+			if t, err := time.Parse(layout, v); err == nil {
+				st.Time = t
+				return nil
+			}
+		}
+		return fmt.Errorf("cannot parse %q as time", v)
+	case []byte:
+		return st.Scan(string(v))
+	}
+	return fmt.Errorf("cannot scan %T into SQLiteTime", value)
+}
+
+func (st SQLiteTime) Value() (driver.Value, error) {
+	if st.Time.IsZero() {
+		return nil, nil
+	}
+	return st.Time.Format("2006-01-02 15:04:05.999999"), nil
+}
 
 type StringArray []string
 
@@ -105,8 +148,8 @@ type User struct {
 	IsActive          bool        `json:"is_active" db:"is_active"`
 	IsSleeping        bool        `json:"is_sleeping" db:"is_sleeping"`
 	IsProfileComplete bool        `json:"is_profile_complete" db:"is_profile_complete"`
-	CreatedAt         time.Time   `json:"created_at" db:"created_at"`
-	UpdatedAt         time.Time   `json:"updated_at" db:"updated_at"`
-	LastActive        time.Time   `json:"last_active" db:"last_active"`
-	LastRemindedAt    *time.Time  `json:"last_reminded_at,omitempty" db:"last_reminded_at"`
+	CreatedAt         SQLiteTime  `json:"created_at" db:"created_at"`
+	UpdatedAt         SQLiteTime  `json:"updated_at" db:"updated_at"`
+	LastActive        SQLiteTime  `json:"last_active" db:"last_active"`
+	LastRemindedAt    *SQLiteTime `json:"last_reminded_at,omitempty" db:"last_reminded_at"`
 }

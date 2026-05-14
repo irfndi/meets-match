@@ -1,26 +1,29 @@
 package httpserver
 
 import (
-	"github.com/gofiber/fiber/v2"
-	sentrypkg "github.com/irfndi/match-bot/services/api/internal/sentry"
+	"net/http"
+
+	"github.com/irfndi/match-bot/services/api/internal/services"
 )
 
-func New() *fiber.App {
-	app := fiber.New()
+func NewHandler(userSvc *services.UserService, matchSvc *services.MatchService) http.Handler {
+	mux := http.NewServeMux()
 
-	// Add Sentry middleware for panic recovery and error capture
-	app.Use(sentrypkg.FiberMiddleware())
+	registerConnectHandlers(mux, userSvc, matchSvc)
 
-	app.Get("/", func(c *fiber.Ctx) error {
-		return c.JSON(fiber.Map{
-			"message":  "MeetMatch API is running",
-			"docs_url": "/docs",
-		})
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"status":"ok"}`))
 	})
 
-	app.Get("/health", func(c *fiber.Ctx) error {
-		return c.JSON(fiber.Map{"status": "ok"})
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"message":"MeetMatch API is running","docs_url":"/docs"}`))
 	})
 
-	return app
+	return mux
 }

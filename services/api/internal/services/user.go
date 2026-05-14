@@ -60,7 +60,7 @@ func (s *UserService) CreateUser(ctx context.Context, req *pb.CreateUserRequest)
 	}
 
 	u := protoToModel(req.User)
-	now := time.Now()
+	now := models.SQLiteTime{Time: time.Now()}
 	u.CreatedAt = now
 	u.UpdatedAt = now
 	u.LastActive = now
@@ -302,9 +302,9 @@ func modelToProto(u *models.User) *pb.User {
 		IsActive:          u.IsActive,
 		IsSleeping:        u.IsSleeping,
 		IsProfileComplete: u.IsProfileComplete,
-		CreatedAt:         timestamppb.New(u.CreatedAt),
-		UpdatedAt:         timestamppb.New(u.UpdatedAt),
-		LastActive:        timestamppb.New(u.LastActive),
+		CreatedAt:         timestamppb.New(u.CreatedAt.Time),
+		UpdatedAt:         timestamppb.New(u.UpdatedAt.Time),
+		LastActive:        timestamppb.New(u.LastActive.Time),
 	}
 
 	if u.Username != nil {
