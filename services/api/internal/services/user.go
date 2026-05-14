@@ -60,7 +60,7 @@ func (s *UserService) CreateUser(ctx context.Context, req *pb.CreateUserRequest)
 	}
 
 	u := protoToModel(req.User)
-	now := models.SQLiteTime{Time: time.Now()}
+	now := models.SQLiteTime{Time: time.Now().UTC()}
 	u.CreatedAt = now
 	u.UpdatedAt = now
 	u.LastActive = now

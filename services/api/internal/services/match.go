@@ -321,7 +321,7 @@ func (s *MatchService) CreateMatch(ctx context.Context, req *pb.CreateMatchReque
 
 	// Insert
 	newID := uuid.New().String()
-	now := time.Now()
+	now := time.Now().UTC()
 	nowSQLite := models.SQLiteTime{Time: now}
 
 	query := `
@@ -430,7 +430,7 @@ func (s *MatchService) LikeMatch(ctx context.Context, req *pb.LikeMatchRequest) 
 	// Update action
 	updateQuery := ""
 	isMatch := false
-	now := time.Now()
+	now := time.Now().UTC()
 	nowSQLite := models.SQLiteTime{Time: now}
 
 	if who == 1 {

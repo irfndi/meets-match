@@ -49,12 +49,16 @@ func Up(db *sql.DB, migrationsDir string) error {
 		}
 
 		if _, err := tx.Exec(string(content)); err != nil {
-			tx.Rollback()
+			if rbErr := tx.Rollback(); rbErr != nil {
+				return fmt.Errorf("apply migration %s: %w (rollback: %v)", version, err, rbErr)
+			}
 			return fmt.Errorf("apply migration %s: %w", version, err)
 		}
 
 		if _, err := tx.Exec("INSERT INTO schema_migrations (version) VALUES (?)", version); err != nil {
-			tx.Rollback()
+			if rbErr := tx.Rollback(); rbErr != nil {
+				return fmt.Errorf("record migration %s: %w (rollback: %v)", version, err, rbErr)
+			}
 			return fmt.Errorf("record migration %s: %w", version, err)
 		}
 
