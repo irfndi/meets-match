@@ -72,7 +72,7 @@ export async function handleProfileCallback(ctx: MyContext, env: Env, data: stri
       return true;
     }
     case 'profile:close':
-      await ctx.deleteMessage();
+      await ctx.deleteMessage().catch(() => {});
       return true;
     default:
       return false;

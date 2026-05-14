@@ -53,12 +53,7 @@ export const settingsCallbacks = async (ctx: MyContext, env: Env): Promise<void>
       break;
     case "settings:close":
       await ctx.answerCallbackQuery("Settings closed.").catch(() => {});
-      try {
-        await ctx.deleteMessage();
-      } catch (e) {
-        if (e instanceof Error && e.message.includes("message to delete not found")) return;
-        console.error("Failed to delete settings message:", e);
-      }
+      await ctx.deleteMessage().catch(() => {});
       break;
     default:
       await ctx.answerCallbackQuery("Unknown setting.").catch(() => {});
