@@ -31,7 +31,9 @@ export const startCommand = async (ctx: MyContext, env: Env): Promise<void> => {
         isActive: true,
       },
     });
-  } catch {}
+  } catch (error) {
+    console.error('Failed to create user on /start:', error);
+  }
 
   await ctx.reply(WELCOME_MESSAGE);
 };

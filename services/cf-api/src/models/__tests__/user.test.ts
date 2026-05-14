@@ -46,7 +46,7 @@ describe("UserRepository", () => {
     const { Effect } = await import("effect");
     const user = await Effect.runPromise(repo.getById({ userId: "1" }));
     expect(user.id).toBe("1");
-    expect(user.firstName).toBe("Test");
+    expect(user.displayName).toBe("Test");
   });
 
   it("should throw NotFoundError for missing user", async () => {
@@ -59,10 +59,10 @@ describe("UserRepository", () => {
   it("should create a new user", async () => {
     const { Effect } = await import("effect");
     const result = await Effect.runPromise(repo.create({
-      user: { id: "1", firstName: "Alice", age: 30, gender: "female" as any }
+      user: { id: "1", displayName: "Alice", age: 30, gender: "female" as any }
     }));
     expect(result.id).toBe("1");
-    expect(result.firstName).toBe("Alice");
+    expect(result.displayName).toBe("Alice");
   });
 
   it("should update existing user with upsert", async () => {
