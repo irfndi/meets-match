@@ -52,12 +52,24 @@ export class MatchRepository {
   create(req: CreateMatchRequest): Effect.Effect<typeof Match.Type, DatabaseError, never> {
     return Effect.tryPromise({
       try: async () => {
+        // Normalize pair ordering to prevent duplicates
+        const [u1, u2] = [req.user1Id, req.user2Id].sort();
+
+        // Check if match already exists
+        const existing = await this.db
+          .prepare("SELECT * FROM matches WHERE user1_id = ? AND user2_id = ?")
+          .bind(u1, u2)
+          .first();
+        if (existing) {
+          return this.toMatch(existing);
+        }
+
         const id = crypto.randomUUID();
         await this.db.prepare(
           `INSERT INTO matches (id, user1_id, user2_id, status, score, created_at, updated_at, matched_at, user1_action, user2_action)
            VALUES (?, ?, ?, 'pending', '{}', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, NULL, 'none', 'none')`
-        ).bind(id, req.user1Id, req.user2Id).run();
-        return { id, user1Id: req.user1Id, user2Id: req.user2Id, status: "PENDING" as const } as typeof Match.Type;
+        ).bind(id, u1, u2).run();
+        return { id, user1Id: u1, user2Id: u2, status: "PENDING" as const } as typeof Match.Type;
       },
       catch: (error) => new DatabaseError("create", error),
     });
@@ -143,44 +155,87 @@ export class MatchRepository {
           return [];
         }
 
-        // 2. Build query for candidates
+        const prefs = currentUser.preferences;
+
+        // 2. Build query for candidates including interacted profiles for cooldown/re-engagement
+        // We fetch more candidates to allow filtering and variety
+        const fetchLimit = limit * 10;
         let sql = `
-          SELECT id, username, first_name, last_name, bio, age, gender, interests, photos, location, preferences, is_active, is_profile_complete
-          FROM users
-          WHERE id != ? AND is_active = 1 AND is_profile_complete = 1
-          AND id NOT IN (
-            SELECT user2_id FROM matches WHERE user1_id = ?
-            UNION
-            SELECT user1_id FROM matches WHERE user2_id = ?
+          SELECT
+            u.id, u.username, u.first_name, u.last_name, u.bio, u.age, u.gender,
+            u.interests, u.photos, u.location, u.preferences,
+            u.is_active, u.is_profile_complete,
+            m.user1_id, m.user2_id,
+            m.status as match_status,
+            m.user1_action, m.user2_action,
+            m.updated_at as match_updated_at,
+            pv.viewed_at
+          FROM users u
+          LEFT JOIN matches m ON (
+            (m.user1_id = u.id AND m.user2_id = ?) OR
+            (m.user2_id = u.id AND m.user1_id = ?)
           )
+          LEFT JOIN profile_views pv ON (pv.viewer_id = ? AND pv.viewed_id = u.id)
+          WHERE u.id != ? AND u.is_active = 1 AND u.is_profile_complete = 1
         `;
-        const values: unknown[] = [currentUser.id, currentUser.id, currentUser.id];
+        const values: unknown[] = [currentUser.id, currentUser.id, currentUser.id, currentUser.id];
+
+        // Exclude profiles where current user already liked (pending) or mutual match
+        sql += ` AND (
+          m.id IS NULL
+          OR (
+            m.status = 'pending' AND NOT (
+              (m.user1_id = ? AND m.user1_action = 'like' AND m.user2_action = 'none')
+              OR
+              (m.user2_id = ? AND m.user2_action = 'like' AND m.user1_action = 'none')
+            )
+          )
+          OR (
+            m.status = 'matched' AND (
+              (m.user1_id = ? AND m.user1_action = 'like' AND m.user2_action = 'like')
+              OR
+              (m.user2_id = ? AND m.user2_action = 'like' AND m.user1_action = 'like')
+            )
+          )
+          OR m.status = 'rejected'
+        )`;
+        values.push(currentUser.id, currentUser.id, currentUser.id, currentUser.id);
 
         // Apply preference filters
-        const prefs = currentUser.preferences;
         if (prefs?.minAge && prefs.minAge > 0) {
-          sql += " AND age >= ?";
+          sql += " AND u.age >= ?";
           values.push(prefs.minAge);
         }
         if (prefs?.maxAge && prefs.maxAge > 0) {
-          sql += " AND age <= ?";
+          sql += " AND u.age <= ?";
           values.push(prefs.maxAge);
         }
         if (prefs?.genderPreference && prefs.genderPreference.length > 0) {
           const placeholders = prefs.genderPreference.map(() => "?").join(",");
-          sql += ` AND gender IN (${placeholders})`;
+          sql += ` AND u.gender IN (${placeholders})`;
           values.push(...prefs.genderPreference);
         }
 
-        sql += ` LIMIT ${limit * 5}`;
+        sql += ` LIMIT ${fetchLimit}`;
 
         const { results } = await this.db.prepare(sql).bind(...values).all();
-        const candidates = (results ?? []).map((r) => this.rowToUser(r as Record<string, unknown>));
+        const rows = (results ?? []) as Array<Record<string, unknown>>;
 
-        // 3. Score candidates
-        const scored = candidates
-          .map((candidate) => {
-            // Verify distance hard constraint
+        // 3. Filter and score candidates
+        const scored = rows
+          .map((row) => {
+            const candidate = this.rowToUser(row);
+            const matchStatus = row.match_status ? String(row.match_status) : null;
+            const user1Action = row.user1_action ? String(row.user1_action).toUpperCase() : null;
+            const user2Action = row.user2_action ? String(row.user2_action).toUpperCase() : null;
+            const matchUpdatedAt = row.match_updated_at ? String(row.match_updated_at) : null;
+            const viewedAt = row.viewed_at ? String(row.viewed_at) : null;
+
+            // Determine current user's action in this match
+            const isUser1InMatch = row.user1_id === currentUser.id;
+            const myAction = isUser1InMatch ? user1Action : user2Action;
+
+            // Distance hard constraint
             if (currentUser.location && candidate.location && prefs?.maxDistance) {
               const dist = haversine(
                 currentUser.location.latitude, currentUser.location.longitude,
@@ -189,8 +244,49 @@ export class MatchRepository {
               if (dist > prefs.maxDistance) return null;
             }
 
-            const score = calculateMatchScore(currentUser, candidate);
-            return { user: candidate, score: score.total };
+            // Cooldown filtering
+            const now = new Date();
+            if (matchStatus === 'rejected' && myAction === 'DISLIKE' && matchUpdatedAt) {
+              const cooldownMs = 3 * 24 * 60 * 60 * 1000; // 3 days
+              if (now.getTime() - new Date(matchUpdatedAt).getTime() < cooldownMs) {
+                return null;
+              }
+            }
+            if (myAction === 'SKIP' && matchUpdatedAt) {
+              const cooldownMs = 6 * 60 * 60 * 1000; // 6 hours
+              if (now.getTime() - new Date(matchUpdatedAt).getTime() < cooldownMs) {
+                return null;
+              }
+            }
+
+            // Calculate base score
+            let baseScore = calculateMatchScore(currentUser, candidate).total;
+
+            // Variety: penalize recently shown profiles
+            if (viewedAt) {
+              const hoursSinceViewed = (now.getTime() - new Date(viewedAt).getTime()) / (1000 * 60 * 60);
+              if (hoursSinceViewed < 24) {
+                baseScore *= 0.1; // Heavily penalize profiles shown in last 24h
+              } else if (hoursSinceViewed < 72) {
+                baseScore *= 0.5;
+              }
+            }
+
+            // Already matched: include but with very low priority
+            if (matchStatus === 'matched') {
+              baseScore *= 0.05;
+            }
+
+            // Disliked after cooldown: lower priority
+            if (matchStatus === 'rejected' && myAction === 'DISLIKE') {
+              baseScore *= 0.3;
+            }
+
+            // Add randomness for variety (0.0 - 0.3 random boost)
+            const randomFactor = 0.7 + Math.random() * 0.3;
+            baseScore *= randomFactor;
+
+            return { user: candidate, score: baseScore };
           })
           .filter((s): s is { user: typeof User.Type; score: number } => s !== null);
 
@@ -198,9 +294,50 @@ export class MatchRepository {
         scored.sort((a, b) => b.score - a.score);
 
         // 5. Return top limit
-        return scored.slice(0, limit).map((s) => s.user);
+        const selected = scored.slice(0, limit);
+
+        // 6. Record profile views (batched for efficiency)
+        if (selected.length > 0) {
+          const statements = selected.map((s) =>
+            this.db.prepare(
+              `INSERT INTO profile_views (viewer_id, viewed_id, viewed_at)
+               VALUES (?, ?, CURRENT_TIMESTAMP)
+               ON CONFLICT(viewer_id, viewed_id) DO UPDATE SET viewed_at = CURRENT_TIMESTAMP`
+            ).bind(currentUser.id, s.user.id)
+          );
+          await this.db.batch(statements);
+        }
+
+        return selected.map((s) => s.user);
       },
       catch: (error) => new DatabaseError("getPotentialMatches", error),
+    });
+  }
+
+  getPendingLikes(req: { userId: string }): Effect.Effect<Array<typeof User.Type>, DatabaseError, never> {
+    return Effect.tryPromise({
+      try: async () => {
+        // Find users who liked the current user but current user hasn't responded
+        const { results } = await this.db.prepare(`
+          SELECT u.id, u.username, u.first_name, u.last_name, u.bio, u.age, u.gender,
+                 u.interests, u.photos, u.location, u.preferences,
+                 u.is_active, u.is_profile_complete
+          FROM matches m
+          JOIN users u ON (
+            (m.user1_id = u.id AND m.user2_id = ?) OR
+            (m.user2_id = u.id AND m.user1_id = ?)
+          )
+          WHERE m.status = 'pending'
+            AND (
+              (m.user1_id = ? AND m.user2_action = 'like' AND m.user1_action = 'none') OR
+              (m.user2_id = ? AND m.user1_action = 'like' AND m.user2_action = 'none')
+            )
+          ORDER BY m.updated_at DESC
+        `).bind(req.userId, req.userId, req.userId, req.userId).all();
+
+        return (results ?? []).map((r) => this.rowToUser(r as Record<string, unknown>));
+      },
+      catch: (error) => new DatabaseError("getPendingLikes", error),
     });
   }
 

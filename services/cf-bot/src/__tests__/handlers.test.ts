@@ -18,17 +18,86 @@ function mockCtx(text?: string): MyContext {
   } as unknown as MyContext;
 }
 
+function createMockApiService(responseMap: Record<string, () => Response>) {
+  return {
+    fetch: vi.fn().mockImplementation((req: Request) => {
+      const url = typeof req === 'string' ? req : (req as any).url || String(req);
+      for (const [pattern, factory] of Object.entries(responseMap)) {
+        if (url.includes(pattern)) {
+          return Promise.resolve(factory());
+        }
+      }
+      return Promise.resolve(new Response(JSON.stringify({}), { status: 404 }));
+    }),
+  };
+}
+
+function createMockKV() {
+  return {
+    get: vi.fn().mockResolvedValue(null),
+    put: vi.fn().mockResolvedValue(undefined),
+    delete: vi.fn().mockResolvedValue(undefined),
+  };
+}
+
+const completeUser = {
+  id: "123",
+  displayName: "Test",
+  age: 25,
+  gender: "male",
+  bio: "Hello",
+  location: { city: "Jakarta", country: "Indonesia" },
+  interests: ["Hiking"],
+  phoneNumber: "+1234567890",
+  isProfileComplete: true,
+};
+
+const incompleteUser = {
+  id: "123",
+  displayName: "Test",
+};
+
 describe("Bot Handlers", () => {
   describe("startCommand", () => {
-    it("should send welcome message", async () => {
+    it("should send language selection for new user", async () => {
       const ctx = mockCtx();
-      const env = { API_SERVICE: { fetch: vi.fn().mockResolvedValue(new Response(JSON.stringify({ user: { id: "123" } }), { status: 201 })) } } as any;
+      const env = {
+        API_SERVICE: createMockApiService({
+          "/users/123": () => new Response(JSON.stringify({ error: "not found" }), { status: 404 }),
+          "/users": () => new Response(JSON.stringify({ user: completeUser }), { status: 201 }),
+        }),
+      } as any;
       await startCommand(ctx, env);
       expect(ctx.reply).toHaveBeenCalled();
       const message = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
-      expect(message).toContain("Welcome");
-      expect(message).toContain("/profile");
-      expect(message).toContain("/match");
+      expect(message).toContain("Choose your language");
+    });
+
+    it("should send welcome back for existing complete user", async () => {
+      const ctx = mockCtx();
+      const env = {
+        API_SERVICE: createMockApiService({
+          "/users/123": () => new Response(JSON.stringify({ user: completeUser }), { status: 200 }),
+        }),
+      } as any;
+      await startCommand(ctx, env);
+      expect(ctx.reply).toHaveBeenCalled();
+      const message = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+      expect(message).toContain("Welcome back");
+    });
+
+    it("should prompt incomplete existing user to complete profile", async () => {
+      const ctx = mockCtx();
+      const env = {
+        API_SERVICE: createMockApiService({
+          "/users/123": () => new Response(JSON.stringify({ user: incompleteUser }), { status: 200 }),
+        }),
+      } as any;
+      await startCommand(ctx, env);
+      expect(ctx.reply).toHaveBeenCalled();
+      const message = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+      expect(message).toContain("Welcome back");
+      expect(message).toContain("incomplete");
     });
   });
 
@@ -66,17 +135,56 @@ describe("Bot Handlers", () => {
   });
 
   describe("matchCommand", () => {
-    it("should reply with finding matches message", async () => {
+    it("should redirect incomplete user to profile", async () => {
       const ctx = mockCtx();
-      await matchCommand(ctx, { API_SERVICE: { fetch: vi.fn().mockResolvedValue(new Response(JSON.stringify({ potentialMatches: [] }))) } } as any);
+      const env = {
+        API_SERVICE: createMockApiService({
+          "/users/123": () => new Response(JSON.stringify({ user: incompleteUser }), { status: 200 }),
+        }),
+        KV: createMockKV(),
+      } as any;
+      await matchCommand(ctx, env);
+      expect(ctx.reply).toHaveBeenCalledWith(expect.stringContaining("complete your profile"));
+    });
+
+    it("should reply with finding matches message for complete user", async () => {
+      const ctx = mockCtx();
+      const env = {
+        API_SERVICE: createMockApiService({
+          "/users/123": () => new Response(JSON.stringify({ user: completeUser }), { status: 200 }),
+          "/potential-matches": () => new Response(JSON.stringify({ potentialMatches: [] }), { status: 200 }),
+        }),
+        KV: createMockKV(),
+      } as any;
+      await matchCommand(ctx, env);
       expect(ctx.reply).toHaveBeenCalled();
     });
   });
 
   describe("matchesCommand", () => {
-    it("should reply with no matches message when empty", async () => {
+    it("should redirect incomplete user to profile", async () => {
       const ctx = mockCtx();
-      await matchesCommand(ctx, { API_SERVICE: { fetch: vi.fn().mockResolvedValue(new Response(JSON.stringify({ potentialMatches: [] }))) } } as any);
+      const env = {
+        API_SERVICE: createMockApiService({
+          "/users/123": () => new Response(JSON.stringify({ user: incompleteUser }), { status: 200 }),
+        }),
+        KV: createMockKV(),
+      } as any;
+      await matchesCommand(ctx, env);
+      expect(ctx.reply).toHaveBeenCalledWith(expect.stringContaining("complete your profile"));
+    });
+
+    it("should reply with no matches message when empty for complete user", async () => {
+      const ctx = mockCtx();
+      const env = {
+        API_SERVICE: createMockApiService({
+          "/users/123": () => new Response(JSON.stringify({ user: completeUser }), { status: 200 }),
+          "/matches": () => new Response(JSON.stringify({ matches: [] }), { status: 200 }),
+          "/pending-likes": () => new Response(JSON.stringify({ pendingLikes: [] }), { status: 200 }),
+        }),
+        KV: createMockKV(),
+      } as any;
+      await matchesCommand(ctx, env);
       expect(ctx.reply).toHaveBeenCalledWith(
         expect.stringContaining("No matches"),
       );
@@ -84,9 +192,15 @@ describe("Bot Handlers", () => {
   });
 
   describe("settingsCommand", () => {
-    it("should show settings menu", async () => {
+    it("should show settings menu for existing user", async () => {
       const ctx = mockCtx();
-      await settingsCommand(ctx, { KV: {} } as any);
+      const env = {
+        API_SERVICE: createMockApiService({
+          "/users/123": () => new Response(JSON.stringify({ user: completeUser }), { status: 200 }),
+        }),
+        KV: {},
+      } as any;
+      await settingsCommand(ctx, env);
       expect(ctx.reply).toHaveBeenCalledWith(
         expect.stringContaining("Settings"),
         expect.any(Object),

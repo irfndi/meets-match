@@ -11,7 +11,16 @@ import {
   type UpdateLastActiveResponse,
   type UpdateLastRemindedAtRequest,
   type UpdateLastRemindedAtResponse,
+  type GetPotentialMatchesRequest,
+  type GetPotentialMatchesResponse,
+  type CreateMatchRequest,
+  type CreateMatchResponse,
+  type LikeMatchRequest,
+  type LikeMatchResponse,
+  type GetMatchListRequest,
+  type GetMatchListResponse,
   UserService as IUserService,
+  MatchService as IMatchService,
 } from "@meetsmatch/cf-shared";
 
 export class ApiServiceClient implements IUserService {
@@ -53,5 +62,47 @@ export class ApiServiceClient implements IUserService {
     const response = await this.binding.fetch(new Request(`http://api/users/${req.userId}/last-reminded-at`, { method: "POST" }));
     if (!response.ok) throw new Error(`API error: ${response.status}`);
     return (await response.json()) as UpdateLastRemindedAtResponse;
+  }
+
+  async getPotentialMatches(req: GetPotentialMatchesRequest): Promise<GetPotentialMatchesResponse> {
+    const response = await this.binding.fetch(new Request(`http://api/users/${req.userId}/potential-matches?limit=${req.limit ?? 10}`, { method: "GET" }));
+    if (!response.ok) throw new Error(`API error: ${response.status}`);
+    return (await response.json()) as GetPotentialMatchesResponse;
+  }
+
+  async getPendingLikes(userId: string): Promise<{ pendingLikes: Array<Record<string, unknown>> }> {
+    const response = await this.binding.fetch(new Request(`http://api/users/${userId}/pending-likes`, { method: "GET" }));
+    if (!response.ok) throw new Error(`API error: ${response.status}`);
+    return (await response.json()) as { pendingLikes: Array<Record<string, unknown>> };
+  }
+
+  async getMatchList(req: GetMatchListRequest): Promise<GetMatchListResponse> {
+    const url = new URL("http://api/matches");
+    url.searchParams.set("userId", req.userId);
+    if (req.status) url.searchParams.set("status", req.status);
+    if (req.limit) url.searchParams.set("limit", String(req.limit));
+    const response = await this.binding.fetch(new Request(url.toString(), { method: "GET" }));
+    if (!response.ok) throw new Error(`API error: ${response.status}`);
+    return (await response.json()) as GetMatchListResponse;
+  }
+
+  async createMatch(req: CreateMatchRequest): Promise<CreateMatchResponse> {
+    const response = await this.binding.fetch(new Request("http://api/matches", {
+      method: "POST",
+      body: JSON.stringify(req),
+      headers: { "Content-Type": "application/json" },
+    }));
+    if (!response.ok) throw new Error(`API error: ${response.status}`);
+    return (await response.json()) as CreateMatchResponse;
+  }
+
+  async likeMatch(req: LikeMatchRequest): Promise<LikeMatchResponse> {
+    const response = await this.binding.fetch(new Request(`http://api/matches/${req.matchId}/like`, {
+      method: "POST",
+      body: JSON.stringify({ userId: req.userId }),
+      headers: { "Content-Type": "application/json" },
+    }));
+    if (!response.ok) throw new Error(`API error: ${response.status}`);
+    return (await response.json()) as LikeMatchResponse;
   }
 }

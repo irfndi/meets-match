@@ -1,41 +1,80 @@
-import type { MyContext } from '../types.js';
-import type { Env } from '../index.js';
-import { ApiServiceClient } from '../services/api-client.js';
+import { InlineKeyboard } from "grammy";
+import type { MyContext } from "../types.js";
+import type { Env } from "../index.js";
+import { ensureUserExists, getProfileCompleteness, getMissingFieldsDisplay } from "../lib/user-utils.js";
+import { t, SUPPORTED_LANGUAGES, DEFAULT_LANGUAGE, type Language } from "../lib/i18n.js";
 
-const WELCOME_MESSAGE = `
-👋 Welcome to MeetMatch!
+export function buildLanguageKeyboard(): InlineKeyboard {
+  const keyboard = new InlineKeyboard();
+  for (const lang of SUPPORTED_LANGUAGES) {
+    keyboard.text(`${lang.flag} ${lang.label}`, `lang:${lang.code}`).row();
+  }
+  return keyboard;
+}
 
-I'm your personal matchmaking assistant. I'll help you find people with similar interests near you.
-
-To get started:
-1️⃣ Set up your profile with /profile
-2️⃣ Start matching with /match
-3️⃣ View your matches with /matches
-
-Need help? Just type /help anytime.
-`;
+async function setUserLanguage(env: Env, userId: string, language: Language): Promise<boolean> {
+  try {
+    const res = await env.API_SERVICE.fetch(
+      new Request(`http://api/users/${userId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user: { language } }),
+      })
+    );
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
 
 export const startCommand = async (ctx: MyContext, env: Env): Promise<void> => {
   if (!ctx.from) {
-    await ctx.reply(WELCOME_MESSAGE);
+    await ctx.reply(t("welcomeNew"));
     return;
   }
 
-  try {
-    const client = new ApiServiceClient(env.API_SERVICE);
-    await client.createUser({
-      user: {
-        id: String(ctx.from.id),
-        username: ctx.from.username ?? undefined,
-        displayName: ctx.from.first_name,
-        isActive: true,
-      },
-    });
-  } catch (error) {
-    console.error('Failed to create user on /start:', error);
-    await ctx.reply('❌ Sorry, there was an error setting up your profile. Please try again later.');
+  const result = await ensureUserExists(ctx, env);
+  if (!result) {
+    await ctx.reply(t("genericError"));
     return;
   }
 
-  await ctx.reply(WELCOME_MESSAGE);
+  const { user, created } = result;
+  const lang = (user.language as Language) ?? DEFAULT_LANGUAGE;
+
+  if (created) {
+    // New user — show language selection first
+    await ctx.reply(
+      "🌍 Choose your language / Pilih bahasa:\n(More languages coming soon!)",
+      { reply_markup: buildLanguageKeyboard() }
+    );
+    return;
+  }
+
+  // Existing user — welcome back in their language
+  const { complete, missing } = getProfileCompleteness(user);
+
+  if (!complete) {
+    await ctx.reply(
+      t("welcomeBackIncomplete", lang, { missing: getMissingFieldsDisplay(missing) })
+    );
+    return;
+  }
+
+  await ctx.reply(t("welcomeBack", lang));
+};
+
+export const languageCallback = async (ctx: MyContext, env: Env, data: string): Promise<boolean> => {
+  if (!ctx.from) return false;
+  if (!data.startsWith("lang:")) return false;
+
+  const selectedLang = data.replace("lang:", "") as Language;
+  const userId = String(ctx.from.id);
+
+  // Store language preference
+  await setUserLanguage(env, userId, selectedLang);
+
+  await ctx.answerCallbackQuery("Language set to English 🇬🇧");
+  await ctx.editMessageText(t("welcomeNew", selectedLang));
+  return true;
 };

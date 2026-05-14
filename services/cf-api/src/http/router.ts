@@ -50,6 +50,8 @@ export class ApiRouter {
           return this.handleCreateUser(request);
         case url.pathname.startsWith("/users/") && url.pathname.endsWith("/potential-matches") && method === "GET":
           return this.handleGetPotentialMatches(url.pathname, url.searchParams);
+        case url.pathname.startsWith("/users/") && url.pathname.endsWith("/pending-likes") && method === "GET":
+          return this.handleGetPendingLikes(url.pathname);
         case url.pathname.startsWith("/users/") && method === "GET":
           return this.handleGetUser(url.pathname);
         case url.pathname.startsWith("/users/") && url.pathname.endsWith("/last-active") && method === "POST":
@@ -58,6 +60,8 @@ export class ApiRouter {
           return this.handleUpdateLastRemindedAt(url.pathname);
         case url.pathname.startsWith("/users/") && method === "PUT":
           return this.handleUpdateUser(url.pathname, request);
+        case url.pathname === "/matches" && method === "GET":
+          return this.handleGetMatchList(url.searchParams);
         case url.pathname === "/matches" && method === "POST":
           return this.handleCreateMatch(request);
         case url.pathname.startsWith("/matches/") && method === "GET":
@@ -82,14 +86,14 @@ export class ApiRouter {
   private async handleCreateUser(request: Request): Promise<Response> {
     const body = await request.json() as Record<string, unknown>;
     const result = await runEffect(this.userRepo.create({ user: body.user as typeof import("@meetsmatch/cf-shared").User.Type }));
-    return jsonResponse(result, 201);
+    return jsonResponse({ user: result }, 201);
   }
 
   private async handleGetUser(path: string): Promise<Response> {
     const userId = path.replace("/users/", "");
     try {
       const result = await runEffect(this.userRepo.getById({ userId }));
-      return jsonResponse(result);
+      return jsonResponse({ user: result });
     } catch (error) {
       if (error instanceof NotFoundError) return jsonResponse({ error: error.message }, 404);
       return jsonResponse({ error: "Database error" }, 500);
@@ -111,6 +115,19 @@ export class ApiRouter {
       return jsonResponse({ potentialMatches: result });
     } catch (error) {
       return jsonResponse({ error: "Failed to get potential matches" }, 500);
+    }
+  }
+
+  private async handleGetPendingLikes(path: string): Promise<Response> {
+    const userId = path.replace("/users/", "").replace("/pending-likes", "");
+    if (!userId) {
+      return jsonResponse({ error: "user_id is required" }, 400);
+    }
+    try {
+      const result = await runEffect(this.matchRepo.getPendingLikes({ userId }));
+      return jsonResponse({ pendingLikes: result });
+    } catch (error) {
+      return jsonResponse({ error: "Failed to get pending likes" }, 500);
     }
   }
 
@@ -139,7 +156,7 @@ export class ApiRouter {
     const body = await request.json() as Record<string, unknown>;
     try {
       const result = await runEffect(this.userRepo.update({ userId, user: body.user as typeof import("@meetsmatch/cf-shared").User.Type, updateMask: body.updateMask as string[] }));
-      return jsonResponse(result);
+      return jsonResponse({ user: result });
     } catch (error) {
       if (error instanceof NotFoundError) return jsonResponse({ error: error.message }, 404);
       return jsonResponse({ error: "Database error" }, 500);
@@ -149,14 +166,41 @@ export class ApiRouter {
   private async handleCreateMatch(request: Request): Promise<Response> {
     const body = await request.json() as Record<string, unknown>;
     const result = await runEffect(this.matchRepo.create({ user1Id: String(body.user1Id), user2Id: String(body.user2Id) }));
-    return jsonResponse(result, 201);
+    return jsonResponse({ match: result }, 201);
+  }
+
+  private async handleGetMatchList(searchParams: URLSearchParams): Promise<Response> {
+    const userId = searchParams.get("userId");
+    if (!userId) {
+      return jsonResponse({ error: "user_id is required" }, 400);
+    }
+    const statusRaw = searchParams.get("status");
+    const allowedStatuses = new Set(["PENDING", "MATCHED", "REJECTED"]);
+    const status = statusRaw ? statusRaw.toUpperCase() : undefined;
+    if (status && !allowedStatuses.has(status)) {
+      return jsonResponse({ error: "Invalid status" }, 400);
+    }
+    const limitRaw = searchParams.get("limit");
+    let limit: number | undefined;
+    if (limitRaw) {
+      limit = Number(limitRaw);
+      if (Number.isNaN(limit) || limit < 1 || limit > 100) {
+        return jsonResponse({ error: "limit must be between 1 and 100" }, 400);
+      }
+    }
+    try {
+      const result = await runEffect(this.matchRepo.getList({ userId, status: status as typeof import("@meetsmatch/cf-shared").MatchStatus.Type | undefined, limit }));
+      return jsonResponse({ matches: result });
+    } catch (error) {
+      return jsonResponse({ error: "Failed to get matches" }, 500);
+    }
   }
 
   private async handleGetMatch(path: string): Promise<Response> {
     const matchId = path.replace("/matches/", "");
     try {
       const result = await runEffect(this.matchRepo.getById({ matchId }));
-      return jsonResponse(result);
+      return jsonResponse({ match: result });
     } catch (error) {
       if (error instanceof NotFoundError) return jsonResponse({ error: error.message }, 404);
       return jsonResponse({ error: "Database error" }, 500);

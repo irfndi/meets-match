@@ -2,6 +2,7 @@ import { InlineKeyboard } from "grammy";
 import type { MyContext } from "../types.js";
 import type { Env } from "../index.js";
 import { startConversation } from "../lib/conversations.js";
+import { ensureUserExists } from "../lib/user-utils.js";
 
 function getSettingsKeyboard() {
   return new InlineKeyboard()
@@ -15,6 +16,13 @@ function getSettingsKeyboard() {
 
 export const settingsCommand = async (ctx: MyContext, env: Env): Promise<void> => {
   if (!ctx.from) return;
+
+  const result = await ensureUserExists(ctx, env);
+  if (!result) {
+    await ctx.reply('❌ Sorry, there was an error. Please try /start first.');
+    return;
+  }
+
   const userId = String(ctx.from.id);
 
   await ctx.reply("⚙️ *Settings*\n\nAdjust your match preferences:", {

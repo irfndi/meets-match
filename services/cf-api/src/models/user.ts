@@ -42,8 +42,8 @@ export class UserRepository {
         }
         await this.db
           .prepare(
-            `INSERT INTO users (id, username, first_name, last_name, bio, age, gender, interests, photos, location, preferences, is_active, is_sleeping, is_profile_complete, last_active)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            `INSERT INTO users (id, username, first_name, last_name, bio, age, gender, interests, photos, location, preferences, is_active, is_sleeping, is_profile_complete, phone_number, language, last_active)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
           )
           .bind(
             user.id,
@@ -60,6 +60,8 @@ export class UserRepository {
             user.isActive ?? true ? 1 : 0,
             user.isSleeping ?? false ? 1 : 0,
             user.isProfileComplete ?? false ? 1 : 0,
+            user.phoneNumber ?? null,
+            user.language ?? 'en',
             user.lastActive ?? new Date().toISOString()
           )
           .run();
@@ -98,6 +100,8 @@ export class UserRepository {
         if (user.isActive !== undefined) { fields.push("is_active = ?"); values.push(user.isActive ? 1 : 0); }
         if (user.isSleeping !== undefined) { fields.push("is_sleeping = ?"); values.push(user.isSleeping ? 1 : 0); }
         if (user.isProfileComplete !== undefined) { fields.push("is_profile_complete = ?"); values.push(user.isProfileComplete ? 1 : 0); }
+        if (user.phoneNumber !== undefined) { fields.push("phone_number = ?"); values.push(user.phoneNumber); }
+        if (user.language !== undefined) { fields.push("language = ?"); values.push(user.language); }
 
         if (fields.length === 0) {
           return user;
@@ -171,6 +175,8 @@ export class UserRepository {
       isActive: row.is_active ? Number(row.is_active) === 1 : true,
       isSleeping: row.is_sleeping ? Number(row.is_sleeping) === 1 : false,
       isProfileComplete: row.is_profile_complete ? Number(row.is_profile_complete) === 1 : false,
+      phoneNumber: row.phone_number ? String(row.phone_number) : undefined,
+      language: row.language ? String(row.language) : undefined,
       createdAt: row.created_at ? String(row.created_at) : undefined,
       updatedAt: row.updated_at ? String(row.updated_at) : undefined,
       lastActive: row.last_active ? String(row.last_active) : undefined,

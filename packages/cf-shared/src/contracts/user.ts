@@ -46,6 +46,8 @@ export const User = Struct({
   isActive: optional(Boolean),
   isSleeping: optional(Boolean),
   isProfileComplete: optional(Boolean),
+  phoneNumber: optional(String),
+  language: optional(String),
   createdAt: optional(String), // ISO 8601
   updatedAt: optional(String),
   lastActive: optional(String),
