@@ -1,4 +1,5 @@
 import type { MyContext } from '../types.js';
+import { getVersionInfo, formatDuration } from '../lib/version.js';
 
 const HELP_MESSAGE = `
 🤖 *MeetMatch Bot Help*
@@ -19,20 +20,28 @@ const HELP_MESSAGE = `
 Need more help? Contact support.
 `;
 
-const ABOUT_MESSAGE = `
+export const helpCommand = async (ctx: MyContext): Promise<void> => {
+  await ctx.reply(HELP_MESSAGE, { parse_mode: 'Markdown' });
+};
+
+export const aboutCommand = async (ctx: MyContext): Promise<void> => {
+  const v = getVersionInfo();
+  const age = formatDuration(v.builtAt);
+
+  const ABOUT_MESSAGE = `
 🌟 *About MeetMatch*
 
 MeetMatch helps you find people with similar interests near you.
 
 Built with ❤️ using modern tech stack.
 
-Version: 0.0.1
+*Version:* \`${v.version}\`
+*Environment:* ${v.environment}
+*Last updated:* ${v.builtAt}
+*Server age:* ${age}
+
+Need help? Use /help
 `;
 
-export const helpCommand = async (ctx: MyContext): Promise<void> => {
-  await ctx.reply(HELP_MESSAGE, { parse_mode: 'Markdown' });
-};
-
-export const aboutCommand = async (ctx: MyContext): Promise<void> => {
   await ctx.reply(ABOUT_MESSAGE, { parse_mode: 'Markdown' });
 };

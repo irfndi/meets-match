@@ -5,6 +5,7 @@ import { MatchRepository } from "../models/match.js";
 import { NotificationRepository } from "../models/notification.js";
 import { GeocodingService } from "../models/geocoding.js";
 import { AppError, NotFoundError, DatabaseError } from "@meetsmatch/cf-shared";
+import { getVersionInfo } from "../lib/version.js";
 
 async function runEffect<A, E>(effect: Effect.Effect<A, E, never>): Promise<A> {
   const exit = await Effect.runPromiseExit(effect);
@@ -44,7 +45,7 @@ export class ApiRouter {
     try {
       switch (true) {
         case url.pathname === "/health":
-          return jsonResponse({ status: "ok", service: "cf-api" });
+          return jsonResponse({ status: "ok", service: "cf-api", version: getVersionInfo() });
 
         case url.pathname === "/users" && method === "POST":
           return this.handleCreateUser(request);
