@@ -82,14 +82,14 @@ export class ApiRouter {
   private async handleCreateUser(request: Request): Promise<Response> {
     const body = await request.json() as Record<string, unknown>;
     const result = await runEffect(this.userRepo.create({ user: body.user as typeof import("@meetsmatch/cf-shared").User.Type }));
-    return jsonResponse(result, 201);
+    return jsonResponse({ user: result }, 201);
   }
 
   private async handleGetUser(path: string): Promise<Response> {
     const userId = path.replace("/users/", "");
     try {
       const result = await runEffect(this.userRepo.getById({ userId }));
-      return jsonResponse(result);
+      return jsonResponse({ user: result });
     } catch (error) {
       if (error instanceof NotFoundError) return jsonResponse({ error: error.message }, 404);
       return jsonResponse({ error: "Database error" }, 500);
@@ -139,7 +139,7 @@ export class ApiRouter {
     const body = await request.json() as Record<string, unknown>;
     try {
       const result = await runEffect(this.userRepo.update({ userId, user: body.user as typeof import("@meetsmatch/cf-shared").User.Type, updateMask: body.updateMask as string[] }));
-      return jsonResponse(result);
+      return jsonResponse({ user: result });
     } catch (error) {
       if (error instanceof NotFoundError) return jsonResponse({ error: error.message }, 404);
       return jsonResponse({ error: "Database error" }, 500);
@@ -149,14 +149,14 @@ export class ApiRouter {
   private async handleCreateMatch(request: Request): Promise<Response> {
     const body = await request.json() as Record<string, unknown>;
     const result = await runEffect(this.matchRepo.create({ user1Id: String(body.user1Id), user2Id: String(body.user2Id) }));
-    return jsonResponse(result, 201);
+    return jsonResponse({ match: result }, 201);
   }
 
   private async handleGetMatch(path: string): Promise<Response> {
     const matchId = path.replace("/matches/", "");
     try {
       const result = await runEffect(this.matchRepo.getById({ matchId }));
-      return jsonResponse(result);
+      return jsonResponse({ match: result });
     } catch (error) {
       if (error instanceof NotFoundError) return jsonResponse({ error: error.message }, 404);
       return jsonResponse({ error: "Database error" }, 500);
