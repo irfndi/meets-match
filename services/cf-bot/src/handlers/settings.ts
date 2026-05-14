@@ -41,12 +41,15 @@ export const settingsCallbacks = async (ctx: MyContext, env: Env): Promise<void>
       break;
     case "settings:gender-pref":
       await startConversation(env.KV, userId, "gender-pref");
-      await ctx.reply("Enter preferred genders separated by commas (e.g. Male, Female). Type Cancel to abort.");
+      await ctx.reply("Enter preferred genders separated by commas (male, female, other, prefer_not_to_say). Type Cancel to abort.");
       await ctx.answerCallbackQuery();
       break;
     case "settings:close":
       await ctx.answerCallbackQuery("Settings closed.");
-      await ctx.deleteMessage();
+      try { await ctx.deleteMessage(); } catch (e) {
+        if (e instanceof Error && e.message.includes("message to delete not found")) return;
+        console.error("Failed to delete settings message:", e);
+      }
       break;
     default:
       await ctx.answerCallbackQuery("Unknown setting.");

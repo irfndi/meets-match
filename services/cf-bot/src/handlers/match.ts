@@ -24,10 +24,12 @@ function buildMatchKeyboard(targetUserId: string) {
 }
 
 function formatProfile(user: Record<string, unknown>, index: number): string {
-  const name = user.first_name ?? "Unknown";
+  const name = (user.firstName ?? user.first_name ?? "Unknown") as string;
   const age = user.age ?? "?";
   const bio = user.bio ? `\n📝 ${user.bio}` : "";
-  const interests = user.interests ? `\n🌟 ${user.interests}` : "";
+  const interests = user.interests
+    ? `\n🌟 ${Array.isArray(user.interests) ? (user.interests as string[]).join(", ") : String(user.interests)}`
+    : "";
   return `${index}. ${name}, ${age}${bio}${interests}`;
 }
 

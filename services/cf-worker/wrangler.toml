@@ -84,3 +84,6 @@ name = "meetsmatch-worker"
 [observability.logs]
 enabled = true
 invocation_logs = true
+
+[observability.traces]
+enabled = false
