@@ -124,7 +124,10 @@ export const matchCommand = async (ctx: MyContext, env: Env): Promise<void> => {
 
   const userId = String(ctx.from.id);
 
-  await ctx.reply(t("matchFinding", lang), { parse_mode: "Markdown" });
+  await ctx.reply(t("matchFinding", lang), {
+    parse_mode: "Markdown",
+    reply_markup: getMainMenuKeyboard(),
+  });
 
   const users = await fetchPotentialMatches(env, userId, 5);
   if (users.length === 0) {
@@ -135,9 +138,8 @@ export const matchCommand = async (ctx: MyContext, env: Env): Promise<void> => {
     return;
   }
 
-  for (let i = 0; i < users.length; i++) {
-    const potentialMatch = users[i];
-    const text = formatProfile(potentialMatch, i + 1);
+  for (const potentialMatch of users) {
+    const text = buildMatchCard(potentialMatch);
     await ctx.reply(text, {
       reply_markup: buildMatchKeyboard(String(potentialMatch.id)),
     });

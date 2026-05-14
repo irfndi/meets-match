@@ -138,10 +138,9 @@ function createBot(env: Env): Bot<MyContext> {
   });
 
   bot.on("message:text", async (ctx) => {
-    const handled = await handleConversationMessage(ctx, env);
-    if (handled) return;
-
     const text = ctx.message?.text;
+
+    // Main menu keyboard buttons take priority over conversations
     switch (text) {
       case "🔍 Find Match":
         return matchCommand(ctx, env);
@@ -152,6 +151,9 @@ function createBot(env: Env): Bot<MyContext> {
       case "⚙️ Settings":
         return settingsCommand(ctx, env);
     }
+
+    const handled = await handleConversationMessage(ctx, env);
+    if (handled) return;
 
     await ctx.reply(
       "I'm not sure what you mean. Use the menu below or try /help for guidance.",
