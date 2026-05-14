@@ -1,6 +1,6 @@
 import type { MyContext } from '../types.js';
 import type { Env } from '../index.js';
-import { ApiServiceClient } from '../services/api-client.js';
+import { ensureUserExists, getProfileCompleteness, getMissingFieldsDisplay } from '../lib/user-utils.js';
 
 const WELCOME_MESSAGE = `
 👋 Welcome to MeetMatch!
@@ -15,27 +15,40 @@ To get started:
 Need help? Just type /help anytime.
 `;
 
+const WELCOME_BACK_MESSAGE = `
+👋 Welcome back to MeetMatch!
+
+Ready to find your next match?
+`;
+
 export const startCommand = async (ctx: MyContext, env: Env): Promise<void> => {
   if (!ctx.from) {
     await ctx.reply(WELCOME_MESSAGE);
     return;
   }
 
-  try {
-    const client = new ApiServiceClient(env.API_SERVICE);
-    await client.createUser({
-      user: {
-        id: String(ctx.from.id),
-        username: ctx.from.username ?? undefined,
-        displayName: ctx.from.first_name,
-        isActive: true,
-      },
-    });
-  } catch (error) {
-    console.error('Failed to create user on /start:', error);
+  const result = await ensureUserExists(ctx, env);
+  if (!result) {
     await ctx.reply('❌ Sorry, there was an error setting up your profile. Please try again later.');
     return;
   }
 
-  await ctx.reply(WELCOME_MESSAGE);
+  const { user, created } = result;
+
+  if (created) {
+    await ctx.reply(WELCOME_MESSAGE);
+    return;
+  }
+
+  // Existing user — welcome back
+  const { complete, missing } = getProfileCompleteness(user);
+
+  if (!complete) {
+    await ctx.reply(
+      `${WELCOME_BACK_MESSAGE}\n⚠️ Your profile is incomplete. To start matching, please fill in:\n${getMissingFieldsDisplay(missing)}\n\nUse /profile to update your info.`.trim()
+    );
+    return;
+  }
+
+  await ctx.reply(WELCOME_BACK_MESSAGE.trim());
 };

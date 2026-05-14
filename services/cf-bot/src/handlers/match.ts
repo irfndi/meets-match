@@ -1,6 +1,7 @@
 import { InlineKeyboard } from "grammy";
 import type { MyContext } from "../types.js";
 import type { Env } from "../index.js";
+import { ensureUserExists, getProfileCompleteness, getMissingFieldsDisplay } from "../lib/user-utils.js";
 
 async function fetchPotentialMatches(env: Env, userId: string, limit = 5) {
   try {
@@ -38,6 +39,23 @@ export const matchCommand = async (ctx: MyContext, env: Env): Promise<void> => {
     await ctx.reply("Could not identify you. Try again.");
     return;
   }
+
+  const result = await ensureUserExists(ctx, env);
+  if (!result) {
+    await ctx.reply("❌ Sorry, there was an error. Please try /start first.");
+    return;
+  }
+
+  const { user } = result;
+  const { complete, missing } = getProfileCompleteness(user);
+
+  if (!complete) {
+    await ctx.reply(
+      `⚠️ You need to complete your profile before matching.\n\nMissing fields:\n${getMissingFieldsDisplay(missing)}\n\nUse /profile to update your info.`
+    );
+    return;
+  }
+
   const userId = String(ctx.from.id);
 
   await ctx.reply("🔍 Finding matches for you...");
@@ -45,16 +63,16 @@ export const matchCommand = async (ctx: MyContext, env: Env): Promise<void> => {
   const users = await fetchPotentialMatches(env, userId, 5);
   if (users.length === 0) {
     await ctx.reply(
-      "No potential matches found right now. Complete your profile with /profile and try again!"
+      "No potential matches found right now. Try again later or adjust your preferences in /settings."
     );
     return;
   }
 
   for (let i = 0; i < users.length; i++) {
-    const user = users[i];
-    const text = formatProfile(user, i + 1);
+    const potentialMatch = users[i];
+    const text = formatProfile(potentialMatch, i + 1);
     await ctx.reply(text, {
-      reply_markup: buildMatchKeyboard(String(user.id)),
+      reply_markup: buildMatchKeyboard(String(potentialMatch.id)),
     });
   }
 };

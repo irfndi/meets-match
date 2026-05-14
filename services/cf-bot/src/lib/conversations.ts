@@ -1,5 +1,6 @@
 import type { MyContext } from '../types.js';
 import type { Env } from '../index.js';
+import { getProfileCompleteness, updateUserProfileComplete } from './user-utils.js';
 
 interface ConversationState {
   userId: string;
@@ -37,6 +38,24 @@ async function updateUser(env: Env, userId: string, updates: Record<string, unkn
     return response.ok;
   } catch {
     return false;
+  }
+}
+
+async function checkAndUpdateProfileComplete(env: Env, userId: string): Promise<void> {
+  try {
+    const response = await env.API_SERVICE.fetch(
+      new Request(`http://api/users/${userId}`, { method: 'GET' })
+    );
+    if (!response.ok) return;
+    const data = await response.json() as { user?: Record<string, unknown> };
+    const user = data.user;
+    if (!user) return;
+    const { complete, missing } = getProfileCompleteness(user as Record<string, unknown>);
+    if (complete && missing.length === 0 && !user.isProfileComplete) {
+      await updateUserProfileComplete(env, userId, true);
+    }
+  } catch {
+    // Silently ignore — not critical
   }
 }
 
@@ -88,6 +107,7 @@ async function handleBioConversation(ctx: MyContext, env: Env, state: Conversati
   const success = await updateUser(env, state.userId, { bio: text });
   await clearConversationState(env.KV, state.userId);
   if (success) {
+    await checkAndUpdateProfileComplete(env, state.userId);
     await ctx.reply('Bio updated!', { reply_markup: { remove_keyboard: true } });
   } else {
     await ctx.reply('Failed to update bio. Please try again later.', { reply_markup: { remove_keyboard: true } });
@@ -104,6 +124,7 @@ async function handleAgeConversation(ctx: MyContext, env: Env, state: Conversati
   const success = await updateUser(env, state.userId, { age });
   await clearConversationState(env.KV, state.userId);
   if (success) {
+    await checkAndUpdateProfileComplete(env, state.userId);
     await ctx.reply(`Age updated to ${age}!`, { reply_markup: { remove_keyboard: true } });
   } else {
     await ctx.reply('Failed to update age. Please try again later.', { reply_markup: { remove_keyboard: true } });
@@ -120,6 +141,7 @@ async function handleNameConversation(ctx: MyContext, env: Env, state: Conversat
   const success = await updateUser(env, state.userId, { displayName: name });
   await clearConversationState(env.KV, state.userId);
   if (success) {
+    await checkAndUpdateProfileComplete(env, state.userId);
     await ctx.reply(`Name updated to ${name}!`, { reply_markup: { remove_keyboard: true } });
   } else {
     await ctx.reply('Failed to update name. Please try again later.', { reply_markup: { remove_keyboard: true } });
@@ -137,6 +159,7 @@ async function handleGenderConversation(ctx: MyContext, env: Env, state: Convers
   const success = await updateUser(env, state.userId, { gender });
   await clearConversationState(env.KV, state.userId);
   if (success) {
+    await checkAndUpdateProfileComplete(env, state.userId);
     await ctx.reply(`Gender updated!`, { reply_markup: { remove_keyboard: true } });
   } else {
     await ctx.reply('Failed to update gender. Please try again later.', { reply_markup: { remove_keyboard: true } });
@@ -157,6 +180,7 @@ async function handleInterestsConversation(ctx: MyContext, env: Env, state: Conv
   const success = await updateUser(env, state.userId, { interests });
   await clearConversationState(env.KV, state.userId);
   if (success) {
+    await checkAndUpdateProfileComplete(env, state.userId);
     await ctx.reply(`Interests updated: ${interests.join(', ')}!`, { reply_markup: { remove_keyboard: true } });
   } else {
     await ctx.reply('Failed to update interests. Please try again later.', { reply_markup: { remove_keyboard: true } });
@@ -170,6 +194,7 @@ async function handleLocationConversation(ctx: MyContext, env: Env, state: Conve
     const success = await updateUser(env, state.userId, { location: { latitude, longitude } });
     await clearConversationState(env.KV, state.userId);
     if (success) {
+      await checkAndUpdateProfileComplete(env, state.userId);
       await ctx.reply('📍 Location updated from GPS!', { reply_markup: { remove_keyboard: true } });
     } else {
       await ctx.reply('Failed to update location. Please try again later.', { reply_markup: { remove_keyboard: true } });
@@ -186,6 +211,7 @@ async function handleLocationConversation(ctx: MyContext, env: Env, state: Conve
   const success = await updateUser(env, state.userId, { location: { city, country } });
   await clearConversationState(env.KV, state.userId);
   if (success) {
+    await checkAndUpdateProfileComplete(env, state.userId);
     await ctx.reply(`Location updated to ${city}, ${country}!`, { reply_markup: { remove_keyboard: true } });
   } else {
     await ctx.reply('Failed to update location. Please try again later.', { reply_markup: { remove_keyboard: true } });

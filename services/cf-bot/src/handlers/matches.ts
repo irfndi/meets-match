@@ -1,6 +1,7 @@
 import { InlineKeyboard } from "grammy";
 import type { MyContext } from "../types.js";
 import type { Env } from "../index.js";
+import { ensureUserExists, getProfileCompleteness, getMissingFieldsDisplay } from "../lib/user-utils.js";
 
 async function fetchMatches(env: Env, userId: string) {
   try {
@@ -29,6 +30,23 @@ export const matchesCommand = async (ctx: MyContext, env: Env): Promise<void> =>
     await ctx.reply("Could not identify you. Try again.");
     return;
   }
+
+  const result = await ensureUserExists(ctx, env);
+  if (!result) {
+    await ctx.reply("❌ Sorry, there was an error. Please try /start first.");
+    return;
+  }
+
+  const { user } = result;
+  const { complete, missing } = getProfileCompleteness(user);
+
+  if (!complete) {
+    await ctx.reply(
+      `⚠️ You need to complete your profile before viewing matches.\n\nMissing fields:\n${getMissingFieldsDisplay(missing)}\n\nUse /profile to update your info.`
+    );
+    return;
+  }
+
   const userId = String(ctx.from.id);
 
   const matches = await fetchMatches(env, userId);
