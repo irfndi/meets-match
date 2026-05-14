@@ -26,7 +26,7 @@ export const startCommand = (ctx: Context) =>
       const user = new User({
         id: String(ctx.from.id),
         username: ctx.from.username,
-        firstName: ctx.from.first_name,
+        displayName: ctx.from.first_name,
         lastName: ctx.from.last_name,
         isActive: true,
       });

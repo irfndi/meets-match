@@ -50,12 +50,12 @@ func TestHaversine(t *testing.T) {
 
 func TestCalculateMatchScore_EmptyUsers(t *testing.T) {
 	user1 := &User{
-		ID:        "1",
-		FirstName: "Test",
+		ID:          "1",
+		DisplayName: "Test",
 	}
 	user2 := &User{
-		ID:        "2",
-		FirstName: "Test2",
+		ID:          "2",
+		DisplayName: "Test2",
 	}
 
 	score := calculateMatchScore(user1, user2)
@@ -78,8 +78,8 @@ func TestCalculateMatchScore_EmptyUsers(t *testing.T) {
 func TestCalculateMatchScore_WithLocation(t *testing.T) {
 	maxDist := 20
 	user1 := &User{
-		ID:        "1",
-		FirstName: "Test",
+		ID:          "1",
+		DisplayName: "Test",
 		Location: &Location{
 			Latitude:  37.5665,
 			Longitude: 126.9780,
@@ -89,8 +89,8 @@ func TestCalculateMatchScore_WithLocation(t *testing.T) {
 		},
 	}
 	user2 := &User{
-		ID:        "2",
-		FirstName: "Test2",
+		ID:          "2",
+		DisplayName: "Test2",
 		Location: &Location{
 			Latitude:  37.5700, // ~400m away
 			Longitude: 126.9800,
@@ -107,14 +107,14 @@ func TestCalculateMatchScore_WithLocation(t *testing.T) {
 
 func TestCalculateMatchScore_WithInterests(t *testing.T) {
 	user1 := &User{
-		ID:        "1",
-		FirstName: "Test",
-		Interests: []string{"coding", "coffee", "music"},
+		ID:          "1",
+		DisplayName: "Test",
+		Interests:   []string{"coding", "coffee", "music"},
 	}
 	user2 := &User{
-		ID:        "2",
-		FirstName: "Test2",
-		Interests: []string{"coding", "coffee", "travel"},
+		ID:          "2",
+		DisplayName: "Test2",
+		Interests:   []string{"coding", "coffee", "travel"},
 	}
 
 	score := calculateMatchScore(user1, user2)
@@ -133,8 +133,8 @@ func TestCalculateMatchScore_WithPreferences(t *testing.T) {
 	female := Gender("female")
 
 	user1 := &User{
-		ID:        "1",
-		FirstName: "Test",
+		ID:          "1",
+		DisplayName: "Test",
 		Preferences: Preferences{
 			MinAge:           &minAge,
 			MaxAge:           &maxAge,
@@ -142,10 +142,10 @@ func TestCalculateMatchScore_WithPreferences(t *testing.T) {
 		},
 	}
 	user2 := &User{
-		ID:        "2",
-		FirstName: "Test2",
-		Age:       &user2Age,
-		Gender:    &male,
+		ID:          "2",
+		DisplayName: "Test2",
+		Age:         &user2Age,
+		Gender:      &male,
 	}
 
 	score := calculateMatchScore(user1, user2)

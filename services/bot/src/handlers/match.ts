@@ -73,7 +73,7 @@ export const matchCommand = (ctx: Context) =>
 
     const message = MATCH_PROFILE_TEMPLATE(
       // Helper function or string literal
-      matchUser.firstName,
+      matchUser.displayName,
       matchUser.age,
       matchUser.gender,
       matchUser.bio || 'No bio',
@@ -173,7 +173,7 @@ export const handleLike = (ctx: Context, matchId: string) =>
       // Fetch other user's details to show their name
       const otherUserRes = yield* _(userService.getUser(otherUserId));
       const otherUser = otherUserRes.user;
-      const otherName = otherUser?.firstName || 'your match';
+      const otherName = otherUser?.displayName || 'your match';
       const template = getRandomStarter();
 
       yield* _(

@@ -14,6 +14,10 @@ plugins:
     out: packages/contracts/gen/go
     opt:
       - paths=source_relative
+  - plugin: buf.build/connectrpc/go
+    out: packages/contracts/gen/go
+    opt:
+      - paths=source_relative
   - plugin: buf.build/bufbuild/es:v1.10.0
     out: packages/contracts/gen/ts
     opt:

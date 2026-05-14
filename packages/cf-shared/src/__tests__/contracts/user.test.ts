@@ -16,7 +16,7 @@ import {
 const validUser = {
   id: "user-1",
   username: "johndoe",
-  firstName: "John",
+  displayName: "John",
   lastName: "Doe",
   bio: "Hello world",
   age: 30,
@@ -61,7 +61,7 @@ describe("User Contracts", () => {
       const minimal = { id: "minimal-user" };
       const result = Schema.decodeUnknownSync(User)(minimal);
       expect(result.id).toBe("minimal-user");
-      expect(result.firstName).toBeUndefined();
+      expect(result.displayName).toBeUndefined();
       expect(result.age).toBeUndefined();
     });
 
@@ -199,10 +199,10 @@ describe("User Contracts", () => {
       const result = Schema.decodeUnknownSync(UpdateUserRequest)({
         userId: "abc",
         user: validUser,
-        updateMask: ["firstName", "age"],
+        updateMask: ["displayName", "age"],
       });
       expect(result.userId).toBe("abc");
-      expect(result.updateMask).toEqual(["firstName", "age"]);
+      expect(result.updateMask).toEqual(["displayName", "age"]);
     });
 
     it("should decode UpdateUserRequest without updateMask", () => {

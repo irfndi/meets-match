@@ -3,6 +3,7 @@ module github.com/irfndi/match-bot/services/api
 go 1.25.9
 
 require (
+	connectrpc.com/connect v1.19.2
 	github.com/getsentry/sentry-go v0.46.2
 	github.com/gofiber/fiber/v2 v2.52.13
 	github.com/google/uuid v1.6.0

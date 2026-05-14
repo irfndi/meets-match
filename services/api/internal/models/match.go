@@ -4,7 +4,6 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
-	"time"
 )
 
 type MatchStatus string
@@ -51,9 +50,9 @@ type Match struct {
 	User2ID     string       `json:"user2_id"`
 	Status      MatchStatus  `json:"status"`
 	Score       MatchScore   `json:"score"`
-	CreatedAt   time.Time    `json:"created_at"`
-	UpdatedAt   time.Time    `json:"updated_at"`
-	MatchedAt   *time.Time   `json:"matched_at,omitempty"`
+	CreatedAt   SQLiteTime   `json:"created_at"`
+	UpdatedAt   SQLiteTime   `json:"updated_at"`
+	MatchedAt   *SQLiteTime  `json:"matched_at,omitempty"`
 	User1Action *MatchAction `json:"user1_action,omitempty"`
 	User2Action *MatchAction `json:"user2_action,omitempty"`
 }

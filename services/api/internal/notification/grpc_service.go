@@ -386,7 +386,7 @@ func (s *GRPCService) GetReengagementCandidates(ctx context.Context, req *pb.Get
 
 		err := rows.Scan(
 			&c.UserId,
-			&c.FirstName,
+			&c.DisplayName,
 			&c.DaysInactive,
 			&c.PendingLikesCount,
 			&c.NotificationsEnabled,

@@ -67,7 +67,7 @@ describe('Matches List Handler', () => {
 
       const otherUser = createMockUser({
         id: 'user2',
-        firstName: 'Jane',
+        displayName: 'Jane',
         age: 25,
       });
 
@@ -151,7 +151,7 @@ describe('Matches List Handler', () => {
 
       const otherUser = createMockUser({
         id: 'user2',
-        firstName: 'Jane',
+        displayName: 'Jane',
         age: 25,
         gender: 'female',
         bio: 'Hello!',

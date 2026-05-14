@@ -34,7 +34,7 @@ export type Preferences = typeof Preferences.Type;
 export const User = Struct({
   id: String,
   username: optional(String),
-  firstName: optional(String),
+  displayName: optional(String),
   lastName: optional(String),
   bio: optional(String),
   age: optional(Number),

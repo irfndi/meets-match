@@ -61,7 +61,7 @@ describe('Match Handler', () => {
     it('should display match profile when matches exist', async () => {
       const potentialUser = createMockUser({
         id: 'user2',
-        firstName: 'Jane',
+        displayName: 'Jane',
         age: 25,
         gender: 'female',
         bio: 'Hello!',
@@ -177,7 +177,7 @@ describe('Match Handler', () => {
 
       const otherUser = createMockUser({
         id: 'user2',
-        firstName: 'Jane',
+        displayName: 'Jane',
       });
 
       vi.mocked(matchService.likeMatch).mockReturnValue(

@@ -187,7 +187,7 @@ message SendNotificationResponse {
 // Re-engagement candidate (inactive user eligible for reminder)
 message ReengagementCandidate {
   string user_id = 1;
-  string first_name = 2;
+  string display_name = 2;
   int32 days_inactive = 3;
   int32 pending_likes_count = 4;
   bool notifications_enabled = 5;

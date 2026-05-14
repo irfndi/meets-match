@@ -25,7 +25,7 @@ describe('Profile Handler', () => {
     } as unknown as Context;
 
     const mockUser = createMockUser({
-      firstName: 'John',
+      displayName: 'John',
       lastName: 'Doe',
       username: 'johndoe',
       age: 25,
@@ -38,9 +38,9 @@ describe('Profile Handler', () => {
 
     await profileCommand(mockContext);
 
-    expect(userService.getUser).toHaveBeenCalledWith('12345');
-    expect(mockContext.reply).toHaveBeenCalledWith(
-      expect.stringContaining('Name: John Doe'),
+    expect(userService.getUser).toHaveBeenLastCalledWith('12345');
+    expect(mockContext.reply).toHaveBeenLastCalledWith(
+      expect.stringContaining('Name: John'),
       expect.any(Object),
     );
   });
@@ -57,7 +57,9 @@ describe('Profile Handler', () => {
 
     await profileCommand(mockContext);
 
-    expect(mockContext.reply).toHaveBeenCalledWith(expect.stringContaining('Profile not found'));
+    expect(mockContext.reply).toHaveBeenLastCalledWith(
+      expect.stringContaining('Profile not found'),
+    );
   });
 
   it('should handle errors when fetching profile', async () => {
@@ -70,7 +72,7 @@ describe('Profile Handler', () => {
 
     await profileCommand(mockContext);
 
-    expect(mockContext.reply).toHaveBeenCalledWith(
+    expect(mockContext.reply).toHaveBeenLastCalledWith(
       expect.stringContaining('Could not load profile'),
     );
   });
@@ -93,7 +95,7 @@ describe('Profile Handler', () => {
     } as unknown as Context;
 
     const mockUser = createMockUser({
-      firstName: 'Jane',
+      displayName: 'Jane',
       lastName: '',
       bio: '',
       location: undefined,
@@ -103,7 +105,7 @@ describe('Profile Handler', () => {
 
     await profileCommand(mockContext);
 
-    expect(mockContext.reply).toHaveBeenCalledWith(
+    expect(mockContext.reply).toHaveBeenLastCalledWith(
       expect.stringContaining('Jane'),
       expect.any(Object),
     );

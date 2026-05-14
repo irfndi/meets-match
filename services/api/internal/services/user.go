@@ -38,7 +38,7 @@ func (s *UserService) GetUser(ctx context.Context, req *pb.GetUserRequest) (*pb.
 
 	var u models.User
 	err := s.db.QueryRowContext(ctx, query, req.UserId).Scan(
-		&u.ID, &u.Username, &u.FirstName, &u.LastName, &u.Bio, &u.Age, &u.Gender,
+		&u.ID, &u.Username, &u.DisplayName, &u.LastName, &u.Bio, &u.Age, &u.Gender,
 		&u.Interests, &u.Photos, &u.Location, &u.Preferences,
 		&u.IsActive, &u.IsSleeping, &u.IsProfileComplete,
 		&u.CreatedAt, &u.UpdatedAt, &u.LastActive,
@@ -60,7 +60,7 @@ func (s *UserService) CreateUser(ctx context.Context, req *pb.CreateUserRequest)
 	}
 
 	u := protoToModel(req.User)
-	now := time.Now()
+	now := models.SQLiteTime{Time: time.Now().UTC()}
 	u.CreatedAt = now
 	u.UpdatedAt = now
 	u.LastActive = now
@@ -82,7 +82,7 @@ func (s *UserService) CreateUser(ctx context.Context, req *pb.CreateUserRequest)
 	`
 
 	_, err = s.db.ExecContext(ctx, query,
-		u.ID, u.Username, u.FirstName, u.LastName, u.Bio, u.Age, u.Gender,
+		u.ID, u.Username, u.DisplayName, u.LastName, u.Bio, u.Age, u.Gender,
 		u.Interests, u.Photos, locJSON, prefJSON,
 		u.IsActive, u.IsSleeping, u.IsProfileComplete,
 		u.CreatedAt, u.UpdatedAt, u.LastActive,
@@ -126,9 +126,9 @@ func (s *UserService) UpdateUser(ctx context.Context, req *pb.UpdateUserRequest)
 	args := []interface{}{}
 	argID := 1
 
-	if uReq.FirstName != "" {
+	if uReq.DisplayName != "" {
 		query += fmt.Sprintf(", first_name = $%d", argID)
-		args = append(args, uReq.FirstName)
+		args = append(args, uReq.DisplayName)
 		argID++
 	}
 	if uReq.Username != nil {
@@ -298,13 +298,13 @@ func modelToProto(u *models.User) *pb.User {
 
 	pbUser := &pb.User{
 		Id:                u.ID,
-		FirstName:         u.FirstName,
+		DisplayName:       u.DisplayName,
 		IsActive:          u.IsActive,
 		IsSleeping:        u.IsSleeping,
 		IsProfileComplete: u.IsProfileComplete,
-		CreatedAt:         timestamppb.New(u.CreatedAt),
-		UpdatedAt:         timestamppb.New(u.UpdatedAt),
-		LastActive:        timestamppb.New(u.LastActive),
+		CreatedAt:         timestamppb.New(u.CreatedAt.Time),
+		UpdatedAt:         timestamppb.New(u.UpdatedAt.Time),
+		LastActive:        timestamppb.New(u.LastActive.Time),
 	}
 
 	if u.Username != nil {
@@ -383,7 +383,7 @@ func protoToModel(p *pb.User) *models.User {
 
 	u := &models.User{
 		ID:                p.Id,
-		FirstName:         p.FirstName,
+		DisplayName:       p.DisplayName,
 		IsActive:          p.IsActive,
 		IsSleeping:        p.IsSleeping,
 		IsProfileComplete: p.IsProfileComplete,

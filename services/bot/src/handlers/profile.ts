@@ -28,18 +28,18 @@ export const profileCommand = (ctx: Context) =>
         return;
       }
 
-      const msg = `
-👤 Profile
-
-Name: ${user.firstName} ${user.lastName || ''}
-Username: ${user.username ? `@${user.username}` : 'N/A'}
-Age: ${user.age || 'Not set'}
-Gender: ${user.gender || 'Not set'}
-Bio: ${user.bio || 'Not set'}
-Location: ${user.location?.city || 'Unknown'}, ${user.location?.country || ''}
-
-Use the buttons below to edit your profile.
-`;
+      const msg = [
+        '👤 Profile',
+        '',
+        `Name: ${user.displayName || 'Not set'}`,
+        `Username: ${user.username ? `@${user.username}` : 'N/A'}`,
+        `Age: ${user.age || 'Not set'}`,
+        `Gender: ${user.gender || 'Not set'}`,
+        `Bio: ${user.bio || 'Not set'}`,
+        `Location: ${user.location?.city || 'Unknown'}, ${user.location?.country || ''}`,
+        '',
+        'Use the buttons below to edit your profile.',
+      ].join('\n');
       yield* Effect.tryPromise(() => ctx.reply(msg, { reply_markup: profileMenu }));
     }),
   );

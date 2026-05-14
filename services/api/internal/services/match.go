@@ -116,7 +116,7 @@ func (s *MatchService) GetPotentialMatches(ctx context.Context, req *pb.GetPoten
 	for rows.Next() {
 		var u models.User
 		err := rows.Scan(
-			&u.ID, &u.Username, &u.FirstName, &u.LastName, &u.Bio, &u.Age, &u.Gender,
+			&u.ID, &u.Username, &u.DisplayName, &u.LastName, &u.Bio, &u.Age, &u.Gender,
 			&u.Interests, &u.Photos, &u.Location, &u.Preferences,
 			&u.IsActive, &u.IsProfileComplete,
 		)
@@ -321,14 +321,15 @@ func (s *MatchService) CreateMatch(ctx context.Context, req *pb.CreateMatchReque
 
 	// Insert
 	newID := uuid.New().String()
-	now := time.Now()
+	now := time.Now().UTC()
+	nowSQLite := models.SQLiteTime{Time: now}
 
 	query := `
 		INSERT INTO matches (id, user1_id, user2_id, status, score, created_at, updated_at, user1_action, user2_action)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 	`
 	_, err = s.db.ExecContext(ctx, query,
-		newID, req.User1Id, req.User2Id, "pending", scoreJSON, now, now, "none", "none",
+		newID, req.User1Id, req.User2Id, "pending", scoreJSON, nowSQLite, nowSQLite, "none", "none",
 	)
 
 	if err != nil {
@@ -361,24 +362,41 @@ func (s *MatchService) GetMatch(ctx context.Context, req *pb.GetMatchRequest) (*
 		return nil, status.Errorf(codes.Internal, "failed to get match: %v", err)
 	}
 	if matchedAt.Valid {
-		m.MatchedAt = &matchedAt.Time
+		m.MatchedAt = &models.SQLiteTime{Time: matchedAt.Time}
 	}
+	return s.matchToProto(&m), nil
+}
 
-	// Convert to proto
+func (s *MatchService) matchToProto(m *models.Match) *pb.GetMatchResponse {
+	if m == nil {
+		return nil
+	}
+	return &pb.GetMatchResponse{Match: matchModelToProto(m)}
+}
+
+func matchModelToProto(m *models.Match) *pb.Match {
+	if m == nil {
+		return nil
+	}
 	pbMatch := &pb.Match{
 		Id:        m.ID,
 		User1Id:   m.User1ID,
 		User2Id:   m.User2ID,
 		Status:    string(m.Status),
 		Score:     m.Score.Total,
-		CreatedAt: timestamppb.New(m.CreatedAt),
-		UpdatedAt: timestamppb.New(m.UpdatedAt),
+		CreatedAt: timestamppb.New(m.CreatedAt.Time),
+		UpdatedAt: timestamppb.New(m.UpdatedAt.Time),
 	}
 	if m.MatchedAt != nil {
-		pbMatch.MatchedAt = timestamppb.New(*m.MatchedAt)
+		pbMatch.MatchedAt = timestamppb.New(m.MatchedAt.Time)
 	}
-
-	return &pb.GetMatchResponse{Match: pbMatch}, nil
+	if m.User1Action != nil {
+		pbMatch.User1Action = string(*m.User1Action)
+	}
+	if m.User2Action != nil {
+		pbMatch.User2Action = string(*m.User2Action)
+	}
+	return pbMatch
 }
 
 func (s *MatchService) LikeMatch(ctx context.Context, req *pb.LikeMatchRequest) (*pb.LikeMatchResponse, error) {
@@ -412,7 +430,8 @@ func (s *MatchService) LikeMatch(ctx context.Context, req *pb.LikeMatchRequest) 
 	// Update action
 	updateQuery := ""
 	isMatch := false
-	now := time.Now()
+	now := time.Now().UTC()
+	nowSQLite := models.SQLiteTime{Time: now}
 
 	if who == 1 {
 		if act2 == models.MatchActionLike {
@@ -430,7 +449,7 @@ func (s *MatchService) LikeMatch(ctx context.Context, req *pb.LikeMatchRequest) 
 		}
 	}
 
-	_, err = s.db.ExecContext(ctx, updateQuery, req.MatchId, now)
+	_, err = s.db.ExecContext(ctx, updateQuery, req.MatchId, nowSQLite)
 	if err != nil {
 		return nil, err
 	}
@@ -470,14 +489,14 @@ func (s *MatchService) DislikeMatch(ctx context.Context, req *pb.DislikeMatchReq
 	}
 
 	updateQuery := ""
-	now := time.Now()
+	nowSQLite := models.SQLiteTime{Time: time.Now()}
 	if who == 1 {
 		updateQuery = `UPDATE matches SET user1_action='dislike', status='rejected', updated_at=$2 WHERE id=$1`
 	} else {
 		updateQuery = `UPDATE matches SET user2_action='dislike', status='rejected', updated_at=$2 WHERE id=$1`
 	}
 
-	_, err = s.db.ExecContext(ctx, updateQuery, req.MatchId, now)
+	_, err = s.db.ExecContext(ctx, updateQuery, req.MatchId, nowSQLite)
 	if err != nil {
 		return nil, err
 	}
@@ -521,22 +540,10 @@ func (s *MatchService) GetMatchList(ctx context.Context, req *pb.GetMatchListReq
 			continue
 		}
 		if matchedAt.Valid {
-			m.MatchedAt = &matchedAt.Time
+			m.MatchedAt = &models.SQLiteTime{Time: matchedAt.Time}
 		}
 
-		pbMatch := &pb.Match{
-			Id:        m.ID,
-			User1Id:   m.User1ID,
-			User2Id:   m.User2ID,
-			Status:    string(m.Status),
-			Score:     m.Score.Total,
-			CreatedAt: timestamppb.New(m.CreatedAt),
-			UpdatedAt: timestamppb.New(m.UpdatedAt),
-		}
-		if m.MatchedAt != nil {
-			pbMatch.MatchedAt = timestamppb.New(*m.MatchedAt)
-		}
-		matches = append(matches, pbMatch)
+		matches = append(matches, matchModelToProto(&m))
 	}
 
 	// Check for errors from iterating over rows
@@ -574,14 +581,14 @@ func (s *MatchService) SkipMatch(ctx context.Context, req *pb.SkipMatchRequest) 
 	}
 
 	updateQuery := ""
-	now := time.Now()
+	nowSQLite := models.SQLiteTime{Time: time.Now()}
 	if who == 1 {
 		updateQuery = `UPDATE matches SET user1_action='skip', updated_at=$2 WHERE id=$1`
 	} else {
 		updateQuery = `UPDATE matches SET user2_action='skip', updated_at=$2 WHERE id=$1`
 	}
 
-	_, err = s.db.ExecContext(ctx, updateQuery, req.MatchId, now)
+	_, err = s.db.ExecContext(ctx, updateQuery, req.MatchId, nowSQLite)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to skip match: %v", err)
 	}

@@ -81,7 +81,7 @@ export async function editAge(conversation: Conversation<MyContext, MyContext>, 
 
 // === NAME CONVERSATION ===
 export async function editName(conversation: Conversation<MyContext, MyContext>, ctx: MyContext) {
-  await ctx.reply('Please enter your first name:', {
+  await ctx.reply('What name should other users see?', {
     reply_markup: new Keyboard().text('Cancel').resized().oneTime(),
   });
   const { message } = await conversation.wait();
@@ -102,7 +102,7 @@ export async function editName(conversation: Conversation<MyContext, MyContext>,
   const userId = String(ctx.from?.id);
 
   const result = await conversation.external(() =>
-    Effect.runPromise(Effect.either(userService.updateUser(userId, { firstName: name }))),
+    Effect.runPromise(Effect.either(userService.updateUser(userId, { displayName: name }))),
   );
 
   if (result._tag === 'Left') {
@@ -168,39 +168,116 @@ export async function editGender(conversation: Conversation<MyContext, MyContext
 }
 
 // === INTERESTS CONVERSATION ===
+
+const PREDEFINED_INTERESTS = [
+  '🎵 Music',
+  '🎬 Movies',
+  '📚 Books',
+  '☕ Coffee',
+  '🍳 Cooking',
+  '✈️ Travel',
+  '🏋️ Fitness',
+  '🎮 Gaming',
+  '📸 Photography',
+  '🐾 Pets',
+  '🌿 Nature',
+  '💻 Tech',
+  '🎨 Art',
+  '⚽ Sports',
+  '🧘 Yoga',
+  '💃 Dancing',
+];
+
+function buildInterestsKeyboard(selected: Set<string>): Keyboard {
+  const kb = new Keyboard();
+
+  for (let i = 0; i < PREDEFINED_INTERESTS.length; i++) {
+    const interest = PREDEFINED_INTERESTS[i];
+    const label = selected.has(interest) ? `✅ ${interest}` : interest;
+    kb.text(label);
+    if ((i + 1) % 3 === 0) kb.row();
+  }
+  kb.row();
+  kb.text('➕ Add Custom').row();
+  kb.text(selected.size > 0 ? '✔️ Done' : '❌ Done');
+  kb.text('Cancel').resized();
+
+  return kb;
+}
+
+function interestLabelToValue(label: string): string {
+  return label.replace(/^(✅|➕|✔️|❌)\s*/, '').toLowerCase();
+}
+
 export async function editInterests(
   conversation: Conversation<MyContext, MyContext>,
   ctx: MyContext,
 ) {
-  await ctx.reply(
-    'Enter your interests, separated by commas (max 10):\n\nExample: coding, coffee, travel, music',
-    {
-      reply_markup: new Keyboard().text('Cancel').resized().oneTime(),
-    },
-  );
+  const selected = new Set<string>();
 
-  const { message } = await conversation.wait();
+  await ctx.reply('Choose your interests (at least 1):', {
+    reply_markup: buildInterestsKeyboard(selected).oneTime(),
+  });
 
-  if (!message?.text || message.text === 'Cancel') {
-    await ctx.reply('Cancelled.', { reply_markup: { remove_keyboard: true } });
-    return;
-  }
+  let iterations = 0;
+  while (iterations < 50) {
+    iterations++;
+    const { message } = await conversation.wait();
 
-  const interests = message.text
-    .split(',')
-    .map((i) => i.trim().toLowerCase())
-    .filter((i) => i.length > 0)
-    .slice(0, 10);
+    if (!message?.text) continue;
 
-  if (interests.length === 0) {
-    await ctx.reply('Please provide at least one interest. Cancelled.', {
-      reply_markup: { remove_keyboard: true },
+    const text = message.text;
+
+    if (text === 'Cancel') {
+      await ctx.reply('Cancelled.', { reply_markup: { remove_keyboard: true } });
+      return;
+    }
+
+    if (text === '❌ Done') {
+      await ctx.reply('Please select at least one interest.');
+      await ctx.reply('Choose your interests:', {
+        reply_markup: buildInterestsKeyboard(selected).oneTime(),
+      });
+      continue;
+    }
+
+    if (text === '✔️ Done') {
+      break;
+    }
+
+    if (text === '➕ Add Custom') {
+      await ctx.reply('Type your custom interest (one word/tag):', {
+        reply_markup: new Keyboard().text('Back').resized().oneTime(),
+      });
+      const customResp = await conversation.wait();
+      if (customResp.message?.text && customResp.message.text !== 'Back') {
+        const custom = customResp.message.text.trim().toLowerCase().slice(0, 30);
+        if (custom.length > 0 && ![...selected].some((s) => interestLabelToValue(s) === custom)) {
+          selected.add(custom);
+        }
+      }
+      await ctx.reply(`Selected: ${[...selected].map(interestLabelToValue).join(', ')}`, {
+        reply_markup: buildInterestsKeyboard(selected).oneTime(),
+      });
+      continue;
+    }
+
+    const value = interestLabelToValue(text);
+    const existing = [...selected].find((s) => interestLabelToValue(s) === value);
+    if (existing) {
+      selected.delete(existing);
+    } else {
+      selected.add(text);
+    }
+
+    await ctx.reply(`Selected: ${[...selected].map(interestLabelToValue).join(', ')}`, {
+      reply_markup: buildInterestsKeyboard(selected).oneTime(),
     });
-    return;
   }
+
+  const interests = [...selected].map(interestLabelToValue);
 
   const userId = String(ctx.from?.id);
-
   const result = await conversation.external(() =>
     Effect.runPromise(Effect.either(userService.updateUser(userId, { interests }))),
   );
@@ -223,17 +300,14 @@ export async function editLocation(
   conversation: Conversation<MyContext, MyContext>,
   ctx: MyContext,
 ) {
-  await ctx.reply(
-    "Please share your location or enter your city manually (e.g., 'Seoul, South Korea'):",
-    {
-      reply_markup: new Keyboard()
-        .requestLocation('📍 Share Location')
-        .row()
-        .text('Cancel')
-        .resized()
-        .oneTime(),
-    },
-  );
+  await ctx.reply('📍 Share your location so we can find matches near you:', {
+    reply_markup: new Keyboard()
+      .requestLocation('📍 Share Location')
+      .row()
+      .text('Cancel')
+      .resized()
+      .oneTime(),
+  });
 
   const response = await conversation.wait();
 
@@ -242,40 +316,26 @@ export async function editLocation(
     return;
   }
 
-  const userId = String(ctx.from?.id);
-  let locationData: { latitude?: number; longitude?: number; city?: string; country?: string } = {};
-
-  if (response.message?.location) {
-    // User shared GPS location
-    locationData = {
-      latitude: response.message.location.latitude,
-      longitude: response.message.location.longitude,
-    };
-    // TODO: Reverse geocode to get city/country from API
-  } else if (response.message?.text) {
-    // User entered text location
-    const parts = response.message.text.split(',').map((p) => p.trim());
-    if (parts.length >= 2) {
-      locationData = {
-        city: parts[0],
-        country: parts[1],
-      };
-      // TODO: Geocode to get coordinates from API
-    } else {
-      await ctx.reply('Please use format: City, Country. Cancelled.', {
-        reply_markup: { remove_keyboard: true },
-      });
-      return;
-    }
-  } else {
-    await ctx.reply('Invalid input. Cancelled.', {
+  if (!response.message?.location) {
+    await ctx.reply('Please share your location using the button.', {
       reply_markup: { remove_keyboard: true },
     });
     return;
   }
 
+  const userId = String(ctx.from?.id);
+
   const result = await conversation.external(() =>
-    Effect.runPromise(Effect.either(userService.updateUser(userId, { location: locationData }))),
+    Effect.runPromise(
+      Effect.either(
+        userService.updateUser(userId, {
+          location: {
+            latitude: response.message?.location?.latitude,
+            longitude: response.message?.location?.longitude,
+          },
+        }),
+      ),
+    ),
   );
 
   if (result._tag === 'Left') {
@@ -286,11 +346,5 @@ export async function editLocation(
     return;
   }
 
-  const locationText = locationData.city
-    ? `${locationData.city}, ${locationData.country}`
-    : `📍 ${locationData.latitude?.toFixed(4)}, ${locationData.longitude?.toFixed(4)}`;
-
-  await ctx.reply(`✅ Location updated to ${locationText}!`, {
-    reply_markup: { remove_keyboard: true },
-  });
+  await ctx.reply('✅ Location updated!', { reply_markup: { remove_keyboard: true } });
 }
