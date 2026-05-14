@@ -32,7 +32,7 @@ export async function handleProfileCallback(ctx: MyContext, env: Env, data: stri
       return true;
     case 'profile:name':
       await startConversation(env.KV, userId, 'name');
-      await ctx.reply('Please enter your first name (1-50 characters). Type Cancel to abort.');
+      await ctx.reply('What name should other users see? (1-50 characters). Type Cancel to abort.');
       return true;
     case 'profile:gender':
       await startConversation(env.KV, userId, 'gender');
@@ -44,7 +44,7 @@ export async function handleProfileCallback(ctx: MyContext, env: Env, data: stri
       return true;
     case 'profile:location':
       await startConversation(env.KV, userId, 'location');
-      await ctx.reply('Enter your city and country, separated by a comma. Type Cancel to abort.');
+      await ctx.reply('Enter your city and country (e.g., "Jakarta, Indonesia"), or share your GPS location. Type Cancel to abort.');
       return true;
     case 'profile:close':
       await ctx.deleteMessage();

@@ -40,7 +40,7 @@ function createBot(env: Env): Bot<MyContext> {
 
   bot.use(activityTrackerMiddleware(env));
 
-  bot.command('start', startCommand);
+  bot.command('start', (ctx) => startCommand(ctx, env));
   bot.command('help', helpCommand);
   bot.command('about', aboutCommand);
   bot.command('profile', (ctx) => profileCommand(ctx, env));

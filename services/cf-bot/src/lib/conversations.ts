@@ -165,9 +165,21 @@ async function handleInterestsConversation(ctx: MyContext, env: Env, state: Conv
 }
 
 async function handleLocationConversation(ctx: MyContext, env: Env, state: ConversationState, text: string): Promise<boolean> {
+  if (ctx.message?.location) {
+    const { latitude, longitude } = ctx.message.location;
+    const success = await updateUser(env, state.userId, { location: { latitude, longitude } });
+    await clearConversationState(env.KV, state.userId);
+    if (success) {
+      await ctx.reply('📍 Location updated from GPS!', { reply_markup: { remove_keyboard: true } });
+    } else {
+      await ctx.reply('Failed to update location. Please try again later.', { reply_markup: { remove_keyboard: true } });
+    }
+    return true;
+  }
+
   const parts = text.split(',').map((s) => s.trim());
   if (parts.length < 2) {
-    await ctx.reply('Please enter city and country separated by a comma (e.g., "Jakarta, Indonesia"). Try again or type Cancel.');
+    await ctx.reply('Please enter city and country separated by a comma (e.g., "Jakarta, Indonesia"), or share your location. Try again or type Cancel.');
     return true;
   }
   const [city, country] = parts;
