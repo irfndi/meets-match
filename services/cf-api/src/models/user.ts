@@ -44,7 +44,7 @@ export class UserRepository {
           .bind(
             user.id,
             user.username ?? null,
-            user.firstName ?? null,
+            user.displayName ?? "User",
             user.lastName ?? null,
             user.bio ?? null,
             user.age ?? null,
@@ -75,14 +75,14 @@ export class UserRepository {
         if (!existing) {
           await this.db.prepare(
             `INSERT INTO users (id, first_name) VALUES (?, ?)`
-          ).bind(req.userId, user.firstName ?? "User").run();
+          ).bind(req.userId, user.displayName ?? "User").run();
         }
 
         const fields: string[] = [];
         const values: unknown[] = [];
 
         if (user.username !== undefined) { fields.push("username = ?"); values.push(user.username); }
-        if (user.firstName !== undefined) { fields.push("first_name = ?"); values.push(user.firstName); }
+        if (user.displayName !== undefined) { fields.push("first_name = ?"); values.push(user.displayName); }
         if (user.lastName !== undefined) { fields.push("last_name = ?"); values.push(user.lastName); }
         if (user.bio !== undefined) { fields.push("bio = ?"); values.push(user.bio); }
         if (user.age !== undefined) { fields.push("age = ?"); values.push(user.age); }
@@ -155,7 +155,7 @@ export class UserRepository {
     return {
       id: String(row.id),
       username: row.username ? String(row.username) : undefined,
-      firstName: row.first_name ? String(row.first_name) : undefined,
+      displayName: row.first_name ? String(row.first_name) : undefined,
       lastName: row.last_name ? String(row.last_name) : undefined,
       bio: row.bio ? String(row.bio) : undefined,
       age: row.age ? Number(row.age) : undefined,

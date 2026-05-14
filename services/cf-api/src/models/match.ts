@@ -223,7 +223,7 @@ export class MatchRepository {
     return {
       id: String(row.id),
       username: row.username ? String(row.username) : undefined,
-      firstName: row.first_name ? String(row.first_name) : undefined,
+      displayName: row.first_name ? String(row.first_name) : undefined,
       lastName: row.last_name ? String(row.last_name) : undefined,
       bio: row.bio ? String(row.bio) : undefined,
       age: row.age ? Number(row.age) : undefined,
