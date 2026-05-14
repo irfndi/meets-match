@@ -37,7 +37,7 @@ describe('Start Handler', () => {
       expect.objectContaining({
         id: '123456',
         username: 'testuser',
-        firstName: 'Test',
+        displayName: 'Test',
         lastName: 'User',
         isActive: true,
       }),
@@ -100,7 +100,7 @@ describe('Start Handler', () => {
     expect(userService.createUser).toHaveBeenCalledWith(
       expect.objectContaining({
         id: '789',
-        firstName: 'NoUsername',
+        displayName: 'NoUsername',
       }),
     );
     expect(mockContext.reply).toHaveBeenCalled();

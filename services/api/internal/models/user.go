@@ -136,7 +136,7 @@ func (p *Preferences) Scan(value interface{}) error {
 type User struct {
 	ID                string      `json:"id" db:"id"`
 	Username          *string     `json:"username,omitempty" db:"username"`
-	FirstName         string      `json:"first_name" db:"first_name"`
+	DisplayName         string      `json:"first_name" db:"first_name"`
 	LastName          *string     `json:"last_name,omitempty" db:"last_name"`
 	Bio               *string     `json:"bio,omitempty" db:"bio"`
 	Age               *int        `json:"age,omitempty" db:"age"`

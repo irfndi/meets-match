@@ -18,7 +18,7 @@ async function fetchMatches(env: Env, userId: string) {
 }
 
 function formatMatch(match: Record<string, unknown>): string {
-  const name = (match.firstName ?? match.first_name ?? "Unknown") as string;
+  const name = (match.displayName ?? match.first_name ?? "Unknown") as string;
   const age = match.age ?? "?";
   const bio = match.bio ? `\n📝 ${match.bio}` : "";
   return `💕 ${name}, ${age}${bio}\nMatched at: ${match.matched_at ?? "recently"}`;

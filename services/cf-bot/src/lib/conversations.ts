@@ -117,7 +117,7 @@ async function handleNameConversation(ctx: MyContext, env: Env, state: Conversat
     await ctx.reply('Name must be 1-50 characters. Try again or type Cancel.');
     return true;
   }
-  const success = await updateUser(env, state.userId, { firstName: name });
+  const success = await updateUser(env, state.userId, { displayName: name });
   await clearConversationState(env.KV, state.userId);
   if (success) {
     await ctx.reply(`Name updated to ${name}!`, { reply_markup: { remove_keyboard: true } });

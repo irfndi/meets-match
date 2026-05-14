@@ -38,7 +38,7 @@ describe.skipIf(skipTests)('Bot-API Integration', () => {
       Effect.either(
         userService.createUser({
           id: TEST_USER_ID,
-          firstName: 'Integration',
+          displayName: 'Integration',
           lastName: 'Test',
           isActive: true,
         }),
@@ -52,7 +52,7 @@ describe.skipIf(skipTests)('Bot-API Integration', () => {
 
     expect(getResult._tag).toBe('Right');
     if (getResult._tag === 'Right') {
-      expect(getResult.right.user?.firstName).toBe('Integration');
+      expect(getResult.right.user?.displayName).toBe('Integration');
     }
   });
 

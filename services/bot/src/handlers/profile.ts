@@ -31,7 +31,7 @@ export const profileCommand = (ctx: Context) =>
       const msg = [
         '👤 Profile',
         '',
-        `Name: ${user.firstName || 'Not set'}`,
+        `Name: ${user.displayName || 'Not set'}`,
         `Username: ${user.username ? `@${user.username}` : 'N/A'}`,
         `Age: ${user.age || 'Not set'}`,
         `Gender: ${user.gender || 'Not set'}`,

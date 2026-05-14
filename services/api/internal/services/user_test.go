@@ -53,7 +53,7 @@ func TestUserService_CreateAndGetUser(t *testing.T) {
 		User: &pb.User{
 			Id:        userID,
 			Username:  "testuser",
-			FirstName: "Test",
+			DisplayName: "Test",
 			LastName:  "User",
 		},
 	}
@@ -73,15 +73,15 @@ func TestUserService_CreateAndGetUser(t *testing.T) {
 		t.Fatalf("GetUser failed: %v", err)
 	}
 
-	if getResp.User.FirstName != "Test" {
-		t.Errorf("Expected FirstName Test, got %s", getResp.User.FirstName)
+	if getResp.User.DisplayName != "Test" {
+		t.Errorf("Expected DisplayName Test, got %s", getResp.User.DisplayName)
 	}
 
 	// Update
 	updateReq := &pb.UpdateUserRequest{
 		UserId: userID,
 		User: &pb.User{
-			FirstName: "UpdatedTest",
+			DisplayName: "UpdatedTest",
 			Bio:       "Updated Bio",
 		},
 	}
@@ -89,8 +89,8 @@ func TestUserService_CreateAndGetUser(t *testing.T) {
 	if err != nil {
 		t.Fatalf("UpdateUser failed: %v", err)
 	}
-	if updateResp.User.FirstName != "UpdatedTest" {
-		t.Errorf("Expected FirstName UpdatedTest, got %s", updateResp.User.FirstName)
+	if updateResp.User.DisplayName != "UpdatedTest" {
+		t.Errorf("Expected DisplayName UpdatedTest, got %s", updateResp.User.DisplayName)
 	}
 
 	// Verify Update

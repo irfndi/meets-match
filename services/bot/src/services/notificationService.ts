@@ -175,10 +175,10 @@ Start a conversation now 👋
   enqueueWelcome: (
     userId: string,
     chatId: string,
-    firstName: string,
+    displayName: string,
   ): Effect.Effect<EnqueueNotificationResponse, unknown> => {
     const text = `
-👋 Welcome to MeetMatch, *${firstName}*!
+👋 Welcome to MeetMatch, *${displayName}*!
 
 I'm here to help you find meaningful connections.
 

@@ -116,7 +116,7 @@ func (s *MatchService) GetPotentialMatches(ctx context.Context, req *pb.GetPoten
 	for rows.Next() {
 		var u models.User
 		err := rows.Scan(
-			&u.ID, &u.Username, &u.FirstName, &u.LastName, &u.Bio, &u.Age, &u.Gender,
+			&u.ID, &u.Username, &u.DisplayName, &u.LastName, &u.Bio, &u.Age, &u.Gender,
 			&u.Interests, &u.Photos, &u.Location, &u.Preferences,
 			&u.IsActive, &u.IsProfileComplete,
 		)

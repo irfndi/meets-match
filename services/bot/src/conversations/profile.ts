@@ -102,7 +102,7 @@ export async function editName(conversation: Conversation<MyContext, MyContext>,
   const userId = String(ctx.from?.id);
 
   const result = await conversation.external(() =>
-    Effect.runPromise(Effect.either(userService.updateUser(userId, { firstName: name }))),
+    Effect.runPromise(Effect.either(userService.updateUser(userId, { displayName: name }))),
   );
 
   if (result._tag === 'Left') {

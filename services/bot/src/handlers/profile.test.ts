@@ -25,7 +25,7 @@ describe('Profile Handler', () => {
     } as unknown as Context;
 
     const mockUser = createMockUser({
-      firstName: 'John',
+      displayName: 'John',
       lastName: 'Doe',
       username: 'johndoe',
       age: 25,
@@ -95,7 +95,7 @@ describe('Profile Handler', () => {
     } as unknown as Context;
 
     const mockUser = createMockUser({
-      firstName: 'Jane',
+      displayName: 'Jane',
       lastName: '',
       bio: '',
       location: undefined,
