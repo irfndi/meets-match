@@ -1,38 +1,47 @@
 import type { MyContext } from '../types.js';
-
-const HELP_MESSAGE = `
-🤖 *MeetMatch Bot Help*
-
-*Commands:*
-/start — Get started
-/profile — View or edit your profile
-/match — Find your next match
-/matches — View your current matches
-/settings — Adjust your preferences
-/about — About MeetMatch
-
-*Tips:*
-• Complete your profile for better matches
-• Use /settings to adjust age range and distance
-• Matches are based on interests, location, and preferences
-
-Need more help? Contact support.
-`;
-
-const ABOUT_MESSAGE = `
-🌟 *About MeetMatch*
-
-MeetMatch helps you find people with similar interests near you.
-
-Built with ❤️ using modern tech stack.
-
-Version: 0.0.1
-`;
+import { getMainMenuKeyboard } from '../lib/main-menu.js';
+import { versionInfo, formatDuration } from '../lib/version.js';
 
 export const helpCommand = async (ctx: MyContext): Promise<void> => {
-  await ctx.reply(HELP_MESSAGE, { parse_mode: 'Markdown' });
+  const msg = [
+    '🤖 *MeetMatch Bot*',
+    '',
+    '*Commands:*',
+    '*/start* — Get started',
+    '*/profile* — View or edit your profile',
+    '*/match* — Find your next match',
+    '*/matches* — View your matches and likes',
+    '*/settings* — Adjust your preferences',
+    '*/help* — Show this help',
+    '*/about* — About MeetMatch',
+    '',
+    '*Tips:*',
+    '• Complete your profile for better matches',
+    '• Use */settings* to adjust age range and distance',
+    '• Matches are based on interests, location, and preferences',
+    '',
+    'Need help? Contact support.',
+  ].join('\n');
+
+  await ctx.reply(msg, { parse_mode: 'Markdown', reply_markup: getMainMenuKeyboard() });
 };
 
 export const aboutCommand = async (ctx: MyContext): Promise<void> => {
-  await ctx.reply(ABOUT_MESSAGE, { parse_mode: 'Markdown' });
+  const { version, environment, builtAt } = versionInfo;
+  const serverAge = formatDuration(builtAt);
+
+  const msg = [
+    '🌟 *About MeetMatch*',
+    '',
+    'MeetMatch helps you find people with similar interests near you.',
+    '',
+    'Built with ❤️ using modern tech.',
+    '',
+    `*Version:* ${version}`,
+    `*Environment:* ${environment}`,
+    `*Last updated:* ${builtAt}`,
+    `*Server age:* ${serverAge}`,
+  ].join('\n');
+
+  await ctx.reply(msg, { parse_mode: 'Markdown', reply_markup: getMainMenuKeyboard() });
 };

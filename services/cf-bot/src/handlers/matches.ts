@@ -4,6 +4,7 @@ import type { Env } from "../index.js";
 import { ensureUserExists, getProfileCompleteness, getMissingFieldsDisplay, isPhoneVerified } from "../lib/user-utils.js";
 import { promptPhoneVerification } from "../lib/conversations.js";
 import { getNotifications, removeNotification, type LikeNotification, type MutualMatchNotification } from "../lib/notifications.js";
+import { getMainMenuKeyboard } from "../lib/main-menu.js";
 import { type Language } from "../lib/i18n.js";
 import { ApiServiceClient } from "../services/api-client.js";
 
@@ -66,7 +67,8 @@ export const matchesCommand = async (ctx: MyContext, env: Env): Promise<void> =>
 
   if (!complete) {
     await ctx.reply(
-      `⚠️ You need to complete your profile before viewing matches.\n\nMissing fields:\n${getMissingFieldsDisplay(missing)}\n\nUse /profile to update your info.`
+      `⚠️ *Almost there!*\n\nComplete your profile before viewing matches:\n\n${getMissingFieldsDisplay(missing)}\n\nTap *👤 Profile* to finish setting up.`,
+      { parse_mode: "Markdown", reply_markup: getMainMenuKeyboard() }
     );
     return;
   }
@@ -119,7 +121,8 @@ export const matchesCommand = async (ctx: MyContext, env: Env): Promise<void> =>
 
   if (totalMatches === 0 && totalPending === 0 && notifications.length === 0) {
     await ctx.reply(
-      "💑 No matches or likes yet. Use /match to find potential matches, then like someone who likes you back!"
+      "💑 *No matches yet.*\n\nUse *🔍 Find Match* to discover people, then like someone who likes you back!",
+      { parse_mode: "Markdown", reply_markup: getMainMenuKeyboard() }
     );
     return;
   }

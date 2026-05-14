@@ -2,6 +2,7 @@ import type { MyContext } from '../types.js';
 import { getProfileMenu } from '../menus/profile.js';
 import type { Env } from '../index.js';
 import { ensureUserExists, getProfileCompleteness, getMissingFieldsDisplay } from '../lib/user-utils.js';
+import { getMainMenuKeyboard } from '../lib/main-menu.js';
 
 export const profileCommand = async (ctx: MyContext, env: Env): Promise<void> => {
   if (!ctx.from) {
@@ -17,37 +18,45 @@ export const profileCommand = async (ctx: MyContext, env: Env): Promise<void> =>
 
   const { user } = result;
   const name = user.displayName || 'Not set';
-  const username = user.username ? `@${user.username}` : 'N/A';
-  const age = user.age || 'Not set';
-  const gender = user.gender || 'Not set';
+  const username = user.username ? `@${user.username}` : 'Not set';
+  const age = user.age ?? 'Not set';
+  const gender = user.gender ? (user.gender as string).charAt(0).toUpperCase() + (user.gender as string).slice(1) : 'Not set';
   const bio = user.bio || 'Not set';
   const loc = user.location;
-  const locationText = loc?.city ? `${loc.city}, ${loc.country}` : loc?.latitude ? `📍 Shared` : 'Not set';
+  const locationText = loc?.city ? `${loc.city}, ${loc.country}` : loc?.latitude ? '📍 Shared' : 'Not set';
+  const interests = user.interests && Array.isArray(user.interests) && user.interests.length > 0
+    ? (user.interests as string[]).join(', ')
+    : 'Not set';
 
   const { complete, missing } = getProfileCompleteness(user);
 
   const msgParts = [
-    '👤 Profile',
+    '👤 *Your Profile*',
     '',
-    `Name: ${name}`,
-    `Username: ${username}`,
-    `Age: ${age}`,
-    `Gender: ${gender}`,
-    `Bio: ${bio}`,
-    `Location: ${locationText}`,
+    `*Name:* ${name}`,
+    `*Username:* ${username}`,
+    `*Age:* ${age}`,
+    `*Gender:* ${gender}`,
+    `*Bio:* ${bio}`,
+    `*Location:* ${locationText}`,
+    `*Interests:* ${interests}`,
   ];
 
   if (!complete) {
     msgParts.push(
       '',
-      '⚠️ Your profile is incomplete. To start matching, please fill in:',
+      '⚠️ *Profile Incomplete*',
+      'To start matching, please fill in:',
       getMissingFieldsDisplay(missing)
     );
+  } else {
+    msgParts.push('', '✅ *Profile complete!* Ready to match.');
   }
 
   msgParts.push('', 'Select a field to edit:');
 
   await ctx.reply(msgParts.join('\n'), {
+    parse_mode: 'Markdown',
     reply_markup: getProfileMenu(env),
   });
 };

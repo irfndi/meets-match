@@ -2,6 +2,7 @@ import { InlineKeyboard } from "grammy";
 import type { MyContext } from "../types.js";
 import type { Env } from "../index.js";
 import { ensureUserExists, getProfileCompleteness, getMissingFieldsDisplay } from "../lib/user-utils.js";
+import { getMainMenuKeyboard } from "../lib/main-menu.js";
 import { t, SUPPORTED_LANGUAGES, DEFAULT_LANGUAGE, type Language } from "../lib/i18n.js";
 
 export function buildLanguageKeyboard(): InlineKeyboard {
@@ -56,12 +57,16 @@ export const startCommand = async (ctx: MyContext, env: Env): Promise<void> => {
 
   if (!complete) {
     await ctx.reply(
-      t("welcomeBackIncomplete", lang, { missing: getMissingFieldsDisplay(missing) })
+      t("welcomeBackIncomplete", lang, { missing: getMissingFieldsDisplay(missing) }),
+      { reply_markup: getMainMenuKeyboard(), parse_mode: "Markdown" }
     );
     return;
   }
 
-  await ctx.reply(t("welcomeBack", lang));
+  await ctx.reply(t("welcomeBack", lang), {
+    reply_markup: getMainMenuKeyboard(),
+    parse_mode: "Markdown",
+  });
 };
 
 export const languageCallback = async (ctx: MyContext, env: Env, data: string): Promise<boolean> => {
@@ -75,6 +80,7 @@ export const languageCallback = async (ctx: MyContext, env: Env, data: string): 
   await setUserLanguage(env, userId, selectedLang);
 
   await ctx.answerCallbackQuery("Language set to English 🇬🇧");
-  await ctx.editMessageText(t("welcomeNew", selectedLang));
+  await ctx.editMessageText(t("welcomeNew", selectedLang), { parse_mode: "Markdown" });
+  await ctx.reply("Use the menu below to get started:", { reply_markup: getMainMenuKeyboard() });
   return true;
 };

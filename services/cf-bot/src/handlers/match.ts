@@ -5,6 +5,7 @@ import { ensureUserExists, getProfileCompleteness, getMissingFieldsDisplay, isPh
 import { addNotification } from "../lib/notifications.js";
 import { promptPhoneVerification } from "../lib/conversations.js";
 import { ApiServiceClient } from "../services/api-client.js";
+import { getMainMenuKeyboard } from "../lib/main-menu.js";
 import { t, type Language } from "../lib/i18n.js";
 
 function getLang(user: Record<string, unknown> | UserProfile): Language {
@@ -123,11 +124,14 @@ export const matchCommand = async (ctx: MyContext, env: Env): Promise<void> => {
 
   const userId = String(ctx.from.id);
 
-  await ctx.reply(t("matchFinding", lang));
+  await ctx.reply(t("matchFinding", lang), { parse_mode: "Markdown" });
 
   const users = await fetchPotentialMatches(env, userId, 5);
   if (users.length === 0) {
-    await ctx.reply(t("matchNoMatches", lang));
+    await ctx.reply(t("matchNoMatches", lang), {
+      parse_mode: "Markdown",
+      reply_markup: getMainMenuKeyboard(),
+    });
     return;
   }
 
@@ -194,7 +198,7 @@ async function handleMatchAction(
           timestamp: new Date().toISOString(),
         });
       } else {
-        await ctx.reply(t("matchLikeSuccess", lang));
+        await ctx.reply(t("matchLikeSuccess", lang), { reply_markup: getMainMenuKeyboard() });
 
         // Store like notification for target user
         await addNotification(env, targetUserId, {
@@ -212,7 +216,7 @@ async function handleMatchAction(
           body: JSON.stringify({ userId }),
         })
       );
-      await ctx.reply(t("matchDislikeSuccess", lang));
+      await ctx.reply(t("matchDislikeSuccess", lang), { reply_markup: getMainMenuKeyboard() });
     } else if (action === "skip") {
       await env.API_SERVICE.fetch(
         new Request(`http://api/matches/${matchId}/skip`, {
@@ -221,11 +225,11 @@ async function handleMatchAction(
           body: JSON.stringify({ userId }),
         })
       );
-      await ctx.reply(t("matchSkipSuccess", lang));
+      await ctx.reply(t("matchSkipSuccess", lang), { reply_markup: getMainMenuKeyboard() });
     }
   } catch (error) {
     console.error("Match action error:", error);
-    await ctx.reply(t("matchError", lang));
+    await ctx.reply(t("matchError", lang), { reply_markup: getMainMenuKeyboard() });
   }
   await ctx.answerCallbackQuery("Done!");
 }

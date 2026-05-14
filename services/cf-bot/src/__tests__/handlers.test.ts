@@ -114,12 +114,12 @@ describe("Bot Handlers", () => {
       expect(message).toContain("/about");
     });
 
-    it("should use Markdown parse mode", async () => {
+    it("should use Markdown parse mode with main menu keyboard", async () => {
       const ctx = mockCtx();
       await helpCommand(ctx);
       expect(ctx.reply).toHaveBeenCalledWith(
         expect.any(String),
-        { parse_mode: "Markdown" },
+        expect.objectContaining({ parse_mode: "Markdown" }),
       );
     });
   });
@@ -144,7 +144,7 @@ describe("Bot Handlers", () => {
         KV: createMockKV(),
       } as any;
       await matchCommand(ctx, env);
-      expect(ctx.reply).toHaveBeenCalledWith(expect.stringContaining("complete your profile"));
+      expect(ctx.reply).toHaveBeenCalledWith(expect.stringContaining("Almost there"));
     });
 
     it("should reply with finding matches message for complete user", async () => {
@@ -171,7 +171,10 @@ describe("Bot Handlers", () => {
         KV: createMockKV(),
       } as any;
       await matchesCommand(ctx, env);
-      expect(ctx.reply).toHaveBeenCalledWith(expect.stringContaining("complete your profile"));
+      expect(ctx.reply).toHaveBeenCalledWith(
+        expect.stringContaining("Almost there"),
+        expect.any(Object),
+      );
     });
 
     it("should reply with no matches message when empty for complete user", async () => {
@@ -186,7 +189,8 @@ describe("Bot Handlers", () => {
       } as any;
       await matchesCommand(ctx, env);
       expect(ctx.reply).toHaveBeenCalledWith(
-        expect.stringContaining("No matches"),
+        expect.stringContaining("No matches yet"),
+        expect.any(Object),
       );
     });
   });

@@ -10,6 +10,7 @@ import { activityTrackerMiddleware } from "./lib/activityTracker.js";
 import { handleConversationMessage, handleContactMessage, handleLocationMessage } from "./lib/conversations.js";
 import { handleProfileCallback } from "./menus/profile.js";
 import { getNotifications, clearNotifications } from "./lib/notifications.js";
+import { getMainMenuKeyboard } from "./lib/main-menu.js";
 import { InlineKeyboard } from "grammy";
 import { t, type Language } from "./lib/i18n.js";
 
@@ -64,6 +65,17 @@ function createBot(env: Env): Bot<MyContext> {
     }
     return next();
   });
+
+  // Register visible BotFather commands (clean, minimal set)
+  void bot.api.setMyCommands([
+    { command: "start", description: "Get started with MeetMatch" },
+    { command: "profile", description: "View or edit your profile" },
+    { command: "match", description: "Find your next match" },
+    { command: "matches", description: "View your matches and likes" },
+    { command: "settings", description: "Adjust match preferences" },
+    { command: "help", description: "How to use MeetMatch" },
+    { command: "about", description: "About MeetMatch" },
+  ]);
 
   bot.command("start", (ctx) => startCommand(ctx, env));
   bot.command("help", helpCommand);
@@ -128,7 +140,10 @@ function createBot(env: Env): Bot<MyContext> {
   bot.on("message:text", async (ctx) => {
     const handled = await handleConversationMessage(ctx, env);
     if (handled) return;
-    await ctx.reply("Got it. Use /help to see available commands.");
+    await ctx.reply(
+      "I'm not sure what you mean. Use the menu below or try /help for guidance.",
+      { reply_markup: getMainMenuKeyboard() }
+    );
   });
 
   return bot;

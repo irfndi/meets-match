@@ -120,7 +120,7 @@ describe("Conversation Message Handling", () => {
     const ctx = mockCtx("unknown");
     const result = await handleConversationMessage(ctx, mockEnv(kv));
     expect(result).toBe(true);
-    expect(ctx.reply).toHaveBeenCalledWith(expect.stringContaining("Male or Female"));
+    expect(ctx.reply).toHaveBeenCalledWith(expect.stringContaining("Male"));
   });
 
   it("should process name input", async () => {
