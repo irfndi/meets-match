@@ -14,6 +14,13 @@ type SQLiteTime struct{ time.Time }
 var _ sql.Scanner = (*SQLiteTime)(nil)
 var _ driver.Valuer = (*SQLiteTime)(nil)
 
+var timeLayouts = []string{
+	"2006-01-02 15:04:05.999999",
+	"2006-01-02 15:04:05",
+	time.RFC3339,
+	time.RFC3339Nano,
+}
+
 func (st *SQLiteTime) Scan(value interface{}) error {
 	if value == nil {
 		st.Time = time.Time{}
@@ -24,13 +31,7 @@ func (st *SQLiteTime) Scan(value interface{}) error {
 		st.Time = v
 		return nil
 	case string:
-		layouts := []string{
-			"2006-01-02 15:04:05.999999",
-			"2006-01-02 15:04:05",
-			time.RFC3339,
-			time.RFC3339Nano,
-		}
-		for _, layout := range layouts {
+		for _, layout := range timeLayouts {
 			if t, err := time.Parse(layout, v); err == nil {
 				st.Time = t
 				return nil
@@ -47,7 +48,7 @@ func (st SQLiteTime) Value() (driver.Value, error) {
 	if st.IsZero() {
 		return nil, nil
 	}
-	return st.Format("2006-01-02 15:04:05.999999"), nil
+	return st.Format(time.RFC3339Nano), nil
 }
 
 type StringArray []string
