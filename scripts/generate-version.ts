@@ -1,6 +1,10 @@
 import { execSync } from "child_process";
 import { writeFileSync } from "fs";
-import { resolve } from "path";
+import { resolve, dirname } from "path";
+import { fileURLToPath } from "url";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const projectRoot = resolve(__dirname, "..");
 
 function getGitVersion(): string {
   try {
@@ -82,7 +86,7 @@ export function formatDuration(isoDate: string): string {
 }
 `;
 
-  writeFileSync(resolve(outPath), content, "utf-8");
+  writeFileSync(resolve(projectRoot, outPath), content, "utf-8");
   console.log(`Generated version info for ${serviceName}:`);
   console.log(`  version: ${version}`);
   console.log(`  commit: ${commit}`);
