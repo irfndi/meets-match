@@ -1,148 +1,115 @@
-# MeetMatch Telegram Bot
+# MeetMatch -- Telegram Matchmaking Bot
 
-A Telegram-based matchmaking bot that helps users find and connect with compatible matches based on interests, location, and preferences.
-
-## Overview
-
-MeetMatch is a Telegram matchmaking bot built with Go and TypeScript that facilitates user matching based on:
-- Location proximity
-- Shared interests
-- User preferences (age, gender, relationship type)
+MeetMatch is a Telegram bot that connects people based on shared interests, location proximity, and personal preferences. Users set up a profile, browse curated matches, and start conversations directly in Telegram. No apps to install, no websites to visit.
 
 ## Architecture
 
-The project uses a microservices architecture with three main components:
+The application runs entirely on Cloudflare Workers, split across three independently deployed services:
 
-- **API Service** (`services/api/`) - Go-based gRPC/HTTP API with SQLite database
-- **Bot Service** (`services/bot/`) - TypeScript/Bun Telegram bot client
-- **Worker Service** (`services/worker/`) - Go background job processor (optional)
+- **cf-api** -- HTTP API backed by D1 and KV. Handles user profiles, match queries, preference management, and all CRUD operations. Exposes endpoints consumed by the bot and by scheduled background jobs.
+- **cf-bot** -- Telegram webhook bot powered by Grammy. Receives inline commands and callback queries, calls cf-api via service bindings, and renders match results, profile cards, and menus inline.
+- **cf-worker** -- Background job processor triggered by cron triggers and Cloudflare Queues. Runs periodic match scoring, notification delivery, and housekeeping tasks.
 
-### Communication Flow
-
-```
-Telegram → Bot Service (TS/Bun) → gRPC → API Service (Go/SQLite)
-                                           ↓
-                                    Worker Service (Go/Redis)
-```
+All three Workers share logic through an internal package (`cf-shared`) and communicate via Cloudflare Service Bindings. Queues handle async work that doesn't need to block a webhook response.
 
 ## Tech Stack
 
-- **Go 1.25+** - API and Worker services
-- **TypeScript 5+** - Bot service
-- **Bun** - JavaScript runtime for bot
-- **SQLite** - Database (via modernc.org/sqlite)
-- **Redis** - Job queue (for notifications)
-- **gRPC + ConnectRPC** - Inter-service communication
-- **Grammy** - Telegram Bot framework
-- **Fiber** - HTTP framework for API
+- **Effect TS** -- typed, composable effects for error handling, dependency injection, and structured concurrency
+- **Cloudflare Workers** -- serverless compute at the edge
+- **D1** -- SQLite-compatible relational database (binding: `meetsmatch-db`)
+- **KV** -- low-latency key-value store (binding: `meetsmatch-kv`)
+- **Queues** -- async message delivery between cf-bot and cf-worker
+- **Service Bindings** -- zero-latency internal RPC between Workers
+- **Grammy** -- Telegram Bot API framework
+- **vitest** -- unit and integration testing
 
 ## Local Development
 
 ### Prerequisites
 
-- Go 1.25+
-- Bun 1.3+
-- SQLite (embedded, no separate install needed)
-- Redis (optional, for notifications)
-- Buf (for protobuf generation)
+- Node 20+
+- pnpm
+- Wrangler CLI (`npm install -g wrangler`)
 
 ### Setup
 
-1. **Clone the repository**:
-   ```bash
-   git clone <repository-url>
-   cd meetsmatch
-   ```
+```bash
+pnpm install
 
-2. **Generate protobufs**:
-   ```bash
-   buf generate
-   ```
+# Copy environment template and fill in your values
+cp .dev.vars.example services/cf-bot/.dev.vars
+cp .dev.vars.example services/cf-worker/.dev.vars
 
-3. **Install dependencies**:
-   ```bash
-   # Go services
-   cd services/api && go mod tidy
-   cd services/worker && go mod tidy
+# Apply D1 migrations locally
+cd services/cf-api && npx wrangler d1 migrations apply meetsmatch-db --local
+```
 
-   # Bot service
-   cd services/bot && bun install
-   ```
+Minimal required env var: `BOT_TOKEN`.
 
-4. **Configure Environment**:
-   Copy `.env.example` to `.env` and fill in your credentials.
-   ```bash
-   cp .env.example .env
-   ```
+### Run Services
 
-5. **Start the API**:
-   ```bash
-   cd services/api && go run cmd/api/main.go
-   ```
+Start all three Workers locally (each in its own terminal):
 
-6. **Start the Bot** (in another terminal):
-   ```bash
-   cd services/bot && bun run dev
-   ```
+```bash
+pnpm dev:api      # cf-api on port 8787
+pnpm dev:bot      # cf-bot on port 8788
+pnpm dev:worker   # cf-worker on port 8789
+```
+
+For local Telegram webhook testing, expose cf-bot with a tunnel (e.g. ngrok) and register the URL with Telegram's `setWebhook` API.
 
 ## Project Structure
 
-```text
+```
 services/
-├── api/               # Go API service (gRPC + HTTP)
-│   ├── cmd/api/       # Main entry point
-│   ├── internal/      # Internal packages
-│   │   ├── services/  # Business logic (user, match, notification)
-│   │   ├── models/    # Data models
-│   │   └── config/    # Configuration
-│   └── migrations/    # SQLite schema migrations
-├── bot/               # TypeScript Telegram bot
-│   ├── src/handlers/  # Command and callback handlers
-│   ├── src/services/  # Bot services
-│   └── src/lib/       # Utilities
-└── worker/            # Go background worker
-    ├── cmd/worker/    # Main entry point
-    └── internal/      # Job processors
-
+  cf-api/           # HTTP API Worker (D1 + KV)
+    src/
+      index.ts      # Entry point
+      http/         # Route handlers
+      models/       # Data models
+      services/     # Business logic
+    migrations/     # D1 SQL migrations
+  cf-bot/           # Telegram webhook Worker
+    src/
+      index.ts      # Entry point
+      handlers/     # Telegram update handlers
+      menus/        # Inline keyboard menus
+      services/     # Bot-specific services
+  cf-worker/        # Background job Worker
+    src/
+      index.ts      # Entry point
+      jobs/         # Cron + Queue job handlers
+      notifications/ # Notification delivery logic
 packages/
-└── contracts/         # Shared protobuf definitions
+  cf-shared/        # Shared Effect TS schemas, services, config, and utils
+docs/               # Project documentation
+.github/workflows/  # CI/CD pipelines
 ```
 
 ## Deployment
 
-### Docker / Coolify
-
-The project includes a `Dockerfile` for containerized deployment via Coolify:
+Deploy each Worker independently:
 
 ```bash
-docker build -t meetsmatch-bot .
-docker run -e BOT_TOKEN=<token> -p 3000:3000 meetsmatch-bot
+pnpm deploy:api
+pnpm deploy:bot
+pnpm deploy:worker
 ```
 
-### Environment Variables
+Set required environment variables in the Cloudflare dashboard or via `wrangler secret put`.
 
-Key environment variables (see `.env.example` for full list):
+## Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `BOT_TOKEN` | Telegram bot token | Required |
-| `DATABASE_URL` | SQLite database path | `file:meetsmatch.db` |
-| `API_URL` | API service URL | `http://localhost:8080` |
-| `REDIS_URL` | Redis connection | `redis://localhost:6379` |
+| Variable | Required | Description |
+|---|---|---|
+| `BOT_TOKEN` | Yes | Telegram Bot API token from @BotFather |
+| `SENTRY_DSN` | No | Sentry project DSN for error reporting |
+| `SENTRY_ENVIRONMENT` | No | Sentry environment tag (`production`, `staging`, etc.) |
+| `ENABLE_SENTRY` | No | Set to `true` to enable Sentry error reporting |
 
 ## Testing
 
 ```bash
-# Go API tests
-cd services/api && go test ./...
-
-# Bot tests
-cd services/bot && bun run test
-
-# Full CI
-cd services/api && make ci
+pnpm test          # Run the full test suite with vitest
+pnpm lint          # Type-check the entire monorepo (tsc --build --force)
 ```
-
-## License
-
-MIT
