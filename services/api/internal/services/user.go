@@ -298,7 +298,7 @@ func modelToProto(u *models.User) *pb.User {
 
 	pbUser := &pb.User{
 		Id:                u.ID,
-		DisplayName:         u.DisplayName,
+		DisplayName:       u.DisplayName,
 		IsActive:          u.IsActive,
 		IsSleeping:        u.IsSleeping,
 		IsProfileComplete: u.IsProfileComplete,
@@ -383,7 +383,7 @@ func protoToModel(p *pb.User) *models.User {
 
 	u := &models.User{
 		ID:                p.Id,
-		DisplayName:         p.DisplayName,
+		DisplayName:       p.DisplayName,
 		IsActive:          p.IsActive,
 		IsSleeping:        p.IsSleeping,
 		IsProfileComplete: p.IsProfileComplete,

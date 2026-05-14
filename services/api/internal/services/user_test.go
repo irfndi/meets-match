@@ -51,10 +51,10 @@ func TestUserService_CreateAndGetUser(t *testing.T) {
 	// Create
 	req := &pb.CreateUserRequest{
 		User: &pb.User{
-			Id:        userID,
-			Username:  "testuser",
+			Id:          userID,
+			Username:    "testuser",
 			DisplayName: "Test",
-			LastName:  "User",
+			LastName:    "User",
 		},
 	}
 
@@ -82,7 +82,7 @@ func TestUserService_CreateAndGetUser(t *testing.T) {
 		UserId: userID,
 		User: &pb.User{
 			DisplayName: "UpdatedTest",
-			Bio:       "Updated Bio",
+			Bio:         "Updated Bio",
 		},
 	}
 	updateResp, err := svc.UpdateUser(ctx, updateReq)
