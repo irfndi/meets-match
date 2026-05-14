@@ -44,7 +44,7 @@ export class UserRepository {
           .bind(
             user.id,
             user.username ?? null,
-            user.displayName ?? null,
+            user.displayName ?? "User",
             user.lastName ?? null,
             user.bio ?? null,
             user.age ?? null,

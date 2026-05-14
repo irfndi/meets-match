@@ -33,6 +33,8 @@ export const startCommand = async (ctx: MyContext, env: Env): Promise<void> => {
     });
   } catch (error) {
     console.error('Failed to create user on /start:', error);
+    await ctx.reply('❌ Sorry, there was an error setting up your profile. Please try again later.');
+    return;
   }
 
   await ctx.reply(WELCOME_MESSAGE);
