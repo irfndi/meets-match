@@ -23,12 +23,16 @@ import {
 export class BotServiceClient implements INotificationService {
   constructor(private readonly binding: Fetcher) {}
 
-  async sendNotification(req: SendNotificationRequest): Promise<SendNotificationResponse> {
-    const response = await this.binding.fetch(new Request("http://bot/send-notification", {
-      method: "POST",
-      body: JSON.stringify(req),
-      headers: { "Content-Type": "application/json" },
-    }));
+  async sendNotification(
+    req: SendNotificationRequest,
+  ): Promise<SendNotificationResponse> {
+    const response = await this.binding.fetch(
+      new Request("http://bot/send-notification", {
+        method: "POST",
+        body: JSON.stringify(req),
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
 
     if (!response.ok) {
       throw new Error(`Bot service error: ${response.status}`);
@@ -37,10 +41,14 @@ export class BotServiceClient implements INotificationService {
     return (await response.json()) as SendNotificationResponse;
   }
 
-  async enqueueNotification(_req: EnqueueNotificationRequest): Promise<EnqueueNotificationResponse> {
+  async enqueueNotification(
+    _req: EnqueueNotificationRequest,
+  ): Promise<EnqueueNotificationResponse> {
     throw new Error("Not implemented");
   }
-  async getNotification(_req: GetNotificationRequest): Promise<GetNotificationResponse> {
+  async getNotification(
+    _req: GetNotificationRequest,
+  ): Promise<GetNotificationResponse> {
     throw new Error("Not implemented");
   }
   async getDLQStats(_req: GetDLQStatsRequest): Promise<GetDLQStatsResponse> {
@@ -49,13 +57,19 @@ export class BotServiceClient implements INotificationService {
   async replayDLQ(_req: ReplayDLQRequest): Promise<ReplayDLQResponse> {
     throw new Error("Not implemented");
   }
-  async getQueueStats(_req: GetQueueStatsRequest): Promise<GetQueueStatsResponse> {
+  async getQueueStats(
+    _req: GetQueueStatsRequest,
+  ): Promise<GetQueueStatsResponse> {
     throw new Error("Not implemented");
   }
-  async getReengagementCandidates(_req: GetReengagementCandidatesRequest): Promise<GetReengagementCandidatesResponse> {
+  async getReengagementCandidates(
+    _req: GetReengagementCandidatesRequest,
+  ): Promise<GetReengagementCandidatesResponse> {
     throw new Error("Not implemented");
   }
-  async logNotificationResult(_req: LogNotificationResultRequest): Promise<LogNotificationResultResponse> {
+  async logNotificationResult(
+    _req: LogNotificationResultRequest,
+  ): Promise<LogNotificationResultResponse> {
     throw new Error("Not implemented");
   }
 }

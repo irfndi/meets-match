@@ -37,12 +37,13 @@ service = "meetsmatch-bot"
 
 # Cron Triggers
 [triggers]
-crons = ["0 10 * * *"]
+crons = ["0 9 * * *", "0 10 * * *", "0 11 * * *", "*/5 * * * *"]
 
 [vars]
 ENVIRONMENT = "development"
 REENGAGEMENT_SCHEDULE = "0 10 * * *"
 DLQ_PROCESSOR_SCHEDULE = "*/5 * * * *"
+BIRTHDAY_SCHEDULE = "0 9 * * *"
 WORKER_CONCURRENCY = "10"
 
 # Secrets (set via wrangler secret put or .dev.vars):
@@ -75,6 +76,15 @@ service = "meetsmatch-api-dev"
 [[env.dev.services]]
 binding = "BOT_SERVICE"
 service = "meetsmatch-bot-dev"
+
+# R2 Bucket for profile media cleanup
+[[env.dev.r2_buckets]]
+binding = "MEDIA_BUCKET"
+bucket_name = "meetsmatch-media"
+
+# Dev environment has no cron triggers to stay within Cloudflare free plan limits
+[env.dev.triggers]
+crons = []
 
 [env.production]
 name = "meetsmatch-worker"

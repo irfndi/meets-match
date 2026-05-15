@@ -16,16 +16,26 @@ vi.mock("grammy", () => ({
   Bot: vi.fn(() => mockBotInstance),
   session: vi.fn(() => vi.fn()),
   InlineKeyboard: class {
-    text() { return this; }
-    row() { return this; }
+    text() {
+      return this;
+    }
+    row() {
+      return this;
+    }
   },
 }));
 
 function createEnv(overrides: Record<string, unknown> = {}) {
   return {
     DB: {} as D1Database,
-    KV: { get: vi.fn().mockResolvedValue(null), put: vi.fn().mockResolvedValue(undefined), delete: vi.fn().mockResolvedValue(undefined) } as unknown as KVNamespace,
-    API_SERVICE: { fetch: vi.fn().mockResolvedValue(new Response(null, { status: 200 })) } as unknown as Fetcher,
+    KV: {
+      get: vi.fn().mockResolvedValue(null),
+      put: vi.fn().mockResolvedValue(undefined),
+      delete: vi.fn().mockResolvedValue(undefined),
+    } as unknown as KVNamespace,
+    API_SERVICE: {
+      fetch: vi.fn().mockResolvedValue(new Response(null, { status: 200 })),
+    } as unknown as Fetcher,
     BOT_TOKEN: "test-token",
     ...overrides,
   };
@@ -45,7 +55,7 @@ describe("Fetch Handler Routing", () => {
       {} as ExecutionContext,
     );
     expect(res.status).toBe(200);
-    const body = await res.json() as Record<string, string>;
+    const body = (await res.json()) as Record<string, string>;
     expect(body.status).toBe("ok");
     expect(body.service).toBe("cf-bot");
   });

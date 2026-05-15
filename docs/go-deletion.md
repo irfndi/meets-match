@@ -4,7 +4,7 @@ Execute ONLY after 48 hours of stable production on Cloudflare Workers.
 
 ## Pre-Deletion Verification
 
-- [ ] All integration tests pass on cf-* services
+- [ ] All integration tests pass on cf-\* services
 - [ ] Zero active traffic to Go services (verify via logs/metrics)
 - [ ] All data migrated from PostgreSQL/SQLite to D1
 - [ ] Bot webhook points to cf-bot Worker
@@ -13,6 +13,7 @@ Execute ONLY after 48 hours of stable production on Cloudflare Workers.
 ## Files to Delete
 
 ### Go Services
+
 ```
 services/api/
 services/worker/
@@ -23,11 +24,13 @@ services/bot/src/lib/sentry*.ts (keep for cf-bot)
 ```
 
 ### Contracts/Protobuf
+
 ```
 packages/contracts/
 ```
 
 ### Docker
+
 ```
 Dockerfile
 docker-compose.yml
@@ -36,6 +39,7 @@ services/worker/Dockerfile
 ```
 
 ### Go Workspace
+
 ```
 go.work
 go.work.sum
@@ -48,6 +52,7 @@ services/bot/go.sum       (if exists)
 ```
 
 ### CI/CD (update, don't delete)
+
 - Remove Go build steps from `.github/workflows/ci.yml`
 - Remove Docker build/push steps
 - Keep TypeScript/Worker build steps

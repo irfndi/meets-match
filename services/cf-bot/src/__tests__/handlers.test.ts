@@ -12,7 +12,14 @@ function mockCtx(text?: string): MyContext {
     answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
     deleteMessage: vi.fn().mockResolvedValue(undefined),
     from: { id: 123, first_name: "Test", is_bot: false, language_code: "en" },
-    message: text ? { text, message_id: 1, date: 1, chat: { id: 123, type: "private" as const } } : undefined,
+    message: text
+      ? {
+          text,
+          message_id: 1,
+          date: 1,
+          chat: { id: 123, type: "private" as const },
+        }
+      : undefined,
     callbackQuery: undefined,
     chat: { id: 123, type: "private" as const },
   } as unknown as MyContext;
@@ -21,8 +28,12 @@ function mockCtx(text?: string): MyContext {
 function createMockApiService(responseMap: Record<string, () => Response>) {
   return {
     fetch: vi.fn().mockImplementation((req: Request) => {
-      const url = typeof req === 'string' ? req : (req as any).url || String(req);
-      for (const [pattern, factory] of Object.entries(responseMap)) {
+      const url =
+        typeof req === "string" ? req : (req as any).url || String(req);
+      const sortedPatterns = Object.entries(responseMap).sort(
+        (a, b) => b[0].length - a[0].length,
+      );
+      for (const [pattern, factory] of sortedPatterns) {
         if (url.includes(pattern)) {
           return Promise.resolve(factory());
         }
@@ -43,11 +54,13 @@ function createMockKV() {
 const completeUser = {
   id: "123",
   displayName: "Test",
+  birthDate: "1999-03-15",
   age: 25,
   gender: "male",
   bio: "Hello",
   location: { city: "Jakarta", country: "Indonesia" },
   interests: ["Hiking"],
+  mediaUrls: [{ url: "test", type: "image", uploadedAt: "2024-01-01" }],
   phoneNumber: "+1234567890",
   isProfileComplete: true,
 };
@@ -63,13 +76,20 @@ describe("Bot Handlers", () => {
       const ctx = mockCtx();
       const env = {
         API_SERVICE: createMockApiService({
-          "/users/123": () => new Response(JSON.stringify({ error: "not found" }), { status: 404 }),
-          "/users": () => new Response(JSON.stringify({ user: completeUser }), { status: 201 }),
+          "/users/123": () =>
+            new Response(JSON.stringify({ error: "not found" }), {
+              status: 404,
+            }),
+          "/users": () =>
+            new Response(JSON.stringify({ user: completeUser }), {
+              status: 201,
+            }),
         }),
       } as any;
       await startCommand(ctx, env);
       expect(ctx.reply).toHaveBeenCalled();
-      const message = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+      const message = (ctx.reply as ReturnType<typeof vi.fn>).mock
+        .calls[0][0] as string;
       expect(message).toContain("Choose your language");
     });
 
@@ -77,12 +97,16 @@ describe("Bot Handlers", () => {
       const ctx = mockCtx();
       const env = {
         API_SERVICE: createMockApiService({
-          "/users/123": () => new Response(JSON.stringify({ user: completeUser }), { status: 200 }),
+          "/users/123": () =>
+            new Response(JSON.stringify({ user: completeUser }), {
+              status: 200,
+            }),
         }),
       } as any;
       await startCommand(ctx, env);
       expect(ctx.reply).toHaveBeenCalled();
-      const message = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+      const message = (ctx.reply as ReturnType<typeof vi.fn>).mock
+        .calls[0][0] as string;
       expect(message).toContain("Welcome back");
     });
 
@@ -90,12 +114,16 @@ describe("Bot Handlers", () => {
       const ctx = mockCtx();
       const env = {
         API_SERVICE: createMockApiService({
-          "/users/123": () => new Response(JSON.stringify({ user: incompleteUser }), { status: 200 }),
+          "/users/123": () =>
+            new Response(JSON.stringify({ user: incompleteUser }), {
+              status: 200,
+            }),
         }),
       } as any;
       await startCommand(ctx, env);
       expect(ctx.reply).toHaveBeenCalled();
-      const message = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+      const message = (ctx.reply as ReturnType<typeof vi.fn>).mock
+        .calls[0][0] as string;
       expect(message).toContain("Welcome back");
       expect(message).toContain("incomplete");
     });
@@ -106,7 +134,8 @@ describe("Bot Handlers", () => {
       const ctx = mockCtx();
       await helpCommand(ctx);
       expect(ctx.reply).toHaveBeenCalled();
-      const message = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+      const message = (ctx.reply as ReturnType<typeof vi.fn>).mock
+        .calls[0][0] as string;
       expect(message).toContain("/start");
       expect(message).toContain("/profile");
       expect(message).toContain("/match");
@@ -129,7 +158,8 @@ describe("Bot Handlers", () => {
       const ctx = mockCtx();
       await aboutCommand(ctx);
       expect(ctx.reply).toHaveBeenCalled();
-      const message = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+      const message = (ctx.reply as ReturnType<typeof vi.fn>).mock
+        .calls[0][0] as string;
       expect(message).toContain("MeetMatch");
     });
   });
@@ -139,20 +169,31 @@ describe("Bot Handlers", () => {
       const ctx = mockCtx();
       const env = {
         API_SERVICE: createMockApiService({
-          "/users/123": () => new Response(JSON.stringify({ user: incompleteUser }), { status: 200 }),
+          "/users/123": () =>
+            new Response(JSON.stringify({ user: incompleteUser }), {
+              status: 200,
+            }),
         }),
         KV: createMockKV(),
       } as any;
       await matchCommand(ctx, env);
-      expect(ctx.reply).toHaveBeenCalledWith(expect.stringContaining("Almost there"));
+      expect(ctx.reply).toHaveBeenCalledWith(
+        expect.stringContaining("Almost there"),
+      );
     });
 
     it("should reply with finding matches message for complete user", async () => {
       const ctx = mockCtx();
       const env = {
         API_SERVICE: createMockApiService({
-          "/users/123": () => new Response(JSON.stringify({ user: completeUser }), { status: 200 }),
-          "/potential-matches": () => new Response(JSON.stringify({ potentialMatches: [] }), { status: 200 }),
+          "/users/123": () =>
+            new Response(JSON.stringify({ user: completeUser }), {
+              status: 200,
+            }),
+          "/potential-matches": () =>
+            new Response(JSON.stringify({ potentialMatches: [] }), {
+              status: 200,
+            }),
         }),
         KV: createMockKV(),
       } as any;
@@ -166,7 +207,10 @@ describe("Bot Handlers", () => {
       const ctx = mockCtx();
       const env = {
         API_SERVICE: createMockApiService({
-          "/users/123": () => new Response(JSON.stringify({ user: incompleteUser }), { status: 200 }),
+          "/users/123": () =>
+            new Response(JSON.stringify({ user: incompleteUser }), {
+              status: 200,
+            }),
         }),
         KV: createMockKV(),
       } as any;
@@ -181,9 +225,14 @@ describe("Bot Handlers", () => {
       const ctx = mockCtx();
       const env = {
         API_SERVICE: createMockApiService({
-          "/users/123": () => new Response(JSON.stringify({ user: completeUser }), { status: 200 }),
-          "/matches": () => new Response(JSON.stringify({ matches: [] }), { status: 200 }),
-          "/pending-likes": () => new Response(JSON.stringify({ pendingLikes: [] }), { status: 200 }),
+          "/users/123": () =>
+            new Response(JSON.stringify({ user: completeUser }), {
+              status: 200,
+            }),
+          "/matches": () =>
+            new Response(JSON.stringify({ matches: [] }), { status: 200 }),
+          "/pending-likes": () =>
+            new Response(JSON.stringify({ pendingLikes: [] }), { status: 200 }),
         }),
         KV: createMockKV(),
       } as any;
@@ -200,7 +249,10 @@ describe("Bot Handlers", () => {
       const ctx = mockCtx();
       const env = {
         API_SERVICE: createMockApiService({
-          "/users/123": () => new Response(JSON.stringify({ user: completeUser }), { status: 200 }),
+          "/users/123": () =>
+            new Response(JSON.stringify({ user: completeUser }), {
+              status: 200,
+            }),
         }),
         KV: {},
       } as any;

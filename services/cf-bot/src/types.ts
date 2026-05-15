@@ -1,4 +1,4 @@
-import type { Context, SessionFlavor } from 'grammy';
+import type { Context, SessionFlavor } from "grammy";
 
 export interface SessionData {
   conversation?: string;

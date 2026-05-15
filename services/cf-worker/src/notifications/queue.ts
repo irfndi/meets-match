@@ -16,7 +16,8 @@ export class NotificationQueueProducer {
       try: async () => {
         await this.queue.send(JSON.stringify(message));
       },
-      catch: (error) => (error instanceof Error ? error : new Error(String(error))),
+      catch: (error) =>
+        error instanceof Error ? error : new Error(String(error)),
     });
   }
 }
@@ -24,7 +25,7 @@ export class NotificationQueueProducer {
 export class NotificationQueueConsumer {
   constructor(
     private readonly db: D1Database,
-    private readonly botService: Fetcher
+    private readonly botService: Fetcher,
   ) {}
 
   async processBatch(batch: MessageBatch): Promise<void> {
@@ -34,7 +35,8 @@ export class NotificationQueueConsumer {
         await this.processMessage(body);
         message.ack();
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
         console.error(`Failed to process notification:`, errorMessage);
         message.retry();
       }
@@ -42,30 +44,60 @@ export class NotificationQueueConsumer {
   }
 
   private async processMessage(msg: NotificationMessage): Promise<void> {
-    const notification = await this.db.prepare("SELECT * FROM notifications WHERE id = ?").bind(msg.notificationId).first();
+    const notification = await this.db
+      .prepare("SELECT * FROM notifications WHERE id = ?")
+      .bind(msg.notificationId)
+      .first();
     if (!notification) return;
 
     const status = String((notification as Record<string, unknown>).status);
     if (status === "delivered" || status === "dlq") return;
 
-    await this.db.prepare("UPDATE notifications SET status = 'processing', updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(msg.notificationId).run();
+    await this.db
+      .prepare(
+        "UPDATE notifications SET status = 'processing', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+      )
+      .bind(msg.notificationId)
+      .run();
 
     try {
-      const response = await this.botService.fetch(new Request("http://bot/send-notification", {
-        method: "POST",
-        body: JSON.stringify({ userId: msg.userId, type: msg.type, payload: msg.payload }),
-        headers: { "Content-Type": "application/json" },
-      }));
+      const response = await this.botService.fetch(
+        new Request("http://bot/send-notification", {
+          method: "POST",
+          body: JSON.stringify({
+            userId: msg.userId,
+            type: msg.type,
+            payload: msg.payload,
+          }),
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
 
       if (response.ok) {
-        await this.db.prepare("UPDATE notifications SET status = 'delivered', delivered_at = CURRENT_TIMESTAMP WHERE id = ?").bind(msg.notificationId).run();
+        await this.db
+          .prepare(
+            "UPDATE notifications SET status = 'delivered', delivered_at = CURRENT_TIMESTAMP WHERE id = ?",
+          )
+          .bind(msg.notificationId)
+          .run();
       } else {
         const errorText = await response.text();
-        await this.db.prepare("UPDATE notifications SET status = 'failed', last_error = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(errorText, msg.notificationId).run();
+        await this.db
+          .prepare(
+            "UPDATE notifications SET status = 'failed', last_error = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+          )
+          .bind(errorText, msg.notificationId)
+          .run();
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      await this.db.prepare("UPDATE notifications SET status = 'failed', last_error = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(errorMessage, msg.notificationId).run();
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      await this.db
+        .prepare(
+          "UPDATE notifications SET status = 'failed', last_error = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+        )
+        .bind(errorMessage, msg.notificationId)
+        .run();
     }
   }
 }

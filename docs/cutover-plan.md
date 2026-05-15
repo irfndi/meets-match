@@ -21,12 +21,14 @@ This document describes the deployment sequence for migrating MeetMatch from Go+
 ### Phase 1: Deploy API Worker (cf-api)
 
 1. Build and verify:
+
    ```bash
    cd services/cf-api
    npx tsc --noEmit
    ```
 
 2. Deploy:
+
    ```bash
    wrangler deploy
    ```
@@ -42,12 +44,14 @@ This document describes the deployment sequence for migrating MeetMatch from Go+
 ### Phase 2: Deploy Worker (cf-worker)
 
 1. Build and verify:
+
    ```bash
    cd services/cf-worker
    npx tsc --noEmit
    ```
 
 2. Deploy:
+
    ```bash
    wrangler deploy
    ```
@@ -60,17 +64,20 @@ This document describes the deployment sequence for migrating MeetMatch from Go+
 ### Phase 3: Deploy Bot Worker (cf-bot)
 
 1. Build and verify:
+
    ```bash
    cd services/cf-bot
    npx tsc --noEmit
    ```
 
 2. Deploy:
+
    ```bash
    wrangler deploy
    ```
 
 3. Update Telegram webhook:
+
    ```bash
    curl -X POST "https://api.telegram.org/bot<BOT_TOKEN>/setWebhook" \
      -H "Content-Type: application/json" \
@@ -106,7 +113,7 @@ If a service has issues:
 
 ### Full Rollback
 
-1. Stop all cf-* deployments
+1. Stop all cf-\* deployments
 2. Restore Go services from backup
 3. Restore PostgreSQL/Redis from backup
 4. Update DNS/webhook URLs to point to Go stack
