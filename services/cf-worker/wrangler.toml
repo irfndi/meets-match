@@ -37,7 +37,7 @@ service = "meetsmatch-bot"
 
 # Cron Triggers
 [triggers]
-crons = ["0 9 * * *", "0 10 * * *", "*/5 * * * *"]
+crons = ["0 9 * * *", "0 10 * * *", "0 11 * * *", "*/5 * * * *"]
 
 [vars]
 ENVIRONMENT = "development"

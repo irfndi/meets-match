@@ -53,6 +53,7 @@ export async function runBirthdayJob(env: Env): Promise<void> {
         // Notify each match
         for (const matchUserId of matchIds) {
           try {
+            const safeName = firstName.replace(/[_*\[\]`\\]/g, "\\$&");
             const response = await env.API_SERVICE.fetch(
               new Request("http://api/notifications", {
                 method: "POST",
@@ -61,7 +62,7 @@ export async function runBirthdayJob(env: Env): Promise<void> {
                   type: "BIRTHDAY",
                   channel: "TELEGRAM",
                   payload: JSON.stringify({
-                    message: `🎂 *It's ${firstName}'s birthday today!*\n\nSend them a message and make their day special! 💕`,
+                    message: `🎂 *It's ${safeName}'s birthday today!*\n\nSend them a message and make their day special! 💕`,
                   }),
                 }),
                 headers: { "Content-Type": "application/json" },
