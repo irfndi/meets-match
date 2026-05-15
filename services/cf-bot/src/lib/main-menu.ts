@@ -16,5 +16,6 @@ export function getMainMenuKeyboard(): Keyboard {
     .row()
     .text(MENU_PROFILE)
     .text(MENU_SETTINGS)
+    .persistent()
     .resized();
 }
