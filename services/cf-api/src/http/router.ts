@@ -850,12 +850,16 @@ export class ApiRouter {
     try {
       const body = (await request.json()) as Record<string, unknown>;
       const userId = String(body.userId ?? "");
-      const type = body.type ? String(body.type) : undefined;
+      const typeRaw = body.type ? String(body.type) : undefined;
       const message = body.message ? String(body.message) : undefined;
       const mediaUrl = body.mediaUrl ? String(body.mediaUrl) : undefined;
       if (!userId) {
         return jsonResponse({ error: "userId is required" }, 400);
       }
+      const allowedTypes = new Set(["bug", "feature", "other"]);
+      const type = typeRaw && allowedTypes.has(typeRaw)
+        ? (typeRaw as "bug" | "feature" | "other")
+        : undefined;
       const result = await runEffect(
         this.feedbackRepo.create({ userId, type, message, mediaUrl }),
       );

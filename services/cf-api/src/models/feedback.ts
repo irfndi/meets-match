@@ -4,7 +4,7 @@ import { DatabaseError } from "@meetsmatch/cf-shared";
 
 export interface CreateFeedbackRequest {
   userId: string;
-  type?: string;
+  type?: "bug" | "feature" | "other";
   message?: string;
   mediaUrl?: string;
 }

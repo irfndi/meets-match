@@ -73,6 +73,8 @@ interface Translations {
   phoneVerifyButton: string;
   phoneVerified: string;
   phoneSkipped: string;
+  phoneShareOwn: string;
+  phoneFailed: string;
   genericError: string;
   genericCancel: string;
   genericCancelled: string;
@@ -227,6 +229,8 @@ const en: Translations = {
     "✅ Phone number verified! Your profile is now complete. Use *🔍 Find Match* to start discovering people!",
   phoneSkipped:
     "✅ Profile complete! You can verify your phone number anytime in *⚙️ Settings*. Use *🔍 Find Match* to start discovering people!",
+  phoneShareOwn: "Please share your own contact.",
+  phoneFailed: "Could not get phone number. Please try again.",
   genericError: "❌ Sorry, something went wrong. Please try again later.",
   genericCancel: "Cancel",
   genericCancelled: "Cancelled.",

@@ -291,9 +291,13 @@ export async function handleContactMessage(
   const userId = String(ctx.from.id);
   const contact = ctx.message.contact;
 
+  // Resolve user's language
+  const user = await getUser(env, userId);
+  const lang: Language = (user?.language as Language) ?? "en";
+
   // Only accept if the contact is the user's own
   if (String(contact.user_id) !== userId) {
-    await ctx.reply("Please share your own contact.", {
+    await ctx.reply(t("phoneShareOwn", lang), {
       reply_markup: getMainMenuKeyboard(),
     });
     return true;
@@ -301,7 +305,7 @@ export async function handleContactMessage(
 
   const phoneNumber = contact.phone_number;
   if (!phoneNumber) {
-    await ctx.reply("Could not get phone number. Please try again.", {
+    await ctx.reply(t("phoneFailed", lang), {
       reply_markup: getMainMenuKeyboard(),
     });
     return true;
@@ -310,7 +314,7 @@ export async function handleContactMessage(
   // Update user with phone number
   const success = await updateUser(env, userId, { phoneNumber });
   await ctx.reply(
-    success ? t("phoneVerified", "en") : t("genericError", "en"),
+    success ? t("phoneVerified", lang) : t("genericError", lang),
     { reply_markup: getMainMenuKeyboard() },
   );
   return true;
@@ -346,6 +350,10 @@ export async function handleLocationMessage(
   const state = await getConversationState(env.KV, userId);
   const { latitude, longitude } = ctx.message.location;
 
+  // Resolve user's language
+  const user = await getUser(env, userId);
+  const lang: Language = (user?.language as Language) ?? "en";
+
   // Reverse geocode to get city/country
   const geo = await reverseGeocodeLocation(env, latitude, longitude);
   const location = geo?.city
@@ -357,7 +365,7 @@ export async function handleLocationMessage(
     // Check if user is sharing location spontaneously
     const success = await updateUser(env, userId, { location });
     await ctx.reply(
-      success ? t("locationUpdated", "en") : t("genericError", "en"),
+      success ? t("locationUpdated", lang) : t("genericError", lang),
     );
     return true;
   }
@@ -371,14 +379,14 @@ export async function handleLocationMessage(
       env,
       state.userId,
     );
-    await ctx.reply(t("locationUpdated", "en"), {
+    await ctx.reply(t("locationUpdated", lang), {
       reply_markup: getMainMenuKeyboard(),
     });
     if (becameComplete) {
-      await promptPhoneVerification(ctx, env, "en");
+      await promptPhoneVerification(ctx, env, lang);
     }
   } else {
-    await ctx.reply(t("genericError", "en"), {
+    await ctx.reply(t("genericError", lang), {
       reply_markup: getMainMenuKeyboard(),
     });
   }
