@@ -91,8 +91,38 @@ export const profileCommand = async (
 
   msgParts.push("", "Select a field to edit:");
 
-  await ctx.reply(msgParts.join("\n"), {
-    parse_mode: "Markdown",
-    reply_markup: getProfileMenu(env, mediaCount),
-  });
+  const text = msgParts.join("\n");
+  const mediaUrls = (user.mediaUrls ?? []) as Array<{
+    url: string;
+    type: string;
+  }>;
+  const firstImage = mediaUrls.find((m) => m.type === "image");
+  const firstVideo = mediaUrls.find((m) => m.type === "video");
+  const keyboard = getProfileMenu(env, mediaCount);
+
+  try {
+    if (firstImage) {
+      await ctx.replyWithPhoto(firstImage.url, {
+        caption: text,
+        parse_mode: "Markdown",
+        reply_markup: keyboard,
+      });
+    } else if (firstVideo) {
+      await ctx.replyWithVideo(firstVideo.url, {
+        caption: text,
+        parse_mode: "Markdown",
+        reply_markup: keyboard,
+      });
+    } else {
+      await ctx.reply(text, {
+        parse_mode: "Markdown",
+        reply_markup: keyboard,
+      });
+    }
+  } catch {
+    await ctx.reply(text, {
+      parse_mode: "Markdown",
+      reply_markup: keyboard,
+    });
+  }
 };

@@ -64,9 +64,11 @@ interface Translations {
   ageRangeInvalid: string;
   ageRangeUpdated: string;
   distancePrompt: string;
+  distanceSelect: string;
   distanceInvalid: string;
   distanceUpdated: string;
   genderPrefPrompt: string;
+  genderPrefSelect: string;
   genderPrefInvalid: string;
   genderPrefUpdated: string;
   phoneVerifyPrompt: string;
@@ -226,11 +228,13 @@ const en: Translations = {
     "Invalid range. Min must be 12–80, max must be ≥ min and ≤ 80. Try again or type *Cancel*.",
   ageRangeUpdated: "✅ Age range updated to *{min}–{max}*!",
   distancePrompt: "Enter max distance in km (1–500). Type *Cancel* to abort.",
+  distanceSelect: "👇 Select max distance:",
   distanceInvalid:
     "Enter a valid integer distance in km (1–500). Try again or type *Cancel*.",
   distanceUpdated: "✅ Max distance set to *{distance} km*!",
   genderPrefPrompt:
     "Enter preferred genders separated by commas (*male, female, other, prefer_not_to_say*). Type *Cancel* to abort.",
+  genderPrefSelect: "👇 Select gender preference:",
   genderPrefInvalid:
     "Enter valid genders separated by commas (*male, female, other, prefer_not_to_say*). Try again or type *Cancel*.",
   genderPrefUpdated: "✅ Gender preference set to: *{preferences}*!",

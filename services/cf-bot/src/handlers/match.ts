@@ -351,7 +351,17 @@ function buildMatchCard(otherUser: Record<string, unknown>): string {
       : loc?.latitude
         ? "📍 Nearby"
         : "";
-  const bio = otherUser.bio ? `\n📝 ${otherUser.bio}` : "";
+  let bio = "";
+  if (otherUser.bio) {
+    const bioText = String(otherUser.bio);
+    // Truncate long bios with spoiler expand/collapse
+    const maxBioLen = 180;
+    if (bioText.length > maxBioLen) {
+      bio = `\n📝 ${bioText.slice(0, maxBioLen)}||${bioText.slice(maxBioLen)}||`;
+    } else {
+      bio = `\n📝 ${bioText}`;
+    }
+  }
   const interests = otherUser.interests
     ? `\n🌟 ${Array.isArray(otherUser.interests) ? (otherUser.interests as string[]).join(", ") : String(otherUser.interests)}`
     : "";
@@ -428,6 +438,14 @@ async function showNextMatch(
 
   const match = queue.matches[queue.index];
 
+  // Defensive: skip own profile if it somehow ended up in the queue
+  if (String(match.id) === userId) {
+    queue.index++;
+    await setMatchQueue(env.KV, userId, queue);
+    await showNextMatch(ctx, env, userId, lang);
+    return;
+  }
+
   // Show referral prompt before the 3rd match (index 2)
   if (queue.index === 2) {
     const referralKeyboard = new InlineKeyboard()
@@ -491,11 +509,9 @@ export const matchCommand = async (ctx: MyContext, env: Env): Promise<void> => {
     reply_markup: getMatchActionKeyboard(tier),
   });
 
-  const { matches: users, relaxed } = await fetchPotentialMatches(
-    env,
-    userId,
-    5,
-  );
+  let { matches: users, relaxed } = await fetchPotentialMatches(env, userId, 5);
+  // Defensive: filter out own profile if API somehow returns it
+  users = users.filter((u) => String(u.id) !== userId);
   if (users.length === 0) {
     await ctx.reply(t("matchNoMatches", lang), {
       parse_mode: "Markdown",
@@ -539,6 +555,11 @@ async function handleMatchAction(
     return;
   }
   const userId = String(ctx.from.id);
+  if (targetUserId === userId) {
+    await ctx.reply("❌ You can't interact with your own profile.");
+    await ctx.answerCallbackQuery().catch(() => {});
+    return;
+  }
   const myName = ctx.from.first_name ?? "Someone";
   const lang = await fetchUserLang(env, userId);
 
@@ -727,16 +748,32 @@ async function handleSendDM(ctx: MyContext, env: Env, targetUserId: string) {
       (dmStatus.tier !== "premium_plus" || (bypassRemaining ?? 0) > 0);
 
     if (!canSend) {
-      const keyboard = new InlineKeyboard()
-        .text("👑 Get Premium", "premium:show")
-        .row()
-        .text("⭐ Buy 1 DM (50 Stars)", `dm:buy:${targetUserId}`)
-        .row()
-        .text("❌ Cancel", "dm:cancel");
-      await ctx.reply(t("dmGated", lang), {
-        parse_mode: "Markdown",
-        reply_markup: keyboard,
-      });
+      try {
+        const bot = ctx.api;
+        const invoiceLink = await bot.createInvoiceLink(
+          "1 Direct Message",
+          "Send a DM to any user without matching",
+          `dm_credit_${userId}_1_${targetUserId}`,
+          "",
+          "XTR",
+          [{ label: "1 DM", amount: 50 }],
+        );
+        const keyboard = new InlineKeyboard()
+          .url("⭐ Pay 50 Stars", invoiceLink)
+          .row()
+          .text("👑 Get Premium", "premium:show")
+          .row()
+          .text("❌ Cancel", "dm:cancel");
+        await ctx.reply(
+          t("dmGated", lang) +
+            "\n\nTap the button below to pay with Telegram Stars.",
+          { parse_mode: "Markdown", reply_markup: keyboard },
+        );
+      } catch {
+        await ctx.reply(t("dmError", lang), {
+          reply_markup: getMainMenuKeyboard(),
+        });
+      }
       await ctx.answerCallbackQuery().catch(() => {});
       return;
     }
@@ -1392,7 +1429,8 @@ export const matchCallbacks = async (
   } else if (data.startsWith("dm:send:")) {
     await handleSendDM(ctx, env, data.replace("dm:send:", ""));
   } else if (data.startsWith("dm:buy:")) {
-    await handleBuyDM(ctx, env, data.replace("dm:buy:", ""));
+    // Backward compatibility: directly show invoice for the target user
+    await handleSendDM(ctx, env, data.replace("dm:buy:", ""));
   } else if (data === "dm:cancel") {
     await ctx.deleteMessage().catch(() => {});
     await ctx.answerCallbackQuery().catch(() => {});
@@ -1402,38 +1440,6 @@ export const matchCallbacks = async (
 };
 
 async function handleBuyDM(ctx: MyContext, env: Env, targetUserId: string) {
-  if (!ctx.from) {
-    await ctx.answerCallbackQuery("Could not identify you.").catch(() => {});
-    return;
-  }
-  const userId = String(ctx.from.id);
-
-  try {
-    const bot = ctx.api;
-    const invoiceLink = await bot.createInvoiceLink(
-      "1 Direct Message",
-      "Send a DM to any user without matching",
-      `dm_credit_${userId}_1_${targetUserId}`,
-      "",
-      "XTR",
-      [{ label: "1 DM", amount: 50 }],
-    );
-
-    const keyboard = new InlineKeyboard()
-      .url("⭐ Pay 50 Stars", invoiceLink)
-      .row()
-      .text("❌ Cancel", "dm:cancel");
-
-    await ctx.reply(
-      "⭐ *Buy 1 Direct Message*\n\n" +
-        "Send a DM to any user instantly — no mutual match required!\n\n" +
-        "Tap the button below to pay with Telegram Stars.",
-      { parse_mode: "Markdown", reply_markup: keyboard },
-    );
-    await ctx.answerCallbackQuery().catch(() => {});
-  } catch (error) {
-    console.error("Buy DM error:", error);
-    await ctx.reply("❌ Sorry, something went wrong. Please try again later.");
-    await ctx.answerCallbackQuery().catch(() => {});
-  }
+  // Deprecated: combined into handleSendDM for single-step flow
+  await handleSendDM(ctx, env, targetUserId);
 }

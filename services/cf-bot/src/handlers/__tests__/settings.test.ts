@@ -96,26 +96,26 @@ describe("Settings Handlers", () => {
       expect(JSON.parse(state!).field).toBe("age-range");
     });
 
-    it("should start distance conversation", async () => {
+    it("should show distance inline keyboard", async () => {
       ctx.callbackQuery!.data = "settings:distance";
       await settingsCallbacks(ctx, env);
       expect(ctx.reply).toHaveBeenCalledWith(
         expect.stringContaining("distance"),
-        expect.anything(),
+        expect.objectContaining({ reply_markup: expect.anything() }),
       );
       const state = await kv.get("conversation:123");
-      expect(JSON.parse(state!).field).toBe("distance");
+      expect(state).toBeNull();
     });
 
-    it("should start gender-pref conversation", async () => {
+    it("should show gender-pref inline keyboard", async () => {
       ctx.callbackQuery!.data = "settings:gender-pref";
       await settingsCallbacks(ctx, env);
       expect(ctx.reply).toHaveBeenCalledWith(
         expect.stringContaining("gender"),
-        expect.anything(),
+        expect.objectContaining({ reply_markup: expect.anything() }),
       );
       const state = await kv.get("conversation:123");
-      expect(JSON.parse(state!).field).toBe("gender-pref");
+      expect(state).toBeNull();
     });
 
     it("should delete message on settings:close", async () => {

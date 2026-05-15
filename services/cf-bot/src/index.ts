@@ -17,6 +17,8 @@ import {
   settingsCommand,
   settingsCallbacks,
   handleAgeRangeCallback,
+  handleDistanceCallback,
+  handleGenderPrefCallback,
 } from "./handlers/settings.js";
 import {
   premiumCommand,
@@ -197,6 +199,22 @@ function createBot(env: Env): Bot<MyContext> {
     if (data.startsWith("agerange:")) {
       const handled = await handleAgeRangeCallback(ctx, env, data);
       if (handled) return;
+    }
+
+    if (data.startsWith("distance:")) {
+      const handled = await handleDistanceCallback(ctx, env, data);
+      if (handled) return;
+    }
+
+    if (data.startsWith("genderpref:")) {
+      const handled = await handleGenderPrefCallback(ctx, env, data);
+      if (handled) return;
+    }
+
+    if (data === "settings:back") {
+      await settingsCommand(ctx, env);
+      await ctx.answerCallbackQuery().catch(() => {});
+      return;
     }
 
     if (data.startsWith("premium:") || data.startsWith("referral:")) {
