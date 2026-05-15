@@ -130,6 +130,10 @@ function createBot(env: Env): Bot<MyContext> {
       return matchesCommand(ctx, env);
     }
 
+    if (data === "find_match") {
+      return matchCommand(ctx, env);
+    }
+
     if (
       data === "matches_close" ||
       data === "back_to_matches" ||
@@ -266,6 +270,12 @@ export default {
         } else if (type === "BIRTHDAY") {
           message = payload.message || `🎂 Someone has a birthday today!`;
           keyboard = new InlineKeyboard().text("💕 View Matches", "matches").row();
+        } else if (type === "REENGAGEMENT") {
+          message = payload.message || `We miss you on MeetMatch! Come back and find your next match! 💘`;
+          const action = payload.action as string | undefined;
+          if (action === "find_match") {
+            keyboard = new InlineKeyboard().text("🔍 Find Matches", "find_match").row();
+          }
         } else {
           message = payload.message || `You have a new ${type} notification!`;
         }
