@@ -568,7 +568,7 @@ async function handleMatchAction(
       (action === "like" || action === "dislike") &&
       tier === "free"
     ) {
-      if (action === "like" && status.likesRemaining <= 0) {
+      if (action === "like" && (status.likesRemaining ?? 0) <= 0) {
         const keyboard = new InlineKeyboard()
           .text("👑 Get Premium", "premium:show")
           .row()
@@ -580,7 +580,7 @@ async function handleMatchAction(
         await ctx.answerCallbackQuery().catch(() => {});
         return;
       }
-      if (action === "dislike" && status.dislikesRemaining <= 0) {
+      if (action === "dislike" && (status.dislikesRemaining ?? 0) <= 0) {
         const keyboard = new InlineKeyboard()
           .text("👑 Get Premium", "premium:show")
           .row()

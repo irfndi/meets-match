@@ -76,7 +76,7 @@ export async function runCleanupJob(env: Env): Promise<void> {
                 headers: { "Content-Type": "application/json" },
               }),
             );
-            if (!response.ok) {
+            if (!response.ok && response.status !== 404) {
               log.error("cleanup", `R2 deletion returned ${response.status}`, {
                 userId: row.id,
                 url: media.url,
