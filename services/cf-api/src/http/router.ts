@@ -52,12 +52,6 @@ export class ApiRouter {
           return this.handleGetPotentialMatches(url.pathname, url.searchParams);
         case url.pathname.startsWith("/users/") && url.pathname.endsWith("/pending-likes") && method === "GET":
           return this.handleGetPendingLikes(url.pathname);
-        case url.pathname.startsWith("/users/") && method === "GET":
-          return this.handleGetUser(url.pathname);
-        case url.pathname.startsWith("/users/") && url.pathname.endsWith("/last-active") && method === "POST":
-          return this.handleUpdateLastActive(url.pathname);
-        case url.pathname.startsWith("/users/") && url.pathname.endsWith("/last-reminded-at") && method === "POST":
-          return this.handleUpdateLastRemindedAt(url.pathname);
         case url.pathname.startsWith("/users/") && url.pathname.endsWith("/swipe-status") && method === "GET":
           return this.handleGetSwipeStatus(url.pathname);
         case url.pathname.startsWith("/users/") && url.pathname.endsWith("/record-swipe") && method === "POST":
@@ -66,6 +60,12 @@ export class ApiRouter {
           return this.handleGetReferralCode(url.pathname);
         case url.pathname.startsWith("/users/") && url.pathname.endsWith("/apply-referral") && method === "POST":
           return this.handleApplyReferral(url.pathname, request);
+        case url.pathname.startsWith("/users/") && url.pathname.endsWith("/last-active") && method === "POST":
+          return this.handleUpdateLastActive(url.pathname);
+        case url.pathname.startsWith("/users/") && url.pathname.endsWith("/last-reminded-at") && method === "POST":
+          return this.handleUpdateLastRemindedAt(url.pathname);
+        case url.pathname.startsWith("/users/") && method === "GET":
+          return this.handleGetUser(url.pathname);
         case url.pathname.startsWith("/users/") && method === "PUT":
           return this.handleUpdateUser(url.pathname, request);
         case url.pathname === "/matches" && method === "GET":
