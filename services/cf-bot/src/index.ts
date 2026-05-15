@@ -600,11 +600,14 @@ export default {
       } catch (error) {
         const errorMessage =
           error instanceof Error ? error.message : String(error);
-        console.error("Send notification error:", errorMessage);
-        return new Response(JSON.stringify({ error: errorMessage }), {
-          status: 500,
-          headers: { "Content-Type": "application/json" },
-        });
+        console.error("Send notification error:", error);
+        return new Response(
+          JSON.stringify({ error: "Internal Server Error" }),
+          {
+            status: 500,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
       }
     }
 
