@@ -56,9 +56,9 @@ describe("Conversation State Management", () => {
   });
 
   it("should start conversation with field", async () => {
-    await startConversation(kv as unknown as KVNamespace, "123", "age");
+    await startConversation(kv as unknown as KVNamespace, "123", "birthdate");
     const state = await getConversationState(kv as unknown as KVNamespace, "123");
-    expect(state!.field).toBe("age");
+    expect(state!.field).toBe("birthdate");
     expect(state!.step).toBe(0);
   });
 });
@@ -93,19 +93,19 @@ describe("Conversation Message Handling", () => {
     expect(result).toBe(true);
   });
 
-  it("should process age input", async () => {
-    await startConversation(kv as unknown as KVNamespace, "123", "age");
-    const ctx = mockCtx("25");
+  it("should process birthdate input", async () => {
+    await startConversation(kv as unknown as KVNamespace, "123", "birthdate");
+    const ctx = mockCtx("15.03.1995");
     const result = await handleConversationMessage(ctx, mockEnv(kv));
     expect(result).toBe(true);
   });
 
-  it("should reject invalid age", async () => {
-    await startConversation(kv as unknown as KVNamespace, "123", "age");
-    const ctx = mockCtx("not-an-age");
+  it("should reject invalid birthdate", async () => {
+    await startConversation(kv as unknown as KVNamespace, "123", "birthdate");
+    const ctx = mockCtx("not-a-date");
     const result = await handleConversationMessage(ctx, mockEnv(kv));
     expect(result).toBe(true);
-    expect(ctx.reply).toHaveBeenCalledWith(expect.stringContaining("Invalid age"));
+    expect(ctx.reply).toHaveBeenCalledWith(expect.stringContaining("Invalid date"));
   });
 
   it("should process gender input", async () => {

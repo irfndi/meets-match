@@ -1,8 +1,43 @@
 import { InlineKeyboard } from "grammy";
 import type { MyContext } from "../types.js";
 import type { Env } from "../index.js";
-import { ensureUserExists, getProfileCompleteness, getMissingFieldsDisplay, isPhoneVerified, type UserProfile } from "../lib/user-utils.js";
+import { ensureUserExists, getProfileCompleteness, getMissingFieldsDisplay, isPhoneVerified, isBirthdayToday, type UserProfile } from "../lib/user-utils.js";
 import { addNotification } from "../lib/notifications.js";
+
+async function enqueueNotification(env: Env, userId: string, type: string, payload: Record<string, unknown>): Promise<void> {
+  try {
+    await env.API_SERVICE.fetch(new Request("http://api/notifications", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId, type, payload: JSON.stringify(payload) }),
+    }));
+  } catch (error) {
+    console.error("Failed to enqueue notification:", error);
+  }
+}
+
+async function recordSwipe(env: Env, userId: string): Promise<{ remaining: number; total: number } | null> {
+  try {
+    const res = await env.API_SERVICE.fetch(new Request(`http://api/users/${userId}/record-swipe`, { method: "POST" }));
+    if (!res.ok) return null;
+    return await res.json() as { remaining: number; total: number };
+  } catch (error) {
+    console.error("Failed to record swipe:", error);
+    return null;
+  }
+}
+
+async function getSwipeStatus(env: Env, userId: string): Promise<{ remaining: number; total: number; tier: string } | null> {
+  try {
+    const res = await env.API_SERVICE.fetch(new Request(`http://api/users/${userId}/swipe-status`, { method: "GET" }));
+    if (!res.ok) return null;
+    const data = await res.json() as { remaining: number; total: number; tier: string };
+    return data;
+  } catch (error) {
+    console.error("Failed to get swipe status:", error);
+    return null;
+  }
+}
 import { promptPhoneVerification } from "../lib/conversations.js";
 import { ApiServiceClient } from "../services/api-client.js";
 import { getMainMenuKeyboard } from "../lib/main-menu.js";
@@ -67,6 +102,7 @@ function getGenderPronoun(gender: string | undefined): string {
 function buildMatchCard(otherUser: Record<string, unknown>): string {
   const name = (otherUser.displayName ?? otherUser.first_name ?? "Someone") as string;
   const age = otherUser.age ?? "?";
+  const birthdayBadge = isBirthdayToday(otherUser.birthDate as string | undefined) ? " 🎂" : "";
   const loc = otherUser.location as Record<string, unknown> | undefined;
   const locationText = loc?.city && loc?.country
     ? `${loc.city}, ${loc.country}`
@@ -78,7 +114,7 @@ function buildMatchCard(otherUser: Record<string, unknown>): string {
     ? `\n🌟 ${Array.isArray(otherUser.interests) ? (otherUser.interests as string[]).join(", ") : String(otherUser.interests)}`
     : "";
 
-  const parts = [`👤 ${name}, ${age}`];
+  const parts = [`👤 ${name}, ${age}${birthdayBadge}`];
   if (locationText) parts.push(`📍 ${locationText}`);
   if (bio) parts.push(bio);
   if (interests) parts.push(interests);
@@ -123,6 +159,22 @@ export const matchCommand = async (ctx: MyContext, env: Env): Promise<void> => {
   }
 
   const userId = String(ctx.from.id);
+
+  // Check daily swipe limit
+  const swipeStatus = await getSwipeStatus(env, userId);
+  if (swipeStatus && swipeStatus.remaining <= 0 && swipeStatus.tier === "free") {
+    const keyboard = new InlineKeyboard()
+      .text("👑 Get Premium", "premium:show")
+      .row()
+      .text("🎁 Share for Bonus", "referral:show");
+    await ctx.reply(
+      "🛑 *Daily Limit Reached*\n\n" +
+      "You've used all your free swipes for today.\n\n" +
+      "Upgrade to Premium for unlimited swipes, or share your referral link to earn bonus swipes!",
+      { parse_mode: "Markdown", reply_markup: keyboard }
+    );
+    return;
+  }
 
   await ctx.reply(t("matchFinding", lang), {
     parse_mode: "Markdown",
@@ -190,7 +242,7 @@ async function handleMatchAction(
           { parse_mode: "Markdown", link_preview_options: { is_disabled: false } }
         );
 
-        // Store notification for the other user
+        // Store notification for the other user (KV cache + queue)
         await addNotification(env, targetUserId, {
           type: "mutual_match",
           matchId,
@@ -199,16 +251,25 @@ async function handleMatchAction(
           otherUsername: ctx.from.username ?? undefined,
           timestamp: new Date().toISOString(),
         });
+        await enqueueNotification(env, targetUserId, "mutual_match", {
+          otherDisplayName: myName,
+          otherUsername: ctx.from.username ?? undefined,
+        });
+        await recordSwipe(env, userId);
       } else {
         await ctx.reply(t("matchLikeSuccess", lang), { reply_markup: getMainMenuKeyboard() });
 
-        // Store like notification for target user
+        // Store like notification for target user (KV cache + queue)
         await addNotification(env, targetUserId, {
           type: "like",
           fromUserId: userId,
           fromDisplayName: myName,
           timestamp: new Date().toISOString(),
         });
+        await enqueueNotification(env, targetUserId, "like", {
+          fromDisplayName: myName,
+        });
+        await recordSwipe(env, userId);
       }
     } else if (action === "dislike") {
       await env.API_SERVICE.fetch(
@@ -228,6 +289,7 @@ async function handleMatchAction(
         })
       );
       await ctx.reply(t("matchSkipSuccess", lang), { reply_markup: getMainMenuKeyboard() });
+      await recordSwipe(env, userId);
     }
   } catch (error) {
     console.error("Match action error:", error);

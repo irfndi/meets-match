@@ -43,6 +43,7 @@ function createMockKV() {
 const completeUser = {
   id: "123",
   displayName: "Test",
+  birthDate: "1999-03-15",
   age: 25,
   gender: "male",
   bio: "Hello",

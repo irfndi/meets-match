@@ -31,6 +31,9 @@ interface Translations {
   bioPrompt: string;
   bioTooLong: string;
   bioUpdated: string;
+  birthDatePrompt: string;
+  birthDateInvalid: string;
+  birthDateUpdated: string;
   agePrompt: string;
   ageInvalid: string;
   ageUpdated: string;
@@ -50,6 +53,8 @@ interface Translations {
   locationUpdated: string;
   locationInvalid: string;
   ageRangePrompt: string;
+  ageRangeSelectMin: string;
+  ageRangeSelectMax: string;
   ageRangeInvalid: string;
   ageRangeUpdated: string;
   distancePrompt: string;
@@ -101,6 +106,9 @@ const en: Translations = {
   bioPrompt: 'Tell us about yourself! Enter your bio (max 300 characters). Type *Cancel* to abort.',
   bioTooLong: 'Bio is too long (max 300 characters). Try again or type *Cancel*.',
   bioUpdated: '✅ Bio updated!',
+  birthDatePrompt: 'When were you born? Enter your birthdate in *DD.MM.YYYY* format (e.g. *15.03.1995*). Type *Cancel* to abort.',
+  birthDateInvalid: 'Invalid date. Please use *DD.MM.YYYY* format and make sure it is a real date between 12 and 80 years ago. Try again or type *Cancel*.',
+  birthDateUpdated: '✅ Birthdate updated!',
   agePrompt: 'How old are you? Enter your age (18–65). Type *Cancel* to abort.',
   ageInvalid: 'Invalid age. Must be between 18 and 65. Try again or type *Cancel*.',
   ageUpdated: '✅ Age updated to {age}!',
@@ -119,9 +127,11 @@ const en: Translations = {
   locationTypePrompt: 'Please enter city and country separated by a comma (e.g., *Jakarta, Indonesia*). Type *Cancel* to abort.',
   locationUpdated: '✅ Location updated!',
   locationInvalid: 'Could not verify that location. Please enter a real city and country (e.g., *Jakarta, Indonesia*), or share your location. Try again or type *Cancel*.',
-  ageRangePrompt: 'Enter your preferred age range (e.g., *18-30*). Type *Cancel* to abort.',
-  ageRangeInvalid: 'Invalid format. Enter age range like *18-30*. Try again or type *Cancel*.',
-  ageRangeUpdated: '✅ Age range set to *{min}–{max}*!',
+  ageRangePrompt: 'Select your preferred age range. Tap an age or type manually.',
+  ageRangeSelectMin: '👇 Select *minimum* age:',
+  ageRangeSelectMax: '👇 Select *maximum* age (must be ≥ {min}):',
+  ageRangeInvalid: 'Invalid range. Min must be 12–80, max must be ≥ min and ≤ 80. Try again or type *Cancel*.',
+  ageRangeUpdated: '✅ Age range updated to *{min}–{max}*!',
   distancePrompt: 'Enter max distance in km (1–500). Type *Cancel* to abort.',
   distanceInvalid: 'Enter a valid integer distance in km (1–500). Try again or type *Cancel*.',
   distanceUpdated: '✅ Max distance set to *{distance} km*!',

@@ -6,7 +6,7 @@ describe("getProfileCompleteness", () => {
     const user = {
       id: "1",
       displayName: "Test",
-      age: 25,
+      birthDate: "1999-03-15",
       gender: "male",
       bio: "Hello",
       location: { city: "Jakarta", country: "Indonesia" },
@@ -22,14 +22,14 @@ describe("getProfileCompleteness", () => {
     const user = { id: "1" };
     const result = getProfileCompleteness(user as any);
     expect(result.complete).toBe(false);
-    expect(result.missing).toEqual(["displayName", "age", "gender", "bio", "location", "interests"]);
+    expect(result.missing).toEqual(["displayName", "birthDate", "gender", "bio", "location", "interests"]);
   });
 
   it("detects missing location when only country is provided", () => {
     const user = {
       id: "1",
       displayName: "Test",
-      age: 25,
+      birthDate: "1999-03-15",
       gender: "male",
       bio: "Hello",
       location: { country: "Indonesia" },
@@ -45,7 +45,7 @@ describe("getProfileCompleteness", () => {
     const user = {
       id: "1",
       displayName: "Test",
-      age: 25,
+      birthDate: "1999-03-15",
       gender: "male",
       bio: "Hello",
       location: { latitude: -6.2, longitude: 106.8 },
@@ -61,7 +61,7 @@ describe("getProfileCompleteness", () => {
     const user = {
       id: "1",
       displayName: "Test",
-      age: 25,
+      birthDate: "1999-03-15",
       gender: "male",
       bio: "Hello",
       location: { city: "Jakarta", country: "Indonesia" },
@@ -77,7 +77,7 @@ describe("getProfileCompleteness", () => {
     const user = {
       id: "1",
       displayName: "   ",
-      age: 25,
+      birthDate: "1999-03-15",
       gender: "male",
       bio: "Hello",
       location: { city: "Jakarta", country: "Indonesia" },
@@ -93,7 +93,7 @@ describe("getProfileCompleteness", () => {
     const user = {
       id: "1",
       displayName: "Test",
-      age: 25,
+      birthDate: "1999-03-15",
       gender: "male",
       bio: "",
       location: { city: "Jakarta", country: "Indonesia" },
@@ -107,7 +107,7 @@ describe("getProfileCompleteness", () => {
 
 describe("getMissingFieldsDisplay", () => {
   it("formats missing fields with emojis", () => {
-    const result = getMissingFieldsDisplay(["displayName", "age", "interests"]);
+    const result = getMissingFieldsDisplay(["displayName", "birthDate", "interests"]);
     expect(result).toContain("👤 Name");
     expect(result).toContain("🎂 Age");
     expect(result).toContain("🌟 Interests");

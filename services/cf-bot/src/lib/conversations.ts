@@ -1,6 +1,6 @@
 import type { MyContext } from '../types.js';
 import type { Env } from '../index.js';
-import { getProfileCompleteness, updateUserProfileComplete, type UserProfile } from './user-utils.js';
+import { getProfileCompleteness, updateUserProfileComplete, parseBirthDate, type UserProfile } from './user-utils.js';
 import { t, type Language } from './i18n.js';
 
 interface ConversationState {
@@ -27,6 +27,41 @@ export async function clearConversationState(kv: KVNamespace, userId: string): P
 
 export async function startConversation(kv: KVNamespace, userId: string, field: string, data?: Record<string, unknown>): Promise<void> {
   await setConversationState(kv, { userId, field, step: 0, data });
+}
+
+// --- Mandatory update check ---
+
+export async function checkMandatoryUpdates(
+  ctx: MyContext,
+  env: Env
+): Promise<boolean> {
+  if (!ctx.from) return false;
+  const userId = String(ctx.from.id);
+  try {
+    const response = await env.API_SERVICE.fetch(
+      new Request(`http://api/users/${userId}`, { method: 'GET' })
+    );
+    if (!response.ok) return false;
+    const data = await response.json() as { user?: UserProfile };
+    const user = data.user;
+    if (!user) return false;
+
+    // Check if birthDate is missing (migration from age-only profiles)
+    if (!user.birthDate) {
+      await startConversation(env.KV, userId, 'birthdate');
+      await ctx.reply(
+        "📢 *Profile Update Required*\n\n" +
+        "We have updated how ages are stored. Please enter your birthdate to continue.\n\n" +
+        "Enter your birthdate in *DD.MM.YYYY* format (e.g. *15.03.1995*).",
+        { parse_mode: 'Markdown' }
+      );
+      return true;
+    }
+
+    return false;
+  } catch {
+    return false;
+  }
 }
 
 async function updateUser(env: Env, userId: string, updates: Record<string, unknown>): Promise<boolean> {
@@ -139,8 +174,8 @@ export async function handleConversationMessage(ctx: MyContext, env: Env): Promi
   switch (state.field) {
     case 'bio':
       return handleBioConversation(ctx, env, state, text, lang);
-    case 'age':
-      return handleAgeConversation(ctx, env, state, text, lang);
+    case 'birthdate':
+      return handleBirthDateConversation(ctx, env, state, text, lang);
     case 'name':
       return handleNameConversation(ctx, env, state, text, lang);
     case 'gender':
@@ -241,17 +276,17 @@ async function handleBioConversation(ctx: MyContext, env: Env, state: Conversati
   return true;
 }
 
-async function handleAgeConversation(ctx: MyContext, env: Env, state: ConversationState, text: string, lang: Language): Promise<boolean> {
-  const age = parseInt(text, 10);
-  if (Number.isNaN(age) || age < 18 || age > 65) {
-    await ctx.reply(t('ageInvalid', lang));
+async function handleBirthDateConversation(ctx: MyContext, env: Env, state: ConversationState, text: string, lang: Language): Promise<boolean> {
+  const parsed = parseBirthDate(text);
+  if (!parsed) {
+    await ctx.reply(t('birthDateInvalid', lang));
     return true;
   }
-  const success = await updateUser(env, state.userId, { age });
+  const success = await updateUser(env, state.userId, { birthDate: parsed.iso });
   await clearConversationState(env.KV, state.userId);
   if (success) {
     const becameComplete = await checkAndUpdateProfileComplete(env, state.userId);
-    await ctx.reply(t('ageUpdated', lang, { age: String(age) }), { reply_markup: { remove_keyboard: true } });
+    await ctx.reply(t('birthDateUpdated', lang), { reply_markup: { remove_keyboard: true } });
     if (becameComplete) await promptPhoneVerification(ctx, env, lang);
   } else {
     await ctx.reply(t('genericError', lang), { reply_markup: { remove_keyboard: true } });
@@ -355,21 +390,56 @@ async function handleLocationTextConversation(ctx: MyContext, env: Env, state: C
 }
 
 async function handleAgeRangeConversation(ctx: MyContext, env: Env, state: ConversationState, text: string, lang: Language): Promise<boolean> {
-  const match = text.trim().match(/^(\d+)\s*-\s*(\d+)$/);
-  if (!match) {
+  const step = state.step ?? 0;
+
+  // Try parsing as a full range first (e.g. "18-25")
+  const rangeMatch = text.trim().match(/^(\d+)\s*[-–]\s*(\d+)$/);
+  if (rangeMatch) {
+    const min = parseInt(rangeMatch[1], 10);
+    const max = parseInt(rangeMatch[2], 10);
+    if (min < 12 || max > 80 || min > max) {
+      await ctx.reply(t('ageRangeInvalid', lang));
+      return true;
+    }
+    const success = await updateUser(env, state.userId, { preferences: { minAge: min, maxAge: max } });
+    await clearConversationState(env.KV, state.userId);
+    if (success) {
+      await ctx.reply(t('ageRangeUpdated', lang, { min: String(min), max: String(max) }), { reply_markup: { remove_keyboard: true } });
+    } else {
+      await ctx.reply(t('genericError', lang), { reply_markup: { remove_keyboard: true } });
+    }
+    return true;
+  }
+
+  // Single number input
+  const singleMatch = text.trim().match(/^(\d+)$/);
+  if (!singleMatch) {
     await ctx.reply(t('ageRangeInvalid', lang));
     return true;
   }
-  const min = parseInt(match[1], 10);
-  const max = parseInt(match[2], 10);
-  if (min < 18 || max > 65 || min > max) {
+  const val = parseInt(singleMatch[1], 10);
+  if (val < 12 || val > 80) {
     await ctx.reply(t('ageRangeInvalid', lang));
     return true;
   }
-  const success = await updateUser(env, state.userId, { preferences: { minAge: min, maxAge: max } });
+
+  if (step === 0) {
+    // Min selected via text → move to max selection
+    await setConversationState(env.KV, { userId: state.userId, field: 'age-range', step: 1, data: { min: val } });
+    await ctx.reply(t('ageRangeSelectMax', lang, { min: String(val) }), { reply_markup: { remove_keyboard: true } });
+    return true;
+  }
+
+  // Step 1: max selected
+  const min = (state.data?.min as number) ?? 12;
+  if (val < min) {
+    await ctx.reply(t('ageRangeInvalid', lang));
+    return true;
+  }
+  const success = await updateUser(env, state.userId, { preferences: { minAge: min, maxAge: val } });
   await clearConversationState(env.KV, state.userId);
   if (success) {
-    await ctx.reply(t('ageRangeUpdated', lang, { min: String(min), max: String(max) }), { reply_markup: { remove_keyboard: true } });
+    await ctx.reply(t('ageRangeUpdated', lang, { min: String(min), max: String(val) }), { reply_markup: { remove_keyboard: true } });
   } else {
     await ctx.reply(t('genericError', lang), { reply_markup: { remove_keyboard: true } });
   }

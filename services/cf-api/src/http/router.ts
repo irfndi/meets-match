@@ -58,6 +58,14 @@ export class ApiRouter {
           return this.handleUpdateLastActive(url.pathname);
         case url.pathname.startsWith("/users/") && url.pathname.endsWith("/last-reminded-at") && method === "POST":
           return this.handleUpdateLastRemindedAt(url.pathname);
+        case url.pathname.startsWith("/users/") && url.pathname.endsWith("/swipe-status") && method === "GET":
+          return this.handleGetSwipeStatus(url.pathname);
+        case url.pathname.startsWith("/users/") && url.pathname.endsWith("/record-swipe") && method === "POST":
+          return this.handleRecordSwipe(url.pathname);
+        case url.pathname.startsWith("/users/") && url.pathname.endsWith("/referral") && method === "GET":
+          return this.handleGetReferralCode(url.pathname);
+        case url.pathname.startsWith("/users/") && url.pathname.endsWith("/apply-referral") && method === "POST":
+          return this.handleApplyReferral(url.pathname, request);
         case url.pathname.startsWith("/users/") && method === "PUT":
           return this.handleUpdateUser(url.pathname, request);
         case url.pathname === "/matches" && method === "GET":
@@ -301,6 +309,52 @@ export class ApiRouter {
       return jsonResponse(result);
     } catch (error) {
       return jsonResponse({ error: "Failed to get stats" }, 500);
+    }
+  }
+
+  private async handleGetSwipeStatus(path: string): Promise<Response> {
+    const userId = path.replace("/users/", "").replace("/swipe-status", "");
+    try {
+      const status = await runEffect(this.userRepo.getSwipeStatus(userId));
+      return jsonResponse(status);
+    } catch (error) {
+      if (error instanceof NotFoundError) return jsonResponse({ error: error.message }, 404);
+      return jsonResponse({ error: "Failed to get swipe status" }, 500);
+    }
+  }
+
+  private async handleRecordSwipe(path: string): Promise<Response> {
+    const userId = path.replace("/users/", "").replace("/record-swipe", "");
+    try {
+      const result = await runEffect(this.userRepo.recordSwipe(userId));
+      return jsonResponse(result);
+    } catch (error) {
+      if (error instanceof NotFoundError) return jsonResponse({ error: error.message }, 404);
+      return jsonResponse({ error: "Failed to record swipe" }, 500);
+    }
+  }
+
+  private async handleGetReferralCode(path: string): Promise<Response> {
+    const userId = path.replace("/users/", "").replace("/referral", "");
+    try {
+      const code = await runEffect(this.userRepo.getOrCreateReferralCode(userId));
+      return jsonResponse({ code });
+    } catch (error) {
+      if (error instanceof NotFoundError) return jsonResponse({ error: error.message }, 404);
+      return jsonResponse({ error: "Failed to get referral code" }, 500);
+    }
+  }
+
+  private async handleApplyReferral(path: string, request: Request): Promise<Response> {
+    const userId = path.replace("/users/", "").replace("/apply-referral", "");
+    try {
+      const body = await request.json() as Record<string, unknown>;
+      const code = String(body.code ?? "");
+      const result = await runEffect(this.userRepo.applyReferral(userId, code));
+      return jsonResponse(result, result.success ? 200 : 400);
+    } catch (error) {
+      if (error instanceof NotFoundError) return jsonResponse({ error: error.message }, 404);
+      return jsonResponse({ error: "Failed to apply referral" }, 500);
     }
   }
 }

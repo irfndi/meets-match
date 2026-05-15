@@ -60,12 +60,12 @@ describe("Profile Menu Callbacks", () => {
     expect(JSON.parse(state!).field).toBe("bio");
   });
 
-  it("should start age conversation on profile:age", async () => {
-    const result = await handleProfileCallback(ctx, env, "profile:age");
+  it("should start birthdate conversation on profile:birthdate", async () => {
+    const result = await handleProfileCallback(ctx, env, "profile:birthdate");
     expect(result).toBe(true);
     expect(ctx.reply).toHaveBeenCalled();
     const state = await kv.get("conversation:123");
-    expect(JSON.parse(state!).field).toBe("age");
+    expect(JSON.parse(state!).field).toBe("birthdate");
   });
 
   it("should start name conversation on profile:name", async () => {

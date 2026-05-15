@@ -68,10 +68,10 @@ describe("Settings Handlers", () => {
   });
 
   describe("settingsCallbacks", () => {
-    it("should start age-range conversation", async () => {
+    it("should start age-range conversation with grid", async () => {
       ctx.callbackQuery!.data = "settings:age-range";
       await settingsCallbacks(ctx, env);
-      expect(ctx.reply).toHaveBeenCalledWith(expect.stringContaining("age range"), expect.anything());
+      expect(ctx.reply).toHaveBeenCalledWith(expect.stringContaining("minimum"), expect.anything());
       const state = await kv.get("conversation:123");
       expect(JSON.parse(state!).field).toBe("age-range");
     });

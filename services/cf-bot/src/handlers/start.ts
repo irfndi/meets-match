@@ -43,6 +43,23 @@ export const startCommand = async (ctx: MyContext, env: Env): Promise<void> => {
   const { user, created } = result;
   const lang = (user.language as Language) ?? DEFAULT_LANGUAGE;
 
+  // Handle referral code from deep link: /start ref_XXXXXX
+  const startPayload = ctx.message?.text?.replace("/start", "").trim() ?? "";
+  if (startPayload.startsWith("ref_")) {
+    const code = startPayload.replace("ref_", "");
+    const applyRes = await env.API_SERVICE.fetch(
+      new Request(`http://api/users/${ctx.from.id}/apply-referral`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code }),
+      })
+    );
+    if (applyRes.ok) {
+      const data = await applyRes.json() as { message?: string };
+      await ctx.reply(`🎉 ${data.message ?? "Referral applied!"}`);
+    }
+  }
+
   if (created) {
     // New user — show language selection first
     await ctx.reply(

@@ -364,6 +364,7 @@ export class MatchRepository {
       lastName: row.last_name ? String(row.last_name) : undefined,
       bio: row.bio ? String(row.bio) : undefined,
       age: row.age ? Number(row.age) : undefined,
+      birthDate: row.birth_date ? String(row.birth_date) : undefined,
       gender: row.gender ? String(row.gender) as typeof import("@meetsmatch/cf-shared").Gender.Type : undefined,
       interests: row.interests ? JSON.parse(String(row.interests)) : [],
       photos: row.photos ? JSON.parse(String(row.photos)) : [],
@@ -394,7 +395,7 @@ interface MatchScore {
   total: number;
 }
 
-function calculateMatchScore(user1: typeof User.Type, user2: typeof User.Type): MatchScore {
+export function calculateMatchScore(user1: typeof User.Type, user2: typeof User.Type): MatchScore {
   const score: MatchScore = { location: 0, interests: 0, preferences: 0, total: 0 };
 
   // 1. Location Score

@@ -1,7 +1,7 @@
 import type { MyContext } from '../types.js';
 import { getProfileMenu } from '../menus/profile.js';
 import type { Env } from '../index.js';
-import { ensureUserExists, getProfileCompleteness, getMissingFieldsDisplay } from '../lib/user-utils.js';
+import { ensureUserExists, getProfileCompleteness, getMissingFieldsDisplay, computeAgeFromBirthDate } from '../lib/user-utils.js';
 import { getMainMenuKeyboard } from '../lib/main-menu.js';
 
 export const profileCommand = async (ctx: MyContext, env: Env): Promise<void> => {
@@ -19,7 +19,8 @@ export const profileCommand = async (ctx: MyContext, env: Env): Promise<void> =>
   const { user } = result;
   const name = user.displayName || 'Not set';
   const username = user.username ? `@${user.username}` : 'Not set';
-  const age = user.age ?? 'Not set';
+  const computedAge = user.birthDate ? computeAgeFromBirthDate(user.birthDate) : user.age;
+  const ageDisplay = computedAge !== undefined ? String(computedAge) : 'Not set';
   const gender = user.gender ? (user.gender as string).charAt(0).toUpperCase() + (user.gender as string).slice(1) : 'Not set';
   const bio = user.bio || 'Not set';
   const loc = user.location;
@@ -35,7 +36,7 @@ export const profileCommand = async (ctx: MyContext, env: Env): Promise<void> =>
     '',
     `*Name:* ${name}`,
     `*Username:* ${username}`,
-    `*Age:* ${age}`,
+    `*Age:* ${ageDisplay}`,
     `*Gender:* ${gender}`,
     `*Bio:* ${bio}`,
     `*Location:* ${locationText}`,

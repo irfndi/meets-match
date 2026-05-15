@@ -5,9 +5,10 @@ import { helpCommand, aboutCommand } from "./handlers/help.js";
 import { profileCommand } from "./handlers/profile.js";
 import { matchCommand, matchCallbacks } from "./handlers/match.js";
 import { matchesCommand, matchesCallbacks } from "./handlers/matches.js";
-import { settingsCommand, settingsCallbacks } from "./handlers/settings.js";
+import { settingsCommand, settingsCallbacks, handleAgeRangeCallback } from "./handlers/settings.js";
+import { premiumCommand, premiumCallbacks, referralCommand } from "./handlers/premium.js";
 import { activityTrackerMiddleware } from "./lib/activityTracker.js";
-import { handleConversationMessage, handleContactMessage, handleLocationMessage } from "./lib/conversations.js";
+import { handleConversationMessage, handleContactMessage, handleLocationMessage, checkMandatoryUpdates } from "./lib/conversations.js";
 import { handleProfileCallback } from "./menus/profile.js";
 import { getNotifications, clearNotifications } from "./lib/notifications.js";
 import { getMainMenuKeyboard } from "./lib/main-menu.js";
@@ -44,6 +45,20 @@ function createBot(env: Env): Bot<MyContext> {
 
   bot.use(activityTrackerMiddleware(env));
 
+  // Mandatory profile update check — runs before commands and callbacks
+  bot.use(async (ctx, next) => {
+    if (!ctx.from) return next();
+    // Skip if already in a birthdate conversation
+    const state = await env.KV.get(`conversation:${ctx.from.id}`);
+    if (state) {
+      const parsed = JSON.parse(state) as { field?: string };
+      if (parsed.field === 'birthdate') return next();
+    }
+    const needsUpdate = await checkMandatoryUpdates(ctx, env);
+    if (needsUpdate) return;
+    return next();
+  });
+
   // Check for pending notifications only on command interactions (not every message)
   bot.use(async (ctx, next) => {
     if (!ctx.from || !ctx.message?.text?.startsWith("/")) return next();
@@ -73,6 +88,8 @@ function createBot(env: Env): Bot<MyContext> {
     { command: "match", description: "Find your next match" },
     { command: "matches", description: "View your matches and likes" },
     { command: "settings", description: "Adjust match preferences" },
+    { command: "premium", description: "Upgrade to Premium" },
+    { command: "referral", description: "Invite friends for bonus swipes" },
     { command: "help", description: "How to use MeetMatch" },
     { command: "about", description: "About MeetMatch" },
   ]);
@@ -84,6 +101,8 @@ function createBot(env: Env): Bot<MyContext> {
   bot.command("match", (ctx) => matchCommand(ctx, env));
   bot.command("matches", (ctx) => matchesCommand(ctx, env));
   bot.command("settings", (ctx) => settingsCommand(ctx, env));
+  bot.command("premium", (ctx) => premiumCommand(ctx, env));
+  bot.command("referral", (ctx) => referralCommand(ctx, env));
 
   bot.on("callback_query:data", async (ctx) => {
     const data = ctx.callbackQuery.data;
@@ -120,10 +139,17 @@ function createBot(env: Env): Bot<MyContext> {
       return matchesCallbacks(ctx, env);
     }
 
-    if (
-      data.startsWith("settings:")
-    ) {
+    if (data.startsWith("settings:")) {
       return settingsCallbacks(ctx, env);
+    }
+
+    if (data.startsWith("agerange:")) {
+      const handled = await handleAgeRangeCallback(ctx, env, data);
+      if (handled) return;
+    }
+
+    if (data.startsWith("premium:") || data.startsWith("referral:")) {
+      return premiumCallbacks(ctx, env);
     }
   });
 
@@ -222,8 +248,33 @@ export default {
         const payload = typeof body.payload === "string" ? JSON.parse(body.payload) : (body.payload ?? {});
 
         const bot = createBot(env);
-        const message = payload.message || `You have a new ${type} notification!`;
-        await bot.api.sendMessage(userId, message);
+        let message: string;
+        let keyboard: import("grammy").InlineKeyboard | undefined;
+
+        const otherUsername = payload.otherUsername as string | undefined;
+
+        if (type === "like") {
+          const fromName = payload.fromDisplayName ?? "Someone";
+          message = `💕 *New Like!*\n\n${fromName} liked your profile! Use *💕 My Matches* to see who likes you.`;
+        } else if (type === "mutual_match") {
+          const otherName = payload.otherDisplayName ?? "Someone";
+          message = `🎉 *It's a Match!*\n\nYou and *${otherName}* have liked each other! 💕`;
+          if (otherUsername) {
+            message += `\n\n👉 [Start chatting](https://t.me/${otherUsername})`;
+          }
+          keyboard = new InlineKeyboard().text("💕 View Matches", "matches").row();
+        } else if (type === "BIRTHDAY") {
+          message = payload.message || `🎂 Someone has a birthday today!`;
+          keyboard = new InlineKeyboard().text("💕 View Matches", "matches").row();
+        } else {
+          message = payload.message || `You have a new ${type} notification!`;
+        }
+
+        await bot.api.sendMessage(userId, message, {
+          parse_mode: "Markdown",
+          reply_markup: keyboard,
+          link_preview_options: otherUsername ? { is_disabled: false } : undefined,
+        });
 
         return new Response(JSON.stringify({ success: true }), {
           status: 200,

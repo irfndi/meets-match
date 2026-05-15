@@ -7,7 +7,7 @@ import { t, type Language } from '../lib/i18n.js';
 export function getProfileMenu(env: Env) {
   return new InlineKeyboard()
     .text('📝 Bio', 'profile:bio')
-    .text('🎂 Age', 'profile:age')
+    .text('🎂 Age', 'profile:birthdate')
     .row()
     .text('👤 Name', 'profile:name')
     .text('⚧ Gender', 'profile:gender')
@@ -36,9 +36,9 @@ export async function handleProfileCallback(ctx: MyContext, env: Env, data: stri
       await ctx.reply(t('bioPrompt', lang));
       await ctx.answerCallbackQuery().catch(() => {});
       return true;
-    case 'profile:age':
-      await startConversation(env.KV, userId, 'age');
-      await ctx.reply(t('agePrompt', lang));
+    case 'profile:birthdate':
+      await startConversation(env.KV, userId, 'birthdate');
+      await ctx.reply(t('birthDatePrompt', lang));
       await ctx.answerCallbackQuery().catch(() => {});
       return true;
     case 'profile:name':
