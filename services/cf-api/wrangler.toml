@@ -35,6 +35,11 @@ ENABLE_SENTRY = "false"
 
 [env.dev]
 name = "meetsmatch-api-dev"
+
+[env.dev.vars]
+ENVIRONMENT = "development"
+ENABLE_SENTRY = "false"
+
 [[env.dev.d1_databases]]
 binding = "DB"
 database_name = "meetsmatch-dev"

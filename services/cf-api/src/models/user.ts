@@ -169,8 +169,16 @@ export class UserRepository {
           values.push(JSON.stringify(user.location));
         }
         if (user.preferences !== undefined) {
+          const existingPrefsRow = await this.db
+            .prepare("SELECT preferences FROM users WHERE id = ?")
+            .bind(req.userId)
+            .first<{ preferences: string }>();
+          const existingPrefs = existingPrefsRow?.preferences
+            ? JSON.parse(existingPrefsRow.preferences)
+            : {};
+          const merged = { ...existingPrefs, ...user.preferences };
           fields.push("preferences = ?");
-          values.push(JSON.stringify(user.preferences));
+          values.push(JSON.stringify(merged));
         }
         if (user.isActive !== undefined) {
           fields.push("is_active = ?");

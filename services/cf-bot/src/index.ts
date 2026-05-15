@@ -13,6 +13,7 @@ import {
   startLikeMessageConversation,
 } from "./handlers/match.js";
 import { matchesCommand, matchesCallbacks } from "./handlers/matches.js";
+import { buildMediaKey, buildMediaPublicUrl } from "@meetsmatch/cf-shared";
 import {
   settingsCommand,
   settingsCallbacks,
@@ -43,6 +44,7 @@ import {
   MENU_MY_MATCHES,
   MENU_PROFILE,
   MENU_SETTINGS,
+  MENU_PREMIUM,
 } from "./lib/main-menu.js";
 import { InlineKeyboard } from "grammy";
 import { t, type Language } from "./lib/i18n.js";
@@ -192,6 +194,12 @@ function createBot(env: Env): Bot<MyContext> {
       return;
     }
 
+    if (data === "settings:back") {
+      await settingsCommand(ctx, env);
+      await ctx.answerCallbackQuery().catch(() => {});
+      return;
+    }
+
     if (data.startsWith("settings:")) {
       return settingsCallbacks(ctx, env);
     }
@@ -211,13 +219,11 @@ function createBot(env: Env): Bot<MyContext> {
       if (handled) return;
     }
 
-    if (data === "settings:back") {
-      await settingsCommand(ctx, env);
-      await ctx.answerCallbackQuery().catch(() => {});
-      return;
-    }
-
-    if (data.startsWith("premium:") || data.startsWith("referral:")) {
+    if (
+      data.startsWith("premium:") ||
+      data.startsWith("referral:") ||
+      data.startsWith("premium_ad:")
+    ) {
       return premiumCallbacks(ctx, env);
     }
 
@@ -322,6 +328,32 @@ function createBot(env: Env): Bot<MyContext> {
     if (payload && payload.startsWith("gift_")) {
       await handleGiftPayment(ctx, env, payload);
     }
+
+    if (payload && payload.startsWith("premium_")) {
+      const parts = payload.split("_");
+      const userId = parts[2];
+      const tier = parts[3];
+      if (!userId || !tier) return;
+
+      try {
+        const client = new ApiServiceClient(env.API_SERVICE);
+        await client.updateUser({
+          userId,
+          user: { subscriptionTier: tier },
+        });
+        await ctx.reply(
+          t("premiumPurchased", "en", {
+            tier: tier === "premium_plus" ? "Premium+ 💎" : "Premium 👑",
+          }),
+          { reply_markup: getMainMenuKeyboard() },
+        );
+      } catch (error) {
+        console.error("Premium purchase error:", error);
+        await ctx.reply(
+          "❌ Payment processed but we could not activate your subscription. Please contact support.",
+        );
+      }
+    }
   });
 
   bot.on("message:text", async (ctx) => {
@@ -337,6 +369,8 @@ function createBot(env: Env): Bot<MyContext> {
         return profileCommand(ctx, env);
       case MENU_SETTINGS:
         return settingsCommand(ctx, env);
+      case MENU_PREMIUM:
+        return premiumCommand(ctx, env);
     }
 
     // Match action reply keyboard — only if there's an active match queue
@@ -411,12 +445,12 @@ async function handleLikeMessagePhoto(ctx: MyContext, env: Env): Promise<void> {
     }
 
     const ext = "jpg";
-    const key = `${userId}/${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${ext}`;
+    const key = buildMediaKey(userId, ext);
     await env.MEDIA_BUCKET.put(key, bytes, {
       httpMetadata: { contentType: `image/${ext}` },
     });
 
-    const publicUrl = `https://media.meetsmatch.irfndi.workers.dev/${key}`;
+    const publicUrl = buildMediaPublicUrl(key);
 
     const { handleLikeMessageMedia } = await import("./handlers/match.js");
     await handleLikeMessageMedia(ctx, env, publicUrl, "image");
@@ -454,12 +488,12 @@ async function handleLikeMessageVideo(ctx: MyContext, env: Env): Promise<void> {
       return;
     }
 
-    const key = `${userId}/${Date.now()}_${Math.random().toString(36).substring(2, 8)}.mp4`;
+    const key = buildMediaKey(userId, "mp4");
     await env.MEDIA_BUCKET.put(key, bytes, {
       httpMetadata: { contentType: "video/mp4" },
     });
 
-    const publicUrl = `https://media.meetsmatch.irfndi.workers.dev/${key}`;
+    const publicUrl = buildMediaPublicUrl(key);
 
     const { handleLikeMessageMedia } = await import("./handlers/match.js");
     await handleLikeMessageMedia(ctx, env, publicUrl, "video");
@@ -616,13 +650,14 @@ export default {
           headers: { "Content-Type": "application/json" },
         });
       } catch (error) {
-        const errorMessage =
-          error instanceof Error ? error.message : String(error);
-        console.error("Send notification error:", errorMessage);
-        return new Response(JSON.stringify({ error: errorMessage }), {
-          status: 500,
-          headers: { "Content-Type": "application/json" },
-        });
+        console.error("Send notification error:", error);
+        return new Response(
+          JSON.stringify({ error: "Internal Server Error" }),
+          {
+            status: 500,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
       }
     }
 

@@ -10,6 +10,8 @@ const log = createLogger("cf-bot");
 
 const PREMIUM_PRICE = "$4.99/month";
 const PREMIUM_PLUS_PRICE = "$9.99/month";
+const PREMIUM_STARS = 500;
+const PREMIUM_PLUS_STARS = 1000;
 
 async function getInteractionStatus(
   env: Env,
@@ -134,27 +136,72 @@ export const premiumCommand = async (
     "• 15 likes + 35 dislikes per day",
     "• No skip (Like or Dislike only)",
     "",
-    "*Premium 👑 — " + PREMIUM_PRICE + "*",
+    `*Premium 👑 — ${PREMIUM_PRICE}*`,
     "• Unlimited likes & dislikes",
     "• ⏩ Skip profiles",
     "• Priority matching",
     "• See who liked you",
     "",
-    "*Premium+ 💎 — " + PREMIUM_PLUS_PRICE + "*",
+    `*Premium+ 💎 — ${PREMIUM_PLUS_PRICE}*`,
     "• Everything in Premium",
     "• Unlimited direct DMs",
     "• Verified badge",
     "• Advanced filters",
-    "",
-    "_Premium activation is currently manual. Contact support to upgrade._",
   ]
     .filter(Boolean)
     .join("\n");
 
-  const keyboard = new InlineKeyboard()
-    .text("🎁 Share for Free Bonus", "referral:show")
-    .row()
-    .text("❌ Close", "premium:close");
+  const keyboard = new InlineKeyboard();
+
+  // Only show buy buttons for free users; current tier users can see upgrade option
+  if (tier === "free" || tier === "premium") {
+    try {
+      const premiumLink = await ctx.api.createInvoiceLink(
+        "MeetMatch Premium",
+        "Upgrade to Premium — unlimited likes, skip, priority matching, and see who liked you.",
+        `premium_${userId}_premium`,
+        "",
+        "XTR",
+        [{ label: "Premium", amount: PREMIUM_STARS }],
+      );
+      keyboard
+        .url(`⭐ Buy Premium (${PREMIUM_STARS} Stars)`, premiumLink)
+        .row();
+    } catch (error) {
+      log.error(
+        "premiumInvoice",
+        "Failed to create Premium invoice",
+        { userId },
+        error,
+      );
+    }
+  }
+
+  if (tier !== "premium_plus") {
+    try {
+      const plusLink = await ctx.api.createInvoiceLink(
+        "MeetMatch Premium+",
+        "Upgrade to Premium+ — everything in Premium plus unlimited DMs, verified badge, and advanced filters.",
+        `premium_${userId}_premium_plus`,
+        "",
+        "XTR",
+        [{ label: "Premium+", amount: PREMIUM_PLUS_STARS }],
+      );
+      keyboard
+        .url(`💎 Buy Premium+ (${PREMIUM_PLUS_STARS} Stars)`, plusLink)
+        .row();
+    } catch (error) {
+      log.error(
+        "premiumInvoice",
+        "Failed to create Premium+ invoice",
+        { userId },
+        error,
+      );
+    }
+  }
+
+  keyboard.text("🎁 Share for Free Bonus", "referral:show").row();
+  keyboard.text("❌ Close", "premium:close");
 
   await ctx.reply(msg, { parse_mode: "Markdown", reply_markup: keyboard });
 };
@@ -241,6 +288,12 @@ export const premiumCallbacks = async (
   }
 
   if (data === "referral:close" || data === "referral:dismiss") {
+    await ctx.deleteMessage().catch(() => {});
+    await ctx.answerCallbackQuery().catch(() => {});
+    return;
+  }
+
+  if (data === "premium_ad:dismiss") {
     await ctx.deleteMessage().catch(() => {});
     await ctx.answerCallbackQuery().catch(() => {});
     return;

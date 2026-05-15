@@ -411,7 +411,9 @@ export class MatchRepository {
           currentUser.id,
         );
 
-        // Apply preference filters (skipped when relaxing filters)
+        // Apply preference filters.
+        // Gender preference is always enforced (never relaxed).
+        // Age/distance filters are skipped only when relaxing filters.
         if (!relaxFilters) {
           if (prefs?.minAge && prefs.minAge > 0) {
             sql += " AND u.age >= ?";
@@ -421,13 +423,11 @@ export class MatchRepository {
             sql += " AND u.age <= ?";
             values.push(prefs.maxAge);
           }
-          if (prefs?.genderPreference && prefs.genderPreference.length > 0) {
-            const placeholders = prefs.genderPreference
-              .map(() => "?")
-              .join(",");
-            sql += ` AND u.gender IN (${placeholders})`;
-            values.push(...prefs.genderPreference);
-          }
+        }
+        if (prefs?.genderPreference && prefs.genderPreference.length > 0) {
+          const placeholders = prefs.genderPreference.map(() => "?").join(",");
+          sql += ` AND u.gender IN (${placeholders})`;
+          values.push(...prefs.genderPreference);
         }
 
         sql += ` LIMIT ${fetchLimit}`;

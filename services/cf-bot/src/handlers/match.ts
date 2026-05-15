@@ -72,7 +72,7 @@ async function getInteractionStatus(
 import { promptPhoneVerification } from "../lib/conversations.js";
 import { ApiServiceClient } from "../services/api-client.js";
 import { getMainMenuKeyboard } from "../lib/main-menu.js";
-import { t, type Language } from "../lib/i18n.js";
+import { t, type Language, escapeMarkdownV2 } from "../lib/i18n.js";
 
 function getLang(user: Record<string, unknown> | UserProfile): Language {
   return (user.language as Language) ?? "en";
@@ -102,12 +102,29 @@ async function ensureDefaultPreferences(
   userId: string,
   user: Record<string, unknown>,
 ): Promise<void> {
-  const prefs = (user.preferences as Record<string, unknown> | undefined) ?? {};
+  // Always fetch fresh preferences from the API to avoid overwriting
+  // custom preferences with stale data from a previous fetch
+  let freshPrefs: Record<string, unknown> = {};
+  try {
+    const res = await env.API_SERVICE.fetch(
+      new Request(`http://api/users/${userId}`, { method: "GET" }),
+    );
+    if (res.ok) {
+      const data = (await res.json()) as { user?: Record<string, unknown> };
+      freshPrefs =
+        (data.user?.preferences as Record<string, unknown> | undefined) ?? {};
+    }
+  } catch {
+    // fall back to the passed-in user object
+    freshPrefs =
+      (user.preferences as Record<string, unknown> | undefined) ?? {};
+  }
+
   const hasPrefs =
-    prefs.minAge !== undefined ||
-    prefs.maxAge !== undefined ||
-    prefs.maxDistance !== undefined ||
-    prefs.genderPreference !== undefined;
+    freshPrefs.minAge !== undefined ||
+    freshPrefs.maxAge !== undefined ||
+    freshPrefs.maxDistance !== undefined ||
+    freshPrefs.genderPreference !== undefined;
   if (hasPrefs) return;
 
   const age = user.birthDate
@@ -175,6 +192,7 @@ async function fetchPotentialMatches(
 
 const MATCH_QUEUE_TTL = 600; // 10 minutes
 const LAST_ACTION_TTL = 3600; // 1 hour
+const ACTION_LOCK_TTL = 5; // 5 seconds — prevent double-processing
 const DM_BYPASS_LIMIT = 100;
 const DM_BYPASS_TTL = 86400; // 24 hours
 
@@ -236,6 +254,24 @@ async function clearLastAction(kv: KVNamespace, userId: string): Promise<void> {
   await kv.delete(`last_action:${userId}`);
 }
 
+async function acquireActionLock(
+  kv: KVNamespace,
+  userId: string,
+): Promise<boolean> {
+  const key = `action_lock:${userId}`;
+  const existing = await kv.get(key);
+  if (existing) return false;
+  await kv.put(key, "1", { expirationTtl: ACTION_LOCK_TTL });
+  return true;
+}
+
+async function releaseActionLock(
+  kv: KVNamespace,
+  userId: string,
+): Promise<void> {
+  await kv.delete(`action_lock:${userId}`);
+}
+
 // --- Premium+ DM Bypass tracking ---
 
 interface DMBypassStatus {
@@ -285,8 +321,18 @@ async function useDMBypass(
   };
 }
 
-function buildDMKeyboard(targetUserId: string) {
-  return new InlineKeyboard().text("📩 Send DM", `dm:send:${targetUserId}`);
+function buildMatchCardKeyboard(targetUserId: string, tier: string) {
+  const isPremium = tier === "premium" || tier === "premium_plus";
+  const keyboard = new InlineKeyboard();
+  if (isPremium) {
+    keyboard.text("↩️", `match:undo:${targetUserId}`);
+  }
+  keyboard.text("👎", `match:dislike:${targetUserId}`);
+  keyboard.text("❤️", `match:like:${targetUserId}`);
+  keyboard.row();
+  keyboard.text("💌", `match:like-message:${targetUserId}`);
+  keyboard.text("📩 Send DM", `dm:send:${targetUserId}`);
+  return keyboard;
 }
 
 export function getMatchActionKeyboard(tier: string): Keyboard {
@@ -335,9 +381,9 @@ function getGenderPronoun(gender: string | undefined): string {
 }
 
 function buildMatchCard(otherUser: Record<string, unknown>): string {
-  const name = (otherUser.displayName ??
-    otherUser.first_name ??
-    "Someone") as string;
+  const name = escapeMarkdownV2(
+    (otherUser.displayName ?? otherUser.first_name ?? "Someone") as string,
+  );
   const age = otherUser.age ?? "?";
   const birthdayBadge = isBirthdayToday(
     otherUser.birthDate as string | undefined,
@@ -347,23 +393,24 @@ function buildMatchCard(otherUser: Record<string, unknown>): string {
   const loc = otherUser.location as Record<string, unknown> | undefined;
   const locationText =
     loc?.city && loc?.country
-      ? `${loc.city}, ${loc.country}`
+      ? escapeMarkdownV2(`${loc.city}, ${loc.country}`)
       : loc?.latitude
         ? "📍 Nearby"
         : "";
   let bio = "";
   if (otherUser.bio) {
     const bioText = String(otherUser.bio);
+    const escapedBio = escapeMarkdownV2(bioText);
     // Truncate long bios with spoiler expand/collapse
     const maxBioLen = 180;
     if (bioText.length > maxBioLen) {
-      bio = `\n📝 ${bioText.slice(0, maxBioLen)}||${bioText.slice(maxBioLen)}||`;
+      bio = `\n📝 ${escapedBio.slice(0, maxBioLen)}||${escapedBio.slice(maxBioLen)}||`;
     } else {
-      bio = `\n📝 ${bioText}`;
+      bio = `\n📝 ${escapedBio}`;
     }
   }
   const interests = otherUser.interests
-    ? `\n🌟 ${Array.isArray(otherUser.interests) ? (otherUser.interests as string[]).join(", ") : String(otherUser.interests)}`
+    ? `\n🌟 ${escapeMarkdownV2(Array.isArray(otherUser.interests) ? (otherUser.interests as string[]).join(", ") : String(otherUser.interests))}`
     : "";
 
   const parts = [`👤 ${name}, ${age}${birthdayBadge}`];
@@ -397,26 +444,32 @@ async function sendMatchCard(
   }>;
   const firstImage = mediaUrls.find((m) => m.type === "image");
   const firstVideo = mediaUrls.find((m) => m.type === "video");
-  const inlineKeyboard = buildDMKeyboard(String(match.id));
+  const inlineKeyboard = buildMatchCardKeyboard(String(match.id), tier);
 
   try {
     if (firstImage) {
       await ctx.replyWithPhoto(firstImage.url, {
         caption: text,
-        parse_mode: "Markdown",
+        parse_mode: "MarkdownV2",
         reply_markup: inlineKeyboard,
       });
     } else if (firstVideo) {
       await ctx.replyWithVideo(firstVideo.url, {
         caption: text,
-        parse_mode: "Markdown",
+        parse_mode: "MarkdownV2",
         reply_markup: inlineKeyboard,
       });
     } else {
-      await ctx.reply(text, { reply_markup: inlineKeyboard });
+      await ctx.reply(text, {
+        parse_mode: "MarkdownV2",
+        reply_markup: inlineKeyboard,
+      });
     }
   } catch {
-    await ctx.reply(text, { reply_markup: inlineKeyboard });
+    await ctx.reply(text, {
+      parse_mode: "MarkdownV2",
+      reply_markup: inlineKeyboard,
+    });
   }
 }
 
@@ -455,6 +508,32 @@ async function showNextMatch(
     await ctx.reply(t("matchReferralPrompt", lang), {
       reply_markup: referralKeyboard,
     });
+  }
+
+  // Random premium ad for free users (not too often)
+  if (queue.tier === "free" && queue.index > 0) {
+    const adKey = `ad_last_shown:${userId}`;
+    const adLastShown = await env.KV.get(adKey);
+    const lastIndex = adLastShown ? Number(adLastShown) : -999;
+    const minGap = 4;
+    const maxGap = 7;
+    // Use a deterministic but seemingly random gap based on userId hash
+    const gap =
+      minGap +
+      (Array.from(userId).reduce((a, c) => a + c.charCodeAt(0), 0) %
+        (maxGap - minGap + 1));
+
+    if (queue.index - lastIndex >= gap) {
+      await env.KV.put(adKey, String(queue.index), { expirationTtl: 600 });
+      const adKeyboard = new InlineKeyboard()
+        .text("👑 Upgrade to Premium", "premium:show")
+        .row()
+        .text(t("premiumAdDismiss", lang), "premium_ad:dismiss");
+      await ctx.reply(t("premiumAdPrompt", lang), {
+        parse_mode: "Markdown",
+        reply_markup: adKeyboard,
+      });
+    }
   }
 
   await sendMatchCard(ctx, match, lang, queue.tier);
@@ -560,11 +639,32 @@ async function handleMatchAction(
     await ctx.answerCallbackQuery().catch(() => {});
     return;
   }
+
+  // Acquire action lock to prevent double-processing from rapid taps
+  const locked = await acquireActionLock(env.KV, userId);
+  if (!locked) {
+    await ctx.answerCallbackQuery("Processing... please wait.").catch(() => {});
+    return;
+  }
+
   const myName = ctx.from.first_name ?? "Someone";
   const lang = await fetchUserLang(env, userId);
 
   try {
     const client = new ApiServiceClient(env.API_SERVICE);
+
+    // Fetch current user profile for media URL to include in notifications
+    let myMediaUrl: string | undefined;
+    try {
+      const myProfile = await client.getUser({ userId });
+      const myMediaUrls = (myProfile.user?.mediaUrls ?? []) as Array<{
+        url: string;
+        type: string;
+      }>;
+      myMediaUrl = myMediaUrls.find((m) => m.type === "image")?.url;
+    } catch {
+      // ignore — notification will be text-only
+    }
 
     // Check interaction limits for free tier
     const status = await getInteractionStatus(env, userId);
@@ -659,6 +759,7 @@ async function handleMatchAction(
         await enqueueNotification(env, targetUserId, "mutual_match", {
           otherDisplayName: myName,
           otherUsername: ctx.from.username ?? undefined,
+          otherMediaUrl: myMediaUrl,
         });
       } else {
         await addNotification(env, targetUserId, {
@@ -669,6 +770,7 @@ async function handleMatchAction(
         });
         await enqueueNotification(env, targetUserId, "like", {
           fromDisplayName: myName,
+          fromMediaUrl: myMediaUrl,
         });
       }
     } else if (action === "dislike") {
@@ -690,6 +792,21 @@ async function handleMatchAction(
           body: JSON.stringify({ userId }),
         }),
       );
+    }
+
+    // Visual feedback
+    if (action === "like") {
+      await ctx.reply(t("matchLikeSuccess", lang), {
+        reply_markup: getMatchActionKeyboard(tier),
+      });
+    } else if (action === "dislike") {
+      await ctx.reply(t("matchDislikeSuccess", lang), {
+        reply_markup: getMatchActionKeyboard(tier),
+      });
+    } else if (action === "skip") {
+      await ctx.reply(t("matchSkipSuccess", lang), {
+        reply_markup: getMatchActionKeyboard(tier),
+      });
     }
 
     // Store last action for rollback
@@ -720,6 +837,8 @@ async function handleMatchAction(
     await ctx.reply(t("matchError", lang), {
       reply_markup: getMainMenuKeyboard(),
     });
+  } finally {
+    await releaseActionLock(env.KV, userId);
   }
   await ctx.answerCallbackQuery().catch(() => {});
 }
@@ -999,6 +1118,20 @@ export async function handleLikeMessageConversation(
 
   try {
     const client = new ApiServiceClient(env.API_SERVICE);
+
+    // Fetch current user profile for media URL to include in notifications
+    let myMediaUrl: string | undefined;
+    try {
+      const myProfile = await client.getUser({ userId });
+      const myMediaUrls = (myProfile.user?.mediaUrls ?? []) as Array<{
+        url: string;
+        type: string;
+      }>;
+      myMediaUrl = myMediaUrls.find((m) => m.type === "image")?.url;
+    } catch {
+      // ignore
+    }
+
     const createRes = await client.createMatch({
       user1Id: userId,
       user2Id: targetUserId,
@@ -1042,6 +1175,7 @@ export async function handleLikeMessageConversation(
       await enqueueNotification(env, targetUserId, "mutual_match", {
         otherDisplayName: myName,
         otherUsername: ctx.from.username ?? undefined,
+        otherMediaUrl: myMediaUrl,
       });
     } else {
       await ctx.reply(t("likeMessageSent", lang), {
@@ -1053,6 +1187,7 @@ export async function handleLikeMessageConversation(
       // Send notification with the message
       const notificationPayload: Record<string, unknown> = {
         fromDisplayName: myName,
+        fromMediaUrl: myMediaUrl,
       };
       if (message?.text) {
         notificationPayload.messageText = message.text;
@@ -1104,6 +1239,20 @@ export async function handleLikeMessageMedia(
 
   try {
     const client = new ApiServiceClient(env.API_SERVICE);
+
+    // Fetch current user profile for media URL to include in notifications
+    let myMediaUrl: string | undefined;
+    try {
+      const myProfile = await client.getUser({ userId });
+      const myMediaUrls = (myProfile.user?.mediaUrls ?? []) as Array<{
+        url: string;
+        type: string;
+      }>;
+      myMediaUrl = myMediaUrls.find((m) => m.type === "image")?.url;
+    } catch {
+      // ignore
+    }
+
     const createRes = await client.createMatch({
       user1Id: userId,
       user2Id: targetUserId,
@@ -1140,11 +1289,13 @@ export async function handleLikeMessageMedia(
         otherUserId: userId,
         otherDisplayName: myName,
         otherUsername: ctx.from.username ?? undefined,
+        otherMediaUrl: myMediaUrl,
         timestamp: new Date().toISOString(),
       });
       await enqueueNotification(env, targetUserId, "mutual_match", {
         otherDisplayName: myName,
         otherUsername: ctx.from.username ?? undefined,
+        otherMediaUrl: myMediaUrl,
       });
     } else {
       await ctx.reply(t("likeMessageSent", lang), {
@@ -1158,11 +1309,13 @@ export async function handleLikeMessageMedia(
         fromUserId: userId,
         fromDisplayName: myName,
         mediaUrl,
+        fromMediaUrl: myMediaUrl,
         timestamp: new Date().toISOString(),
       });
       await enqueueNotification(env, targetUserId, "like", {
         fromDisplayName: myName,
         mediaUrl,
+        fromMediaUrl: myMediaUrl,
       });
     }
 
@@ -1426,6 +1579,16 @@ export const matchCallbacks = async (
     );
   } else if (data.startsWith("match:skip:")) {
     await handleMatchAction(ctx, env, "skip", data.replace("match:skip:", ""));
+  } else if (data.startsWith("match:like-message:")) {
+    await startLikeMessageConversation(
+      ctx,
+      env,
+      data.replace("match:like-message:", ""),
+    );
+    await ctx.answerCallbackQuery().catch(() => {});
+  } else if (data.startsWith("match:undo:")) {
+    await handleRollback(ctx, env);
+    await ctx.answerCallbackQuery().catch(() => {});
   } else if (data.startsWith("dm:send:")) {
     await handleSendDM(ctx, env, data.replace("dm:send:", ""));
   } else if (data.startsWith("dm:buy:")) {

@@ -120,8 +120,9 @@ export const settingsCommand = async (
   const defaults = getDefaultPreferences(
     result.user as unknown as Record<string, unknown>,
   );
-  const prefs =
-    rawPrefs && Object.keys(rawPrefs).length > 0 ? rawPrefs : defaults;
+  // Merge defaults with existing prefs so partially set preferences
+  // still show calculated defaults for unset fields
+  const prefs = { ...defaults, ...rawPrefs };
 
   const ageRange =
     prefs?.minAge !== undefined && prefs?.maxAge !== undefined
@@ -227,10 +228,9 @@ export async function handleAgeRangeCallback(
   );
   let userAge = 25;
   let lang: Language = "en";
+  let userData: { user?: Record<string, unknown> } | undefined;
   if (userRes.ok) {
-    const userData = (await userRes.json()) as {
-      user?: Record<string, unknown>;
-    };
+    userData = (await userRes.json()) as { user?: Record<string, unknown> };
     const bd = userData.user?.birthDate as string | undefined;
     const age = userData.user?.age as number | undefined;
     userAge = (bd ? computeAgeFromBirthDate(bd) : age) ?? 25;
@@ -299,7 +299,11 @@ export async function handleAgeRangeCallback(
       return true;
     }
 
+    const existing = userData?.user?.preferences as
+      | Record<string, unknown>
+      | undefined;
     const success = await updateUserPreferences(env, userId, {
+      ...(existing ?? {}),
       minAge: min,
       maxAge: max,
     });
@@ -341,10 +345,9 @@ export async function handleDistanceCallback(
     new Request(`http://api/users/${userId}`, { method: "GET" }),
   );
   let lang: Language = "en";
+  let userData: { user?: Record<string, unknown> } | undefined;
   if (userRes.ok) {
-    const userData = (await userRes.json()) as {
-      user?: Record<string, unknown>;
-    };
+    userData = (await userRes.json()) as { user?: Record<string, unknown> };
     lang = (userData.user?.language as Language) ?? "en";
   }
 
@@ -364,7 +367,11 @@ export async function handleDistanceCallback(
       await ctx.answerCallbackQuery("Invalid distance.").catch(() => {});
       return true;
     }
+    const existing = userData?.user?.preferences as
+      | Record<string, unknown>
+      | undefined;
     const success = await updateUserPreferences(env, userId, {
+      ...(existing ?? {}),
       maxDistance: val,
     });
     if (success) {
@@ -401,11 +408,15 @@ export async function handleGenderPrefCallback(
     new Request(`http://api/users/${userId}`, { method: "GET" }),
   );
   let lang: Language = "en";
+  let existing: Record<string, unknown> | undefined;
   if (userRes.ok) {
     const userData = (await userRes.json()) as {
       user?: Record<string, unknown>;
     };
     lang = (userData.user?.language as Language) ?? "en";
+    existing = userData.user?.preferences as
+      | Record<string, unknown>
+      | undefined;
   }
 
   let selected: string[] = [];
@@ -430,6 +441,7 @@ export async function handleGenderPrefCallback(
   }
 
   const success = await updateUserPreferences(env, userId, {
+    ...(existing ?? {}),
     genderPreference: selected,
   });
   if (success) {
@@ -481,13 +493,10 @@ async function updateUserPreferences(
   prefs: Record<string, unknown>,
 ): Promise<boolean> {
   try {
-    // Fetch existing preferences so we merge instead of overwrite
-    const existing = await fetchUserPreferences(env, userId);
-    const merged = { ...(existing ?? {}), ...prefs };
     const response = await env.API_SERVICE.fetch(
       new Request(`http://api/users/${userId}`, {
         method: "PUT",
-        body: JSON.stringify({ user: { preferences: merged } }),
+        body: JSON.stringify({ user: { preferences: prefs } }),
         headers: { "Content-Type": "application/json" },
       }),
     );

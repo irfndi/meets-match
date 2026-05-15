@@ -139,6 +139,9 @@ interface Translations {
   aboutEnvironment: string;
   aboutLastUpdated: string;
   aboutServerAge: string;
+  premiumPurchased: string;
+  premiumAdPrompt: string;
+  premiumAdDismiss: string;
 }
 
 const en: Translations = {
@@ -338,12 +341,26 @@ const en: Translations = {
   aboutEnvironment: "*Environment:* {environment}",
   aboutLastUpdated: "*Last updated:* {builtAt}",
   aboutServerAge: "*Build age:* {serverAge}",
+  premiumPurchased:
+    "✅ You're now on *{tier}*! Enjoy your upgraded experience.",
+  premiumAdPrompt:
+    "👑 *Unlock Premium Features*\n\n" +
+    "• Unlimited likes & dislikes\n" +
+    "• Skip profiles you don't like\n" +
+    "• See who liked you\n" +
+    "• Send unlimited DMs\n\n" +
+    "Tap below to upgrade!",
+  premiumAdDismiss: "Maybe later",
 };
 
 const dictionaries: Record<Language, Translations> = { en };
 
 function escapeMd(value: string): string {
   return value.replace(/[_*\[\]`\\]/g, "\\$&");
+}
+
+export function escapeMarkdownV2(value: string): string {
+  return value.replace(/[_*\[\]()~`>#+=|{}.!\\]/g, "\\$&");
 }
 
 export function t(

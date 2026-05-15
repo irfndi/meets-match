@@ -9,6 +9,7 @@ export interface LikeNotification {
   timestamp: string;
   messageText?: string;
   mediaUrl?: string;
+  fromMediaUrl?: string;
 }
 
 export interface GiftNotification {
@@ -27,6 +28,7 @@ export interface MutualMatchNotification {
   otherDisplayName: string;
   otherUsername?: string;
   timestamp: string;
+  otherMediaUrl?: string;
 }
 
 export type Notification =

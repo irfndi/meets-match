@@ -246,6 +246,36 @@ describe("MatchRepository.getPotentialMatches SQL", () => {
     expect(sql).toContain("u.is_active = 1");
     expect(sql).toContain("u.is_profile_complete = 1");
   });
+
+  it("keeps gender filter even when relaxing filters", async () => {
+    const currentUser = createDbRow({
+      id: "1",
+      preferences: JSON.stringify({
+        minAge: 20,
+        maxAge: 30,
+        genderPreference: ["female"],
+      }),
+    });
+    const mockD1 = createMockD1([], currentUser);
+    const userRepo = new UserRepository(mockD1);
+    const matchRepo = new MatchRepository(mockD1, userRepo);
+
+    await Effect.runPromise(
+      matchRepo.getPotentialMatches({
+        userId: "1",
+        limit: 10,
+        relaxFilters: true,
+      }),
+    );
+
+    const sql = mockD1._capturedSql.find((s) => s.includes("FROM users u"));
+    expect(sql).not.toContain("u.age >= ?");
+    expect(sql).not.toContain("u.age <= ?");
+    expect(sql).toContain("u.gender IN (?)");
+
+    const values = mockD1._capturedValues.find((v) => v.length >= 8);
+    expect(values).toContain("female");
+  });
 });
 
 describe("MatchRepository.getPotentialMatches JS filtering", () => {
