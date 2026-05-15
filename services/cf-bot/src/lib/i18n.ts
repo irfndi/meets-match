@@ -360,7 +360,7 @@ function escapeMd(value: string): string {
 }
 
 export function escapeMarkdownV2(value: string): string {
-  return value.replace(/[_*\[\]()~`>#+=|{}.!\\]/g, "\\$&");
+  return value.replace(/[_*\[\]()~`>#+=|{}\.!\\-]/g, "\\$&");
 }
 
 export function t(

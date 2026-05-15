@@ -113,6 +113,11 @@ async function ensureDefaultPreferences(
       const data = (await res.json()) as { user?: Record<string, unknown> };
       freshPrefs =
         (data.user?.preferences as Record<string, unknown> | undefined) ?? {};
+    } else {
+      // API returned non-OK — fall back to cached user object to avoid
+      // overwriting existing preferences during transient failures
+      freshPrefs =
+        (user.preferences as Record<string, unknown> | undefined) ?? {};
     }
   } catch {
     // fall back to the passed-in user object

@@ -173,9 +173,14 @@ export class UserRepository {
             .prepare("SELECT preferences FROM users WHERE id = ?")
             .bind(req.userId)
             .first<{ preferences: string }>();
-          const existingPrefs = existingPrefsRow?.preferences
-            ? JSON.parse(existingPrefsRow.preferences)
-            : {};
+          let existingPrefs: Record<string, unknown> = {};
+          if (existingPrefsRow?.preferences) {
+            try {
+              existingPrefs = JSON.parse(existingPrefsRow.preferences);
+            } catch {
+              existingPrefs = {};
+            }
+          }
           const merged = { ...existingPrefs, ...user.preferences };
           fields.push("preferences = ?");
           values.push(JSON.stringify(merged));

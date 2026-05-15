@@ -96,32 +96,34 @@ export const profileCommand = async (
     url: string;
     type: string;
   }>;
-  const firstImage = mediaUrls.find((m) => m.type === "image");
-  const firstVideo = mediaUrls.find((m) => m.type === "video");
+  // Preserve media order: show the first uploaded item (image or video)
+  const firstRenderable = mediaUrls.find(
+    (m) => m.type === "image" || m.type === "video",
+  );
   const keyboard = getProfileMenu(env, mediaCount);
 
   try {
-    if (firstImage) {
-      await ctx.replyWithPhoto(firstImage.url, {
+    if (firstRenderable?.type === "image") {
+      await ctx.replyWithPhoto(firstRenderable.url, {
         caption: text,
-        parse_mode: "Markdown",
+        parse_mode: "MarkdownV2",
         reply_markup: keyboard,
       });
-    } else if (firstVideo) {
-      await ctx.replyWithVideo(firstVideo.url, {
+    } else if (firstRenderable?.type === "video") {
+      await ctx.replyWithVideo(firstRenderable.url, {
         caption: text,
-        parse_mode: "Markdown",
+        parse_mode: "MarkdownV2",
         reply_markup: keyboard,
       });
     } else {
       await ctx.reply(text, {
-        parse_mode: "Markdown",
+        parse_mode: "MarkdownV2",
         reply_markup: keyboard,
       });
     }
   } catch {
     await ctx.reply(text, {
-      parse_mode: "Markdown",
+      parse_mode: "MarkdownV2",
       reply_markup: keyboard,
     });
   }

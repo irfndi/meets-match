@@ -8,8 +8,8 @@ import { createLogger } from "@meetsmatch/cf-shared";
 
 const log = createLogger("cf-bot");
 
-const PREMIUM_PRICE = "$4.99/month";
-const PREMIUM_PLUS_PRICE = "$9.99/month";
+const PREMIUM_PRICE = "500 ⭐ Stars";
+const PREMIUM_PLUS_PRICE = "1000 ⭐ Stars";
 const PREMIUM_STARS = 500;
 const PREMIUM_PLUS_STARS = 1000;
 
@@ -153,8 +153,8 @@ export const premiumCommand = async (
 
   const keyboard = new InlineKeyboard();
 
-  // Only show buy buttons for free users; current tier users can see upgrade option
-  if (tier === "free" || tier === "premium") {
+  // Free users can buy Premium; premium users upgrade via Premium+ button below
+  if (tier === "free") {
     try {
       const premiumLink = await ctx.api.createInvoiceLink(
         "MeetMatch Premium",

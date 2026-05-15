@@ -332,8 +332,9 @@ function createBot(env: Env): Bot<MyContext> {
     if (payload && payload.startsWith("premium_")) {
       const parts = payload.split("_");
       const userId = parts[2];
-      const tier = parts[3];
+      const tier = parts.slice(3).join("_");
       if (!userId || !tier) return;
+      if (tier !== "premium" && tier !== "premium_plus") return;
 
       try {
         const client = new ApiServiceClient(env.API_SERVICE);
