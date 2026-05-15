@@ -41,6 +41,8 @@ export async function runCleanupJob(env: Env): Promise<void> {
     `SELECT id, hidden_from_matches, media_deleted_at, last_active
      FROM users
      WHERE media_deleted_at IS NULL
+       AND media_urls IS NOT NULL
+       AND media_urls != '[]'
        AND (last_active IS NULL OR last_active < ?)`,
   )
     .bind(deleteCutoff)
