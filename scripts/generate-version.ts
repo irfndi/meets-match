@@ -96,6 +96,14 @@ export function formatDuration(isoDate: string): string {
 
 // Determine target from CLI args or default to both
 const target = process.argv[2];
+const allowedTargets = new Set(["cf-bot", "cf-api"]);
+
+if (target && !allowedTargets.has(target)) {
+  console.error(
+    `Invalid target: ${target}. Expected one of: ${[...allowedTargets].join(", ")}`,
+  );
+  process.exit(1);
+}
 
 if (!target || target === "cf-bot") {
   generate("cf-bot", "services/cf-bot/src/lib/version.ts");

@@ -38,21 +38,23 @@ export const profileCommand = async (
     : user.age;
   const ageDisplay =
     computedAge !== undefined ? String(computedAge) : "Not set";
-  const gender = user.gender
-    ? (user.gender as string).charAt(0).toUpperCase() +
-      (user.gender as string).slice(1)
-    : "Not set";
+  const gender =
+    typeof user.gender === "string" && user.gender
+      ? user.gender.charAt(0).toUpperCase() + user.gender.slice(1)
+      : "Not set";
   const bio = escapeMarkdown(user.bio || "Not set");
   const loc = user.location;
-  const locationText = escapeMarkdown(
-    loc?.city && loc?.country
-      ? `${loc.city}, ${loc.country}`
-      : loc?.city
-        ? loc.city
-        : loc?.latitude
-          ? "📍 Shared"
-          : "Not set",
-  );
+  let rawLocationText = "Not set";
+  const city = loc?.city as string | undefined;
+  const country = loc?.country as string | undefined;
+  if (city && country) {
+    rawLocationText = `${city}, ${country}`;
+  } else if (city) {
+    rawLocationText = city;
+  } else if (loc?.latitude) {
+    rawLocationText = "📍 Shared";
+  }
+  const locationText = escapeMarkdown(rawLocationText);
   const interests = escapeMarkdown(
     user.interests && Array.isArray(user.interests) && user.interests.length > 0
       ? (user.interests as string[]).join(", ")
