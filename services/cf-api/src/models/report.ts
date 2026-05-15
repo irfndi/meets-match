@@ -46,6 +46,7 @@ export class ReportRepository {
           reporterId: req.reporterId,
           reportedId: req.reportedId,
           reason: req.reason ?? null,
+          mediaUrl: req.mediaUrl ?? null,
           status: "pending" as const,
           createdAt: new Date().toISOString(),
         };
