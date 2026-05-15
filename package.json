@@ -13,12 +13,15 @@
     "deploy:api": "cd services/cf-api && npm run deploy",
     "deploy:bot": "cd services/cf-bot && npm run deploy",
     "deploy:worker": "cd services/cf-worker && npm run deploy",
+    "postinstall": "npx tsx scripts/generate-version.ts",
+    "pretest": "npx tsx scripts/generate-version.ts",
     "test": "vitest",
     "lint": "tsc --build --force",
     "format": "prettier --write \"**/*.{ts,tsx,json,md}\""
   },
   "devDependencies": {
     "prettier": "^3.8.3",
+    "tsx": "^4.22.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.6"
   }

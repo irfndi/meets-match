@@ -126,6 +126,17 @@ interface Translations {
   giftGated: string;
   giftCancelled: string;
   menuPrompt: string;
+  helpTitle: string;
+  helpCommands: string;
+  helpTips: string;
+  helpContact: string;
+  aboutTitle: string;
+  aboutDescription: string;
+  aboutBuiltWith: string;
+  aboutVersion: string;
+  aboutEnvironment: string;
+  aboutLastUpdated: string;
+  aboutServerAge: string;
 }
 
 const en: Translations = {
@@ -309,6 +320,20 @@ const en: Translations = {
     "🔒 *Gifts are a Premium feature*\n\nUpgrade to Premium to send gifts to your matches!",
   giftCancelled: "Gift cancelled.",
   menuPrompt: "Use the menu below to get started:",
+  helpTitle: "🤖 *MeetMatch Bot*",
+  helpCommands:
+    "*Commands:*\n*/start* — Get started\n*/profile* — View or edit your profile\n*/match* — Find your next match\n*/matches* — View your matches and likes\n*/settings* — Adjust your preferences\n*/help* — Show this help\n*/about* — About MeetMatch",
+  helpTips:
+    "*Tips:*\n• Complete your profile for better matches\n• Use */settings* to adjust age range and distance\n• Matches are based on interests, location, and preferences",
+  helpContact: "Need help? Contact support.",
+  aboutTitle: "🌟 *About MeetMatch*",
+  aboutDescription:
+    "MeetMatch helps you find people with similar interests near you.",
+  aboutBuiltWith: "Built with ❤️ using modern tech stack.",
+  aboutVersion: "*Version:* `{version}`",
+  aboutEnvironment: "*Environment:* {environment}",
+  aboutLastUpdated: "*Last updated:* {builtAt}",
+  aboutServerAge: "*Build age:* {serverAge}",
 };
 
 const dictionaries: Record<Language, Translations> = { en };

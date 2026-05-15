@@ -1,26 +1,18 @@
 import type { MyContext } from "../types.js";
 import { getMainMenuKeyboard } from "../lib/main-menu.js";
-import { getVersionInfo, formatDuration } from "../lib/version.js";
+import { getVersionInfo } from "../lib/version.js";
+import { formatDuration } from "@meetsmatch/cf-shared";
+import { t } from "../lib/i18n.js";
 
 export const helpCommand = async (ctx: MyContext): Promise<void> => {
   const msg = [
-    "🤖 *MeetMatch Bot*",
+    t("helpTitle"),
     "",
-    "*Commands:*",
-    "*/start* — Get started",
-    "*/profile* — View or edit your profile",
-    "*/match* — Find your next match",
-    "*/matches* — View your matches and likes",
-    "*/settings* — Adjust your preferences",
-    "*/help* — Show this help",
-    "*/about* — About MeetMatch",
+    t("helpCommands"),
     "",
-    "*Tips:*",
-    "• Complete your profile for better matches",
-    "• Use */settings* to adjust age range and distance",
-    "• Matches are based on interests, location, and preferences",
+    t("helpTips"),
     "",
-    "Need help? Contact support.",
+    t("helpContact"),
   ].join("\n");
 
   await ctx.reply(msg, {
@@ -34,18 +26,16 @@ export const aboutCommand = async (ctx: MyContext): Promise<void> => {
   const serverAge = formatDuration(builtAt);
 
   const msg = [
-    "🌟 *About MeetMatch*",
+    t("aboutTitle"),
     "",
-    "MeetMatch helps you find people with similar interests near you.",
+    t("aboutDescription"),
     "",
-    "Built with ❤️ using modern tech stack.",
+    t("aboutBuiltWith"),
     "",
-    `*Version:* \`${version}\``,
-    `*Environment:* ${environment}`,
-    `*Last updated:* ${builtAt}`,
-    `*Build age:* ${serverAge}`,
-    "",
-    "Need help? Use /help",
+    t("aboutVersion", "en", { version }),
+    t("aboutEnvironment", "en", { environment }),
+    t("aboutLastUpdated", "en", { builtAt }),
+    t("aboutServerAge", "en", { serverAge }),
   ].join("\n");
 
   await ctx.reply(msg, {
