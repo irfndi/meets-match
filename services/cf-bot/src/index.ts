@@ -188,14 +188,14 @@ function createBot(env: Env): Bot<MyContext> {
       return matchesCallbacks(ctx, env);
     }
 
-    if (data.startsWith("settings:")) {
-      return settingsCallbacks(ctx, env);
-    }
-
     if (data === "settings:show") {
       await settingsCommand(ctx, env);
       await ctx.answerCallbackQuery().catch(() => {});
       return;
+    }
+
+    if (data.startsWith("settings:")) {
+      return settingsCallbacks(ctx, env);
     }
 
     if (data.startsWith("agerange:")) {
@@ -535,8 +535,12 @@ export default {
 
         const otherUsername = payload.otherUsername as string | undefined;
 
+        function escapeMd(text: string): string {
+          return text.replace(/[_*\[\]`\\]/g, "\\$&");
+        }
+
         if (type === "like") {
-          const fromName = payload.fromDisplayName ?? "Someone";
+          const fromName = escapeMd(payload.fromDisplayName ?? "Someone");
           message = `💕 *New Like!*\n\n${fromName} liked your profile!`;
           if (payload.messageText) {
             message += `\n\n💌 *Message:* "${String(payload.messageText)}"`;
@@ -546,7 +550,7 @@ export default {
           }
           message += ` Use *💕 My Matches* to see who likes you.`;
         } else if (type === "mutual_match") {
-          const otherName = payload.otherDisplayName ?? "Someone";
+          const otherName = escapeMd(payload.otherDisplayName ?? "Someone");
           message = `🎉 *It's a Match!*\n\nYou and *${otherName}* have liked each other! 💕`;
           if (otherUsername) {
             message += `\n\n👉 [Start chatting](https://t.me/${otherUsername})`;
@@ -555,9 +559,9 @@ export default {
             .text("💕 View Matches", "matches")
             .row();
         } else if (type === "gift") {
-          const fromName = payload.fromDisplayName ?? "Someone";
+          const fromName = escapeMd(payload.fromDisplayName ?? "Someone");
           const giftEmoji = payload.giftEmoji ?? "🎁";
-          const giftName = payload.giftName ?? "gift";
+          const giftName = escapeMd(payload.giftName ?? "gift");
           message = `🎁 *New Gift!*\n\n${fromName} sent you a ${giftEmoji} *${giftName}*! 💕`;
         } else if (type === "BIRTHDAY") {
           message = payload.message || `🎂 Someone has a birthday today!`;

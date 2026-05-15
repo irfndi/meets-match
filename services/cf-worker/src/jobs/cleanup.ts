@@ -2,10 +2,9 @@ import type { Env } from "../index.js";
 
 interface UserRow {
   id: string;
-  telegram_id: string;
   hidden_from_matches: number;
   media_deleted_at: string | null;
-  last_interaction_at: string;
+  last_active: string | null;
 }
 
 /**
@@ -24,8 +23,7 @@ export async function runCleanupJob(env: Env): Promise<void> {
     `UPDATE users
      SET hidden_from_matches = 1
      WHERE hidden_from_matches = 0
-       AND (last_interaction_at IS NULL OR last_interaction_at < ?)
-       AND (media_deleted_at IS NULL OR media_deleted_at IS NOT NULL)`,
+       AND (last_active IS NULL OR last_active < ?)`,
   )
     .bind(hideCutoff)
     .run();
@@ -40,10 +38,10 @@ export async function runCleanupJob(env: Env): Promise<void> {
 
   // Find users whose media should be deleted
   const usersToClean = await env.DB.prepare(
-    `SELECT id, telegram_id, hidden_from_matches, media_deleted_at, last_interaction_at
+    `SELECT id, hidden_from_matches, media_deleted_at, last_active
      FROM users
      WHERE media_deleted_at IS NULL
-       AND (last_interaction_at IS NULL OR last_interaction_at < ?)`,
+       AND (last_active IS NULL OR last_active < ?)`,
   )
     .bind(deleteCutoff)
     .all<UserRow>();
@@ -103,7 +101,7 @@ export async function runCleanupJob(env: Env): Promise<void> {
         new Request("http://bot/send-notification", {
           method: "POST",
           body: JSON.stringify({
-            userId: row.telegram_id,
+            userId: row.id,
             type: "CLEANUP_MEDIA_DELETED",
             payload: JSON.stringify({
               message:

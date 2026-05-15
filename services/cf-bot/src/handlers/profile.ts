@@ -11,7 +11,7 @@ import { getMainMenuKeyboard } from "../lib/main-menu.js";
 
 function escapeMarkdown(value: unknown): string {
   const text = typeof value === "string" ? value : String(value);
-  return text.replace(/[_*\[\]`]/g, "\\$&");
+  return text.replace(/[_*\[\]`\\]/g, "\\$&");
 }
 
 export const profileCommand = async (

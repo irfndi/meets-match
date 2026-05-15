@@ -57,7 +57,7 @@ export default {
         }
 
         const status = String((notification as Record<string, unknown>).status);
-        if (status === "delivered") {
+        if (status === "delivered" || status === "dlq") {
           message.ack();
           continue;
         }

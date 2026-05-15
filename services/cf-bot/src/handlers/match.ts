@@ -631,14 +631,16 @@ async function handleMatchAction(
         });
       }
     } else if (action === "dislike") {
-      await client.recordDislike(userId);
-      await env.API_SERVICE.fetch(
+      const dislikeRes = await env.API_SERVICE.fetch(
         new Request(`http://api/matches/${matchId}/dislike`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ userId }),
         }),
       );
+      if (dislikeRes.ok) {
+        await client.recordDislike(userId);
+      }
     } else if (action === "skip") {
       await env.API_SERVICE.fetch(
         new Request(`http://api/matches/${matchId}/skip`, {
@@ -719,6 +721,12 @@ async function handleSendDM(ctx: MyContext, env: Env, targetUserId: string) {
       return;
     }
 
+    // Load target user details BEFORE consuming credits
+    const otherUserRes = await client.getUser({ userId: targetUserId });
+    const otherUser = otherUserRes.user as Record<string, unknown>;
+    const chatLink = buildChatLink(otherUser);
+    const name = (otherUser.displayName ?? "Someone") as string;
+
     // Use bypass for Premium+
     if (dmStatus.tier === "premium_plus" && bypassRemaining !== undefined) {
       const bypassResult = await useDMBypass(env.KV, userId);
@@ -733,13 +741,6 @@ async function handleSendDM(ctx: MyContext, env: Env, targetUserId: string) {
       await ctx.answerCallbackQuery().catch(() => {});
       return;
     }
-
-    const otherUserRes = await client.getUser({ userId: targetUserId });
-    const otherUser = otherUserRes.user as Record<string, unknown>;
-    const chatLink = buildChatLink(otherUser);
-    const name = (otherUser.displayName ??
-      otherUser.first_name ??
-      "Someone") as string;
 
     let successText = t("dmSuccess", lang, { name }) + "\n\n" + chatLink;
     if (dmStatus.tier === "premium_plus" && bypassRemaining !== undefined) {

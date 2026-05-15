@@ -632,7 +632,14 @@ export class ApiRouter {
       .replace("/purchase-dm-credits", "");
     try {
       const body = (await request.json()) as Record<string, unknown>;
-      const amount = Math.max(1, Math.min(100, Number(body.amount ?? 1)));
+      const amountRaw = Number(body.amount ?? 1);
+      if (Number.isNaN(amountRaw) || amountRaw < 1 || amountRaw > 100) {
+        return jsonResponse(
+          { error: "amount must be a number between 1 and 100" },
+          400,
+        );
+      }
+      const amount = Math.max(1, Math.min(100, amountRaw));
       const result = await runEffect(
         this.userRepo.addDMCredits(userId, amount),
       );
@@ -746,6 +753,16 @@ export class ApiRouter {
       const body = (await request.json()) as Record<string, unknown>;
       const url = String(body.url ?? "");
       if (!url) return jsonResponse({ error: "url is required" }, 400);
+
+      // Verify the URL belongs to the user before deleting from R2
+      const userMedia = await runEffect(this.userRepo.getMedia(userId));
+      const allowed = userMedia.some((m) => m.url === url);
+      if (!allowed) {
+        return jsonResponse(
+          { error: "URL does not belong to this user" },
+          403,
+        );
+      }
 
       // Extract key from URL and delete from R2
       const key = url.replace(

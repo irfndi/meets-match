@@ -323,4 +323,12 @@ export class ApiServiceClient implements IUserService {
     if (!response.ok) throw new Error(`API error: ${response.status}`);
     return (await response.json()) as { success: boolean };
   }
+
+  async getReferralCode(userId: string): Promise<{ code: string }> {
+    const response = await this.binding.fetch(
+      new Request(`http://api/users/${userId}/referral`, { method: "GET" }),
+    );
+    if (!response.ok) throw new Error(`API error: ${response.status}`);
+    return (await response.json()) as { code: string };
+  }
 }

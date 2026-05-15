@@ -447,6 +447,9 @@ export class UserRepository {
         let resetAt = String(
           (row as Record<string, unknown>).daily_likes_reset_at ?? "",
         );
+        let dislikesResetAt = String(
+          (row as Record<string, unknown>).daily_dislikes_reset_at ?? "",
+        );
         const bonus = Number(
           (row as Record<string, unknown>).referral_bonus_swipes ?? 0,
         );
@@ -458,15 +461,23 @@ export class UserRepository {
           now.getDate(),
         ).toISOString();
 
+        let needsUpdate = false;
         if (!resetAt || resetAt < today) {
           likesUsed = 0;
-          dislikesUsed = 0;
           resetAt = today;
+          needsUpdate = true;
+        }
+        if (!dislikesResetAt || dislikesResetAt < today) {
+          dislikesUsed = 0;
+          dislikesResetAt = today;
+          needsUpdate = true;
+        }
+        if (needsUpdate) {
           await this.db
             .prepare(
-              "UPDATE users SET daily_likes_used = 0, daily_dislikes_used = 0, daily_likes_reset_at = ?, daily_dislikes_reset_at = ? WHERE id = ?",
+              "UPDATE users SET daily_likes_used = ?, daily_dislikes_used = ?, daily_likes_reset_at = ?, daily_dislikes_reset_at = ? WHERE id = ?",
             )
-            .bind(today, today, userId)
+            .bind(likesUsed, dislikesUsed, resetAt, dislikesResetAt, userId)
             .run();
         }
 

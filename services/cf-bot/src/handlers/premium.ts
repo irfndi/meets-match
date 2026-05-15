@@ -3,6 +3,7 @@ import type { MyContext } from "../types.js";
 import type { Env } from "../index.js";
 import { ensureUserExists } from "../lib/user-utils.js";
 import { getMainMenuKeyboard } from "../lib/main-menu.js";
+import { ApiServiceClient } from "../services/api-client.js";
 
 const PREMIUM_PRICE = "$4.99/month";
 const PREMIUM_PLUS_PRICE = "$9.99/month";
@@ -48,8 +49,20 @@ async function getReferralInfo(
     const data = (await res.json()) as { user?: Record<string, unknown> };
     const user = data.user;
     if (!user) return null;
+
+    let code = (user.referralCode as string | undefined) ?? null;
+    if (!code) {
+      try {
+        const client = new ApiServiceClient(env.API_SERVICE);
+        const referralRes = await client.getReferralCode(userId);
+        code = referralRes.code;
+      } catch {
+        // Fallback to null if referral endpoint fails
+      }
+    }
+
     return {
-      code: (user.referralCode as string | undefined) ?? null,
+      code,
       count: Number(user.referralCount ?? 0),
       bonus: Number(user.referralBonusSwipes ?? 0),
     };

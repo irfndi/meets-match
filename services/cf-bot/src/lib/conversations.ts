@@ -74,8 +74,8 @@ export async function checkMandatoryUpdates(
     const user = data.user;
     if (!user) return false;
 
-    // Check if birthDate is missing (migration from age-only profiles)
-    if (!user.birthDate) {
+    // Check if birthDate is missing for migrated age-only profiles
+    if (!user.birthDate && user.age) {
       await startConversation(env.KV, userId, "birthdate");
       await ctx.reply(
         "📢 *Profile Update Required*\n\n" +

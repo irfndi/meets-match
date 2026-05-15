@@ -363,7 +363,7 @@ export class MatchRepository {
         let sql = `
           SELECT
             u.id, u.username, u.first_name, u.last_name, u.bio, u.age, u.gender,
-            u.interests, u.photos, u.location, u.preferences, u.subscription_tier,
+            u.interests, u.media_urls, u.location, u.preferences, u.subscription_tier,
             u.is_active, u.is_profile_complete,
             m.user1_id, m.user2_id,
             m.status as match_status,
@@ -582,7 +582,7 @@ export class MatchRepository {
           .prepare(
             `
           SELECT u.id, u.username, u.first_name, u.last_name, u.bio, u.age, u.gender,
-                 u.interests, u.photos, u.location, u.preferences,
+                 u.interests, u.media_urls, u.location, u.preferences,
                  u.is_active, u.is_profile_complete
           FROM matches m
           JOIN users u ON (
