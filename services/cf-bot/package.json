@@ -9,7 +9,7 @@
     "deploy": "npx tsx ../../scripts/generate-version.ts cf-bot && wrangler deploy --env dev",
     "build": "npx tsx ../../scripts/generate-version.ts cf-bot && tsc -p tsconfig.json",
     "test": "vitest",
-    "lint": "tsc --noEmit"
+    "lint": "npx tsx ../../scripts/generate-version.ts cf-bot && tsc --noEmit"
   },
   "dependencies": {
     "@effect/platform": "^0.96.1",
