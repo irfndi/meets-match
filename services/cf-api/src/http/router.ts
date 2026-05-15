@@ -60,6 +60,12 @@ export class ApiRouter {
           return this.handleGetReferralCode(url.pathname);
         case url.pathname.startsWith("/users/") && url.pathname.endsWith("/apply-referral") && method === "POST":
           return this.handleApplyReferral(url.pathname, request);
+        case url.pathname.startsWith("/users/") && url.pathname.endsWith("/dm-status") && method === "GET":
+          return this.handleGetDMStatus(url.pathname);
+        case url.pathname.startsWith("/users/") && url.pathname.endsWith("/send-dm") && method === "POST":
+          return this.handleSendDM(url.pathname);
+        case url.pathname.startsWith("/users/") && url.pathname.endsWith("/purchase-dm-credits") && method === "POST":
+          return this.handlePurchaseDMCredits(url.pathname, request);
         case url.pathname.startsWith("/users/") && url.pathname.endsWith("/last-active") && method === "POST":
           return this.handleUpdateLastActive(url.pathname);
         case url.pathname.startsWith("/users/") && url.pathname.endsWith("/last-reminded-at") && method === "POST":
