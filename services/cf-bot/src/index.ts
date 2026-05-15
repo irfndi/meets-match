@@ -140,7 +140,8 @@ function createBot(env: Env): Bot<MyContext> {
     if (
       data === "next_match" ||
       data === "view_matches" ||
-      data.startsWith("match:")
+      data.startsWith("match:") ||
+      data.startsWith("dm:")
     ) {
       return matchCallbacks(ctx, env);
     }

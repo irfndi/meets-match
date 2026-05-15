@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { matchesCommand, matchesCallbacks } from "../matches.js";
+import { addNotification } from "../../lib/notifications.js";
 import type { MyContext } from "../../types.js";
 
 function mockKV() {
@@ -27,7 +28,8 @@ function createMockApiService(responseMap: Record<string, () => Response>) {
   return {
     fetch: vi.fn().mockImplementation((req: Request) => {
       const url = typeof req === "string" ? req : (req as any).url || String(req);
-      for (const [pattern, factory] of Object.entries(responseMap)) {
+      const sortedPatterns = Object.entries(responseMap).sort((a, b) => b[0].length - a[0].length);
+      for (const [pattern, factory] of sortedPatterns) {
         if (url.includes(pattern)) return Promise.resolve(factory());
       }
       return Promise.resolve(new Response(JSON.stringify({}), { status: 404 }));
@@ -103,10 +105,8 @@ describe("Matches Handlers", () => {
   describe("matchesCallbacks", () => {
     it("should dismiss all like notifications", async () => {
       ctx.callbackQuery!.data = "likes:dismiss";
-      await kv.put("notifications:123", JSON.stringify([
-        { type: "like", fromUserId: "456", fromDisplayName: "Alice", timestamp: "t1" },
-        { type: "like", fromUserId: "789", fromDisplayName: "Bob", timestamp: "t2" },
-      ]));
+      await addNotification(env, "123", { type: "like", fromUserId: "456", fromDisplayName: "Alice", timestamp: "t1" });
+      await addNotification(env, "123", { type: "like", fromUserId: "789", fromDisplayName: "Bob", timestamp: "t2" });
       await matchesCallbacks(ctx, env);
       expect(ctx.editMessageText).toHaveBeenCalled();
       const remaining = await kv.get("notifications:123");

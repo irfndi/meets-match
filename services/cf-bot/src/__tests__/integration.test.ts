@@ -28,7 +28,8 @@ function createMockApiService(responseMap: Record<string, () => Response>) {
   return {
     fetch: vi.fn().mockImplementation((req: Request) => {
       const url = typeof req === "string" ? req : (req as any).url || String(req);
-      for (const [pattern, factory] of Object.entries(responseMap)) {
+      const sortedPatterns = Object.entries(responseMap).sort((a, b) => b[0].length - a[0].length);
+      for (const [pattern, factory] of sortedPatterns) {
         if (url.includes(pattern)) return Promise.resolve(factory());
       }
       return Promise.resolve(new Response(JSON.stringify({}), { status: 404 }));
@@ -57,25 +58,58 @@ describe("Integration: Main Menu Keyboard Routing", () => {
   });
 
   it("should route 🔍 Find Match text to match command logic", async () => {
+    const { matchCommand } = await import("../handlers/match.js");
     const ctx = mockCtx("🔍 Find Match");
-    // The text handler should recognize this and route to matchCommand
-    // We verify by checking the handler exists and the text is recognized
-    expect(ctx.message?.text).toBe("🔍 Find Match");
+    const env = {
+      KV: kv as unknown as KVNamespace,
+      API_SERVICE: createMockApiService({
+        "/users/123": () => new Response(JSON.stringify({ user: completeUser }), { status: 200 }),
+        "/users/123/potential-matches": () => new Response(JSON.stringify({ potentialMatches: [] }), { status: 200 }),
+      }),
+    };
+    await matchCommand(ctx, env);
+    expect(ctx.reply).toHaveBeenCalled();
   });
 
   it("should route 💕 My Matches text to matches command logic", async () => {
+    const { matchesCommand } = await import("../handlers/matches.js");
     const ctx = mockCtx("💕 My Matches");
-    expect(ctx.message?.text).toBe("💕 My Matches");
+    const env = {
+      KV: kv as unknown as KVNamespace,
+      API_SERVICE: createMockApiService({
+        "/users/123": () => new Response(JSON.stringify({ user: completeUser }), { status: 200 }),
+        "/matches?userId=123": () => new Response(JSON.stringify({ matches: [] }), { status: 200 }),
+        "/users/123/pending-likes": () => new Response(JSON.stringify({ pendingLikes: [] }), { status: 200 }),
+      }),
+    };
+    await matchesCommand(ctx, env);
+    expect(ctx.reply).toHaveBeenCalled();
   });
 
   it("should route 👤 Profile text to profile command logic", async () => {
+    const { profileCommand } = await import("../handlers/profile.js");
     const ctx = mockCtx("👤 Profile");
-    expect(ctx.message?.text).toBe("👤 Profile");
+    const env = {
+      KV: kv as unknown as KVNamespace,
+      API_SERVICE: createMockApiService({
+        "/users/123": () => new Response(JSON.stringify({ user: completeUser }), { status: 200 }),
+      }),
+    };
+    await profileCommand(ctx, env);
+    expect(ctx.reply).toHaveBeenCalled();
   });
 
   it("should route ⚙️ Settings text to settings command logic", async () => {
+    const { settingsCommand } = await import("../handlers/settings.js");
     const ctx = mockCtx("⚙️ Settings");
-    expect(ctx.message?.text).toBe("⚙️ Settings");
+    const env = {
+      KV: kv as unknown as KVNamespace,
+      API_SERVICE: createMockApiService({
+        "/users/123": () => new Response(JSON.stringify({ user: completeUser }), { status: 200 }),
+      }),
+    };
+    await settingsCommand(ctx, env);
+    expect(ctx.reply).toHaveBeenCalled();
   });
 });
 

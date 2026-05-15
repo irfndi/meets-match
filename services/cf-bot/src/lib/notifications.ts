@@ -7,6 +7,17 @@ export interface LikeNotification {
   fromUserId: string;
   fromDisplayName: string;
   timestamp: string;
+  messageText?: string;
+  mediaUrl?: string;
+}
+
+export interface GiftNotification {
+  type: 'gift';
+  fromUserId: string;
+  fromDisplayName: string;
+  giftEmoji: string;
+  giftName: string;
+  timestamp: string;
 }
 
 export interface MutualMatchNotification {
@@ -18,7 +29,7 @@ export interface MutualMatchNotification {
   timestamp: string;
 }
 
-export type Notification = LikeNotification | MutualMatchNotification;
+export type Notification = LikeNotification | MutualMatchNotification | GiftNotification;
 
 export async function addNotification(env: Env, userId: string, notification: Notification): Promise<void> {
   const key = `notifications:${userId}`;

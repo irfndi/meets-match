@@ -27,7 +27,8 @@ function createMockApiService(responseMap: Record<string, () => Response>) {
   return {
     fetch: vi.fn().mockImplementation((req: Request) => {
       const url = typeof req === "string" ? req : (req as any).url || String(req);
-      for (const [pattern, factory] of Object.entries(responseMap)) {
+      const sortedPatterns = Object.entries(responseMap).sort((a, b) => b[0].length - a[0].length);
+      for (const [pattern, factory] of sortedPatterns) {
         if (url.includes(pattern)) return Promise.resolve(factory());
       }
       return Promise.resolve(new Response(JSON.stringify({}), { status: 404 }));

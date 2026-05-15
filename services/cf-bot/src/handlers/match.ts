@@ -969,7 +969,7 @@ export async function handleGiftPayment(
     // Get sender name
     const client = new ApiServiceClient(env.API_SERVICE);
     const senderRes = await client.getUser({ userId: senderId });
-    const senderName = (senderRes.user?.displayName ?? senderRes.user?.first_name ?? "Someone") as string;
+    const senderName = (senderRes.user?.displayName ?? "Someone") as string;
 
     await ctx.reply(
       t("giftSent", lang, { gift: `${gift.emoji} ${gift.name}` }),
