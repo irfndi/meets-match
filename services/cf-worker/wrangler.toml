@@ -77,6 +77,10 @@ service = "meetsmatch-api-dev"
 binding = "BOT_SERVICE"
 service = "meetsmatch-bot-dev"
 
+# Dev environment has no cron triggers to stay within Cloudflare free plan limits
+[env.dev.triggers]
+crons = []
+
 [env.production]
 name = "meetsmatch-worker"
 
