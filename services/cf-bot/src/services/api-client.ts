@@ -147,9 +147,7 @@ export class ApiServiceClient implements IUserService {
     return (await response.json()) as LikeMatchResponse;
   }
 
-  async getInteractionStatus(
-    userId: string,
-  ): Promise<{
+  async getInteractionStatus(userId: string): Promise<{
     likesRemaining: number;
     likesTotal: number;
     dislikesRemaining: number;

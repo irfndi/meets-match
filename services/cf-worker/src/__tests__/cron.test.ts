@@ -28,13 +28,11 @@ function mockEnv(
     DB: mockD1(dlqCount, candidates),
     KV: {} as KVNamespace,
     API_SERVICE: {
-      fetch: vi
-        .fn()
-        .mockResolvedValue(
-          new Response(JSON.stringify({ ok: true }), {
-            headers: { "Content-Type": "application/json" },
-          }),
-        ),
+      fetch: vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ ok: true }), {
+          headers: { "Content-Type": "application/json" },
+        }),
+      ),
     } as unknown as Fetcher,
     BOT_SERVICE: {
       fetch: vi.fn().mockResolvedValue(new Response()),

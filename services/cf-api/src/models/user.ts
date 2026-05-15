@@ -413,9 +413,7 @@ export class UserRepository {
     });
   }
 
-  getInteractionStatus(
-    userId: string,
-  ): Effect.Effect<
+  getInteractionStatus(userId: string): Effect.Effect<
     {
       likesRemaining: number;
       likesTotal: number;
