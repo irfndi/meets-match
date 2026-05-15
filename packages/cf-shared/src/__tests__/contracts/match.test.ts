@@ -70,9 +70,7 @@ describe("Match Contracts", () => {
     );
 
     it("should reject invalid status", () => {
-      expect(() =>
-        Schema.decodeUnknownSync(MatchStatus)("BLOCKED"),
-      ).toThrow();
+      expect(() => Schema.decodeUnknownSync(MatchStatus)("BLOCKED")).toThrow();
     });
   });
 

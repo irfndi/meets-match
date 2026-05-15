@@ -59,9 +59,7 @@ describe("Notification Contracts", () => {
 
     it("should reject notification with invalid type", () => {
       const invalid = { id: "n1", userId: "u1", type: "SPAM" };
-      expect(() =>
-        Schema.decodeUnknownSync(Notification)(invalid),
-      ).toThrow();
+      expect(() => Schema.decodeUnknownSync(Notification)(invalid)).toThrow();
     });
 
     it("should produce round-trip equivalent output", () => {

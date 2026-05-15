@@ -5,7 +5,9 @@ function mockD1(withNotification = false) {
   return {
     prepare: vi.fn(() => ({
       bind: vi.fn(() => ({
-        first: vi.fn(async () => (withNotification ? { id: "n1", status: "pending" } : null)),
+        first: vi.fn(async () =>
+          withNotification ? { id: "n1", status: "pending" } : null,
+        ),
         run: vi.fn(async () => ({ success: true })),
         all: vi.fn(async () => ({ results: [] })),
       })),
@@ -28,11 +30,21 @@ describe("NotificationQueueConsumer", () => {
 
   it("should ack valid message when notification exists", async () => {
     const db = mockD1(true);
-    const botService = { fetch: vi.fn().mockResolvedValue(new Response()) } as unknown as Fetcher;
+    const botService = {
+      fetch: vi.fn().mockResolvedValue(new Response()),
+    } as unknown as Fetcher;
     const consumer = new NotificationQueueConsumer(db, botService);
 
-    const msg = mockMessage({ notificationId: "n1", userId: "123", type: "WELCOME" });
-    await consumer.processBatch({ messages: [msg], queue: "test", retry: vi.fn() });
+    const msg = mockMessage({
+      notificationId: "n1",
+      userId: "123",
+      type: "WELCOME",
+    });
+    await consumer.processBatch({
+      messages: [msg],
+      queue: "test",
+      retry: vi.fn(),
+    });
 
     expect(msg.ack).toHaveBeenCalled();
     expect(msg.retry).not.toHaveBeenCalled();
@@ -43,8 +55,16 @@ describe("NotificationQueueConsumer", () => {
     const botService = { fetch: vi.fn() } as unknown as Fetcher;
     const consumer = new NotificationQueueConsumer(db, botService);
 
-    const msg = mockMessage({ notificationId: "n1", userId: "123", type: "WELCOME" });
-    await consumer.processBatch({ messages: [msg], queue: "test", retry: vi.fn() });
+    const msg = mockMessage({
+      notificationId: "n1",
+      userId: "123",
+      type: "WELCOME",
+    });
+    await consumer.processBatch({
+      messages: [msg],
+      queue: "test",
+      retry: vi.fn(),
+    });
 
     expect(msg.ack).toHaveBeenCalled();
   });
@@ -57,7 +77,11 @@ describe("NotificationQueueConsumer", () => {
     const ack = vi.fn();
     const retry = vi.fn();
     const msg = { body: "not-valid-json", ack, retry } as unknown as Message;
-    await consumer.processBatch({ messages: [msg], queue: "test", retry: vi.fn() });
+    await consumer.processBatch({
+      messages: [msg],
+      queue: "test",
+      retry: vi.fn(),
+    });
 
     expect(retry).toHaveBeenCalled();
     expect(ack).not.toHaveBeenCalled();
@@ -65,12 +89,26 @@ describe("NotificationQueueConsumer", () => {
 
   it("should process all messages in batch independently", async () => {
     const db = mockD1(true);
-    const botService = { fetch: vi.fn().mockResolvedValue(new Response()) } as unknown as Fetcher;
+    const botService = {
+      fetch: vi.fn().mockResolvedValue(new Response()),
+    } as unknown as Fetcher;
     const consumer = new NotificationQueueConsumer(db, botService);
 
-    const msg1 = mockMessage({ notificationId: "n1", userId: "1", type: "WELCOME" });
-    const msg2 = mockMessage({ notificationId: "n2", userId: "2", type: "WELCOME" });
-    await consumer.processBatch({ messages: [msg1, msg2], queue: "test", retry: vi.fn() });
+    const msg1 = mockMessage({
+      notificationId: "n1",
+      userId: "1",
+      type: "WELCOME",
+    });
+    const msg2 = mockMessage({
+      notificationId: "n2",
+      userId: "2",
+      type: "WELCOME",
+    });
+    await consumer.processBatch({
+      messages: [msg1, msg2],
+      queue: "test",
+      retry: vi.fn(),
+    });
 
     expect(msg1.ack).toHaveBeenCalled();
     expect(msg2.ack).toHaveBeenCalled();

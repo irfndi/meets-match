@@ -36,9 +36,7 @@ describe("Health Contracts", () => {
     });
 
     it("should reject response with missing status", () => {
-      expect(() =>
-        Schema.decodeUnknownSync(HealthCheckResponse)({}),
-      ).toThrow();
+      expect(() => Schema.decodeUnknownSync(HealthCheckResponse)({})).toThrow();
     });
 
     it("should reject response with non-string status", () => {

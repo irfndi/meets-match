@@ -1,13 +1,23 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { getConversationState, setConversationState, clearConversationState, startConversation, handleConversationMessage } from "../lib/conversations.js";
+import {
+  getConversationState,
+  setConversationState,
+  clearConversationState,
+  startConversation,
+  handleConversationMessage,
+} from "../lib/conversations.js";
 import type { MyContext } from "../types.js";
 
 function mockKV() {
   const store = new Map<string, string>();
   return {
     get: vi.fn(async (key: string) => store.get(key) ?? null),
-    put: vi.fn(async (key: string, value: string) => { store.set(key, value); }),
-    delete: vi.fn(async (key: string) => { store.delete(key); }),
+    put: vi.fn(async (key: string, value: string) => {
+      store.set(key, value);
+    }),
+    delete: vi.fn(async (key: string) => {
+      store.delete(key);
+    }),
     _store: store,
   };
 }
@@ -16,7 +26,9 @@ function mockEnv(kv = mockKV()) {
   return {
     DB: {} as D1Database,
     KV: kv as unknown as KVNamespace,
-    API_SERVICE: { fetch: vi.fn().mockResolvedValue(new Response(null, { status: 200 })) } as unknown as Fetcher,
+    API_SERVICE: {
+      fetch: vi.fn().mockResolvedValue(new Response(null, { status: 200 })),
+    } as unknown as Fetcher,
     BOT_TOKEN: "test-token",
   };
 }
@@ -25,7 +37,9 @@ function mockCtx(text?: string): MyContext {
   return {
     reply: vi.fn().mockResolvedValue(undefined),
     from: { id: 123, first_name: "Test", is_bot: false, language_code: "en" },
-    message: text ? { text, message_id: 1, date: 1, chat: { id: 123, type: "private" } } : undefined,
+    message: text
+      ? { text, message_id: 1, date: 1, chat: { id: 123, type: "private" } }
+      : undefined,
   } as unknown as MyContext;
 }
 
@@ -37,28 +51,44 @@ describe("Conversation State Management", () => {
   });
 
   it("should set and get conversation state", async () => {
-    await setConversationState(kv as unknown as KVNamespace, { userId: "123", field: "bio", step: 0 });
-    const state = await getConversationState(kv as unknown as KVNamespace, "123");
+    await setConversationState(kv as unknown as KVNamespace, {
+      userId: "123",
+      field: "bio",
+      step: 0,
+    });
+    const state = await getConversationState(
+      kv as unknown as KVNamespace,
+      "123",
+    );
     expect(state).not.toBeNull();
     expect(state!.field).toBe("bio");
   });
 
   it("should return null for missing state", async () => {
-    const state = await getConversationState(kv as unknown as KVNamespace, "999");
+    const state = await getConversationState(
+      kv as unknown as KVNamespace,
+      "999",
+    );
     expect(state).toBeNull();
   });
 
   it("should clear conversation state", async () => {
     await startConversation(kv as unknown as KVNamespace, "123", "bio");
     await clearConversationState(kv as unknown as KVNamespace, "123");
-    const state = await getConversationState(kv as unknown as KVNamespace, "123");
+    const state = await getConversationState(
+      kv as unknown as KVNamespace,
+      "123",
+    );
     expect(state).toBeNull();
   });
 
   it("should start conversation with field", async () => {
-    await startConversation(kv as unknown as KVNamespace, "123", "age");
-    const state = await getConversationState(kv as unknown as KVNamespace, "123");
-    expect(state!.field).toBe("age");
+    await startConversation(kv as unknown as KVNamespace, "123", "birthdate");
+    const state = await getConversationState(
+      kv as unknown as KVNamespace,
+      "123",
+    );
+    expect(state!.field).toBe("birthdate");
     expect(state!.step).toBe(0);
   });
 });
@@ -82,7 +112,10 @@ describe("Conversation Message Handling", () => {
     const result = await handleConversationMessage(ctx, mockEnv(kv));
     expect(result).toBe(true);
     expect(ctx.reply).toHaveBeenCalledWith("Cancelled.", expect.anything());
-    const state = await getConversationState(kv as unknown as KVNamespace, "123");
+    const state = await getConversationState(
+      kv as unknown as KVNamespace,
+      "123",
+    );
     expect(state).toBeNull();
   });
 
@@ -93,19 +126,21 @@ describe("Conversation Message Handling", () => {
     expect(result).toBe(true);
   });
 
-  it("should process age input", async () => {
-    await startConversation(kv as unknown as KVNamespace, "123", "age");
-    const ctx = mockCtx("25");
+  it("should process birthdate input", async () => {
+    await startConversation(kv as unknown as KVNamespace, "123", "birthdate");
+    const ctx = mockCtx("15.03.1995");
     const result = await handleConversationMessage(ctx, mockEnv(kv));
     expect(result).toBe(true);
   });
 
-  it("should reject invalid age", async () => {
-    await startConversation(kv as unknown as KVNamespace, "123", "age");
-    const ctx = mockCtx("not-an-age");
+  it("should reject invalid birthdate", async () => {
+    await startConversation(kv as unknown as KVNamespace, "123", "birthdate");
+    const ctx = mockCtx("not-a-date");
     const result = await handleConversationMessage(ctx, mockEnv(kv));
     expect(result).toBe(true);
-    expect(ctx.reply).toHaveBeenCalledWith(expect.stringContaining("Invalid age"));
+    expect(ctx.reply).toHaveBeenCalledWith(
+      expect.stringContaining("Invalid date"),
+    );
   });
 
   it("should process gender input", async () => {
@@ -120,7 +155,7 @@ describe("Conversation Message Handling", () => {
     const ctx = mockCtx("unknown");
     const result = await handleConversationMessage(ctx, mockEnv(kv));
     expect(result).toBe(true);
-    expect(ctx.reply).toHaveBeenCalledWith(expect.stringContaining("Male or Female"));
+    expect(ctx.reply).toHaveBeenCalledWith(expect.stringContaining("Male"));
   });
 
   it("should process name input", async () => {

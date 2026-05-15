@@ -1,47 +1,55 @@
-import type { MyContext } from '../types.js';
-import { getVersionInfo, formatDuration } from '../lib/version.js';
-
-const HELP_MESSAGE = `
-🤖 *MeetMatch Bot Help*
-
-*Commands:*
-/start — Get started
-/profile — View or edit your profile
-/match — Find your next match
-/matches — View your current matches
-/settings — Adjust your preferences
-/about — About MeetMatch
-
-*Tips:*
-• Complete your profile for better matches
-• Use /settings to adjust age range and distance
-• Matches are based on interests, location, and preferences
-
-Need more help? Contact support.
-`;
+import type { MyContext } from "../types.js";
+import { getMainMenuKeyboard } from "../lib/main-menu.js";
+import { getVersionInfo, formatDuration } from "../lib/version.js";
 
 export const helpCommand = async (ctx: MyContext): Promise<void> => {
-  await ctx.reply(HELP_MESSAGE, { parse_mode: 'Markdown' });
+  const msg = [
+    "🤖 *MeetMatch Bot*",
+    "",
+    "*Commands:*",
+    "*/start* — Get started",
+    "*/profile* — View or edit your profile",
+    "*/match* — Find your next match",
+    "*/matches* — View your matches and likes",
+    "*/settings* — Adjust your preferences",
+    "*/help* — Show this help",
+    "*/about* — About MeetMatch",
+    "",
+    "*Tips:*",
+    "• Complete your profile for better matches",
+    "• Use */settings* to adjust age range and distance",
+    "• Matches are based on interests, location, and preferences",
+    "",
+    "Need help? Contact support.",
+  ].join("\n");
+
+  await ctx.reply(msg, {
+    parse_mode: "Markdown",
+    reply_markup: getMainMenuKeyboard(),
+  });
 };
 
 export const aboutCommand = async (ctx: MyContext): Promise<void> => {
-  const v = getVersionInfo();
-  const age = formatDuration(v.builtAt);
+  const { version, environment, builtAt } = getVersionInfo();
+  const serverAge = formatDuration(builtAt);
 
-  const ABOUT_MESSAGE = `
-🌟 *About MeetMatch*
+  const msg = [
+    "🌟 *About MeetMatch*",
+    "",
+    "MeetMatch helps you find people with similar interests near you.",
+    "",
+    "Built with ❤️ using modern tech stack.",
+    "",
+    `*Version:* \`${version}\``,
+    `*Environment:* ${environment}`,
+    `*Last updated:* ${builtAt}`,
+    `*Server age:* ${serverAge}`,
+    "",
+    "Need help? Use /help",
+  ].join("\n");
 
-MeetMatch helps you find people with similar interests near you.
-
-Built with ❤️ using modern tech stack.
-
-*Version:* \`${v.version}\`
-*Environment:* ${v.environment}
-*Last updated:* ${v.builtAt}
-*Server age:* ${age}
-
-Need help? Use /help
-`;
-
-  await ctx.reply(ABOUT_MESSAGE, { parse_mode: 'Markdown' });
+  await ctx.reply(msg, {
+    parse_mode: "Markdown",
+    reply_markup: getMainMenuKeyboard(),
+  });
 };

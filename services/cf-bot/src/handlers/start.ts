@@ -1,8 +1,21 @@
 import { InlineKeyboard } from "grammy";
 import type { MyContext } from "../types.js";
 import type { Env } from "../index.js";
-import { ensureUserExists, getProfileCompleteness, getMissingFieldsDisplay } from "../lib/user-utils.js";
-import { t, SUPPORTED_LANGUAGES, DEFAULT_LANGUAGE, type Language } from "../lib/i18n.js";
+import {
+  ensureUserExists,
+  getProfileCompleteness,
+  getMissingFieldsDisplay,
+} from "../lib/user-utils.js";
+import { getMainMenuKeyboard } from "../lib/main-menu.js";
+import { createLogger } from "@meetsmatch/cf-shared";
+
+const log = createLogger("cf-bot");
+import {
+  t,
+  SUPPORTED_LANGUAGES,
+  DEFAULT_LANGUAGE,
+  type Language,
+} from "../lib/i18n.js";
 
 export function buildLanguageKeyboard(): InlineKeyboard {
   const keyboard = new InlineKeyboard();
@@ -12,17 +25,27 @@ export function buildLanguageKeyboard(): InlineKeyboard {
   return keyboard;
 }
 
-async function setUserLanguage(env: Env, userId: string, language: Language): Promise<boolean> {
+async function setUserLanguage(
+  env: Env,
+  userId: string,
+  language: Language,
+): Promise<boolean> {
   try {
     const res = await env.API_SERVICE.fetch(
       new Request(`http://api/users/${userId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user: { language } }),
-      })
+      }),
     );
     return res.ok;
-  } catch {
+  } catch (error) {
+    log.error(
+      "setUserLanguage",
+      "Failed to set user language",
+      { userId, language },
+      error,
+    );
     return false;
   }
 }
@@ -42,11 +65,28 @@ export const startCommand = async (ctx: MyContext, env: Env): Promise<void> => {
   const { user, created } = result;
   const lang = (user.language as Language) ?? DEFAULT_LANGUAGE;
 
+  // Handle referral code from deep link: /start ref_XXXXXX
+  const startPayload = ctx.message?.text?.replace("/start", "").trim() ?? "";
+  if (startPayload.startsWith("ref_")) {
+    const code = startPayload.replace("ref_", "");
+    const applyRes = await env.API_SERVICE.fetch(
+      new Request(`http://api/users/${ctx.from.id}/apply-referral`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code }),
+      }),
+    );
+    if (applyRes.ok) {
+      const data = (await applyRes.json()) as { message?: string };
+      await ctx.reply(`🎉 ${data.message ?? "Referral applied!"}`);
+    }
+  }
+
   if (created) {
     // New user — show language selection first
     await ctx.reply(
       "🌍 Choose your language / Pilih bahasa:\n(More languages coming soon!)",
-      { reply_markup: buildLanguageKeyboard() }
+      { reply_markup: buildLanguageKeyboard() },
     );
     return;
   }
@@ -56,15 +96,25 @@ export const startCommand = async (ctx: MyContext, env: Env): Promise<void> => {
 
   if (!complete) {
     await ctx.reply(
-      t("welcomeBackIncomplete", lang, { missing: getMissingFieldsDisplay(missing) })
+      t("welcomeBackIncomplete", lang, {
+        missing: getMissingFieldsDisplay(missing),
+      }),
+      { reply_markup: getMainMenuKeyboard(), parse_mode: "Markdown" },
     );
     return;
   }
 
-  await ctx.reply(t("welcomeBack", lang));
+  await ctx.reply(t("welcomeBack", lang), {
+    reply_markup: getMainMenuKeyboard(),
+    parse_mode: "Markdown",
+  });
 };
 
-export const languageCallback = async (ctx: MyContext, env: Env, data: string): Promise<boolean> => {
+export const languageCallback = async (
+  ctx: MyContext,
+  env: Env,
+  data: string,
+): Promise<boolean> => {
   if (!ctx.from) return false;
   if (!data.startsWith("lang:")) return false;
 
@@ -74,7 +124,12 @@ export const languageCallback = async (ctx: MyContext, env: Env, data: string): 
   // Store language preference
   await setUserLanguage(env, userId, selectedLang);
 
-  await ctx.answerCallbackQuery("Language set to English 🇬🇧");
-  await ctx.editMessageText(t("welcomeNew", selectedLang));
+  await ctx.answerCallbackQuery("Language set to English 🇬🇧").catch(() => {});
+  await ctx
+    .editMessageText(t("welcomeNew", selectedLang), { parse_mode: "Markdown" })
+    .catch(() => {});
+  await ctx.reply("Use the menu below to get started:", {
+    reply_markup: getMainMenuKeyboard(),
+  });
   return true;
 };

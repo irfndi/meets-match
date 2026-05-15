@@ -1,4 +1,12 @@
-import { Array, Boolean, Literal, Number, String, Struct, optional } from "effect/Schema";
+import {
+  Array,
+  Boolean,
+  Literal,
+  Number,
+  String,
+  Struct,
+  optional,
+} from "effect/Schema";
 
 // --- Enums ---
 
@@ -15,6 +23,9 @@ export const Location = Struct({
   lastUpdated: optional(String), // ISO 8601
 });
 export type Location = typeof Location.Type;
+
+export const SubscriptionTier = Literal("free", "premium", "premium_plus");
+export type SubscriptionTier = typeof SubscriptionTier.Type;
 
 export const Preferences = Struct({
   minAge: optional(Number),
@@ -38,9 +49,18 @@ export const User = Struct({
   lastName: optional(String),
   bio: optional(String),
   age: optional(Number),
+  birthDate: optional(String),
   gender: optional(Gender),
   interests: optional(Array(String)),
-  photos: optional(Array(String)),
+  mediaUrls: optional(
+    Array(
+      Struct({
+        url: String,
+        type: Literal("image", "video"),
+        uploadedAt: String,
+      }),
+    ),
+  ),
   location: optional(Location),
   preferences: optional(Preferences),
   isActive: optional(Boolean),
@@ -48,6 +68,23 @@ export const User = Struct({
   isProfileComplete: optional(Boolean),
   phoneNumber: optional(String),
   language: optional(String),
+  subscriptionTier: optional(String),
+  dailySwipesUsed: optional(Number),
+  dailySwipesResetAt: optional(String),
+  dailyLikesUsed: optional(Number),
+  dailyLikesResetAt: optional(String),
+  dailyDislikesUsed: optional(Number),
+  dailyDislikesResetAt: optional(String),
+  dailyMediaUsed: optional(Number),
+  dailyMediaResetAt: optional(String),
+  referralCode: optional(String),
+  referredBy: optional(String),
+  referralCount: optional(Number),
+  referralBonusSwipes: optional(Number),
+  dmCredits: optional(Number),
+  hiddenFromMatches: optional(Boolean),
+  mediaDeletedAt: optional(String),
+  lastInteractionAt: optional(String),
   createdAt: optional(String), // ISO 8601
   updatedAt: optional(String),
   lastActive: optional(String),
@@ -101,12 +138,14 @@ export type UpdateLastActiveResponse = typeof UpdateLastActiveResponse.Type;
 export const UpdateLastRemindedAtRequest = Struct({
   userId: String,
 });
-export type UpdateLastRemindedAtRequest = typeof UpdateLastRemindedAtRequest.Type;
+export type UpdateLastRemindedAtRequest =
+  typeof UpdateLastRemindedAtRequest.Type;
 
 export const UpdateLastRemindedAtResponse = Struct({
   success: Boolean,
 });
-export type UpdateLastRemindedAtResponse = typeof UpdateLastRemindedAtResponse.Type;
+export type UpdateLastRemindedAtResponse =
+  typeof UpdateLastRemindedAtResponse.Type;
 
 // --- Service Interface (for Service Bindings) ---
 
@@ -114,8 +153,10 @@ export interface UserService {
   readonly getUser: (req: GetUserRequest) => Promise<GetUserResponse>;
   readonly createUser: (req: CreateUserRequest) => Promise<CreateUserResponse>;
   readonly updateUser: (req: UpdateUserRequest) => Promise<UpdateUserResponse>;
-  readonly updateLastActive: (req: UpdateLastActiveRequest) => Promise<UpdateLastActiveResponse>;
-  readonly updateLastRemindedAt: (req: UpdateLastRemindedAtRequest) => Promise<UpdateLastRemindedAtResponse>;
+  readonly updateLastActive: (
+    req: UpdateLastActiveRequest,
+  ) => Promise<UpdateLastActiveResponse>;
+  readonly updateLastRemindedAt: (
+    req: UpdateLastRemindedAtRequest,
+  ) => Promise<UpdateLastRemindedAtResponse>;
 }
-
-

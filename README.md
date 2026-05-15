@@ -100,12 +100,12 @@ Set required environment variables in the Cloudflare dashboard or via `wrangler 
 
 ## Environment Variables
 
-| Variable | Required | Description |
-|---|---|---|
-| `BOT_TOKEN` | Yes | Telegram Bot API token from @BotFather |
-| `SENTRY_DSN` | No | Sentry project DSN for error reporting |
-| `SENTRY_ENVIRONMENT` | No | Sentry environment tag (`production`, `staging`, etc.) |
-| `ENABLE_SENTRY` | No | Set to `true` to enable Sentry error reporting |
+| Variable             | Required | Description                                            |
+| -------------------- | -------- | ------------------------------------------------------ |
+| `BOT_TOKEN`          | Yes      | Telegram Bot API token from @BotFather                 |
+| `SENTRY_DSN`         | No       | Sentry project DSN for error reporting                 |
+| `SENTRY_ENVIRONMENT` | No       | Sentry environment tag (`production`, `staging`, etc.) |
+| `ENABLE_SENTRY`      | No       | Set to `true` to enable Sentry error reporting         |
 
 ## Testing
 

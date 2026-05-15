@@ -69,9 +69,7 @@ describe("Config", () => {
         program.pipe(
           Effect.provide(
             Layer.setConfigProvider(
-              ConfigProvider.fromMap(
-                new Map([["ENABLE_SENTRY", "true"]]),
-              ),
+              ConfigProvider.fromMap(new Map([["ENABLE_SENTRY", "true"]])),
             ),
           ),
         ),
@@ -90,9 +88,7 @@ describe("Config", () => {
         program.pipe(
           Effect.provide(
             Layer.setConfigProvider(
-              ConfigProvider.fromMap(
-                new Map([["ENABLE_SENTRY", "false"]]),
-              ),
+              ConfigProvider.fromMap(new Map([["ENABLE_SENTRY", "false"]])),
             ),
           ),
         ),
@@ -112,9 +108,7 @@ describe("Config", () => {
           program.pipe(
             Effect.provide(
               Layer.setConfigProvider(
-                ConfigProvider.fromMap(
-                  new Map([["ENABLE_SENTRY", "maybe"]]),
-                ),
+                ConfigProvider.fromMap(new Map([["ENABLE_SENTRY", "maybe"]])),
               ),
             ),
           ),
@@ -133,9 +127,7 @@ describe("Config", () => {
           program.pipe(
             Effect.provide(
               Layer.setConfigProvider(
-                ConfigProvider.fromMap(
-                  new Map([["ENABLE_SENTRY", "TRUE"]]),
-                ),
+                ConfigProvider.fromMap(new Map([["ENABLE_SENTRY", "TRUE"]])),
               ),
             ),
           ),

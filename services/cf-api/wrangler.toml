@@ -46,6 +46,15 @@ id = "a0d31ccf20fd44b794e3d4e4298efc4e"
 binding = "NOTIFICATION_QUEUE"
 queue = "notification-queue-dev"
 
+# R2 Bucket for profile media
+[[r2_buckets]]
+binding = "MEDIA_BUCKET"
+bucket_name = "meetsmatch-media"
+
+[[env.dev.r2_buckets]]
+binding = "MEDIA_BUCKET"
+bucket_name = "meetsmatch-media"
+
 [env.production]
 name = "meetsmatch-api"
 

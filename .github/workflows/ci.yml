@@ -24,7 +24,7 @@ jobs:
         run: npm ci
 
       - name: Generate version files
-        run: node scripts/generate-version.ts
+        run: npx tsx scripts/generate-version.ts
 
       - name: Type Check
         run: npx tsc -b packages/cf-shared services/cf-api services/cf-bot services/cf-worker
@@ -47,10 +47,12 @@ jobs:
         env:
           FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       - run: npm ci
-      - name: Generate version files
-        run: node scripts/generate-version.ts
       - name: Build cf-shared
         run: npx tsc -b packages/cf-shared
+      - name: Generate version files
+        run: npx tsx scripts/generate-version.ts
+        env:
+          CF_ENV: development
       - name: Deploy cf-api
         run: npx wrangler deploy --env dev
         working-directory: services/cf-api
@@ -82,10 +84,12 @@ jobs:
         env:
           FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       - run: npm ci
-      - name: Generate version files
-        run: node scripts/generate-version.ts
       - name: Build cf-shared
         run: npx tsc -b packages/cf-shared
+      - name: Generate version files
+        run: npx tsx scripts/generate-version.ts
+        env:
+          CF_ENV: production
       - name: Deploy cf-api (prod)
         run: npx wrangler deploy --env production
         working-directory: services/cf-api

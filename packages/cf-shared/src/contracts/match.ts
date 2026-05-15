@@ -1,4 +1,12 @@
-import { Array, Boolean, Literal, Number, String, Struct, optional } from "effect/Schema";
+import {
+  Array,
+  Boolean,
+  Literal,
+  Number,
+  String,
+  Struct,
+  optional,
+} from "effect/Schema";
 import { User } from "./user.js";
 
 // --- Enums ---
@@ -22,6 +30,14 @@ export const Match = Struct({
   matchedAt: optional(String),
   user1Action: optional(MatchAction),
   user2Action: optional(MatchAction),
+  likeMessage: optional(
+    Struct({
+      fromUserId: String,
+      text: optional(String),
+      mediaUrl: optional(String),
+      createdAt: String,
+    }),
+  ),
 });
 export type Match = typeof Match.Type;
 
@@ -36,7 +52,8 @@ export type GetPotentialMatchesRequest = typeof GetPotentialMatchesRequest.Type;
 export const GetPotentialMatchesResponse = Struct({
   potentialMatches: Array(User),
 });
-export type GetPotentialMatchesResponse = typeof GetPotentialMatchesResponse.Type;
+export type GetPotentialMatchesResponse =
+  typeof GetPotentialMatchesResponse.Type;
 
 export const LikeMatchRequest = Struct({
   matchId: String,
@@ -109,13 +126,19 @@ export type CreateMatchResponse = typeof CreateMatchResponse.Type;
 // --- Service Interface ---
 
 export interface MatchService {
-  readonly getPotentialMatches: (req: GetPotentialMatchesRequest) => Promise<GetPotentialMatchesResponse>;
+  readonly getPotentialMatches: (
+    req: GetPotentialMatchesRequest,
+  ) => Promise<GetPotentialMatchesResponse>;
   readonly likeMatch: (req: LikeMatchRequest) => Promise<LikeMatchResponse>;
-  readonly dislikeMatch: (req: DislikeMatchRequest) => Promise<DislikeMatchResponse>;
+  readonly dislikeMatch: (
+    req: DislikeMatchRequest,
+  ) => Promise<DislikeMatchResponse>;
   readonly skipMatch: (req: SkipMatchRequest) => Promise<SkipMatchResponse>;
-  readonly getMatchList: (req: GetMatchListRequest) => Promise<GetMatchListResponse>;
+  readonly getMatchList: (
+    req: GetMatchListRequest,
+  ) => Promise<GetMatchListResponse>;
   readonly getMatch: (req: GetMatchRequest) => Promise<GetMatchResponse>;
-  readonly createMatch: (req: CreateMatchRequest) => Promise<CreateMatchResponse>;
+  readonly createMatch: (
+    req: CreateMatchRequest,
+  ) => Promise<CreateMatchResponse>;
 }
-
-
