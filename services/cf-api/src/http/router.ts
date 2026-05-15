@@ -801,8 +801,13 @@ export class ApiRouter {
 
       // Extract key from URL and delete from R2
       const key = extractMediaKeyFromUrl(url);
-      if (key && key !== url) {
+      if (key && key.startsWith(`${userId}/`)) {
         await this.env.MEDIA_BUCKET.delete(key).catch(() => {});
+      } else if (key) {
+        log.warn("deleteMedia", "Rejected delete for non-user-scoped key", {
+          userId,
+          key,
+        });
       }
 
       const result = await runEffect(this.userRepo.removeMedia(userId, url));
