@@ -357,6 +357,41 @@ export class ApiRouter {
       return jsonResponse({ error: "Failed to apply referral" }, 500);
     }
   }
+
+  private async handleGetDMStatus(path: string): Promise<Response> {
+    const userId = path.replace("/users/", "").replace("/dm-status", "");
+    try {
+      const status = await runEffect(this.userRepo.getDMStatus(userId));
+      return jsonResponse(status);
+    } catch (error) {
+      if (error instanceof NotFoundError) return jsonResponse({ error: error.message }, 404);
+      return jsonResponse({ error: "Failed to get DM status" }, 500);
+    }
+  }
+
+  private async handleSendDM(path: string): Promise<Response> {
+    const userId = path.replace("/users/", "").replace("/send-dm", "");
+    try {
+      const result = await runEffect(this.userRepo.useDMCredit(userId));
+      return jsonResponse(result);
+    } catch (error) {
+      if (error instanceof NotFoundError) return jsonResponse({ error: error.message }, 404);
+      return jsonResponse({ error: "Failed to send DM" }, 500);
+    }
+  }
+
+  private async handlePurchaseDMCredits(path: string, request: Request): Promise<Response> {
+    const userId = path.replace("/users/", "").replace("/purchase-dm-credits", "");
+    try {
+      const body = await request.json() as Record<string, unknown>;
+      const amount = Math.max(1, Math.min(100, Number(body.amount ?? 1)));
+      const result = await runEffect(this.userRepo.addDMCredits(userId, amount));
+      return jsonResponse(result);
+    } catch (error) {
+      if (error instanceof NotFoundError) return jsonResponse({ error: error.message }, 404);
+      return jsonResponse({ error: "Failed to purchase DM credits" }, 500);
+    }
+  }
 }
 
 function jsonResponse(body: unknown, status = 200): Response {

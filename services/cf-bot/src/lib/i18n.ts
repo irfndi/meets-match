@@ -73,6 +73,11 @@ interface Translations {
   notificationsNewLikes: string;
   notificationsNewMutual: string;
   notificationsCheckMatches: string;
+  dmGated: string;
+  dmSuccess: string;
+  dmFailed: string;
+  dmError: string;
+  dmPurchased: string;
 }
 
 const en: Translations = {
@@ -150,6 +155,16 @@ const en: Translations = {
   notificationsNewLikes: '❤️ new like(s)',
   notificationsNewMutual: '💕 new mutual match(es)',
   notificationsCheckMatches: 'You have {items}! Check them out with *💕 My Matches*.',
+  dmGated:
+    "🔒 *Direct Messages are a Premium feature*\n\n" +
+    "Send a DM to anyone without waiting for a mutual match.\n\n" +
+    "*Options:*\n" +
+    "• Upgrade to Premium/Premium+ for unlimited DMs\n" +
+    "• Buy 1 DM with Telegram Stars (no subscription)",
+  dmSuccess: '✅ DM unlocked! You can now message *{name}* directly:',
+  dmFailed: '❌ Could not unlock DM. Please try again.',
+  dmError: '❌ Something went wrong. Please try again later.',
+  dmPurchased: '✅ You bought {count} DM credit(s)! You now have {total} DM credit(s).',
 };
 
 const dictionaries: Record<Language, Translations> = { en };

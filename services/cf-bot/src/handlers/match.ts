@@ -78,7 +78,8 @@ function buildMatchKeyboard(targetUserId: string) {
     .text("❤️ Like", `match:like:${targetUserId}`)
     .text("👎 Dislike", `match:dislike:${targetUserId}`)
     .row()
-    .text("⏩ Skip", `match:skip:${targetUserId}`);
+    .text("⏩ Skip", `match:skip:${targetUserId}`)
+    .text("📩 Send DM", `dm:send:${targetUserId}`);
 }
 
 function formatProfile(user: Record<string, unknown>, index: number): string {
@@ -298,6 +299,60 @@ async function handleMatchAction(
   await ctx.answerCallbackQuery("Done!").catch(() => {});
 }
 
+async function handleSendDM(ctx: MyContext, env: Env, targetUserId: string) {
+  if (!ctx.from) {
+    await ctx.answerCallbackQuery("Could not identify you.").catch(() => {});
+    return;
+  }
+  const userId = String(ctx.from.id);
+  const lang = await fetchUserLang(env, userId);
+
+  try {
+    const client = new ApiServiceClient(env.API_SERVICE);
+    const dmStatus = await client.getDMStatus(userId);
+
+    if (!dmStatus.canSendDM) {
+      // Show purchase options
+      const keyboard = new InlineKeyboard()
+        .text("👑 Get Premium", "premium:show")
+        .row()
+        .text("⭐ Buy 1 DM (50 Stars)", `dm:buy:${targetUserId}`)
+        .row()
+        .text("❌ Cancel", "dm:cancel");
+      await ctx.reply(
+        t("dmGated", lang),
+        { parse_mode: "Markdown", reply_markup: keyboard }
+      );
+      await ctx.answerCallbackQuery().catch(() => {});
+      return;
+    }
+
+    // Use DM credit if needed
+    const result = await client.sendDM(userId);
+    if (!result.success) {
+      await ctx.reply(t("dmFailed", lang), { reply_markup: getMainMenuKeyboard() });
+      await ctx.answerCallbackQuery().catch(() => {});
+      return;
+    }
+
+    // Get target user details for chat link
+    const otherUserRes = await client.getUser({ userId: targetUserId });
+    const otherUser = otherUserRes.user as Record<string, unknown>;
+    const chatLink = buildChatLink(otherUser);
+    const name = (otherUser.displayName ?? otherUser.first_name ?? "Someone") as string;
+
+    await ctx.reply(
+      t("dmSuccess", lang, { name }) + "\n\n" + chatLink,
+      { parse_mode: "Markdown", link_preview_options: { is_disabled: false } }
+    );
+    await ctx.answerCallbackQuery().catch(() => {});
+  } catch (error) {
+    console.error("Send DM error:", error);
+    await ctx.reply(t("dmError", lang), { reply_markup: getMainMenuKeyboard() });
+    await ctx.answerCallbackQuery().catch(() => {});
+  }
+}
+
 export const matchCallbacks = async (ctx: MyContext, env: Env): Promise<void> => {
   if (!ctx.callbackQuery?.data) {
     await ctx.answerCallbackQuery().catch(() => {});
@@ -311,7 +366,50 @@ export const matchCallbacks = async (ctx: MyContext, env: Env): Promise<void> =>
     await handleMatchAction(ctx, env, "dislike", data.replace("match:dislike:", ""));
   } else if (data.startsWith("match:skip:")) {
     await handleMatchAction(ctx, env, "skip", data.replace("match:skip:", ""));
+  } else if (data.startsWith("dm:send:")) {
+    await handleSendDM(ctx, env, data.replace("dm:send:", ""));
+  } else if (data.startsWith("dm:buy:")) {
+    await handleBuyDM(ctx, env, data.replace("dm:buy:", ""));
+  } else if (data === "dm:cancel") {
+    await ctx.deleteMessage().catch(() => {});
+    await ctx.answerCallbackQuery().catch(() => {});
   } else {
     await ctx.answerCallbackQuery("Unknown action.").catch(() => {});
   }
 };
+
+async function handleBuyDM(ctx: MyContext, env: Env, targetUserId: string) {
+  if (!ctx.from) {
+    await ctx.answerCallbackQuery("Could not identify you.").catch(() => {});
+    return;
+  }
+  const userId = String(ctx.from.id);
+
+  try {
+    const bot = ctx.api;
+    const invoiceLink = await bot.createInvoiceLink({
+      title: "1 Direct Message",
+      description: "Send a DM to any user without matching",
+      payload: `dm_credit_${userId}_1_${targetUserId}`,
+      currency: "XTR",
+      prices: [{ label: "1 DM", amount: 50 }],
+    });
+
+    const keyboard = new InlineKeyboard()
+      .url("⭐ Pay 50 Stars", invoiceLink)
+      .row()
+      .text("❌ Cancel", "dm:cancel");
+
+    await ctx.reply(
+      "⭐ *Buy 1 Direct Message*\n\n" +
+      "Send a DM to any user instantly — no mutual match required!\n\n" +
+      "Tap the button below to pay with Telegram Stars.",
+      { parse_mode: "Markdown", reply_markup: keyboard }
+    );
+    await ctx.answerCallbackQuery().catch(() => {});
+  } catch (error) {
+    console.error("Buy DM error:", error);
+    await ctx.reply("❌ Sorry, something went wrong. Please try again later.");
+    await ctx.answerCallbackQuery().catch(() => {});
+  }
+}

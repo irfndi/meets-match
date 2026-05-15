@@ -105,4 +105,26 @@ export class ApiServiceClient implements IUserService {
     if (!response.ok) throw new Error(`API error: ${response.status}`);
     return (await response.json()) as LikeMatchResponse;
   }
+
+  async getDMStatus(userId: string): Promise<{ canSendDM: boolean; tier: string; dmCredits: number }> {
+    const response = await this.binding.fetch(new Request(`http://api/users/${userId}/dm-status`, { method: "GET" }));
+    if (!response.ok) throw new Error(`API error: ${response.status}`);
+    return (await response.json()) as { canSendDM: boolean; tier: string; dmCredits: number };
+  }
+
+  async sendDM(userId: string): Promise<{ success: boolean; dmCredits: number }> {
+    const response = await this.binding.fetch(new Request(`http://api/users/${userId}/send-dm`, { method: "POST" }));
+    if (!response.ok) throw new Error(`API error: ${response.status}`);
+    return (await response.json()) as { success: boolean; dmCredits: number };
+  }
+
+  async purchaseDMCredits(userId: string, amount: number): Promise<{ dmCredits: number }> {
+    const response = await this.binding.fetch(new Request(`http://api/users/${userId}/purchase-dm-credits`, {
+      method: "POST",
+      body: JSON.stringify({ amount }),
+      headers: { "Content-Type": "application/json" },
+    }));
+    if (!response.ok) throw new Error(`API error: ${response.status}`);
+    return (await response.json()) as { dmCredits: number };
+  }
 }

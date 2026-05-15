@@ -7,6 +7,7 @@ import { matchCommand, matchCallbacks } from "./handlers/match.js";
 import { matchesCommand, matchesCallbacks } from "./handlers/matches.js";
 import { settingsCommand, settingsCallbacks, handleAgeRangeCallback } from "./handlers/settings.js";
 import { premiumCommand, premiumCallbacks, referralCommand } from "./handlers/premium.js";
+import { ApiServiceClient } from "./services/api-client.js";
 import { activityTrackerMiddleware } from "./lib/activityTracker.js";
 import { handleConversationMessage, handleContactMessage, handleLocationMessage, checkMandatoryUpdates } from "./lib/conversations.js";
 import { handleProfileCallback } from "./menus/profile.js";
@@ -165,6 +166,36 @@ function createBot(env: Env): Bot<MyContext> {
   bot.on("message:location", async (ctx) => {
     const handled = await handleLocationMessage(ctx, env);
     if (handled) return;
+  });
+
+  // Handle Telegram Stars payments for DM credits
+  bot.on("pre_checkout_query", async (ctx) => {
+    await ctx.answerPreCheckoutQuery(true).catch(() => {});
+  });
+
+  bot.on("message:successful_payment", async (ctx) => {
+    const payment = ctx.message.successful_payment;
+    if (!payment) return;
+    const payload = payment.invoice_payload;
+
+    if (payload && payload.startsWith("dm_credit_")) {
+      const parts = payload.split("_");
+      const userId = parts[2];
+      const amount = Number(parts[3] ?? 1);
+      if (!userId) return;
+
+      try {
+        const client = new ApiServiceClient(env.API_SERVICE);
+        const result = await client.purchaseDMCredits(userId, amount);
+        await ctx.reply(
+          t("dmPurchased", "en", { count: String(amount), total: String(result.dmCredits) }),
+          { reply_markup: getMainMenuKeyboard() }
+        );
+      } catch (error) {
+        console.error("DM credit purchase error:", error);
+        await ctx.reply("❌ Payment processed but we could not add DM credits. Please contact support.");
+      }
+    }
   });
 
   bot.on("message:text", async (ctx) => {

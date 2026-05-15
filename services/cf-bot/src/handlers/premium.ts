@@ -5,7 +5,7 @@ import { ensureUserExists } from "../lib/user-utils.js";
 import { getMainMenuKeyboard } from "../lib/main-menu.js";
 
 const PREMIUM_PRICE = "$4.99/month";
-const SUPERVIP_PRICE = "$9.99/month";
+const PREMIUM_PLUS_PRICE = "$9.99/month";
 
 async function getSwipeStatus(env: Env, userId: string): Promise<{ remaining: number; total: number; tier: string } | null> {
   try {
@@ -44,7 +44,7 @@ export const premiumCommand = async (ctx: MyContext, env: Env): Promise<void> =>
   const msg = [
     "👑 *Premium Plans*",
     "",
-    `*Current plan:* ${tier === "free" ? "Free" : tier === "premium" ? "Premium 👑" : "SuperVIP 💎"}`,
+    `*Current plan:* ${tier === "free" ? "Free" : tier === "premium" ? "Premium 👑" : "Premium+ 💎"}`,
     status ? `*Swipes remaining today:* ${status.remaining}/${status.total}` : "",
     "",
     "*Free Plan:*",
@@ -56,8 +56,9 @@ export const premiumCommand = async (ctx: MyContext, env: Env): Promise<void> =>
     "• Priority matching",
     "• See who liked you",
     "",
-    "*SuperVIP 💎 — " + SUPERVIP_PRICE + "*",
+    "*Premium+ 💎 — " + PREMIUM_PLUS_PRICE + "*",
     "• Everything in Premium",
+    "• Unlimited direct DMs",
     "• Verified badge",
     "• Advanced filters",
     "",

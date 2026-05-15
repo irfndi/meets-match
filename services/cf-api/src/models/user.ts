@@ -203,7 +203,7 @@ export class UserRepository {
           await this.db.prepare("UPDATE users SET daily_swipes_used = 0, daily_swipes_reset_at = ? WHERE id = ?").bind(today, userId).run();
         }
 
-        const baseLimit = tier === "premium" || tier === "supervip" ? 9999 : 10;
+        const baseLimit = tier === "premium" || tier === "premium_plus" ? 9999 : 10;
         const total = baseLimit + bonus;
         const remaining = Math.max(0, total - used);
 
@@ -232,7 +232,7 @@ export class UserRepository {
           resetAt = today;
         }
 
-        const baseLimit = tier === "premium" || tier === "supervip" ? 9999 : 10;
+        const baseLimit = tier === "premium" || tier === "premium_plus" ? 9999 : 10;
         const total = baseLimit + bonus;
 
         if (used >= total) {
@@ -294,6 +294,56 @@ export class UserRepository {
     });
   }
 
+  getDMStatus(userId: string): Effect.Effect<{ canSendDM: boolean; tier: string; dmCredits: number }, DatabaseError | NotFoundError, never> {
+    return Effect.tryPromise({
+      try: async () => {
+        const row = await this.db.prepare("SELECT subscription_tier, dm_credits FROM users WHERE id = ?").bind(userId).first();
+        if (!row) throw new NotFoundError("User", userId);
+        const tier = String((row as Record<string, unknown>).subscription_tier ?? "free");
+        const dmCredits = Number((row as Record<string, unknown>).dm_credits ?? 0);
+        const canSendDM = tier === "premium" || tier === "premium_plus" || dmCredits > 0;
+        return { canSendDM, tier, dmCredits };
+      },
+      catch: (error) => (error instanceof NotFoundError ? error : new DatabaseError("getDMStatus", error)),
+    });
+  }
+
+  useDMCredit(userId: string): Effect.Effect<{ success: boolean; dmCredits: number }, DatabaseError | NotFoundError, never> {
+    return Effect.tryPromise({
+      try: async () => {
+        const row = await this.db.prepare("SELECT subscription_tier, dm_credits FROM users WHERE id = ?").bind(userId).first();
+        if (!row) throw new NotFoundError("User", userId);
+        const tier = String((row as Record<string, unknown>).subscription_tier ?? "free");
+        let dmCredits = Number((row as Record<string, unknown>).dm_credits ?? 0);
+
+        if (tier === "premium" || tier === "premium_plus") {
+          return { success: true, dmCredits };
+        }
+        if (dmCredits <= 0) {
+          return { success: false, dmCredits };
+        }
+        dmCredits--;
+        await this.db.prepare("UPDATE users SET dm_credits = ? WHERE id = ?").bind(dmCredits, userId).run();
+        return { success: true, dmCredits };
+      },
+      catch: (error) => (error instanceof NotFoundError ? error : new DatabaseError("useDMCredit", error)),
+    });
+  }
+
+  addDMCredits(userId: string, amount: number): Effect.Effect<{ dmCredits: number }, DatabaseError | NotFoundError, never> {
+    return Effect.tryPromise({
+      try: async () => {
+        const row = await this.db.prepare("SELECT dm_credits FROM users WHERE id = ?").bind(userId).first();
+        if (!row) throw new NotFoundError("User", userId);
+        const current = Number((row as Record<string, unknown>).dm_credits ?? 0);
+        const dmCredits = current + amount;
+        await this.db.prepare("UPDATE users SET dm_credits = ? WHERE id = ?").bind(dmCredits, userId).run();
+        return { dmCredits };
+      },
+      catch: (error) => (error instanceof NotFoundError ? error : new DatabaseError("addDMCredits", error)),
+    });
+  }
+
   private toUser(row: Record<string, unknown>): typeof User.Type {
     return {
       id: String(row.id),
@@ -320,6 +370,7 @@ export class UserRepository {
       referredBy: row.referred_by ? String(row.referred_by) : undefined,
       referralCount: row.referral_count ? Number(row.referral_count) : undefined,
       referralBonusSwipes: row.referral_bonus_swipes ? Number(row.referral_bonus_swipes) : undefined,
+      dmCredits: row.dm_credits ? Number(row.dm_credits) : undefined,
       createdAt: row.created_at ? String(row.created_at) : undefined,
       updatedAt: row.updated_at ? String(row.updated_at) : undefined,
       lastActive: row.last_active ? String(row.last_active) : undefined,

@@ -16,6 +16,9 @@ export const Location = Struct({
 });
 export type Location = typeof Location.Type;
 
+export const SubscriptionTier = Literal("free", "premium", "premium_plus");
+export type SubscriptionTier = typeof SubscriptionTier.Type;
+
 export const Preferences = Struct({
   minAge: optional(Number),
   maxAge: optional(Number),
@@ -56,6 +59,7 @@ export const User = Struct({
   referredBy: optional(String),
   referralCount: optional(Number),
   referralBonusSwipes: optional(Number),
+  dmCredits: optional(Number),
   createdAt: optional(String), // ISO 8601
   updatedAt: optional(String),
   lastActive: optional(String),
