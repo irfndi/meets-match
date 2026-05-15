@@ -6,7 +6,7 @@
   "main": "./dist/index.js",
   "scripts": {
     "dev": "npx tsx ../../scripts/generate-version.ts cf-api && wrangler dev",
-    "deploy": "wrangler deploy",
+    "deploy": "CF_ENV=development npx tsx ../../scripts/generate-version.ts cf-api && wrangler deploy --env dev",
     "build": "npx tsx ../../scripts/generate-version.ts cf-api && tsc -p tsconfig.json",
     "test": "vitest",
     "lint": "npx tsx ../../scripts/generate-version.ts cf-api && tsc --noEmit"
