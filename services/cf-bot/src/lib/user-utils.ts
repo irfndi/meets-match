@@ -12,7 +12,7 @@ export interface UserProfile {
   birthDate?: string;
   gender?: string;
   interests?: string[];
-  photos?: string[];
+  mediaUrls?: Array<{ url: string; type: string; uploadedAt: string }>;
   location?: Record<string, unknown>;
   preferences?: Record<string, unknown>;
   isActive?: boolean;
@@ -20,6 +20,10 @@ export interface UserProfile {
   isProfileComplete?: boolean;
   phoneNumber?: string;
   language?: string;
+  subscriptionTier?: string;
+  hiddenFromMatches?: boolean;
+  mediaDeletedAt?: string;
+  lastInteractionAt?: string;
 }
 
 export const REQUIRED_FIELDS = [
@@ -29,6 +33,7 @@ export const REQUIRED_FIELDS = [
   'bio',
   'location',
   'interests',
+  'mediaUrls',
 ] as const;
 
 export function isPhoneVerified(user: UserProfile): boolean {
@@ -59,6 +64,9 @@ export function getProfileCompleteness(user: UserProfile): {
   if (!user.interests || user.interests.length === 0) {
     missing.push('interests');
   }
+  if (!user.mediaUrls || user.mediaUrls.length === 0) {
+    missing.push('mediaUrls');
+  }
 
   return { complete: missing.length === 0, missing };
 }
@@ -71,6 +79,7 @@ export function getMissingFieldsDisplay(missing: string[]): string {
     bio: '📝 Bio',
     location: '📍 Location',
     interests: '🌟 Interests',
+    mediaUrls: '📸 Media',
   };
   return missing.map((f) => labels[f] || f).join(', ');
 }
@@ -109,6 +118,22 @@ export function parseBirthDate(input: string): { day: number; month: number; yea
 }
 
 export function computeAgeFromBirthDate(birthDate: string): number | undefined {
+  // Try parsing as ISO format YYYY-MM-DD first (database storage format)
+  const isoMatch = birthDate.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoMatch) {
+    const year = parseInt(isoMatch[1], 10);
+    const month = parseInt(isoMatch[2], 10);
+    const day = parseInt(isoMatch[3], 10);
+    const now = new Date();
+    let age = now.getFullYear() - year;
+    const m = now.getMonth() - (month - 1);
+    if (m < 0 || (m === 0 && now.getDate() < day)) {
+      age--;
+    }
+    if (age >= 12 && age <= 80) return age;
+  }
+
+  // Fallback to DD.MM.YYYY format (user input format)
   const parsed = parseBirthDate(birthDate);
   if (!parsed) return undefined;
   const now = new Date();

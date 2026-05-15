@@ -49,6 +49,7 @@ const completeUser = {
   bio: "Hello",
   location: { city: "Jakarta", country: "Indonesia" },
   interests: ["Hiking"],
+  mediaUrls: [{ url: "test", type: "image", uploadedAt: "2024-01-01" }],
   phoneNumber: "+1234567890",
   isProfileComplete: true,
 };

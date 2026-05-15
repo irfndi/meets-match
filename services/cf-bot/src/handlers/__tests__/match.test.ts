@@ -43,6 +43,7 @@ const completeUser = {
   bio: "Hello",
   location: { city: "Jakarta", country: "Indonesia", latitude: -6.2, longitude: 106.8 },
   interests: ["Hiking"],
+  mediaUrls: [{ url: "test", type: "image", uploadedAt: "2024-01-01" }],
   phoneNumber: "+1234567890",
   isProfileComplete: true,
   language: "en",
@@ -112,17 +113,22 @@ describe("Match Handlers", () => {
   describe("matchCallbacks", () => {
     it("should handle match:like callback", async () => {
       ctx.callbackQuery!.data = "match:like:456";
+      (ctx as any).editMessageReplyMarkup = vi.fn().mockResolvedValue(undefined);
+      await env.KV.put("match_queue:123", JSON.stringify({ matches: [{ id: "456", displayName: "Alice", age: 24 }], index: 0 }));
       env.API_SERVICE = createMockApiService({
         "/users/123": () => new Response(JSON.stringify({ user: completeUser }), { status: 200 }),
         "/matches": () => new Response(JSON.stringify({ match: { id: "m1", user1Id: "123", user2Id: "456", status: "PENDING" } }), { status: 201 }),
         "/matches/m1/like": () => new Response(JSON.stringify({ isMutual: false, match: { id: "m1" } }), { status: 200 }),
       });
       await matchCallbacks(ctx, env);
+      // Should advance queue and show "no more matches" since queue only had 1 item
       expect(ctx.reply).toHaveBeenCalled();
     });
 
     it("should handle match:dislike callback", async () => {
       ctx.callbackQuery!.data = "match:dislike:456";
+      (ctx as any).editMessageReplyMarkup = vi.fn().mockResolvedValue(undefined);
+      await env.KV.put("match_queue:123", JSON.stringify({ matches: [{ id: "456", displayName: "Alice", age: 24 }], index: 0 }));
       env.API_SERVICE = createMockApiService({
         "/users/123": () => new Response(JSON.stringify({ user: completeUser }), { status: 200 }),
         "/matches": () => new Response(JSON.stringify({ match: { id: "m1", user1Id: "123", user2Id: "456", status: "PENDING" } }), { status: 201 }),
@@ -134,6 +140,8 @@ describe("Match Handlers", () => {
 
     it("should handle match:skip callback", async () => {
       ctx.callbackQuery!.data = "match:skip:456";
+      (ctx as any).editMessageReplyMarkup = vi.fn().mockResolvedValue(undefined);
+      await env.KV.put("match_queue:123", JSON.stringify({ matches: [{ id: "456", displayName: "Alice", age: 24 }], index: 0 }));
       env.API_SERVICE = createMockApiService({
         "/users/123": () => new Response(JSON.stringify({ user: completeUser }), { status: 200 }),
         "/matches": () => new Response(JSON.stringify({ match: { id: "m1", user1Id: "123", user2Id: "456", status: "PENDING" } }), { status: 201 }),

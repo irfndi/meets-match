@@ -1,8 +1,9 @@
 import { Effect, Exit, Cause } from "effect";
-import type { D1Database, KVNamespace, Queue } from "@cloudflare/workers-types";
+import type { D1Database, KVNamespace, Queue, R2Bucket } from "@cloudflare/workers-types";
 import { UserRepository } from "../models/user.js";
 import { MatchRepository } from "../models/match.js";
 import { NotificationRepository } from "../models/notification.js";
+import { ReportRepository } from "../models/report.js";
 import { GeocodingService } from "../models/geocoding.js";
 import { AppError, NotFoundError, DatabaseError } from "@meetsmatch/cf-shared";
 
@@ -22,18 +23,21 @@ export interface ApiEnv {
   DB: D1Database;
   KV: KVNamespace;
   NOTIFICATION_QUEUE: Queue;
+  MEDIA_BUCKET: R2Bucket;
 }
 
 export class ApiRouter {
   private readonly userRepo: UserRepository;
   private readonly matchRepo: MatchRepository;
   private readonly notificationRepo: NotificationRepository;
+  private readonly reportRepo: ReportRepository;
   private readonly geoService: GeocodingService;
 
   constructor(private readonly env: ApiEnv) {
     this.userRepo = new UserRepository(env.DB);
     this.matchRepo = new MatchRepository(env.DB, this.userRepo);
     this.notificationRepo = new NotificationRepository(env.DB);
+    this.reportRepo = new ReportRepository(env.DB);
     this.geoService = new GeocodingService(env.KV);
   }
 
@@ -56,6 +60,12 @@ export class ApiRouter {
           return this.handleGetSwipeStatus(url.pathname);
         case url.pathname.startsWith("/users/") && url.pathname.endsWith("/record-swipe") && method === "POST":
           return this.handleRecordSwipe(url.pathname);
+        case url.pathname.startsWith("/users/") && url.pathname.endsWith("/interaction-status") && method === "GET":
+          return this.handleGetInteractionStatus(url.pathname);
+        case url.pathname.startsWith("/users/") && url.pathname.endsWith("/record-like") && method === "POST":
+          return this.handleRecordLike(url.pathname);
+        case url.pathname.startsWith("/users/") && url.pathname.endsWith("/record-dislike") && method === "POST":
+          return this.handleRecordDislike(url.pathname);
         case url.pathname.startsWith("/users/") && url.pathname.endsWith("/referral") && method === "GET":
           return this.handleGetReferralCode(url.pathname);
         case url.pathname.startsWith("/users/") && url.pathname.endsWith("/apply-referral") && method === "POST":
@@ -66,6 +76,16 @@ export class ApiRouter {
           return this.handleSendDM(url.pathname);
         case url.pathname.startsWith("/users/") && url.pathname.endsWith("/purchase-dm-credits") && method === "POST":
           return this.handlePurchaseDMCredits(url.pathname, request);
+        case url.pathname.startsWith("/users/") && url.pathname.endsWith("/media") && method === "POST":
+          return this.handleUploadMedia(url.pathname, request);
+        case url.pathname.startsWith("/users/") && url.pathname.endsWith("/media") && method === "DELETE":
+          return this.handleDeleteMedia(url.pathname, request);
+        case url.pathname.startsWith("/users/") && url.pathname.endsWith("/restore-profile") && method === "POST":
+          return this.handleRestoreProfile(url.pathname);
+        case url.pathname.startsWith("/users/") && url.pathname.endsWith("/report") && method === "POST":
+          return this.handleReport(url.pathname, request);
+        case url.pathname.startsWith("/users/") && url.pathname.endsWith("/interact") && method === "POST":
+          return this.handleInteract(url.pathname);
         case url.pathname.startsWith("/users/") && url.pathname.endsWith("/last-active") && method === "POST":
           return this.handleUpdateLastActive(url.pathname);
         case url.pathname.startsWith("/users/") && url.pathname.endsWith("/last-reminded-at") && method === "POST":
@@ -125,8 +145,16 @@ export class ApiRouter {
       return jsonResponse({ error: "limit must be a number between 1 and 50" }, 400);
     }
     try {
-      const result = await runEffect(this.matchRepo.getPotentialMatches({ userId, limit }));
-      return jsonResponse({ potentialMatches: result });
+      let result = await runEffect(this.matchRepo.getPotentialMatches({ userId, limit }));
+      let relaxed = false;
+
+      // If strict filters return nothing, try relaxed filters
+      if (result.length === 0) {
+        result = await runEffect(this.matchRepo.getPotentialMatches({ userId, limit, relaxFilters: true }));
+        relaxed = result.length > 0;
+      }
+
+      return jsonResponse({ potentialMatches: result, relaxed });
     } catch (error) {
       return jsonResponse({ error: "Failed to get potential matches" }, 500);
     }
@@ -231,7 +259,8 @@ export class ApiRouter {
     try {
       switch (action) {
         case "like": {
-          const result = await runEffect(this.matchRepo.like({ matchId, userId }));
+          const message = body.message as { text?: string; mediaUrl?: string } | undefined;
+          const result = await runEffect(this.matchRepo.like({ matchId, userId, message }));
           return jsonResponse(result);
         }
         case "dislike": {
@@ -240,6 +269,10 @@ export class ApiRouter {
         }
         case "skip": {
           const result = await runEffect(this.matchRepo.skip({ matchId, userId }));
+          return jsonResponse(result);
+        }
+        case "undo": {
+          const result = await runEffect(this.matchRepo.undo({ matchId, userId }));
           return jsonResponse(result);
         }
         default:
@@ -340,6 +373,39 @@ export class ApiRouter {
     }
   }
 
+  private async handleGetInteractionStatus(path: string): Promise<Response> {
+    const userId = path.replace("/users/", "").replace("/interaction-status", "");
+    try {
+      const status = await runEffect(this.userRepo.getInteractionStatus(userId));
+      return jsonResponse(status);
+    } catch (error) {
+      if (error instanceof NotFoundError) return jsonResponse({ error: error.message }, 404);
+      return jsonResponse({ error: "Failed to get interaction status" }, 500);
+    }
+  }
+
+  private async handleRecordLike(path: string): Promise<Response> {
+    const userId = path.replace("/users/", "").replace("/record-like", "");
+    try {
+      const result = await runEffect(this.userRepo.recordLike(userId));
+      return jsonResponse(result);
+    } catch (error) {
+      if (error instanceof NotFoundError) return jsonResponse({ error: error.message }, 404);
+      return jsonResponse({ error: "Failed to record like" }, 500);
+    }
+  }
+
+  private async handleRecordDislike(path: string): Promise<Response> {
+    const userId = path.replace("/users/", "").replace("/record-dislike", "");
+    try {
+      const result = await runEffect(this.userRepo.recordDislike(userId));
+      return jsonResponse(result);
+    } catch (error) {
+      if (error instanceof NotFoundError) return jsonResponse({ error: error.message }, 404);
+      return jsonResponse({ error: "Failed to record dislike" }, 500);
+    }
+  }
+
   private async handleGetReferralCode(path: string): Promise<Response> {
     const userId = path.replace("/users/", "").replace("/referral", "");
     try {
@@ -396,6 +462,123 @@ export class ApiRouter {
     } catch (error) {
       if (error instanceof NotFoundError) return jsonResponse({ error: error.message }, 404);
       return jsonResponse({ error: "Failed to purchase DM credits" }, 500);
+    }
+  }
+
+  private async handleUploadMedia(path: string, request: Request): Promise<Response> {
+    const userId = path.replace("/users/", "").replace("/media", "");
+    try {
+      const body = await request.json() as Record<string, unknown>;
+
+      // Check daily media upload limit
+      const mediaStatus = await runEffect(this.userRepo.getMediaUploadStatus(userId));
+      if (mediaStatus.remaining <= 0) {
+        return jsonResponse({ error: "Daily media upload limit reached", limit: true, tier: mediaStatus.tier }, 429);
+      }
+
+      // Check current media count
+      const currentMedia = await runEffect(this.userRepo.getMedia(userId));
+      if (currentMedia.length >= 3) return jsonResponse({ error: "Maximum 3 media items allowed" }, 400);
+
+      let publicUrl: string;
+      let fileType: string;
+
+      // Mode 1: URL already provided (bot uploaded directly to R2)
+      if (body.url) {
+        publicUrl = String(body.url);
+        fileType = String(body.type ?? "image");
+        if (fileType !== "image" && fileType !== "video") {
+          return jsonResponse({ error: "type must be image or video" }, 400);
+        }
+        console.log(`[api:media] Registering pre-uploaded ${fileType} for user ${userId}: ${publicUrl}`);
+      }
+      // Mode 2: Base64 data provided (legacy direct upload)
+      else {
+        const fileData = String(body.fileData ?? "");
+        fileType = String(body.fileType ?? "image");
+        const fileName = String(body.fileName ?? "media");
+
+        if (!fileData) return jsonResponse({ error: "fileData or url is required" }, 400);
+        if (fileType !== "image" && fileType !== "video") return jsonResponse({ error: "fileType must be image or video" }, 400);
+
+        // Decode base64 and upload to R2
+        const bytes = Uint8Array.from(atob(fileData), (c) => c.charCodeAt(0));
+        const ext = fileType === "image" ? (fileName.endsWith(".png") ? "png" : "jpg") : "mp4";
+        const key = `${userId}/${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${ext}`;
+        await this.env.MEDIA_BUCKET.put(key, bytes, {
+          httpMetadata: { contentType: fileType === "image" ? `image/${ext}` : "video/mp4" },
+        });
+
+        publicUrl = `https://media.meetsmatch.irfndi.workers.dev/${key}`;
+        console.log(`[api:media] Uploaded ${fileType} to R2 for user ${userId}: ${publicUrl}`);
+      }
+
+      const mediaItem = { url: publicUrl, type: fileType, uploadedAt: new Date().toISOString() };
+      const result = await runEffect(this.userRepo.addMedia(userId, mediaItem));
+      await runEffect(this.userRepo.recordMediaUpload(userId));
+      return jsonResponse(result);
+    } catch (error) {
+      console.error(`[api:media] Upload failed for user ${userId}:`, error);
+      if (error instanceof NotFoundError) return jsonResponse({ error: error.message }, 404);
+      return jsonResponse({ error: "Failed to upload media" }, 500);
+    }
+  }
+
+  private async handleDeleteMedia(path: string, request: Request): Promise<Response> {
+    const userId = path.replace("/users/", "").replace("/media", "");
+    try {
+      const body = await request.json() as Record<string, unknown>;
+      const url = String(body.url ?? "");
+      if (!url) return jsonResponse({ error: "url is required" }, 400);
+
+      // Extract key from URL and delete from R2
+      const key = url.replace("https://media.meetsmatch.irfndi.workers.dev/", "");
+      if (key && key !== url) {
+        await this.env.MEDIA_BUCKET.delete(key).catch(() => {});
+      }
+
+      const result = await runEffect(this.userRepo.removeMedia(userId, url));
+      return jsonResponse(result);
+    } catch (error) {
+      if (error instanceof NotFoundError) return jsonResponse({ error: error.message }, 404);
+      return jsonResponse({ error: "Failed to delete media" }, 500);
+    }
+  }
+
+  private async handleRestoreProfile(path: string): Promise<Response> {
+    const userId = path.replace("/users/", "").replace("/restore-profile", "");
+    try {
+      await runEffect(this.userRepo.restoreProfile(userId));
+      return jsonResponse({ success: true });
+    } catch (error) {
+      if (error instanceof NotFoundError) return jsonResponse({ error: error.message }, 404);
+      return jsonResponse({ error: "Failed to restore profile" }, 500);
+    }
+  }
+
+  private async handleReport(path: string, request: Request): Promise<Response> {
+    const reportedId = path.replace("/users/", "").replace("/report", "");
+    try {
+      const body = await request.json() as Record<string, unknown>;
+      const reporterId = String(body.reporterId ?? "");
+      const reason = body.reason ? String(body.reason) : undefined;
+      if (!reporterId) {
+        return jsonResponse({ error: "reporterId is required" }, 400);
+      }
+      const result = await runEffect(this.reportRepo.create({ reporterId, reportedId, reason }));
+      return jsonResponse({ success: true, reportId: result.id });
+    } catch (error) {
+      return jsonResponse({ error: "Failed to create report" }, 500);
+    }
+  }
+
+  private async handleInteract(path: string): Promise<Response> {
+    const userId = path.replace("/users/", "").replace("/interact", "");
+    try {
+      await runEffect(this.userRepo.updateLastInteraction(userId));
+      return jsonResponse({ success: true });
+    } catch (error) {
+      return jsonResponse({ error: "Failed to update interaction" }, 500);
     }
   }
 }

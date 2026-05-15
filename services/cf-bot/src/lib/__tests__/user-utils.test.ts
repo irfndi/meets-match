@@ -11,7 +11,7 @@ describe("getProfileCompleteness", () => {
       bio: "Hello",
       location: { city: "Jakarta", country: "Indonesia" },
       interests: ["Hiking"],
-
+      mediaUrls: [{ url: "test", type: "image", uploadedAt: "2024-01-01" }],
     };
     const result = getProfileCompleteness(user as any);
     expect(result.complete).toBe(true);
@@ -22,7 +22,7 @@ describe("getProfileCompleteness", () => {
     const user = { id: "1" };
     const result = getProfileCompleteness(user as any);
     expect(result.complete).toBe(false);
-    expect(result.missing).toEqual(["displayName", "birthDate", "gender", "bio", "location", "interests"]);
+    expect(result.missing).toEqual(["displayName", "birthDate", "gender", "bio", "location", "interests", "mediaUrls"]);
   });
 
   it("detects missing location when only country is provided", () => {
@@ -34,7 +34,7 @@ describe("getProfileCompleteness", () => {
       bio: "Hello",
       location: { country: "Indonesia" },
       interests: ["Hiking"],
-
+      mediaUrls: [{ url: "test", type: "image", uploadedAt: "2024-01-01" }],
     };
     const result = getProfileCompleteness(user as any);
     expect(result.complete).toBe(false);
@@ -50,7 +50,7 @@ describe("getProfileCompleteness", () => {
       bio: "Hello",
       location: { latitude: -6.2, longitude: 106.8 },
       interests: ["Hiking"],
-
+      mediaUrls: [{ url: "test", type: "image", uploadedAt: "2024-01-01" }],
     };
     const result = getProfileCompleteness(user as any);
     expect(result.complete).toBe(true);
@@ -66,7 +66,7 @@ describe("getProfileCompleteness", () => {
       bio: "Hello",
       location: { city: "Jakarta", country: "Indonesia" },
       interests: [],
-
+      mediaUrls: [{ url: "test", type: "image", uploadedAt: "2024-01-01" }],
     };
     const result = getProfileCompleteness(user as any);
     expect(result.complete).toBe(false);
@@ -82,7 +82,7 @@ describe("getProfileCompleteness", () => {
       bio: "Hello",
       location: { city: "Jakarta", country: "Indonesia" },
       interests: ["Hiking"],
-
+      mediaUrls: [{ url: "test", type: "image", uploadedAt: "2024-01-01" }],
     };
     const result = getProfileCompleteness(user as any);
     expect(result.complete).toBe(false);
@@ -98,6 +98,7 @@ describe("getProfileCompleteness", () => {
       bio: "",
       location: { city: "Jakarta", country: "Indonesia" },
       interests: ["Hiking"],
+      mediaUrls: [{ url: "test", type: "image", uploadedAt: "2024-01-01" }],
     };
     const result = getProfileCompleteness(user as any);
     expect(result.complete).toBe(false);

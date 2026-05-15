@@ -22,6 +22,12 @@ export const Match = Struct({
   matchedAt: optional(String),
   user1Action: optional(MatchAction),
   user2Action: optional(MatchAction),
+  likeMessage: optional(Struct({
+    fromUserId: String,
+    text: optional(String),
+    mediaUrl: optional(String),
+    createdAt: String,
+  })),
 });
 export type Match = typeof Match.Type;
 

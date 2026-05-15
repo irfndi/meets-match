@@ -22,7 +22,7 @@ const validUser = {
   age: 30,
   gender: "male" as const,
   interests: ["coding", "music"],
-  photos: ["https://example.com/photo.jpg"],
+  mediaUrls: [{ url: "https://example.com/photo.jpg", type: "image", uploadedAt: "2025-01-01T00:00:00Z" }],
   location: {
     latitude: 40.7128,
     longitude: -74.006,

@@ -19,6 +19,10 @@ interface Translations {
   matchLikeSuccess: string;
   matchDislikeSuccess: string;
   matchSkipSuccess: string;
+  matchLikeLimitReached: string;
+  matchDislikeLimitReached: string;
+  matchSkipGated: string;
+  matchReferralPrompt: string;
   matchError: string;
   matchItsAMatch: string;
   matchStartChatting: string;
@@ -78,6 +82,44 @@ interface Translations {
   dmFailed: string;
   dmError: string;
   dmPurchased: string;
+  mediaPrompt: string;
+  mediaInvalidType: string;
+  mediaMaxReached: string;
+  mediaUploadSuccess: string;
+  mediaUploadError: string;
+  mediaDonePrompt: string;
+  mediaDoneButton: string;
+  mediaAddMoreButton: string;
+  mediaDeletedCleanup: string;
+  mediaRequiredPrompt: string;
+  mediaManagerTitle: string;
+  mediaManagerEmpty: string;
+  mediaManagerItemPhoto: string;
+  mediaManagerItemVideo: string;
+  mediaManagerDeletePrompt: string;
+  mediaManagerUploadPrompt: string;
+  mediaDeleteSuccess: string;
+  mediaDeleteError: string;
+  mediaRetryPrompt: string;
+  mediaLimitReached: string;
+  matchFallbackNotice: string;
+  matchAdjustSettingsPrompt: string;
+  hiddenFromMatches: string;
+  reportPrompt: string;
+  reportSubmitted: string;
+  reportCancelled: string;
+  rollbackNoAction: string;
+  rollbackSuccess: string;
+  rollbackGated: string;
+  likeMessagePrompt: string;
+  likeMessageSkipButton: string;
+  likeMessageSent: string;
+  giftTitle: string;
+  giftSelect: string;
+  giftSent: string;
+  giftReceived: string;
+  giftGated: string;
+  giftCancelled: string;
 }
 
 const en: Translations = {
@@ -96,6 +138,10 @@ const en: Translations = {
   matchLikeSuccess: '❤️ You liked this profile!',
   matchDislikeSuccess: '👎 Skipped.',
   matchSkipSuccess: '⏩ Skipped.',
+  matchLikeLimitReached: '🛑 *Like Limit Reached*\n\nYou\'ve used all your free likes for today.\n\nUpgrade to Premium for unlimited likes, or share your referral link to earn bonus likes!',
+  matchDislikeLimitReached: '🛑 *Dislike Limit Reached*\n\nYou\'ve used all your free dislikes for today.\n\nUpgrade to Premium for unlimited dislikes, or share your referral link to earn bonus likes!',
+  matchSkipGated: '🔒 *Skip is a Premium feature*\n\nFree users can only Like or Dislike.\n\nUpgrade to Premium to skip profiles and browse faster!',
+  matchReferralPrompt: '👋 You\'re on a roll! Share MeetMatch with friends to earn bonus likes and dislikes! 🎁',
   matchError: 'Something went wrong. Please try again.',
   matchItsAMatch:
     "🎉 *It's a Match!*\n\n" +
@@ -114,8 +160,8 @@ const en: Translations = {
   birthDatePrompt: 'When were you born? Enter your birthdate in *DD.MM.YYYY* format (e.g. *15.03.1995*). Type *Cancel* to abort.',
   birthDateInvalid: 'Invalid date. Please use *DD.MM.YYYY* format and make sure it is a real date between 12 and 80 years ago. Try again or type *Cancel*.',
   birthDateUpdated: '✅ Birthdate updated!',
-  agePrompt: 'How old are you? Enter your age (18–65). Type *Cancel* to abort.',
-  ageInvalid: 'Invalid age. Must be between 18 and 65. Try again or type *Cancel*.',
+  agePrompt: 'How old are you? Enter your age (12–80). Type *Cancel* to abort.',
+  ageInvalid: 'Invalid age. Must be between 12 and 80. Try again or type *Cancel*.',
   ageUpdated: '✅ Age updated to {age}!',
   namePrompt: 'What should we call you? Enter your display name (1–50 characters). Type *Cancel* to abort.',
   nameInvalid: 'Name must be 1–50 characters. Try again or type *Cancel*.',
@@ -165,6 +211,44 @@ const en: Translations = {
   dmFailed: '❌ Could not unlock DM. Please try again.',
   dmError: '❌ Something went wrong. Please try again later.',
   dmPurchased: '✅ You bought {count} DM credit(s)! You now have {total} DM credit(s).',
+  mediaPrompt: 'Send me 1-3 photos or videos for your profile. Tap 📎 to attach.',
+  mediaInvalidType: 'Please send a photo or video only. Other file types are not supported.',
+  mediaMaxReached: 'You already have {count} media. Maximum is 3. Tap ✅ Done or delete existing media first.',
+  mediaUploadSuccess: '✅ Added! You now have {count}/3 media.',
+  mediaUploadError: '❌ Failed to upload. Please try again.',
+  mediaDonePrompt: 'Send more or tap ✅ Done when finished.',
+  mediaDoneButton: '✅ Done',
+  mediaAddMoreButton: '📤 Add more',
+  mediaDeletedCleanup: '📸 Your profile photos were removed after 30 days of inactivity. Upload new photos to start matching again!',
+  mediaRequiredPrompt: '📸 *Media Required*\n\nPlease upload at least 1 photo or video to complete your profile.',
+  mediaManagerTitle: '📸 *Your Media ({count}/3)*',
+  mediaManagerEmpty: '📸 *Your Media (0/3)*\n\nNo media uploaded yet.\n\nUpload photos or videos to show on your profile:',
+  mediaManagerItemPhoto: '📷 Photo',
+  mediaManagerItemVideo: '🎥 Video',
+  mediaManagerDeletePrompt: 'Tap an item to delete it, or upload more:',
+  mediaManagerUploadPrompt: 'Upload photos or videos to show on your profile:',
+  mediaDeleteSuccess: '✅ Deleted!',
+  mediaDeleteError: '❌ Failed to delete. Please try again.',
+  mediaRetryPrompt: '❌ Upload failed. Want to try again?',
+  mediaLimitReached: '📸 *Upload Limit Reached*\n\nYou\'ve used all your free media uploads for today (10 max).\n\nShare MeetMatch with friends to earn bonus uploads, or upgrade to Premium for unlimited uploads!',
+  matchFallbackNotice: '🔍 *Broadening your search…*\n\nYour current settings are a bit restrictive. Here are some profiles outside your usual preferences — try liking someone new!',
+  matchAdjustSettingsPrompt: 'Tap ⚙️ Settings to adjust your age range, distance, or gender preferences.',
+  hiddenFromMatches: '👋 Your profile is now hidden from matches. Come back to stay visible!',
+  reportPrompt: '⚠️ *Report Profile*\n\nWhy are you reporting this profile? Type your reason below, or tap *Cancel*.',
+  reportSubmitted: '✅ Report submitted. Thank you for keeping our community safe.',
+  reportCancelled: 'Report cancelled.',
+  rollbackNoAction: '↩️ Nothing to undo. You haven\'t taken any action on a profile yet.',
+  rollbackSuccess: '↩️ Undone! The previous profile is back.',
+  rollbackGated: '🔒 *Undo is a Premium+ feature*\n\nUpgrade to Premium or Premium+ to undo your last action!',
+  likeMessagePrompt: '💌 *Send a Like with Message*\n\nType your message below, or send a photo/video. Tap *Skip* to like without a message.',
+  likeMessageSkipButton: '⏭ Skip',
+  likeMessageSent: '💌 Your like with message was sent!',
+  giftTitle: '🎁 *Send a Gift*',
+  giftSelect: 'Choose a gift to send:\n\n🌹 Rose — 10 ⭐\n🍫 Chocolate — 25 ⭐\n🧸 Teddy Bear — 50 ⭐\n💎 Diamond — 100 ⭐',
+  giftSent: '🎁 You sent a *{gift}*! They\'ll receive it soon.',
+  giftReceived: '🎁 *New Gift!*\n\n{name} sent you a *{gift}*! 💕',
+  giftGated: '🔒 *Gifts are a Premium feature*\n\nUpgrade to Premium to send gifts to your matches!',
+  giftCancelled: 'Gift cancelled.',
 };
 
 const dictionaries: Record<Language, Translations> = { en };

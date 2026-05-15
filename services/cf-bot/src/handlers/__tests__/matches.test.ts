@@ -44,6 +44,7 @@ const completeUser = {
   bio: "Hello",
   location: { city: "Jakarta", country: "Indonesia" },
   interests: ["Hiking"],
+  mediaUrls: [{ url: "test", type: "image", uploadedAt: "2024-01-01" }],
   phoneNumber: "+1234567890",
   isProfileComplete: true,
   language: "en",
@@ -83,7 +84,7 @@ describe("Matches Handlers", () => {
         "/users/456": () => new Response(JSON.stringify({ user: { id: "456", displayName: "Alice", age: 24 } }), { status: 200 }),
       });
       await matchesCommand(ctx, env);
-      expect(ctx.reply).toHaveBeenCalledTimes(2); // title + match card
+      expect(ctx.reply).toHaveBeenCalledTimes(3); // title + match card + main menu
     });
 
     it("should show pending likes when they exist", async () => {

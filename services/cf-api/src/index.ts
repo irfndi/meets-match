@@ -11,4 +11,5 @@ interface Env {
   DB: D1Database;
   KV: KVNamespace;
   NOTIFICATION_QUEUE: Queue;
+  MEDIA_BUCKET: R2Bucket;
 }

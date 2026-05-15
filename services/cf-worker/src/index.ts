@@ -1,6 +1,7 @@
 import { runReengagementJob } from './jobs/reengagement.js';
 import { runDLQHealthCheck } from './jobs/dlqHealth.js';
 import { runBirthdayJob } from './jobs/birthday.js';
+import { runCleanupJob } from './jobs/cleanup.js';
 
 export interface Env {
   DB: D1Database;
@@ -10,6 +11,7 @@ export interface Env {
   REENGAGEMENT_SCHEDULE?: string;
   DLQ_PROCESSOR_SCHEDULE?: string;
   BIRTHDAY_SCHEDULE?: string;
+  CLEANUP_SCHEDULE?: string;
 }
 
 export default {
@@ -64,6 +66,7 @@ export default {
     const reengagementSchedule = env.REENGAGEMENT_SCHEDULE || "0 10 * * *";
     const dlqSchedule = env.DLQ_PROCESSOR_SCHEDULE || "*/5 * * * *";
     const birthdaySchedule = env.BIRTHDAY_SCHEDULE || "0 9 * * *";
+    const cleanupSchedule = env.CLEANUP_SCHEDULE || "0 11 * * *";
 
     if (event.cron === reengagementSchedule) {
       await runReengagementJob(env);
@@ -71,6 +74,8 @@ export default {
       await runDLQHealthCheck(env);
     } else if (event.cron === birthdaySchedule) {
       await runBirthdayJob(env);
+    } else if (event.cron === cleanupSchedule) {
+      await runCleanupJob(env);
     } else {
       console.log(`[scheduled] Unknown cron: ${event.cron}`);
     }

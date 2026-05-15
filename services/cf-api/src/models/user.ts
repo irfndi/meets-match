@@ -42,7 +42,7 @@ export class UserRepository {
         }
         await this.db
           .prepare(
-            `INSERT INTO users (id, username, first_name, last_name, bio, age, birth_date, gender, interests, photos, location, preferences, is_active, is_sleeping, is_profile_complete, phone_number, language, last_active)
+            `INSERT INTO users (id, username, first_name, last_name, bio, age, birth_date, gender, interests, media_urls, location, preferences, is_active, is_sleeping, is_profile_complete, phone_number, language, last_active)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
           )
           .bind(
@@ -55,7 +55,7 @@ export class UserRepository {
             user.birthDate ?? null,
             user.gender ?? null,
             JSON.stringify(user.interests ?? []),
-            JSON.stringify(user.photos ?? []),
+            JSON.stringify(user.mediaUrls ?? []),
             JSON.stringify(user.location ?? {}),
             JSON.stringify(user.preferences ?? {}),
             user.isActive ?? true ? 1 : 0,
@@ -111,7 +111,7 @@ export class UserRepository {
         if (user.age !== undefined) { fields.push("age = ?"); values.push(user.age); }
         if (user.gender !== undefined) { fields.push("gender = ?"); values.push(user.gender); }
         if (user.interests !== undefined) { fields.push("interests = ?"); values.push(JSON.stringify(user.interests)); }
-        if (user.photos !== undefined) { fields.push("photos = ?"); values.push(JSON.stringify(user.photos)); }
+        if (user.mediaUrls !== undefined) { fields.push("media_urls = ?"); values.push(JSON.stringify(user.mediaUrls)); }
         if (user.location !== undefined) { fields.push("location = ?"); values.push(JSON.stringify(user.location)); }
         if (user.preferences !== undefined) { fields.push("preferences = ?"); values.push(JSON.stringify(user.preferences)); }
         if (user.isActive !== undefined) { fields.push("is_active = ?"); values.push(user.isActive ? 1 : 0); }
@@ -183,7 +183,7 @@ export class UserRepository {
     });
   }
 
-  getSwipeStatus(userId: string): Effect.Effect<{ remaining: number; total: number; tier: string; resetAt: string }, DatabaseError, never> {
+  getSwipeStatus(userId: string): Effect.Effect<{ remaining: number; total: number; tier: string; resetAt: string }, DatabaseError | NotFoundError, never> {
     return Effect.tryPromise({
       try: async () => {
         const row = await this.db.prepare("SELECT subscription_tier, daily_swipes_used, daily_swipes_reset_at, referral_bonus_swipes FROM users WHERE id = ?").bind(userId).first();
@@ -244,6 +244,101 @@ export class UserRepository {
         return { remaining: total - used, total };
       },
       catch: (error) => (error instanceof NotFoundError ? error : new DatabaseError("recordSwipe", error)),
+    });
+  }
+
+  getInteractionStatus(userId: string): Effect.Effect<{ likesRemaining: number; likesTotal: number; dislikesRemaining: number; dislikesTotal: number; tier: string; resetAt: string }, DatabaseError | NotFoundError, never> {
+    return Effect.tryPromise({
+      try: async () => {
+        const row = await this.db.prepare("SELECT subscription_tier, daily_likes_used, daily_likes_reset_at, daily_dislikes_used, daily_dislikes_reset_at, referral_bonus_swipes FROM users WHERE id = ?").bind(userId).first();
+        if (!row) throw new NotFoundError("User", userId);
+
+        const tier = String((row as Record<string, unknown>).subscription_tier ?? "free");
+        let likesUsed = Number((row as Record<string, unknown>).daily_likes_used ?? 0);
+        let dislikesUsed = Number((row as Record<string, unknown>).daily_dislikes_used ?? 0);
+        let resetAt = String((row as Record<string, unknown>).daily_likes_reset_at ?? "");
+        const bonus = Number((row as Record<string, unknown>).referral_bonus_swipes ?? 0);
+
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+
+        if (!resetAt || resetAt < today) {
+          likesUsed = 0;
+          dislikesUsed = 0;
+          resetAt = today;
+          await this.db.prepare("UPDATE users SET daily_likes_used = 0, daily_dislikes_used = 0, daily_likes_reset_at = ?, daily_dislikes_reset_at = ? WHERE id = ?").bind(today, today, userId).run();
+        }
+
+        const isPremium = tier === "premium" || tier === "premium_plus";
+        const likesTotal = isPremium ? 9999 : 15 + bonus;
+        const dislikesTotal = isPremium ? 9999 : 35 + bonus;
+        return { likesRemaining: Math.max(0, likesTotal - likesUsed), likesTotal, dislikesRemaining: Math.max(0, dislikesTotal - dislikesUsed), dislikesTotal, tier, resetAt };
+      },
+      catch: (error) => (error instanceof NotFoundError ? error : new DatabaseError("getInteractionStatus", error)),
+    });
+  }
+
+  recordLike(userId: string): Effect.Effect<{ remaining: number; total: number }, DatabaseError | NotFoundError, never> {
+    return Effect.tryPromise({
+      try: async () => {
+        const row = await this.db.prepare("SELECT subscription_tier, daily_likes_used, daily_likes_reset_at, referral_bonus_swipes FROM users WHERE id = ?").bind(userId).first();
+        if (!row) throw new NotFoundError("User", userId);
+
+        const tier = String((row as Record<string, unknown>).subscription_tier ?? "free");
+        let used = Number((row as Record<string, unknown>).daily_likes_used ?? 0);
+        let resetAt = String((row as Record<string, unknown>).daily_likes_reset_at ?? "");
+        const bonus = Number((row as Record<string, unknown>).referral_bonus_swipes ?? 0);
+
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+
+        if (!resetAt || resetAt < today) {
+          used = 0;
+          resetAt = today;
+        }
+
+        const total = tier === "premium" || tier === "premium_plus" ? 9999 : 15 + bonus;
+        if (used >= total) {
+          return { remaining: 0, total };
+        }
+
+        used++;
+        await this.db.prepare("UPDATE users SET daily_likes_used = ?, daily_likes_reset_at = ? WHERE id = ?").bind(used, resetAt, userId).run();
+        return { remaining: total - used, total };
+      },
+      catch: (error) => (error instanceof NotFoundError ? error : new DatabaseError("recordLike", error)),
+    });
+  }
+
+  recordDislike(userId: string): Effect.Effect<{ remaining: number; total: number }, DatabaseError | NotFoundError, never> {
+    return Effect.tryPromise({
+      try: async () => {
+        const row = await this.db.prepare("SELECT subscription_tier, daily_dislikes_used, daily_dislikes_reset_at, referral_bonus_swipes FROM users WHERE id = ?").bind(userId).first();
+        if (!row) throw new NotFoundError("User", userId);
+
+        const tier = String((row as Record<string, unknown>).subscription_tier ?? "free");
+        let used = Number((row as Record<string, unknown>).daily_dislikes_used ?? 0);
+        let resetAt = String((row as Record<string, unknown>).daily_dislikes_reset_at ?? "");
+        const bonus = Number((row as Record<string, unknown>).referral_bonus_swipes ?? 0);
+
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+
+        if (!resetAt || resetAt < today) {
+          used = 0;
+          resetAt = today;
+        }
+
+        const total = tier === "premium" || tier === "premium_plus" ? 9999 : 35 + bonus;
+        if (used >= total) {
+          return { remaining: 0, total };
+        }
+
+        used++;
+        await this.db.prepare("UPDATE users SET daily_dislikes_used = ?, daily_dislikes_reset_at = ? WHERE id = ?").bind(used, resetAt, userId).run();
+        return { remaining: total - used, total };
+      },
+      catch: (error) => (error instanceof NotFoundError ? error : new DatabaseError("recordDislike", error)),
     });
   }
 
@@ -355,7 +450,7 @@ export class UserRepository {
       birthDate: row.birth_date ? String(row.birth_date) : undefined,
       gender: row.gender ? String(row.gender) as typeof import("@meetsmatch/cf-shared").Gender.Type : undefined,
       interests: row.interests ? JSON.parse(String(row.interests)) : [],
-      photos: row.photos ? JSON.parse(String(row.photos)) : [],
+      mediaUrls: row.media_urls ? JSON.parse(String(row.media_urls)) : undefined,
       location: row.location ? JSON.parse(String(row.location)) : undefined,
       preferences: row.preferences ? JSON.parse(String(row.preferences)) : {},
       isActive: row.is_active ? Number(row.is_active) === 1 : true,
@@ -366,14 +461,167 @@ export class UserRepository {
       subscriptionTier: row.subscription_tier ? String(row.subscription_tier) : undefined,
       dailySwipesUsed: row.daily_swipes_used ? Number(row.daily_swipes_used) : undefined,
       dailySwipesResetAt: row.daily_swipes_reset_at ? String(row.daily_swipes_reset_at) : undefined,
+      dailyLikesUsed: row.daily_likes_used ? Number(row.daily_likes_used) : undefined,
+      dailyLikesResetAt: row.daily_likes_reset_at ? String(row.daily_likes_reset_at) : undefined,
+      dailyDislikesUsed: row.daily_dislikes_used ? Number(row.daily_dislikes_used) : undefined,
+      dailyDislikesResetAt: row.daily_dislikes_reset_at ? String(row.daily_dislikes_reset_at) : undefined,
+      dailyMediaUsed: row.daily_media_used ? Number(row.daily_media_used) : undefined,
+      dailyMediaResetAt: row.daily_media_reset_at ? String(row.daily_media_reset_at) : undefined,
       referralCode: row.referral_code ? String(row.referral_code) : undefined,
       referredBy: row.referred_by ? String(row.referred_by) : undefined,
       referralCount: row.referral_count ? Number(row.referral_count) : undefined,
       referralBonusSwipes: row.referral_bonus_swipes ? Number(row.referral_bonus_swipes) : undefined,
       dmCredits: row.dm_credits ? Number(row.dm_credits) : undefined,
+      hiddenFromMatches: row.hidden_from_matches ? Number(row.hidden_from_matches) === 1 : undefined,
+      mediaDeletedAt: row.media_deleted_at ? String(row.media_deleted_at) : undefined,
+      lastInteractionAt: row.last_interaction_at ? String(row.last_interaction_at) : undefined,
       createdAt: row.created_at ? String(row.created_at) : undefined,
       updatedAt: row.updated_at ? String(row.updated_at) : undefined,
       lastActive: row.last_active ? String(row.last_active) : undefined,
     };
+  }
+
+  getMediaUploadStatus(userId: string): Effect.Effect<{ remaining: number; total: number; tier: string }, DatabaseError | NotFoundError, never> {
+    return Effect.tryPromise({
+      try: async () => {
+        const row = await this.db.prepare("SELECT subscription_tier, daily_media_used, daily_media_reset_at FROM users WHERE id = ?").bind(userId).first();
+        if (!row) throw new NotFoundError("User", userId);
+
+        const tier = String((row as Record<string, unknown>).subscription_tier ?? "free");
+        let used = Number((row as Record<string, unknown>).daily_media_used ?? 0);
+        let resetAt = String((row as Record<string, unknown>).daily_media_reset_at ?? "");
+
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+
+        if (!resetAt || resetAt < today) {
+          used = 0;
+          resetAt = today;
+          await this.db.prepare("UPDATE users SET daily_media_used = 0, daily_media_reset_at = ? WHERE id = ?").bind(resetAt, userId).run();
+        }
+
+        const total = tier === "premium" || tier === "premium_plus" ? 9999 : 10;
+        return { remaining: Math.max(0, total - used), total, tier };
+      },
+      catch: (error) => (error instanceof NotFoundError ? error : new DatabaseError("getMediaUploadStatus", error)),
+    });
+  }
+
+  recordMediaUpload(userId: string): Effect.Effect<{ remaining: number; total: number }, DatabaseError | NotFoundError, never> {
+    return Effect.tryPromise({
+      try: async () => {
+        const row = await this.db.prepare("SELECT subscription_tier, daily_media_used, daily_media_reset_at FROM users WHERE id = ?").bind(userId).first();
+        if (!row) throw new NotFoundError("User", userId);
+
+        const tier = String((row as Record<string, unknown>).subscription_tier ?? "free");
+        let used = Number((row as Record<string, unknown>).daily_media_used ?? 0);
+        let resetAt = String((row as Record<string, unknown>).daily_media_reset_at ?? "");
+
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+
+        if (!resetAt || resetAt < today) {
+          used = 0;
+          resetAt = today;
+        }
+
+        const total = tier === "premium" || tier === "premium_plus" ? 9999 : 10;
+        if (used >= total) {
+          return { remaining: 0, total };
+        }
+
+        used++;
+        await this.db.prepare("UPDATE users SET daily_media_used = ?, daily_media_reset_at = ? WHERE id = ?").bind(used, resetAt, userId).run();
+        return { remaining: total - used, total };
+      },
+      catch: (error) => (error instanceof NotFoundError ? error : new DatabaseError("recordMediaUpload", error)),
+    });
+  }
+
+  getMedia(userId: string): Effect.Effect<Array<{ url: string; type: string; uploadedAt: string }>, DatabaseError | NotFoundError, never> {
+    return Effect.tryPromise({
+      try: async () => {
+        const row = await this.db.prepare("SELECT media_urls FROM users WHERE id = ?").bind(userId).first();
+        if (!row) throw new NotFoundError("User", userId);
+        const media = (row as Record<string, unknown>).media_urls;
+        return media ? JSON.parse(String(media)) as Array<{ url: string; type: string; uploadedAt: string }> : [];
+      },
+      catch: (error) => (error instanceof NotFoundError ? error : new DatabaseError("getMedia", error)),
+    });
+  }
+
+  addMedia(userId: string, mediaItem: { url: string; type: string; uploadedAt: string }): Effect.Effect<{ mediaUrls: Array<{ url: string; type: string; uploadedAt: string }> }, DatabaseError | NotFoundError, never> {
+    return Effect.tryPromise({
+      try: async () => {
+        const row = await this.db.prepare("SELECT media_urls FROM users WHERE id = ?").bind(userId).first();
+        if (!row) throw new NotFoundError("User", userId);
+        const current = (row as Record<string, unknown>).media_urls;
+        const mediaUrls: Array<{ url: string; type: string; uploadedAt: string }> = current ? JSON.parse(String(current)) : [];
+        if (mediaUrls.length >= 3) throw new DatabaseError("addMedia", new Error("Maximum 3 media items allowed"));
+        mediaUrls.push(mediaItem);
+        await this.db.prepare("UPDATE users SET media_urls = ? WHERE id = ?").bind(JSON.stringify(mediaUrls), userId).run();
+        return { mediaUrls };
+      },
+      catch: (error) => (error instanceof NotFoundError ? error : new DatabaseError("addMedia", error)),
+    });
+  }
+
+  removeMedia(userId: string, url: string): Effect.Effect<{ mediaUrls: Array<{ url: string; type: string; uploadedAt: string }> }, DatabaseError | NotFoundError, never> {
+    return Effect.tryPromise({
+      try: async () => {
+        const row = await this.db.prepare("SELECT media_urls FROM users WHERE id = ?").bind(userId).first();
+        if (!row) throw new NotFoundError("User", userId);
+        const current = (row as Record<string, unknown>).media_urls;
+        const mediaUrls: Array<{ url: string; type: string; uploadedAt: string }> = current ? JSON.parse(String(current)) : [];
+        const filtered = mediaUrls.filter((m) => m.url !== url);
+        await this.db.prepare("UPDATE users SET media_urls = ? WHERE id = ?").bind(JSON.stringify(filtered), userId).run();
+        return { mediaUrls: filtered };
+      },
+      catch: (error) => (error instanceof NotFoundError ? error : new DatabaseError("removeMedia", error)),
+    });
+  }
+
+  updateLastInteraction(userId: string): Effect.Effect<boolean, DatabaseError, never> {
+    return Effect.tryPromise({
+      try: async () => {
+        await this.db.prepare("UPDATE users SET last_interaction_at = CURRENT_TIMESTAMP WHERE id = ?").bind(userId).run();
+        return true;
+      },
+      catch: (error) => new DatabaseError("updateLastInteraction", error),
+    });
+  }
+
+  hideFromMatches(userId: string): Effect.Effect<boolean, DatabaseError, never> {
+    return Effect.tryPromise({
+      try: async () => {
+        await this.db.prepare("UPDATE users SET hidden_from_matches = 1 WHERE id = ?").bind(userId).run();
+        return true;
+      },
+      catch: (error) => new DatabaseError("hideFromMatches", error),
+    });
+  }
+
+  restoreProfile(userId: string): Effect.Effect<boolean, DatabaseError, never> {
+    return Effect.tryPromise({
+      try: async () => {
+        await this.db.prepare(
+          "UPDATE users SET hidden_from_matches = 0, media_deleted_at = NULL, is_profile_complete = 1 WHERE id = ?"
+        ).bind(userId).run();
+        return true;
+      },
+      catch: (error) => new DatabaseError("restoreProfile", error),
+    });
+  }
+
+  clearMediaAndMarkIncomplete(userId: string): Effect.Effect<boolean, DatabaseError, never> {
+    return Effect.tryPromise({
+      try: async () => {
+        await this.db.prepare(
+          "UPDATE users SET media_urls = '[]', media_deleted_at = CURRENT_TIMESTAMP, is_profile_complete = 0 WHERE id = ?"
+        ).bind(userId).run();
+        return true;
+      },
+      catch: (error) => new DatabaseError("clearMediaAndMarkIncomplete", error),
+    });
   }
 }

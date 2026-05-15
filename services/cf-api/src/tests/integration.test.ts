@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import type { R2Bucket } from '@cloudflare/workers-types';
 import { UserRepository } from '../models/user.js';
 import { MatchRepository } from '../models/match.js';
 import { NotificationRepository } from '../models/notification.js';
@@ -97,6 +98,7 @@ describe('API Integration', () => {
     mockKV = createMockKV();
     mockQueue = createMockQueue();
     router = new ApiRouter({
+      MEDIA_BUCKET: {} as R2Bucket,
       DB: mockD1 as unknown as D1Database,
       KV: mockKV as unknown as KVNamespace,
       NOTIFICATION_QUEUE: mockQueue as unknown as Queue,

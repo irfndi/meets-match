@@ -18,16 +18,23 @@ export const profileCommand = async (ctx: MyContext, env: Env): Promise<void> =>
 
   const { user } = result;
   const name = user.displayName || 'Not set';
-  const username = user.username ? `@${user.username}` : 'Not set';
   const computedAge = user.birthDate ? computeAgeFromBirthDate(user.birthDate) : user.age;
   const ageDisplay = computedAge !== undefined ? String(computedAge) : 'Not set';
   const gender = user.gender ? (user.gender as string).charAt(0).toUpperCase() + (user.gender as string).slice(1) : 'Not set';
   const bio = user.bio || 'Not set';
   const loc = user.location;
-  const locationText = loc?.city ? `${loc.city}, ${loc.country}` : loc?.latitude ? '📍 Shared' : 'Not set';
+  const locationText = loc?.city && loc?.country
+    ? `${loc.city}, ${loc.country}`
+    : loc?.city
+      ? loc.city
+      : loc?.latitude
+        ? '📍 Shared'
+        : 'Not set';
   const interests = user.interests && Array.isArray(user.interests) && user.interests.length > 0
     ? (user.interests as string[]).join(', ')
     : 'Not set';
+  const mediaCount = (user.mediaUrls as Array<unknown> | undefined)?.length ?? 0;
+  const mediaText = mediaCount > 0 ? `${mediaCount}/3 uploaded` : 'Not set';
 
   const { complete, missing } = getProfileCompleteness(user);
 
@@ -35,12 +42,12 @@ export const profileCommand = async (ctx: MyContext, env: Env): Promise<void> =>
     '👤 *Your Profile*',
     '',
     `*Name:* ${name}`,
-    `*Username:* ${username}`,
     `*Age:* ${ageDisplay}`,
     `*Gender:* ${gender}`,
     `*Bio:* ${bio}`,
     `*Location:* ${locationText}`,
     `*Interests:* ${interests}`,
+    `*Media:* ${mediaText}`,
   ];
 
   if (!complete) {
@@ -58,6 +65,6 @@ export const profileCommand = async (ctx: MyContext, env: Env): Promise<void> =>
 
   await ctx.reply(msgParts.join('\n'), {
     parse_mode: 'Markdown',
-    reply_markup: getProfileMenu(env),
+    reply_markup: getProfileMenu(env, mediaCount),
   });
 };

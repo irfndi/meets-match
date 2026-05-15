@@ -138,7 +138,22 @@ export const matchesCommand = async (ctx: MyContext, env: Env): Promise<void> =>
         const otherUser = userRes.user as Record<string, unknown>;
         const msg = formatMatch(otherUser);
         const chatLink = buildChatLink(otherUser);
-        await ctx.reply(`${msg}\n${chatLink}`, { parse_mode: "Markdown" });
+        const mediaUrls = (otherUser.mediaUrls ?? []) as Array<{ url: string; type: string }>;
+        const firstImage = mediaUrls.find((m) => m.type === 'image');
+        const firstVideo = mediaUrls.find((m) => m.type === 'video');
+        const text = `${msg}\n${chatLink}`;
+
+        try {
+          if (firstImage) {
+            await ctx.replyWithPhoto(firstImage.url, { caption: text, parse_mode: 'Markdown' });
+          } else if (firstVideo) {
+            await ctx.replyWithVideo(firstVideo.url, { caption: text, parse_mode: 'Markdown' });
+          } else {
+            await ctx.reply(text, { parse_mode: 'Markdown' });
+          }
+        } catch {
+          await ctx.reply(text, { parse_mode: 'Markdown' });
+        }
       } catch {
         await ctx.reply(formatMatch(match));
       }
@@ -156,6 +171,8 @@ export const matchesCommand = async (ctx: MyContext, env: Env): Promise<void> =>
       { reply_markup: keyboard }
     );
   }
+
+  await ctx.reply("Use the menu below to navigate:", { reply_markup: getMainMenuKeyboard() });
 };
 
 export const matchesCallbacks = async (ctx: MyContext, env: Env): Promise<void> => {
@@ -193,13 +210,27 @@ export const matchesCallbacks = async (ctx: MyContext, env: Env): Promise<void> 
       const interests = targetUser.interests
         ? `\n🌟 ${Array.isArray(targetUser.interests) ? (targetUser.interests as string[]).join(", ") : String(targetUser.interests)}`
         : "";
+      const mediaUrls = (targetUser.mediaUrls ?? []) as Array<{ url: string; type: string }>;
+      const firstImage = mediaUrls.find((m) => m.type === 'image');
+      const firstVideo = mediaUrls.find((m) => m.type === 'video');
 
       const keyboard = new InlineKeyboard()
         .text("❤️ Like back", `match:like:${targetUserId}`)
         .text("👎 Pass", `match:dislike:${targetUserId}`)
         .row();
 
-      await ctx.reply(`${name}, ${age}${bio}${interests}`, { reply_markup: keyboard });
+      const text = `${name}, ${age}${bio}${interests}`;
+      try {
+        if (firstImage) {
+          await ctx.replyWithPhoto(firstImage.url, { caption: text, reply_markup: keyboard });
+        } else if (firstVideo) {
+          await ctx.replyWithVideo(firstVideo.url, { caption: text, reply_markup: keyboard });
+        } else {
+          await ctx.reply(text, { reply_markup: keyboard });
+        }
+      } catch {
+        await ctx.reply(text, { reply_markup: keyboard });
+      }
 
       // Remove this like notification
       const notifications = await getNotifications(env, userId);

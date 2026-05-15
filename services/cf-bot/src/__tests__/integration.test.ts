@@ -128,6 +128,8 @@ describe("Integration: Match Lifecycle", () => {
   it("should handle mutual match notification", async () => {
     const { matchCallbacks } = await import("../handlers/match.js");
     const ctx = mockCtx();
+    (ctx as any).editMessageReplyMarkup = vi.fn().mockResolvedValue(undefined);
+    await env.KV.put("match_queue:123", JSON.stringify({ matches: [{ id: "456", displayName: "Alice", age: 24 }], index: 0 }));
     ctx.callbackQuery = { id: "cb1", from: { id: 123, is_bot: false, first_name: "Test" }, data: "match:like:456", message: { message_id: 1, chat: { id: 123, type: "private" }, date: 1 } } as any;
     await matchCallbacks(ctx, env);
     expect(ctx.reply).toHaveBeenCalled();

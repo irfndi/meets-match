@@ -3,14 +3,14 @@ import type { MyContext } from "./types.js";
 import { startCommand, languageCallback } from "./handlers/start.js";
 import { helpCommand, aboutCommand } from "./handlers/help.js";
 import { profileCommand } from "./handlers/profile.js";
-import { matchCommand, matchCallbacks } from "./handlers/match.js";
+import { matchCommand, matchCallbacks, handleMatchReplyAction, getMatchActionKeyboard, handleGiftCallback, handleGiftPayment, startLikeMessageConversation } from "./handlers/match.js";
 import { matchesCommand, matchesCallbacks } from "./handlers/matches.js";
 import { settingsCommand, settingsCallbacks, handleAgeRangeCallback } from "./handlers/settings.js";
 import { premiumCommand, premiumCallbacks, referralCommand } from "./handlers/premium.js";
 import { ApiServiceClient } from "./services/api-client.js";
 import { activityTrackerMiddleware } from "./lib/activityTracker.js";
-import { handleConversationMessage, handleContactMessage, handleLocationMessage, checkMandatoryUpdates } from "./lib/conversations.js";
-import { handleProfileCallback } from "./menus/profile.js";
+import { handleConversationMessage, handleContactMessage, handleLocationMessage, handleMediaMessage, checkMandatoryUpdates, getConversationState } from "./lib/conversations.js";
+import { handleProfileCallback, handleMediaCallback } from "./menus/profile.js";
 import { getNotifications, clearNotifications } from "./lib/notifications.js";
 import { getMainMenuKeyboard } from "./lib/main-menu.js";
 import { InlineKeyboard } from "grammy";
@@ -20,6 +20,7 @@ export interface Env {
   DB: D1Database;
   KV: KVNamespace;
   API_SERVICE: Fetcher;
+  MEDIA_BUCKET?: R2Bucket;
   BOT_TOKEN: string;
   TELEGRAM_WEBHOOK_SECRET?: string;
   ENVIRONMENT?: string;
@@ -60,10 +61,16 @@ function createBot(env: Env): Bot<MyContext> {
     return next();
   });
 
-  // Check for pending notifications only on command interactions (not every message)
+  // Check for pending notifications on any user interaction
+  // Skip if user is in an active conversation to avoid interrupting input
   bot.use(async (ctx, next) => {
-    if (!ctx.from || !ctx.message?.text?.startsWith("/")) return next();
+    if (!ctx.from) return next();
     const userId = String(ctx.from.id);
+
+    // Skip if in a conversation
+    const state = await getConversationState(env.KV, userId);
+    if (state) return next();
+
     const notifications = await getNotifications(env, userId);
     const hasLikes = notifications.some((n) => n.type === "like");
     const hasMutual = notifications.some((n) => n.type === "mutual_match");
@@ -119,6 +126,17 @@ function createBot(env: Env): Bot<MyContext> {
       if (handled) return;
     }
 
+    if (data === "media:back") {
+      await profileCommand(ctx, env);
+      await ctx.answerCallbackQuery().catch(() => {});
+      return;
+    }
+
+    if (data.startsWith("media:")) {
+      const handled = await handleMediaCallback(ctx, env, data);
+      if (handled) return;
+    }
+
     if (
       data === "next_match" ||
       data === "view_matches" ||
@@ -148,6 +166,12 @@ function createBot(env: Env): Bot<MyContext> {
       return settingsCallbacks(ctx, env);
     }
 
+    if (data === "settings:show") {
+      await settingsCommand(ctx, env);
+      await ctx.answerCallbackQuery().catch(() => {});
+      return;
+    }
+
     if (data.startsWith("agerange:")) {
       const handled = await handleAgeRangeCallback(ctx, env, data);
       if (handled) return;
@@ -155,6 +179,24 @@ function createBot(env: Env): Bot<MyContext> {
 
     if (data.startsWith("premium:") || data.startsWith("referral:")) {
       return premiumCallbacks(ctx, env);
+    }
+
+    if (data === "media:retry") {
+      await ctx.deleteMessage().catch(() => {});
+      await ctx.answerCallbackQuery().catch(() => {});
+      return;
+    }
+
+    if (data === "media:cancel") {
+      await ctx.deleteMessage().catch(() => {});
+      await ctx.answerCallbackQuery().catch(() => {});
+      return;
+    }
+
+    // Gift callbacks
+    if (data.startsWith("gift:") || data === "gift:cancel") {
+      const handled = await handleGiftCallback(ctx, env, data);
+      if (handled) return;
     }
   });
 
@@ -168,7 +210,33 @@ function createBot(env: Env): Bot<MyContext> {
     if (handled) return;
   });
 
-  // Handle Telegram Stars payments for DM credits
+  bot.on("message:photo", async (ctx) => {
+    // Check if in like-message conversation first
+    if (ctx.from) {
+      const state = await getConversationState(env.KV, String(ctx.from.id));
+      if (state && state.field === 'like-message') {
+        await handleLikeMessagePhoto(ctx, env);
+        return;
+      }
+    }
+    const handled = await handleMediaMessage(ctx, env, "image");
+    if (handled) return;
+  });
+
+  bot.on("message:video", async (ctx) => {
+    // Check if in like-message conversation first
+    if (ctx.from) {
+      const state = await getConversationState(env.KV, String(ctx.from.id));
+      if (state && state.field === 'like-message') {
+        await handleLikeMessageVideo(ctx, env);
+        return;
+      }
+    }
+    const handled = await handleMediaMessage(ctx, env, "video");
+    if (handled) return;
+  });
+
+  // Handle Telegram Stars payments
   bot.on("pre_checkout_query", async (ctx) => {
     await ctx.answerPreCheckoutQuery(true).catch(() => {});
   });
@@ -196,6 +264,10 @@ function createBot(env: Env): Bot<MyContext> {
         await ctx.reply("❌ Payment processed but we could not add DM credits. Please contact support.");
       }
     }
+
+    if (payload && payload.startsWith("gift_")) {
+      await handleGiftPayment(ctx, env, payload);
+    }
   });
 
   bot.on("message:text", async (ctx) => {
@@ -213,6 +285,28 @@ function createBot(env: Env): Bot<MyContext> {
         return settingsCommand(ctx, env);
     }
 
+    // Match action reply keyboard — only if there's an active match queue
+    const actionMap: Record<string, string> = {
+      "❤️ Like": "like",
+      "👎 Dislike": "dislike",
+      "⏩ Skip": "skip",
+      "↩️": "undo",
+      "⚠️": "report",
+      "💌": "like-message",
+      "🎁 Send a gift": "gift",
+      "🏠 Main menu": "menu",
+    };
+
+    if (text && actionMap[text]) {
+      const action = actionMap[text];
+      if (action === "menu") {
+        await ctx.reply("Main menu:", { reply_markup: getMainMenuKeyboard() });
+        return;
+      }
+      const handled = await handleMatchReplyAction(ctx, env, action);
+      if (handled) return;
+    }
+
     const handled = await handleConversationMessage(ctx, env);
     if (handled) return;
 
@@ -223,6 +317,96 @@ function createBot(env: Env): Bot<MyContext> {
   });
 
   return bot;
+}
+
+// --- Like with Message media handlers ---
+
+async function handleLikeMessagePhoto(ctx: MyContext, env: Env): Promise<void> {
+  if (!ctx.from || !ctx.message?.photo) return;
+  const userId = String(ctx.from.id);
+
+  try {
+    const photos = ctx.message.photo;
+    const fileId = photos[photos.length - 1].file_id;
+
+    const file = await ctx.api.getFile(fileId);
+    if (!file.file_path) {
+      await ctx.reply("❌ Failed to get file. Please try again.");
+      return;
+    }
+
+    const fileUrl = `https://api.telegram.org/file/bot${env.BOT_TOKEN}/${file.file_path}`;
+    const response = await fetch(fileUrl);
+    if (!response.ok) {
+      await ctx.reply("❌ Failed to download. Please try again.");
+      return;
+    }
+
+    const buffer = await response.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+
+    if (!env.MEDIA_BUCKET) {
+      await ctx.reply("❌ Upload service unavailable.");
+      return;
+    }
+
+    const ext = 'jpg';
+    const key = `${userId}/${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${ext}`;
+    await env.MEDIA_BUCKET.put(key, bytes, {
+      httpMetadata: { contentType: `image/${ext}` },
+    });
+
+    const publicUrl = `https://media.meetsmatch.irfndi.workers.dev/${key}`;
+
+    const { handleLikeMessageMedia } = await import("./handlers/match.js");
+    await handleLikeMessageMedia(ctx, env, publicUrl, 'image');
+  } catch (error) {
+    console.error("Like message photo error:", error);
+    await ctx.reply("❌ Failed to upload. Please try again.");
+  }
+}
+
+async function handleLikeMessageVideo(ctx: MyContext, env: Env): Promise<void> {
+  if (!ctx.from || !ctx.message?.video) return;
+  const userId = String(ctx.from.id);
+
+  try {
+    const fileId = ctx.message.video.file_id;
+
+    const file = await ctx.api.getFile(fileId);
+    if (!file.file_path) {
+      await ctx.reply("❌ Failed to get file. Please try again.");
+      return;
+    }
+
+    const fileUrl = `https://api.telegram.org/file/bot${env.BOT_TOKEN}/${file.file_path}`;
+    const response = await fetch(fileUrl);
+    if (!response.ok) {
+      await ctx.reply("❌ Failed to download. Please try again.");
+      return;
+    }
+
+    const buffer = await response.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+
+    if (!env.MEDIA_BUCKET) {
+      await ctx.reply("❌ Upload service unavailable.");
+      return;
+    }
+
+    const key = `${userId}/${Date.now()}_${Math.random().toString(36).substring(2, 8)}.mp4`;
+    await env.MEDIA_BUCKET.put(key, bytes, {
+      httpMetadata: { contentType: 'video/mp4' },
+    });
+
+    const publicUrl = `https://media.meetsmatch.irfndi.workers.dev/${key}`;
+
+    const { handleLikeMessageMedia } = await import("./handlers/match.js");
+    await handleLikeMessageMedia(ctx, env, publicUrl, 'video');
+  } catch (error) {
+    console.error("Like message video error:", error);
+    await ctx.reply("❌ Failed to upload. Please try again.");
+  }
 }
 
 export default {
@@ -290,7 +474,14 @@ export default {
 
         if (type === "like") {
           const fromName = payload.fromDisplayName ?? "Someone";
-          message = `💕 *New Like!*\n\n${fromName} liked your profile! Use *💕 My Matches* to see who likes you.`;
+          message = `💕 *New Like!*\n\n${fromName} liked your profile!`;
+          if (payload.messageText) {
+            message += `\n\n💌 *Message:* "${String(payload.messageText)}"`;
+          }
+          if (payload.mediaUrl) {
+            message += `\n\n📎 They also sent a photo/video with their like.`;
+          }
+          message += ` Use *💕 My Matches* to see who likes you.`;
         } else if (type === "mutual_match") {
           const otherName = payload.otherDisplayName ?? "Someone";
           message = `🎉 *It's a Match!*\n\nYou and *${otherName}* have liked each other! 💕`;
@@ -298,6 +489,11 @@ export default {
             message += `\n\n👉 [Start chatting](https://t.me/${otherUsername})`;
           }
           keyboard = new InlineKeyboard().text("💕 View Matches", "matches").row();
+        } else if (type === "gift") {
+          const fromName = payload.fromDisplayName ?? "Someone";
+          const giftEmoji = payload.giftEmoji ?? "🎁";
+          const giftName = payload.giftName ?? "gift";
+          message = `🎁 *New Gift!*\n\n${fromName} sent you a ${giftEmoji} *${giftName}*! 💕`;
         } else if (type === "BIRTHDAY") {
           message = payload.message || `🎂 Someone has a birthday today!`;
           keyboard = new InlineKeyboard().text("💕 View Matches", "matches").row();
@@ -307,6 +503,9 @@ export default {
           if (action === "find_match") {
             keyboard = new InlineKeyboard().text("🔍 Find Matches", "find_match").row();
           }
+        } else if (type === "CLEANUP_MEDIA_DELETED") {
+          message = payload.message || `📸 Your profile photos were removed after 30 days of inactivity. Upload new photos to start matching again!`;
+          keyboard = new InlineKeyboard().text("👤 Go to Profile", "profile:media").row();
         } else {
           message = payload.message || `You have a new ${type} notification!`;
         }

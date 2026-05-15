@@ -75,7 +75,7 @@ export class MatchRepository {
     });
   }
 
-  like(req: LikeMatchRequest): Effect.Effect<{ isMutual: boolean; match: typeof Match.Type }, NotFoundError | DatabaseError | ValidationError, never> {
+  like(req: LikeMatchRequest & { message?: { text?: string; mediaUrl?: string } }): Effect.Effect<{ isMutual: boolean; match: typeof Match.Type }, NotFoundError | DatabaseError | ValidationError, never> {
     return Effect.tryPromise({
       try: async () => {
         const match = await this.db.prepare("SELECT * FROM matches WHERE id = ?").bind(req.matchId).first();
@@ -89,7 +89,24 @@ export class MatchRepository {
         const actionCol = isUser1 ? "user1_action" : "user2_action";
         const otherAction = isUser1 ? row.user2Action : row.user1Action;
 
-        await this.db.prepare(`UPDATE matches SET ${actionCol} = 'like', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).bind(req.matchId).run();
+        // Build update fields
+        const updates: string[] = [`${actionCol} = 'like'`];
+        const values: unknown[] = [];
+
+        if (req.message && (req.message.text || req.message.mediaUrl)) {
+          updates.push("like_message = ?");
+          values.push(JSON.stringify({
+            fromUserId: req.userId,
+            text: req.message.text ?? null,
+            mediaUrl: req.message.mediaUrl ?? null,
+            createdAt: new Date().toISOString(),
+          }));
+        }
+
+        updates.push("updated_at = CURRENT_TIMESTAMP");
+        values.push(req.matchId);
+
+        await this.db.prepare(`UPDATE matches SET ${updates.join(", ")} WHERE id = ?`).bind(...values).run();
 
         const isMutual = otherAction === "LIKE";
         if (isMutual) {
@@ -141,10 +158,60 @@ export class MatchRepository {
     });
   }
 
-  getPotentialMatches(req: GetPotentialMatchesRequest): Effect.Effect<Array<typeof User.Type>, DatabaseError, never> {
+  undo(req: { matchId: string; userId: string }): Effect.Effect<{ restored: boolean; match: typeof Match.Type }, NotFoundError | DatabaseError | ValidationError, never> {
+    return Effect.tryPromise({
+      try: async () => {
+        const match = await this.db.prepare("SELECT * FROM matches WHERE id = ?").bind(req.matchId).first();
+        if (!match) throw new NotFoundError("Match", req.matchId);
+        const row = this.toMatch(match);
+        if (req.userId !== row.user1Id && req.userId !== row.user2Id) {
+          throw new ValidationError("userId", "User is not part of this match");
+        }
+        const isUser1 = row.user1Id === req.userId;
+        const actionCol = isUser1 ? "user1_action" : "user2_action";
+        const myAction = isUser1 ? row.user1Action : row.user2Action;
+
+        // Only allow undo if there was a recent action (like, dislike, skip)
+        if (!myAction || myAction === "NONE") {
+          return { restored: false, match: row };
+        }
+
+        // Revert the user's action back to 'none'
+        // If it was a mutual match, we also need to revert the match status
+        const otherAction = isUser1 ? row.user2Action : row.user1Action;
+        const wasMutual = myAction === "LIKE" && otherAction === "LIKE";
+
+        if (wasMutual) {
+          // Revert from matched back to pending
+          await this.db.prepare(
+            `UPDATE matches SET ${actionCol} = 'none', status = 'pending', matched_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+          ).bind(req.matchId).run();
+        } else {
+          // If my action caused a rejection, revert status back to pending too
+          const wasRejection = myAction === "DISLIKE";
+          if (wasRejection) {
+            await this.db.prepare(
+              `UPDATE matches SET ${actionCol} = 'none', status = 'pending', updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+            ).bind(req.matchId).run();
+          } else {
+            await this.db.prepare(
+              `UPDATE matches SET ${actionCol} = 'none', updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+            ).bind(req.matchId).run();
+          }
+        }
+
+        const updated = await this.db.prepare("SELECT * FROM matches WHERE id = ?").bind(req.matchId).first();
+        return { restored: true, match: this.toMatch(updated!) };
+      },
+      catch: (error) => (error instanceof NotFoundError || error instanceof ValidationError ? error : new DatabaseError("undo", error)),
+    });
+  }
+
+  getPotentialMatches(req: GetPotentialMatchesRequest & { relaxFilters?: boolean }): Effect.Effect<Array<typeof User.Type>, DatabaseError, never> {
     return Effect.tryPromise({
       try: async () => {
         const limit = req.limit ?? 10;
+        const relaxFilters = req.relaxFilters ?? false;
         if (!this.userRepo) throw new Error("UserRepository required for getPotentialMatches");
 
         // 1. Get current user
@@ -176,7 +243,7 @@ export class MatchRepository {
             (m.user2_id = u.id AND m.user1_id = ?)
           )
           LEFT JOIN profile_views pv ON (pv.viewer_id = ? AND pv.viewed_id = u.id)
-          WHERE u.id != ? AND u.is_active = 1 AND u.is_profile_complete = 1
+          WHERE u.id != ? AND u.is_active = 1 AND u.is_profile_complete = 1 AND u.hidden_from_matches = 0
         `;
         const values: unknown[] = [currentUser.id, currentUser.id, currentUser.id, currentUser.id];
 
@@ -201,19 +268,21 @@ export class MatchRepository {
         )`;
         values.push(currentUser.id, currentUser.id, currentUser.id, currentUser.id);
 
-        // Apply preference filters
-        if (prefs?.minAge && prefs.minAge > 0) {
-          sql += " AND u.age >= ?";
-          values.push(prefs.minAge);
-        }
-        if (prefs?.maxAge && prefs.maxAge > 0) {
-          sql += " AND u.age <= ?";
-          values.push(prefs.maxAge);
-        }
-        if (prefs?.genderPreference && prefs.genderPreference.length > 0) {
-          const placeholders = prefs.genderPreference.map(() => "?").join(",");
-          sql += ` AND u.gender IN (${placeholders})`;
-          values.push(...prefs.genderPreference);
+        // Apply preference filters (skipped when relaxing filters)
+        if (!relaxFilters) {
+          if (prefs?.minAge && prefs.minAge > 0) {
+            sql += " AND u.age >= ?";
+            values.push(prefs.minAge);
+          }
+          if (prefs?.maxAge && prefs.maxAge > 0) {
+            sql += " AND u.age <= ?";
+            values.push(prefs.maxAge);
+          }
+          if (prefs?.genderPreference && prefs.genderPreference.length > 0) {
+            const placeholders = prefs.genderPreference.map(() => "?").join(",");
+            sql += ` AND u.gender IN (${placeholders})`;
+            values.push(...prefs.genderPreference);
+          }
         }
 
         sql += ` LIMIT ${fetchLimit}`;
@@ -235,8 +304,8 @@ export class MatchRepository {
             const isUser1InMatch = row.user1_id === currentUser.id;
             const myAction = isUser1InMatch ? user1Action : user2Action;
 
-            // Distance hard constraint
-            if (currentUser.location && candidate.location && prefs?.maxDistance) {
+            // Distance hard constraint (skipped when relaxing filters)
+            if (!relaxFilters && currentUser.location && candidate.location && prefs?.maxDistance) {
               const dist = haversine(
                 currentUser.location.latitude, currentUser.location.longitude,
                 candidate.location.latitude, candidate.location.longitude
@@ -353,6 +422,7 @@ export class MatchRepository {
       matchedAt: row.matched_at ? String(row.matched_at) : undefined,
       user1Action: row.user1_action ? String(row.user1_action).toUpperCase() as typeof MatchAction.Type : undefined,
       user2Action: row.user2_action ? String(row.user2_action).toUpperCase() as typeof MatchAction.Type : undefined,
+      likeMessage: row.like_message ? JSON.parse(String(row.like_message)) : undefined,
     };
   }
 
@@ -367,7 +437,7 @@ export class MatchRepository {
       birthDate: row.birth_date ? String(row.birth_date) : undefined,
       gender: row.gender ? String(row.gender) as typeof import("@meetsmatch/cf-shared").Gender.Type : undefined,
       interests: row.interests ? JSON.parse(String(row.interests)) : [],
-      photos: row.photos ? JSON.parse(String(row.photos)) : [],
+      mediaUrls: row.media_urls ? JSON.parse(String(row.media_urls)) : [],
       location: row.location ? JSON.parse(String(row.location)) : undefined,
       preferences: row.preferences ? JSON.parse(String(row.preferences)) : {},
       isActive: row.is_active ? Number(row.is_active) === 1 : true,

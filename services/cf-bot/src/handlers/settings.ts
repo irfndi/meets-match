@@ -56,7 +56,31 @@ export const settingsCommand = async (ctx: MyContext, env: Env): Promise<void> =
     return;
   }
 
-  await ctx.reply("⚙️ *Settings*\n\nAdjust your match preferences:", {
+  const userId = String(ctx.from.id);
+  const prefs = await fetchUserPreferences(env, userId);
+
+  const ageRange = prefs?.minAge !== undefined && prefs?.maxAge !== undefined
+    ? `${prefs.minAge}–${prefs.maxAge}`
+    : 'Not set';
+  const distance = prefs?.maxDistance !== undefined
+    ? `${prefs.maxDistance} km`
+    : 'Not set';
+  const genderPref = prefs?.genderPreference !== undefined && Array.isArray(prefs.genderPreference) && prefs.genderPreference.length > 0
+    ? (prefs.genderPreference as string[]).join(', ')
+    : 'Not set';
+
+  const lines = [
+    '⚙️ *Settings*',
+    '',
+    '*Current Preferences:*',
+    `🎯 Age Range: ${ageRange}`,
+    `📍 Max Distance: ${distance}`,
+    `⚧ Gender Preference: ${genderPref}`,
+    '',
+    'Tap a field below to change it:',
+  ];
+
+  await ctx.reply(lines.join('\n'), {
     parse_mode: "Markdown",
     reply_markup: getSettingsKeyboard(),
   });
@@ -101,6 +125,7 @@ export const settingsCallbacks = async (ctx: MyContext, env: Env): Promise<void>
     case "settings:close":
       await ctx.answerCallbackQuery("Settings closed.").catch(() => {});
       await ctx.deleteMessage().catch(() => {});
+      await ctx.reply("👇 Use the menu below to navigate:", { reply_markup: getMainMenuKeyboard() });
       break;
     default:
       await ctx.answerCallbackQuery("Unknown setting.").catch(() => {});
@@ -174,14 +199,28 @@ export async function handleAgeRangeCallback(ctx: MyContext, env: Env, data: str
       await ctx.editMessageText(t("ageRangeUpdated", "en", { min: String(min), max: String(max) }), {
         parse_mode: "Markdown",
       }).catch(() => {});
+      await ctx.reply("👇 Use the menu below to navigate:", { reply_markup: getMainMenuKeyboard() });
     } else {
-      await ctx.reply(t("genericError", "en")).catch(() => {});
+      await ctx.reply(t("genericError", "en"), { reply_markup: getMainMenuKeyboard() }).catch(() => {});
     }
     await ctx.answerCallbackQuery().catch(() => {});
     return true;
   }
 
   return false;
+}
+
+async function fetchUserPreferences(env: Env, userId: string): Promise<Record<string, unknown> | null> {
+  try {
+    const response = await env.API_SERVICE.fetch(new Request(`http://api/users/${userId}`, { method: "GET" }));
+    if (!response.ok) return null;
+    const data = await response.json() as { user?: Record<string, unknown> };
+    const user = data.user;
+    if (!user) return null;
+    return (user.preferences as Record<string, unknown>) ?? {};
+  } catch {
+    return null;
+  }
 }
 
 async function updateUserPreferences(
