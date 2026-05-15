@@ -33,3 +33,6 @@ node_modules/
 
 # DeepSec
 .deepsec/data/
+
+# Auto-generated version files
+services/*/src/lib/version.ts

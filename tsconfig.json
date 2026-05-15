@@ -1,9 +1,9 @@
 {
   "compilerOptions": {
-    "target": "ES2022",
+    "target": "ES2024",
     "module": "ES2022",
     "moduleResolution": "bundler",
-    "lib": ["ES2022"],
+    "lib": ["ES2024"],
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -12,6 +12,7 @@
     "declarationMap": true,
     "sourceMap": true,
     "composite": true,
+    "ignoreDeprecations": "6.0",
     "baseUrl": ".",
     "paths": {
       "@meetsmatch/cf-shared": ["packages/cf-shared/src"],

@@ -15,11 +15,16 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
           cache: 'npm'
+        env:
+          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Generate version files
+        run: npx tsx scripts/generate-version.ts
 
       - name: Type Check
         run: npx tsc -b packages/cf-shared services/cf-api services/cf-bot services/cf-worker
@@ -29,7 +34,7 @@ jobs:
 
   deploy-dev:
     name: Deploy (dev)
-    if: github.ref == 'refs/heads/main' || (startsWith(github.ref, 'refs/tags/v') && (contains(github.ref, '-pre') || contains(github.ref, '-rc') || contains(github.ref, '-beta')))
+    if: github.ref == 'refs/heads/main' || (startsWith(github.ref, 'refs/tags/v') && (contains(github.ref, '-pre') || contains(github.ref, '-rc') || contains(github.ref, '-beta') || contains(github.ref, '-alpha') || contains(github.ref, '-snapshot') || contains(github.ref, '-nightly') || contains(github.ref, '-canary') || contains(github.ref, '-dev')))
     needs: [test]
     runs-on: ubuntu-latest
     concurrency: dev-deploy
@@ -37,15 +42,17 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
           cache: 'npm'
+        env:
+          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       - run: npm ci
       - name: Build cf-shared
         run: npx tsc -b packages/cf-shared
       - name: Generate version files
         run: npx tsx scripts/generate-version.ts
         env:
-          CF_ENVIRONMENT: development
+          CF_ENV: development
       - name: Deploy cf-api
         run: npx wrangler deploy --env dev
         working-directory: services/cf-api
@@ -64,7 +71,7 @@ jobs:
 
   deploy-prod:
     name: Deploy CF Workers (prod)
-    if: startsWith(github.ref, 'refs/tags/v') && !contains(github.ref, '-pre') && !contains(github.ref, '-rc') && !contains(github.ref, '-beta')
+    if: startsWith(github.ref, 'refs/tags/v') && !contains(github.ref, '-pre') && !contains(github.ref, '-rc') && !contains(github.ref, '-beta') && !contains(github.ref, '-alpha') && !contains(github.ref, '-snapshot') && !contains(github.ref, '-nightly') && !contains(github.ref, '-canary') && !contains(github.ref, '-dev')
     needs: [test]
     runs-on: ubuntu-latest
     concurrency: prod-deploy
@@ -72,15 +79,17 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
           cache: 'npm'
+        env:
+          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       - run: npm ci
       - name: Build cf-shared
         run: npx tsc -b packages/cf-shared
       - name: Generate version files
         run: npx tsx scripts/generate-version.ts
         env:
-          CF_ENVIRONMENT: production
+          CF_ENV: production
       - name: Deploy cf-api (prod)
         run: npx wrangler deploy --env production
         working-directory: services/cf-api

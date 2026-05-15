@@ -38,12 +38,14 @@ export const aboutCommand = async (ctx: MyContext): Promise<void> => {
     "",
     "MeetMatch helps you find people with similar interests near you.",
     "",
-    "Built with ❤️ using modern tech.",
+    "Built with ❤️ using modern tech stack.",
     "",
-    `*Version:* ${version}`,
+    `*Version:* \`${version}\``,
     `*Environment:* ${environment}`,
     `*Last updated:* ${builtAt}`,
-    `*Server age:* ${serverAge}`,
+    `*Build age:* ${serverAge}`,
+    "",
+    "Need help? Use /help",
   ].join("\n");
 
   await ctx.reply(msg, {
