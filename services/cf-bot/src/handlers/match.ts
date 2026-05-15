@@ -94,6 +94,8 @@ async function fetchPotentialMatches(env: Env, userId: string, limit = 5): Promi
 
 const MATCH_QUEUE_TTL = 600; // 10 minutes
 const LAST_ACTION_TTL = 3600; // 1 hour
+const DM_BYPASS_LIMIT = 100;
+const DM_BYPASS_TTL = 86400; // 24 hours
 
 interface MatchQueue {
   matches: Array<Record<string, unknown>>;
@@ -133,6 +135,36 @@ async function setLastAction(kv: KVNamespace, userId: string, action: LastAction
 
 async function clearLastAction(kv: KVNamespace, userId: string): Promise<void> {
   await kv.delete(`last_action:${userId}`);
+}
+
+// --- Premium+ DM Bypass tracking ---
+
+interface DMBypassStatus {
+  used: number;
+  resetAt: string;
+}
+
+async function getDMBypassStatus(kv: KVNamespace, userId: string): Promise<DMBypassStatus> {
+  const value = await kv.get(`dm_bypass:${userId}`);
+  if (value) {
+    const parsed = JSON.parse(value) as DMBypassStatus;
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+    if (parsed.resetAt < today) {
+      return { used: 0, resetAt: today };
+    }
+    return parsed;
+  }
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+  return { used: 0, resetAt: today };
+}
+
+async function useDMBypass(kv: KVNamespace, userId: string): Promise<{ used: number; remaining: number }> {
+  const status = await getDMBypassStatus(kv, userId);
+  status.used++;
+  await kv.put(`dm_bypass:${userId}`, JSON.stringify(status), { expirationTtl: DM_BYPASS_TTL });
+  return { used: status.used, remaining: Math.max(0, DM_BYPASS_LIMIT - status.used) };
 }
 
 function buildDMKeyboard(targetUserId: string) {
@@ -499,7 +531,16 @@ async function handleSendDM(ctx: MyContext, env: Env, targetUserId: string) {
     const client = new ApiServiceClient(env.API_SERVICE);
     const dmStatus = await client.getDMStatus(userId);
 
-    if (!dmStatus.canSendDM) {
+    // Premium+: 100 DM bypass per day
+    let bypassRemaining: number | undefined;
+    if (dmStatus.tier === "premium_plus") {
+      const bypassStatus = await getDMBypassStatus(env.KV, userId);
+      bypassRemaining = Math.max(0, DM_BYPASS_LIMIT - bypassStatus.used);
+    }
+
+    const canSend = dmStatus.canSendDM && (dmStatus.tier !== "premium_plus" || (bypassRemaining ?? 0) > 0);
+
+    if (!canSend) {
       const keyboard = new InlineKeyboard()
         .text("👑 Get Premium", "premium:show")
         .row()
@@ -514,6 +555,12 @@ async function handleSendDM(ctx: MyContext, env: Env, targetUserId: string) {
       return;
     }
 
+    // Use bypass for Premium+
+    if (dmStatus.tier === "premium_plus" && bypassRemaining !== undefined) {
+      const bypassResult = await useDMBypass(env.KV, userId);
+      bypassRemaining = bypassResult.remaining;
+    }
+
     const result = await client.sendDM(userId);
     if (!result.success) {
       await ctx.reply(t("dmFailed", lang), { reply_markup: getMainMenuKeyboard() });
@@ -526,10 +573,12 @@ async function handleSendDM(ctx: MyContext, env: Env, targetUserId: string) {
     const chatLink = buildChatLink(otherUser);
     const name = (otherUser.displayName ?? otherUser.first_name ?? "Someone") as string;
 
-    await ctx.reply(
-      t("dmSuccess", lang, { name }) + "\n\n" + chatLink,
-      { parse_mode: "Markdown", link_preview_options: { is_disabled: false } }
-    );
+    let successText = t("dmSuccess", lang, { name }) + "\n\n" + chatLink;
+    if (dmStatus.tier === "premium_plus" && bypassRemaining !== undefined) {
+      successText += `\n\n📊 DM bypass: ${bypassRemaining}/${DM_BYPASS_LIMIT} remaining today.`;
+    }
+
+    await ctx.reply(successText, { parse_mode: "Markdown", link_preview_options: { is_disabled: false } });
     await ctx.answerCallbackQuery().catch(() => {});
   } catch (error) {
     console.error("Send DM error:", error);

@@ -230,7 +230,7 @@ export class MatchRepository {
         let sql = `
           SELECT
             u.id, u.username, u.first_name, u.last_name, u.bio, u.age, u.gender,
-            u.interests, u.photos, u.location, u.preferences,
+            u.interests, u.photos, u.location, u.preferences, u.subscription_tier,
             u.is_active, u.is_profile_complete,
             m.user1_id, m.user2_id,
             m.status as match_status,
@@ -351,8 +351,16 @@ export class MatchRepository {
               baseScore *= 0.3;
             }
 
-            // Add randomness for variety (0.0 - 0.3 random boost)
-            const randomFactor = 0.7 + Math.random() * 0.3;
+            // Premium boost: higher base random range for paid tiers
+            const candidateTier = candidate.subscriptionTier ?? "free";
+            let randomFactor: number;
+            if (candidateTier === "premium_plus") {
+              randomFactor = 1.0 + Math.random() * 0.3; // 1.0 - 1.3 (up to +30%)
+            } else if (candidateTier === "premium") {
+              randomFactor = 0.85 + Math.random() * 0.3; // 0.85 - 1.15 (up to +15%)
+            } else {
+              randomFactor = 0.7 + Math.random() * 0.3; // 0.7 - 1.0 (base)
+            }
             baseScore *= randomFactor;
 
             return { user: candidate, score: baseScore };
@@ -442,6 +450,7 @@ export class MatchRepository {
       preferences: row.preferences ? JSON.parse(String(row.preferences)) : {},
       isActive: row.is_active ? Number(row.is_active) === 1 : true,
       isSleeping: row.is_sleeping ? Number(row.is_sleeping) === 1 : false,
+      subscriptionTier: row.subscription_tier ? String(row.subscription_tier) : undefined,
       isProfileComplete: row.is_profile_complete ? Number(row.is_profile_complete) === 1 : false,
     };
   }

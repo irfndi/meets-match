@@ -199,6 +199,11 @@ function createBot(env: Env): Bot<MyContext> {
       const handled = await handleGiftCallback(ctx, env, data);
       if (handled) return;
     }
+
+    // DM callbacks (inline button on match card)
+    if (data.startsWith("dm:send:") || data.startsWith("dm:buy:") || data === "dm:cancel") {
+      return matchCallbacks(ctx, env);
+    }
   });
 
   bot.on("message:contact", async (ctx) => {
@@ -288,9 +293,9 @@ function createBot(env: Env): Bot<MyContext> {
 
     // Match action reply keyboard — only if there's an active match queue
     const actionMap: Record<string, string> = {
-      "❤️ Like": "like",
-      "👎 Dislike": "dislike",
-      "⏩ Skip": "skip",
+      "❤️": "like",
+      "👎": "dislike",
+      "⏩": "skip",
       "↩️": "undo",
       "⚠️": "report",
       "💌": "like-message",
@@ -310,6 +315,13 @@ function createBot(env: Env): Bot<MyContext> {
 
     const handled = await handleConversationMessage(ctx, env);
     if (handled) return;
+
+    // Graceful fallback: if user sends ⏭ Skip without an active like-message
+    // conversation but has a match queue, treat it as a regular Like
+    if (text === "⏭ Skip") {
+      const queueHandled = await handleMatchReplyAction(ctx, env, "like");
+      if (queueHandled) return;
+    }
 
     await ctx.reply(
       "I'm not sure what you mean. Use the menu below or try /help for guidance.",

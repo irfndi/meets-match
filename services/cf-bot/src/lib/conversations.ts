@@ -13,7 +13,7 @@ interface ConversationState {
   data?: Record<string, unknown>;
 }
 
-const CONVERSATION_TTL_SECONDS = 300;
+const CONVERSATION_TTL_SECONDS = 1800; // 30 minutes
 
 export async function getConversationState(kv: KVNamespace, userId: string): Promise<ConversationState | null> {
   const value = await kv.get(`conversation:${userId}`);
