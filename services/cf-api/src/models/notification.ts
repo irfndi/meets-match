@@ -23,9 +23,9 @@ export class NotificationRepository {
       try: async () => {
         const id = crypto.randomUUID();
         await this.db.prepare(
-          `INSERT INTO notifications (id, user_id, type, channel, payload, status, priority, attempt_count, max_attempts, created_at, scheduled_at)
-           VALUES (?, ?, ?, ?, ?, 'pending', 0, 0, 5, CURRENT_TIMESTAMP, ?)`
-        ).bind(id, req.userId, req.type, req.channel ?? "TELEGRAM", JSON.stringify(req.payload ?? {}), req.scheduledAt ?? null).run();
+          `INSERT INTO notifications (id, user_id, type, channel, payload, status, priority, attempt_count, max_attempts, created_at)
+           VALUES (?, ?, ?, ?, ?, 'pending', 0, 0, 5, CURRENT_TIMESTAMP)`
+        ).bind(id, req.userId, req.type, req.channel ?? "TELEGRAM", JSON.stringify(req.payload ?? {})).run();
         return {
           id,
           userId: req.userId,
