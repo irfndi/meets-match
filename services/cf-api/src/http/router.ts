@@ -17,6 +17,9 @@ import {
   DatabaseError,
   ValidationError,
   createLogger,
+  buildMediaKey,
+  buildMediaPublicUrl,
+  extractMediaKeyFromUrl,
 } from "@meetsmatch/cf-shared";
 import { getVersionInfo } from "../lib/version.js";
 
@@ -750,14 +753,14 @@ export class ApiRouter {
               ? "png"
               : "jpg"
             : "mp4";
-        const key = `${userId}/${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${ext}`;
+        const key = buildMediaKey(userId, ext);
         await this.env.MEDIA_BUCKET.put(key, bytes, {
           httpMetadata: {
             contentType: fileType === "image" ? `image/${ext}` : "video/mp4",
           },
         });
 
-        publicUrl = `https://media.meetsmatch.irfndi.workers.dev/${key}`;
+        publicUrl = buildMediaPublicUrl(key);
         console.log(
           `[api:media] Uploaded ${fileType} to R2 for user ${userId}: ${publicUrl}`,
         );
@@ -797,10 +800,7 @@ export class ApiRouter {
       }
 
       // Extract key from URL and delete from R2
-      const key = url.replace(
-        "https://media.meetsmatch.irfndi.workers.dev/",
-        "",
-      );
+      const key = extractMediaKeyFromUrl(url);
       if (key && key !== url) {
         await this.env.MEDIA_BUCKET.delete(key).catch(() => {});
       }

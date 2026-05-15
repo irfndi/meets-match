@@ -6,3 +6,4 @@ export * from "./contracts/bindings.js";
 export * from "./errors.js";
 export * from "./structured-log.js";
 export * from "./version.js";
+export * from "./media.js";

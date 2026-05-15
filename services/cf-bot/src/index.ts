@@ -13,6 +13,7 @@ import {
   startLikeMessageConversation,
 } from "./handlers/match.js";
 import { matchesCommand, matchesCallbacks } from "./handlers/matches.js";
+import { buildMediaKey, buildMediaPublicUrl } from "@meetsmatch/cf-shared";
 import {
   settingsCommand,
   settingsCallbacks,
@@ -393,12 +394,12 @@ async function handleLikeMessagePhoto(ctx: MyContext, env: Env): Promise<void> {
     }
 
     const ext = "jpg";
-    const key = `${userId}/${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${ext}`;
+    const key = buildMediaKey(userId, ext);
     await env.MEDIA_BUCKET.put(key, bytes, {
       httpMetadata: { contentType: `image/${ext}` },
     });
 
-    const publicUrl = `https://media.meetsmatch.irfndi.workers.dev/${key}`;
+    const publicUrl = buildMediaPublicUrl(key);
 
     const { handleLikeMessageMedia } = await import("./handlers/match.js");
     await handleLikeMessageMedia(ctx, env, publicUrl, "image");
@@ -436,12 +437,12 @@ async function handleLikeMessageVideo(ctx: MyContext, env: Env): Promise<void> {
       return;
     }
 
-    const key = `${userId}/${Date.now()}_${Math.random().toString(36).substring(2, 8)}.mp4`;
+    const key = buildMediaKey(userId, "mp4");
     await env.MEDIA_BUCKET.put(key, bytes, {
       httpMetadata: { contentType: "video/mp4" },
     });
 
-    const publicUrl = `https://media.meetsmatch.irfndi.workers.dev/${key}`;
+    const publicUrl = buildMediaPublicUrl(key);
 
     const { handleLikeMessageMedia } = await import("./handlers/match.js");
     await handleLikeMessageMedia(ctx, env, publicUrl, "video");

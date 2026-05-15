@@ -9,7 +9,11 @@ import {
 import { getMainMenuKeyboard } from "./main-menu.js";
 import { t, type Language } from "./i18n.js";
 import { InlineKeyboard } from "grammy";
-import { createLogger } from "@meetsmatch/cf-shared";
+import {
+  createLogger,
+  buildMediaKey,
+  buildMediaPublicUrl,
+} from "@meetsmatch/cf-shared";
 
 const log = createLogger("cf-bot");
 import {
@@ -477,7 +481,7 @@ export async function handleMediaMessage(
           ? "png"
           : "jpg"
         : "mp4";
-    const key = `${userId}/${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${ext}`;
+    const key = buildMediaKey(userId, ext);
     const contentType = fileType === "image" ? `image/${ext}` : "video/mp4";
 
     try {
@@ -491,7 +495,7 @@ export async function handleMediaMessage(
       return true;
     }
 
-    const publicUrl = `https://media.meetsmatch.irfndi.workers.dev/${key}`;
+    const publicUrl = buildMediaPublicUrl(key);
 
     // Register URL in DB via API
     const apiResponse = await env.API_SERVICE.fetch(
