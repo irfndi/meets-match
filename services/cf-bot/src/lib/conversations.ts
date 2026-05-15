@@ -548,14 +548,36 @@ async function handleLocationTextConversation(ctx: MyContext, env: Env, state: C
   }
   const [city, country] = parts;
 
-  // Verify location via geocoding
-  const geo = await verifyLocation(city, country);
+  // Verify location via geocoding (with retry)
+  let geo = await verifyLocation(city, country);
   if (!geo) {
-    await ctx.reply(t('locationInvalid', lang));
+    await new Promise(r => setTimeout(r, 1500));
+    geo = await verifyLocation(city, country);
+  }
+
+  if (!geo) {
+    // Geocoding failed twice — accept what user typed, store without lat/lon
+    // Distance matching will skip distance filter for this user until geocoded
+    const success = await updateUser(env, state.userId, {
+      location: { city, country },
+    });
+    await clearConversationState(env.KV, state.userId);
+    if (success) {
+      const becameComplete = await checkAndUpdateProfileComplete(env, state.userId);
+      await ctx.reply(
+        `📍 *${city}, ${country}* saved!\n\n` +
+        `We could not verify the exact coordinates right now, but your city is recorded. ` +
+        `Distance matching will work once we verify it.`,
+        { parse_mode: 'Markdown', reply_markup: getMainMenuKeyboard() }
+      );
+      if (becameComplete) await promptPhoneVerification(ctx, env, lang);
+    } else {
+      await ctx.reply(t('genericError', lang), { reply_markup: getMainMenuKeyboard() });
+    }
     return true;
   }
 
-  // Use normalized location from geocoding if available
+  // Use normalized location from geocoding
   const normalizedCity = geo.address?.city ?? geo.address?.town ?? geo.address?.village ?? city;
   const normalizedCountry = geo.address?.country ?? country;
   const lat = parseFloat(geo.lat);
@@ -567,7 +589,10 @@ async function handleLocationTextConversation(ctx: MyContext, env: Env, state: C
   await clearConversationState(env.KV, state.userId);
   if (success) {
     const becameComplete = await checkAndUpdateProfileComplete(env, state.userId);
-    await ctx.reply(t('locationUpdated', lang), { reply_markup: getMainMenuKeyboard() });
+    await ctx.reply(
+      `📍 Location verified: *${normalizedCity}, ${normalizedCountry}*`,
+      { parse_mode: 'Markdown', reply_markup: getMainMenuKeyboard() }
+    );
     if (becameComplete) await promptPhoneVerification(ctx, env, lang);
   } else {
     await ctx.reply(t('genericError', lang), { reply_markup: getMainMenuKeyboard() });

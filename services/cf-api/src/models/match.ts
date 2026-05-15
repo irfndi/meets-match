@@ -304,8 +304,8 @@ export class MatchRepository {
             const isUser1InMatch = row.user1_id === currentUser.id;
             const myAction = isUser1InMatch ? user1Action : user2Action;
 
-            // Distance hard constraint (skipped when relaxing filters)
-            if (!relaxFilters && currentUser.location && candidate.location && prefs?.maxDistance) {
+            // Distance hard constraint (skipped when relaxing filters or either user lacks coordinates)
+            if (!relaxFilters && currentUser.location?.latitude != null && currentUser.location?.longitude != null && candidate.location?.latitude != null && candidate.location?.longitude != null && prefs?.maxDistance) {
               const dist = haversine(
                 currentUser.location.latitude, currentUser.location.longitude,
                 candidate.location.latitude, candidate.location.longitude
