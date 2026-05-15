@@ -22,7 +22,13 @@ const validUser = {
   age: 30,
   gender: "male" as const,
   interests: ["coding", "music"],
-  mediaUrls: [{ url: "https://example.com/photo.jpg", type: "image", uploadedAt: "2025-01-01T00:00:00Z" }],
+  mediaUrls: [
+    {
+      url: "https://example.com/photo.jpg",
+      type: "image",
+      uploadedAt: "2025-01-01T00:00:00Z",
+    },
+  ],
   location: {
     latitude: 40.7128,
     longitude: -74.006,
@@ -188,9 +194,7 @@ describe("User Contracts", () => {
     });
 
     it("should reject CreateUserRequest with missing user", () => {
-      expect(() =>
-        Schema.decodeUnknownSync(CreateUserRequest)({}),
-      ).toThrow();
+      expect(() => Schema.decodeUnknownSync(CreateUserRequest)({})).toThrow();
     });
   });
 

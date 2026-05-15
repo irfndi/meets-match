@@ -1,27 +1,65 @@
 import { InlineKeyboard, Keyboard } from "grammy";
 import type { MyContext } from "../types.js";
 import type { Env } from "../index.js";
-import { ensureUserExists, getProfileCompleteness, getMissingFieldsDisplay, isPhoneVerified, isBirthdayToday, computeAgeFromBirthDate, type UserProfile } from "../lib/user-utils.js";
+import {
+  ensureUserExists,
+  getProfileCompleteness,
+  getMissingFieldsDisplay,
+  isPhoneVerified,
+  isBirthdayToday,
+  computeAgeFromBirthDate,
+  type UserProfile,
+} from "../lib/user-utils.js";
 import { addNotification } from "../lib/notifications.js";
-import { getConversationState, setConversationState, clearConversationState } from "../lib/conversations.js";
+import {
+  getConversationState,
+  setConversationState,
+  clearConversationState,
+} from "../lib/conversations.js";
 
-async function enqueueNotification(env: Env, userId: string, type: string, payload: Record<string, unknown>): Promise<void> {
+async function enqueueNotification(
+  env: Env,
+  userId: string,
+  type: string,
+  payload: Record<string, unknown>,
+): Promise<void> {
   try {
-    await env.API_SERVICE.fetch(new Request("http://api/notifications", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId, type, payload: JSON.stringify(payload) }),
-    }));
+    await env.API_SERVICE.fetch(
+      new Request("http://api/notifications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId,
+          type,
+          payload: JSON.stringify(payload),
+        }),
+      }),
+    );
   } catch (error) {
     console.error("Failed to enqueue notification:", error);
   }
 }
 
-async function getInteractionStatus(env: Env, userId: string): Promise<{ likesRemaining: number; dislikesRemaining: number; tier: string } | null> {
+async function getInteractionStatus(
+  env: Env,
+  userId: string,
+): Promise<{
+  likesRemaining: number;
+  dislikesRemaining: number;
+  tier: string;
+} | null> {
   try {
-    const res = await env.API_SERVICE.fetch(new Request(`http://api/users/${userId}/interaction-status`, { method: "GET" }));
+    const res = await env.API_SERVICE.fetch(
+      new Request(`http://api/users/${userId}/interaction-status`, {
+        method: "GET",
+      }),
+    );
     if (!res.ok) return null;
-    const data = await res.json() as { likesRemaining: number; dislikesRemaining: number; tier: string };
+    const data = (await res.json()) as {
+      likesRemaining: number;
+      dislikesRemaining: number;
+      tier: string;
+    };
     return data;
   } catch (error) {
     console.error("Failed to get interaction status:", error);
@@ -40,7 +78,7 @@ function getLang(user: Record<string, unknown> | UserProfile): Language {
 async function fetchUserLang(env: Env, userId: string): Promise<Language> {
   try {
     const res = await env.API_SERVICE.fetch(
-      new Request(`http://api/users/${userId}`, { method: "GET" })
+      new Request(`http://api/users/${userId}`, { method: "GET" }),
     );
     if (!res.ok) return "en";
     const data = (await res.json()) as { user?: Record<string, unknown> };
@@ -50,12 +88,22 @@ async function fetchUserLang(env: Env, userId: string): Promise<Language> {
   }
 }
 
-async function ensureDefaultPreferences(env: Env, userId: string, user: Record<string, unknown>): Promise<void> {
+async function ensureDefaultPreferences(
+  env: Env,
+  userId: string,
+  user: Record<string, unknown>,
+): Promise<void> {
   const prefs = (user.preferences as Record<string, unknown> | undefined) ?? {};
-  const hasPrefs = prefs.minAge !== undefined || prefs.maxAge !== undefined || prefs.maxDistance !== undefined || prefs.genderPreference !== undefined;
+  const hasPrefs =
+    prefs.minAge !== undefined ||
+    prefs.maxAge !== undefined ||
+    prefs.maxDistance !== undefined ||
+    prefs.genderPreference !== undefined;
   if (hasPrefs) return;
 
-  const age = user.birthDate ? computeAgeFromBirthDate(String(user.birthDate)) : (user.age as number | undefined);
+  const age = user.birthDate
+    ? computeAgeFromBirthDate(String(user.birthDate))
+    : (user.age as number | undefined);
   const gender = user.gender as string | undefined;
   if (!age || !gender) return;
 
@@ -69,24 +117,42 @@ async function ensureDefaultPreferences(env: Env, userId: string, user: Record<s
   else genderPreference = ["male", "female", "other", "prefer_not_to_say"];
 
   try {
-    await env.API_SERVICE.fetch(new Request(`http://api/users/${userId}`, {
-      method: "PUT",
-      body: JSON.stringify({ user: { preferences: { minAge, maxAge, maxDistance, genderPreference } } }),
-      headers: { "Content-Type": "application/json" },
-    }));
+    await env.API_SERVICE.fetch(
+      new Request(`http://api/users/${userId}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          user: {
+            preferences: { minAge, maxAge, maxDistance, genderPreference },
+          },
+        }),
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
   } catch (error) {
     console.error("Failed to set default preferences:", error);
   }
 }
 
-async function fetchPotentialMatches(env: Env, userId: string, limit = 5): Promise<{ matches: Array<Record<string, unknown>>; relaxed: boolean }> {
+async function fetchPotentialMatches(
+  env: Env,
+  userId: string,
+  limit = 5,
+): Promise<{ matches: Array<Record<string, unknown>>; relaxed: boolean }> {
   try {
     const res = await env.API_SERVICE.fetch(
-      new Request(`http://api/users/${userId}/potential-matches?limit=${limit}`)
+      new Request(
+        `http://api/users/${userId}/potential-matches?limit=${limit}`,
+      ),
     );
     if (!res.ok) return { matches: [], relaxed: false };
-    const data = (await res.json()) as { potentialMatches?: Array<Record<string, unknown>>; relaxed?: boolean };
-    return { matches: data.potentialMatches ?? [], relaxed: data.relaxed ?? false };
+    const data = (await res.json()) as {
+      potentialMatches?: Array<Record<string, unknown>>;
+      relaxed?: boolean;
+    };
+    return {
+      matches: data.potentialMatches ?? [],
+      relaxed: data.relaxed ?? false,
+    };
   } catch {
     return { matches: [], relaxed: false };
   }
@@ -111,26 +177,44 @@ interface LastAction {
   timestamp: string;
 }
 
-async function getMatchQueue(kv: KVNamespace, userId: string): Promise<MatchQueue | null> {
+async function getMatchQueue(
+  kv: KVNamespace,
+  userId: string,
+): Promise<MatchQueue | null> {
   const value = await kv.get(`match_queue:${userId}`);
   return value ? JSON.parse(value) : null;
 }
 
-async function setMatchQueue(kv: KVNamespace, userId: string, queue: MatchQueue): Promise<void> {
-  await kv.put(`match_queue:${userId}`, JSON.stringify(queue), { expirationTtl: MATCH_QUEUE_TTL });
+async function setMatchQueue(
+  kv: KVNamespace,
+  userId: string,
+  queue: MatchQueue,
+): Promise<void> {
+  await kv.put(`match_queue:${userId}`, JSON.stringify(queue), {
+    expirationTtl: MATCH_QUEUE_TTL,
+  });
 }
 
 async function clearMatchQueue(kv: KVNamespace, userId: string): Promise<void> {
   await kv.delete(`match_queue:${userId}`);
 }
 
-async function getLastAction(kv: KVNamespace, userId: string): Promise<LastAction | null> {
+async function getLastAction(
+  kv: KVNamespace,
+  userId: string,
+): Promise<LastAction | null> {
   const value = await kv.get(`last_action:${userId}`);
   return value ? JSON.parse(value) : null;
 }
 
-async function setLastAction(kv: KVNamespace, userId: string, action: LastAction): Promise<void> {
-  await kv.put(`last_action:${userId}`, JSON.stringify(action), { expirationTtl: LAST_ACTION_TTL });
+async function setLastAction(
+  kv: KVNamespace,
+  userId: string,
+  action: LastAction,
+): Promise<void> {
+  await kv.put(`last_action:${userId}`, JSON.stringify(action), {
+    expirationTtl: LAST_ACTION_TTL,
+  });
 }
 
 async function clearLastAction(kv: KVNamespace, userId: string): Promise<void> {
@@ -144,27 +228,46 @@ interface DMBypassStatus {
   resetAt: string;
 }
 
-async function getDMBypassStatus(kv: KVNamespace, userId: string): Promise<DMBypassStatus> {
+async function getDMBypassStatus(
+  kv: KVNamespace,
+  userId: string,
+): Promise<DMBypassStatus> {
   const value = await kv.get(`dm_bypass:${userId}`);
   if (value) {
     const parsed = JSON.parse(value) as DMBypassStatus;
     const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+    const today = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+    ).toISOString();
     if (parsed.resetAt < today) {
       return { used: 0, resetAt: today };
     }
     return parsed;
   }
   const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+  const today = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+  ).toISOString();
   return { used: 0, resetAt: today };
 }
 
-async function useDMBypass(kv: KVNamespace, userId: string): Promise<{ used: number; remaining: number }> {
+async function useDMBypass(
+  kv: KVNamespace,
+  userId: string,
+): Promise<{ used: number; remaining: number }> {
   const status = await getDMBypassStatus(kv, userId);
   status.used++;
-  await kv.put(`dm_bypass:${userId}`, JSON.stringify(status), { expirationTtl: DM_BYPASS_TTL });
-  return { used: status.used, remaining: Math.max(0, DM_BYPASS_LIMIT - status.used) };
+  await kv.put(`dm_bypass:${userId}`, JSON.stringify(status), {
+    expirationTtl: DM_BYPASS_TTL,
+  });
+  return {
+    used: status.used,
+    remaining: Math.max(0, DM_BYPASS_LIMIT - status.used),
+  };
 }
 
 function buildDMKeyboard(targetUserId: string) {
@@ -207,22 +310,32 @@ function formatProfile(user: Record<string, unknown>, index: number): string {
 
 function getGenderPronoun(gender: string | undefined): string {
   switch (gender) {
-    case "male": return "him";
-    case "female": return "her";
-    default: return "them";
+    case "male":
+      return "him";
+    case "female":
+      return "her";
+    default:
+      return "them";
   }
 }
 
 function buildMatchCard(otherUser: Record<string, unknown>): string {
-  const name = (otherUser.displayName ?? otherUser.first_name ?? "Someone") as string;
+  const name = (otherUser.displayName ??
+    otherUser.first_name ??
+    "Someone") as string;
   const age = otherUser.age ?? "?";
-  const birthdayBadge = isBirthdayToday(otherUser.birthDate as string | undefined) ? " 🎂" : "";
+  const birthdayBadge = isBirthdayToday(
+    otherUser.birthDate as string | undefined,
+  )
+    ? " 🎂"
+    : "";
   const loc = otherUser.location as Record<string, unknown> | undefined;
-  const locationText = loc?.city && loc?.country
-    ? `${loc.city}, ${loc.country}`
-    : loc?.latitude
-      ? "📍 Nearby"
-      : "";
+  const locationText =
+    loc?.city && loc?.country
+      ? `${loc.city}, ${loc.country}`
+      : loc?.latitude
+        ? "📍 Nearby"
+        : "";
   const bio = otherUser.bio ? `\n📝 ${otherUser.bio}` : "";
   const interests = otherUser.interests
     ? `\n🌟 ${Array.isArray(otherUser.interests) ? (otherUser.interests as string[]).join(", ") : String(otherUser.interests)}`
@@ -237,7 +350,9 @@ function buildMatchCard(otherUser: Record<string, unknown>): string {
 
 function buildChatLink(otherUser: Record<string, unknown>): string {
   const username = otherUser.username as string | undefined;
-  const displayName = (otherUser.displayName ?? otherUser.first_name ?? "Someone") as string;
+  const displayName = (otherUser.displayName ??
+    otherUser.first_name ??
+    "Someone") as string;
   if (username) {
     return `👉 [Start chatting with ${displayName}](https://t.me/${username})`;
   }
@@ -248,25 +363,28 @@ async function sendMatchCard(
   ctx: MyContext,
   match: Record<string, unknown>,
   lang: Language,
-  tier: string
+  tier: string,
 ): Promise<void> {
   const text = buildMatchCard(match);
-  const mediaUrls = (match.mediaUrls ?? []) as Array<{ url: string; type: string }>;
-  const firstImage = mediaUrls.find((m) => m.type === 'image');
-  const firstVideo = mediaUrls.find((m) => m.type === 'video');
+  const mediaUrls = (match.mediaUrls ?? []) as Array<{
+    url: string;
+    type: string;
+  }>;
+  const firstImage = mediaUrls.find((m) => m.type === "image");
+  const firstVideo = mediaUrls.find((m) => m.type === "video");
   const inlineKeyboard = buildDMKeyboard(String(match.id));
 
   try {
     if (firstImage) {
       await ctx.replyWithPhoto(firstImage.url, {
         caption: text,
-        parse_mode: 'Markdown',
+        parse_mode: "Markdown",
         reply_markup: inlineKeyboard,
       });
     } else if (firstVideo) {
       await ctx.replyWithVideo(firstVideo.url, {
         caption: text,
-        parse_mode: 'Markdown',
+        parse_mode: "Markdown",
         reply_markup: inlineKeyboard,
       });
     } else {
@@ -277,13 +395,18 @@ async function sendMatchCard(
   }
 }
 
-async function showNextMatch(ctx: MyContext, env: Env, userId: string, lang: Language): Promise<void> {
+async function showNextMatch(
+  ctx: MyContext,
+  env: Env,
+  userId: string,
+  lang: Language,
+): Promise<void> {
   const queue = await getMatchQueue(env.KV, userId);
   if (!queue || queue.index >= queue.matches.length) {
-    await ctx.reply(
-      t("matchNoMatches", lang),
-      { parse_mode: "Markdown", reply_markup: getMainMenuKeyboard() }
-    );
+    await ctx.reply(t("matchNoMatches", lang), {
+      parse_mode: "Markdown",
+      reply_markup: getMainMenuKeyboard(),
+    });
     await clearMatchQueue(env.KV, userId);
     return;
   }
@@ -296,7 +419,9 @@ async function showNextMatch(ctx: MyContext, env: Env, userId: string, lang: Lan
       .text("🎁 Share & Earn", "referral:show")
       .row()
       .text("❌ Dismiss", "referral:dismiss");
-    await ctx.reply(t("matchReferralPrompt", lang), { reply_markup: referralKeyboard });
+    await ctx.reply(t("matchReferralPrompt", lang), {
+      reply_markup: referralKeyboard,
+    });
   }
 
   await sendMatchCard(ctx, match, lang, queue.tier);
@@ -320,7 +445,9 @@ export const matchCommand = async (ctx: MyContext, env: Env): Promise<void> => {
 
   if (!complete) {
     await ctx.reply(
-      t("matchProfileIncomplete", lang, { missing: getMissingFieldsDisplay(missing) })
+      t("matchProfileIncomplete", lang, {
+        missing: getMissingFieldsDisplay(missing),
+      }),
     );
     return;
   }
@@ -334,7 +461,11 @@ export const matchCommand = async (ctx: MyContext, env: Env): Promise<void> => {
   const tier = (user.subscriptionTier as string) ?? "free";
 
   // Set default preferences if none exist
-  await ensureDefaultPreferences(env, userId, user as unknown as Record<string, unknown>);
+  await ensureDefaultPreferences(
+    env,
+    userId,
+    user as unknown as Record<string, unknown>,
+  );
 
   // Clear any existing queue to start fresh
   await clearMatchQueue(env.KV, userId);
@@ -345,7 +476,11 @@ export const matchCommand = async (ctx: MyContext, env: Env): Promise<void> => {
     reply_markup: getMatchActionKeyboard(tier),
   });
 
-  const { matches: users, relaxed } = await fetchPotentialMatches(env, userId, 5);
+  const { matches: users, relaxed } = await fetchPotentialMatches(
+    env,
+    userId,
+    5,
+  );
   if (users.length === 0) {
     await ctx.reply(t("matchNoMatches", lang), {
       parse_mode: "Markdown",
@@ -361,13 +496,20 @@ export const matchCommand = async (ctx: MyContext, env: Env): Promise<void> => {
       .row()
       .text("❌ Dismiss", "referral:dismiss");
     await ctx.reply(
-      t("matchFallbackNotice", lang) + "\n\n" + t("matchAdjustSettingsPrompt", lang),
-      { parse_mode: "Markdown", reply_markup: adjustKeyboard }
+      t("matchFallbackNotice", lang) +
+        "\n\n" +
+        t("matchAdjustSettingsPrompt", lang),
+      { parse_mode: "Markdown", reply_markup: adjustKeyboard },
     );
   }
 
   // Store queue and show first match only
-  await setMatchQueue(env.KV, userId, { matches: users, index: 0, tier, relaxed });
+  await setMatchQueue(env.KV, userId, {
+    matches: users,
+    index: 0,
+    tier,
+    relaxed,
+  });
   await showNextMatch(ctx, env, userId, lang);
 };
 
@@ -375,7 +517,7 @@ async function handleMatchAction(
   ctx: MyContext,
   env: Env,
   action: string,
-  targetUserId: string
+  targetUserId: string,
 ) {
   if (!ctx.from) {
     await ctx.answerCallbackQuery("Could not identify you.").catch(() => {});
@@ -397,7 +539,10 @@ async function handleMatchAction(
         .text("👑 Get Premium", "premium:show")
         .row()
         .text("🎁 Share for Bonus", "referral:show");
-      await ctx.reply(t("matchSkipGated", lang), { parse_mode: "Markdown", reply_markup: keyboard });
+      await ctx.reply(t("matchSkipGated", lang), {
+        parse_mode: "Markdown",
+        reply_markup: keyboard,
+      });
       await ctx.answerCallbackQuery().catch(() => {});
       return;
     }
@@ -408,7 +553,10 @@ async function handleMatchAction(
           .text("👑 Get Premium", "premium:show")
           .row()
           .text("🎁 Share for Bonus", "referral:show");
-        await ctx.reply(t("matchLikeLimitReached", lang), { parse_mode: "Markdown", reply_markup: keyboard });
+        await ctx.reply(t("matchLikeLimitReached", lang), {
+          parse_mode: "Markdown",
+          reply_markup: keyboard,
+        });
         await ctx.answerCallbackQuery().catch(() => {});
         return;
       }
@@ -417,14 +565,20 @@ async function handleMatchAction(
           .text("👑 Get Premium", "premium:show")
           .row()
           .text("🎁 Share for Bonus", "referral:show");
-        await ctx.reply(t("matchDislikeLimitReached", lang), { parse_mode: "Markdown", reply_markup: keyboard });
+        await ctx.reply(t("matchDislikeLimitReached", lang), {
+          parse_mode: "Markdown",
+          reply_markup: keyboard,
+        });
         await ctx.answerCallbackQuery().catch(() => {});
         return;
       }
     }
 
     // Create match (normalized in API layer)
-    const createRes = await client.createMatch({ user1Id: userId, user2Id: targetUserId });
+    const createRes = await client.createMatch({
+      user1Id: userId,
+      user2Id: targetUserId,
+    });
     const matchId = createRes.match.id;
 
     if (action === "like") {
@@ -434,19 +588,23 @@ async function handleMatchAction(
       if (likeRes.isMutual) {
         const otherUserRes = await client.getUser({ userId: targetUserId });
         const otherUser = otherUserRes.user as Record<string, unknown>;
-        const name = (otherUser.displayName ?? otherUser.first_name ?? "Someone") as string;
+        const name = (otherUser.displayName ??
+          otherUser.first_name ??
+          "Someone") as string;
         const username = otherUser.username as string | undefined;
         const pronoun = getGenderPronoun(otherUser.gender as string);
         const chatLink = buildChatLink(otherUser);
 
-        await ctx.reply(
-          t("matchItsAMatch", lang, { name }),
-          { parse_mode: "Markdown" }
-        );
+        await ctx.reply(t("matchItsAMatch", lang, { name }), {
+          parse_mode: "Markdown",
+        });
 
         await ctx.reply(
           `${chatLink}\n\n${t("matchSayHiTo", lang, { pronoun })}`,
-          { parse_mode: "Markdown", link_preview_options: { is_disabled: false } }
+          {
+            parse_mode: "Markdown",
+            link_preview_options: { is_disabled: false },
+          },
         );
 
         await addNotification(env, targetUserId, {
@@ -479,7 +637,7 @@ async function handleMatchAction(
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ userId }),
-        })
+        }),
       );
     } else if (action === "skip") {
       await env.API_SERVICE.fetch(
@@ -487,7 +645,7 @@ async function handleMatchAction(
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ userId }),
-        })
+        }),
       );
     }
 
@@ -503,7 +661,9 @@ async function handleMatchAction(
     const queue = await getMatchQueue(env.KV, userId);
     if (queue) {
       try {
-        await ctx.editMessageReplyMarkup({ reply_markup: new InlineKeyboard() });
+        await ctx.editMessageReplyMarkup({
+          reply_markup: new InlineKeyboard(),
+        });
       } catch {
         // Message might be too old or not editable; ignore
       }
@@ -514,7 +674,9 @@ async function handleMatchAction(
     }
   } catch (error) {
     console.error("Match action error:", error);
-    await ctx.reply(t("matchError", lang), { reply_markup: getMainMenuKeyboard() });
+    await ctx.reply(t("matchError", lang), {
+      reply_markup: getMainMenuKeyboard(),
+    });
   }
   await ctx.answerCallbackQuery().catch(() => {});
 }
@@ -538,7 +700,9 @@ async function handleSendDM(ctx: MyContext, env: Env, targetUserId: string) {
       bypassRemaining = Math.max(0, DM_BYPASS_LIMIT - bypassStatus.used);
     }
 
-    const canSend = dmStatus.canSendDM && (dmStatus.tier !== "premium_plus" || (bypassRemaining ?? 0) > 0);
+    const canSend =
+      dmStatus.canSendDM &&
+      (dmStatus.tier !== "premium_plus" || (bypassRemaining ?? 0) > 0);
 
     if (!canSend) {
       const keyboard = new InlineKeyboard()
@@ -547,10 +711,10 @@ async function handleSendDM(ctx: MyContext, env: Env, targetUserId: string) {
         .text("⭐ Buy 1 DM (50 Stars)", `dm:buy:${targetUserId}`)
         .row()
         .text("❌ Cancel", "dm:cancel");
-      await ctx.reply(
-        t("dmGated", lang),
-        { parse_mode: "Markdown", reply_markup: keyboard }
-      );
+      await ctx.reply(t("dmGated", lang), {
+        parse_mode: "Markdown",
+        reply_markup: keyboard,
+      });
       await ctx.answerCallbackQuery().catch(() => {});
       return;
     }
@@ -563,7 +727,9 @@ async function handleSendDM(ctx: MyContext, env: Env, targetUserId: string) {
 
     const result = await client.sendDM(userId);
     if (!result.success) {
-      await ctx.reply(t("dmFailed", lang), { reply_markup: getMainMenuKeyboard() });
+      await ctx.reply(t("dmFailed", lang), {
+        reply_markup: getMainMenuKeyboard(),
+      });
       await ctx.answerCallbackQuery().catch(() => {});
       return;
     }
@@ -571,32 +737,43 @@ async function handleSendDM(ctx: MyContext, env: Env, targetUserId: string) {
     const otherUserRes = await client.getUser({ userId: targetUserId });
     const otherUser = otherUserRes.user as Record<string, unknown>;
     const chatLink = buildChatLink(otherUser);
-    const name = (otherUser.displayName ?? otherUser.first_name ?? "Someone") as string;
+    const name = (otherUser.displayName ??
+      otherUser.first_name ??
+      "Someone") as string;
 
     let successText = t("dmSuccess", lang, { name }) + "\n\n" + chatLink;
     if (dmStatus.tier === "premium_plus" && bypassRemaining !== undefined) {
       successText += `\n\n📊 DM bypass: ${bypassRemaining}/${DM_BYPASS_LIMIT} remaining today.`;
     }
 
-    await ctx.reply(successText, { parse_mode: "Markdown", link_preview_options: { is_disabled: false } });
+    await ctx.reply(successText, {
+      parse_mode: "Markdown",
+      link_preview_options: { is_disabled: false },
+    });
     await ctx.answerCallbackQuery().catch(() => {});
   } catch (error) {
     console.error("Send DM error:", error);
-    await ctx.reply(t("dmError", lang), { reply_markup: getMainMenuKeyboard() });
+    await ctx.reply(t("dmError", lang), {
+      reply_markup: getMainMenuKeyboard(),
+    });
     await ctx.answerCallbackQuery().catch(() => {});
   }
 }
 
 // --- Report feature ---
 
-export async function startReportConversation(ctx: MyContext, env: Env, targetUserId: string): Promise<void> {
+export async function startReportConversation(
+  ctx: MyContext,
+  env: Env,
+  targetUserId: string,
+): Promise<void> {
   if (!ctx.from) return;
   const userId = String(ctx.from.id);
   const lang = await fetchUserLang(env, userId);
 
   await setConversationState(env.KV, {
     userId,
-    field: 'report',
+    field: "report",
     step: 0,
     data: { targetUserId },
   });
@@ -612,22 +789,27 @@ export async function handleReportConversation(
   ctx: MyContext,
   env: Env,
   text: string,
-  lang: Language
+  lang: Language,
 ): Promise<boolean> {
   if (!ctx.from) return false;
   const userId = String(ctx.from.id);
   const state = await getConversationState(env.KV, userId);
-  if (!state || state.field !== 'report' || !state.data?.targetUserId) return false;
+  if (!state || state.field !== "report" || !state.data?.targetUserId)
+    return false;
 
   const targetUserId = String(state.data.targetUserId);
 
   try {
     const client = new ApiServiceClient(env.API_SERVICE);
     await client.reportUser(targetUserId, userId, text);
-    await ctx.reply(t("reportSubmitted", lang), { reply_markup: getMainMenuKeyboard() });
+    await ctx.reply(t("reportSubmitted", lang), {
+      reply_markup: getMainMenuKeyboard(),
+    });
   } catch (error) {
     console.error("Report error:", error);
-    await ctx.reply(t("genericError", lang), { reply_markup: getMainMenuKeyboard() });
+    await ctx.reply(t("genericError", lang), {
+      reply_markup: getMainMenuKeyboard(),
+    });
   }
 
   await clearConversationState(env.KV, userId);
@@ -652,20 +834,27 @@ async function handleRollback(ctx: MyContext, env: Env): Promise<void> {
         .text("👑 Get Premium", "premium:show")
         .row()
         .text("🎁 Share for Bonus", "referral:show");
-      await ctx.reply(t("rollbackGated", lang), { parse_mode: "Markdown", reply_markup: keyboard });
+      await ctx.reply(t("rollbackGated", lang), {
+        parse_mode: "Markdown",
+        reply_markup: keyboard,
+      });
       return;
     }
 
     const lastAction = await getLastAction(env.KV, userId);
     if (!lastAction) {
-      await ctx.reply(t("rollbackNoAction", lang), { reply_markup: getMatchActionKeyboard(tier) });
+      await ctx.reply(t("rollbackNoAction", lang), {
+        reply_markup: getMatchActionKeyboard(tier),
+      });
       return;
     }
 
     // Call undo API
     const undoRes = await client.undoMatch(lastAction.matchId, userId);
     if (!undoRes.restored) {
-      await ctx.reply(t("rollbackNoAction", lang), { reply_markup: getMatchActionKeyboard(tier) });
+      await ctx.reply(t("rollbackNoAction", lang), {
+        reply_markup: getMatchActionKeyboard(tier),
+      });
       return;
     }
 
@@ -677,7 +866,9 @@ async function handleRollback(ctx: MyContext, env: Env): Promise<void> {
     }
 
     await clearLastAction(env.KV, userId);
-    await ctx.reply(t("rollbackSuccess", lang), { reply_markup: getMatchActionKeyboard(tier) });
+    await ctx.reply(t("rollbackSuccess", lang), {
+      reply_markup: getMatchActionKeyboard(tier),
+    });
 
     // Show the restored profile
     if (queue) {
@@ -685,13 +876,19 @@ async function handleRollback(ctx: MyContext, env: Env): Promise<void> {
     }
   } catch (error) {
     console.error("Rollback error:", error);
-    await ctx.reply(t("genericError", lang), { reply_markup: getMainMenuKeyboard() });
+    await ctx.reply(t("genericError", lang), {
+      reply_markup: getMainMenuKeyboard(),
+    });
   }
 }
 
 // --- Like with Message feature ---
 
-export async function startLikeMessageConversation(ctx: MyContext, env: Env, targetUserId: string): Promise<void> {
+export async function startLikeMessageConversation(
+  ctx: MyContext,
+  env: Env,
+  targetUserId: string,
+): Promise<void> {
   if (!ctx.from) return;
   const userId = String(ctx.from.id);
   const lang = await fetchUserLang(env, userId);
@@ -703,18 +900,24 @@ export async function startLikeMessageConversation(ctx: MyContext, env: Env, tar
       .text("👑 Get Premium", "premium:show")
       .row()
       .text("🎁 Share for Bonus", "referral:show");
-    await ctx.reply(t("matchLikeLimitReached", lang), { parse_mode: "Markdown", reply_markup: keyboard });
+    await ctx.reply(t("matchLikeLimitReached", lang), {
+      parse_mode: "Markdown",
+      reply_markup: keyboard,
+    });
     return;
   }
 
   await setConversationState(env.KV, {
     userId,
-    field: 'like-message',
+    field: "like-message",
     step: 0,
     data: { targetUserId },
   });
 
-  const skipKeyboard = new Keyboard().text(t("likeMessageSkipButton", lang)).text("Cancel").resized();
+  const skipKeyboard = new Keyboard()
+    .text(t("likeMessageSkipButton", lang))
+    .text("Cancel")
+    .resized();
   await ctx.reply(t("likeMessagePrompt", lang), {
     parse_mode: "Markdown",
     reply_markup: skipKeyboard,
@@ -725,24 +928,27 @@ export async function handleLikeMessageConversation(
   ctx: MyContext,
   env: Env,
   text: string,
-  lang: Language
+  lang: Language,
 ): Promise<boolean> {
   if (!ctx.from) return false;
   const userId = String(ctx.from.id);
   const state = await getConversationState(env.KV, userId);
-  if (!state || state.field !== 'like-message' || !state.data?.targetUserId) return false;
+  if (!state || state.field !== "like-message" || !state.data?.targetUserId)
+    return false;
 
   const targetUserId = String(state.data.targetUserId);
   const myName = ctx.from.first_name ?? "Someone";
 
   try {
     const client = new ApiServiceClient(env.API_SERVICE);
-    const createRes = await client.createMatch({ user1Id: userId, user2Id: targetUserId });
+    const createRes = await client.createMatch({
+      user1Id: userId,
+      user2Id: targetUserId,
+    });
     const matchId = createRes.match.id;
 
-    const message = text === t("likeMessageSkipButton", lang)
-      ? undefined
-      : { text };
+    const message =
+      text === t("likeMessageSkipButton", lang) ? undefined : { text };
 
     const likeRes = await client.likeMatch({ matchId, userId, message });
     await client.recordLike(userId);
@@ -750,14 +956,21 @@ export async function handleLikeMessageConversation(
     if (likeRes.isMutual) {
       const otherUserRes = await client.getUser({ userId: targetUserId });
       const otherUser = otherUserRes.user as Record<string, unknown>;
-      const name = (otherUser.displayName ?? otherUser.first_name ?? "Someone") as string;
+      const name = (otherUser.displayName ??
+        otherUser.first_name ??
+        "Someone") as string;
       const pronoun = getGenderPronoun(otherUser.gender as string);
       const chatLink = buildChatLink(otherUser);
 
-      await ctx.reply(t("matchItsAMatch", lang, { name }), { parse_mode: "Markdown" });
+      await ctx.reply(t("matchItsAMatch", lang, { name }), {
+        parse_mode: "Markdown",
+      });
       await ctx.reply(
         `${chatLink}\n\n${t("matchSayHiTo", lang, { pronoun })}`,
-        { parse_mode: "Markdown", link_preview_options: { is_disabled: false } }
+        {
+          parse_mode: "Markdown",
+          link_preview_options: { is_disabled: false },
+        },
       );
 
       await addNotification(env, targetUserId, {
@@ -773,7 +986,11 @@ export async function handleLikeMessageConversation(
         otherUsername: ctx.from.username ?? undefined,
       });
     } else {
-      await ctx.reply(t("likeMessageSent", lang), { reply_markup: getMatchActionKeyboard((await getInteractionStatus(env, userId))?.tier ?? "free") });
+      await ctx.reply(t("likeMessageSent", lang), {
+        reply_markup: getMatchActionKeyboard(
+          (await getInteractionStatus(env, userId))?.tier ?? "free",
+        ),
+      });
 
       // Send notification with the message
       const notificationPayload: Record<string, unknown> = {
@@ -802,7 +1019,9 @@ export async function handleLikeMessageConversation(
     }
   } catch (error) {
     console.error("Like with message error:", error);
-    await ctx.reply(t("matchError", lang), { reply_markup: getMainMenuKeyboard() });
+    await ctx.reply(t("matchError", lang), {
+      reply_markup: getMainMenuKeyboard(),
+    });
   }
 
   await clearConversationState(env.KV, userId);
@@ -813,12 +1032,13 @@ export async function handleLikeMessageMedia(
   ctx: MyContext,
   env: Env,
   mediaUrl: string,
-  mediaType: 'image' | 'video'
+  mediaType: "image" | "video",
 ): Promise<boolean> {
   if (!ctx.from) return false;
   const userId = String(ctx.from.id);
   const state = await getConversationState(env.KV, userId);
-  if (!state || state.field !== 'like-message' || !state.data?.targetUserId) return false;
+  if (!state || state.field !== "like-message" || !state.data?.targetUserId)
+    return false;
 
   const targetUserId = String(state.data.targetUserId);
   const myName = ctx.from.first_name ?? "Someone";
@@ -826,7 +1046,10 @@ export async function handleLikeMessageMedia(
 
   try {
     const client = new ApiServiceClient(env.API_SERVICE);
-    const createRes = await client.createMatch({ user1Id: userId, user2Id: targetUserId });
+    const createRes = await client.createMatch({
+      user1Id: userId,
+      user2Id: targetUserId,
+    });
     const matchId = createRes.match.id;
 
     const message = { mediaUrl };
@@ -836,14 +1059,21 @@ export async function handleLikeMessageMedia(
     if (likeRes.isMutual) {
       const otherUserRes = await client.getUser({ userId: targetUserId });
       const otherUser = otherUserRes.user as Record<string, unknown>;
-      const name = (otherUser.displayName ?? otherUser.first_name ?? "Someone") as string;
+      const name = (otherUser.displayName ??
+        otherUser.first_name ??
+        "Someone") as string;
       const pronoun = getGenderPronoun(otherUser.gender as string);
       const chatLink = buildChatLink(otherUser);
 
-      await ctx.reply(t("matchItsAMatch", lang, { name }), { parse_mode: "Markdown" });
+      await ctx.reply(t("matchItsAMatch", lang, { name }), {
+        parse_mode: "Markdown",
+      });
       await ctx.reply(
         `${chatLink}\n\n${t("matchSayHiTo", lang, { pronoun })}`,
-        { parse_mode: "Markdown", link_preview_options: { is_disabled: false } }
+        {
+          parse_mode: "Markdown",
+          link_preview_options: { is_disabled: false },
+        },
       );
 
       await addNotification(env, targetUserId, {
@@ -859,7 +1089,11 @@ export async function handleLikeMessageMedia(
         otherUsername: ctx.from.username ?? undefined,
       });
     } else {
-      await ctx.reply(t("likeMessageSent", lang), { reply_markup: getMatchActionKeyboard((await getInteractionStatus(env, userId))?.tier ?? "free") });
+      await ctx.reply(t("likeMessageSent", lang), {
+        reply_markup: getMatchActionKeyboard(
+          (await getInteractionStatus(env, userId))?.tier ?? "free",
+        ),
+      });
 
       await addNotification(env, targetUserId, {
         type: "like",
@@ -882,7 +1116,9 @@ export async function handleLikeMessageMedia(
     }
   } catch (error) {
     console.error("Like with media error:", error);
-    await ctx.reply(t("matchError", lang), { reply_markup: getMainMenuKeyboard() });
+    await ctx.reply(t("matchError", lang), {
+      reply_markup: getMainMenuKeyboard(),
+    });
   }
 
   await clearConversationState(env.KV, userId);
@@ -898,7 +1134,11 @@ const GIFTS = [
   { id: "diamond", emoji: "💎", name: "Diamond", stars: 100 },
 ];
 
-export async function startGiftSelection(ctx: MyContext, env: Env, targetUserId: string): Promise<void> {
+export async function startGiftSelection(
+  ctx: MyContext,
+  env: Env,
+  targetUserId: string,
+): Promise<void> {
   if (!ctx.from) return;
   const userId = String(ctx.from.id);
   const lang = await fetchUserLang(env, userId);
@@ -913,31 +1153,43 @@ export async function startGiftSelection(ctx: MyContext, env: Env, targetUserId:
       .text("👑 Get Premium", "premium:show")
       .row()
       .text("🎁 Share for Bonus", "referral:show");
-    await ctx.reply(t("giftGated", lang), { parse_mode: "Markdown", reply_markup: keyboard });
+    await ctx.reply(t("giftGated", lang), {
+      parse_mode: "Markdown",
+      reply_markup: keyboard,
+    });
     return;
   }
 
   // Store gift selection state
   await setConversationState(env.KV, {
     userId,
-    field: 'gift',
+    field: "gift",
     step: 0,
     data: { targetUserId },
   });
 
   const keyboard = new InlineKeyboard();
   for (const gift of GIFTS) {
-    keyboard.text(`${gift.emoji} ${gift.name} (${gift.stars} ⭐)`, `gift:buy:${gift.id}:${targetUserId}`).row();
+    keyboard
+      .text(
+        `${gift.emoji} ${gift.name} (${gift.stars} ⭐)`,
+        `gift:buy:${gift.id}:${targetUserId}`,
+      )
+      .row();
   }
   keyboard.text("❌ Cancel", "gift:cancel");
 
-  await ctx.reply(
-    `${t("giftTitle", lang)}\n\n${t("giftSelect", lang)}`,
-    { parse_mode: "Markdown", reply_markup: keyboard }
-  );
+  await ctx.reply(`${t("giftTitle", lang)}\n\n${t("giftSelect", lang)}`, {
+    parse_mode: "Markdown",
+    reply_markup: keyboard,
+  });
 }
 
-export async function handleGiftCallback(ctx: MyContext, env: Env, data: string): Promise<boolean> {
+export async function handleGiftCallback(
+  ctx: MyContext,
+  env: Env,
+  data: string,
+): Promise<boolean> {
   if (!ctx.from) return false;
   const userId = String(ctx.from.id);
   const lang = await fetchUserLang(env, userId);
@@ -945,7 +1197,9 @@ export async function handleGiftCallback(ctx: MyContext, env: Env, data: string)
   if (data === "gift:cancel") {
     await clearConversationState(env.KV, userId);
     await ctx.deleteMessage().catch(() => {});
-    await ctx.reply(t("giftCancelled", lang), { reply_markup: getMainMenuKeyboard() });
+    await ctx.reply(t("giftCancelled", lang), {
+      reply_markup: getMainMenuKeyboard(),
+    });
     await ctx.answerCallbackQuery().catch(() => {});
     return true;
   }
@@ -969,7 +1223,7 @@ export async function handleGiftCallback(ctx: MyContext, env: Env, data: string)
         `gift_${userId}_${targetUserId}_${gift.id}`,
         "",
         "XTR",
-        [{ label: gift.name, amount: gift.stars }]
+        [{ label: gift.name, amount: gift.stars }],
       );
 
       const keyboard = new InlineKeyboard()
@@ -979,8 +1233,8 @@ export async function handleGiftCallback(ctx: MyContext, env: Env, data: string)
 
       await ctx.reply(
         `🎁 *Send a ${gift.emoji} ${gift.name}*\n\n` +
-        `Tap the button below to pay with Telegram Stars.`,
-        { parse_mode: "Markdown", reply_markup: keyboard }
+          `Tap the button below to pay with Telegram Stars.`,
+        { parse_mode: "Markdown", reply_markup: keyboard },
       );
       await ctx.answerCallbackQuery().catch(() => {});
     } catch (error) {
@@ -997,7 +1251,7 @@ export async function handleGiftCallback(ctx: MyContext, env: Env, data: string)
 export async function handleGiftPayment(
   ctx: MyContext,
   env: Env,
-  payload: string
+  payload: string,
 ): Promise<void> {
   if (!ctx.from) return;
   const userId = String(ctx.from.id);
@@ -1022,7 +1276,7 @@ export async function handleGiftPayment(
 
     await ctx.reply(
       t("giftSent", lang, { gift: `${gift.emoji} ${gift.name}` }),
-      { reply_markup: getMainMenuKeyboard() }
+      { reply_markup: getMainMenuKeyboard() },
     );
 
     // Send notification to target user
@@ -1041,13 +1295,19 @@ export async function handleGiftPayment(
     });
   } catch (error) {
     console.error("Gift delivery error:", error);
-    await ctx.reply("❌ Payment processed but we could not deliver the gift. Please contact support.");
+    await ctx.reply(
+      "❌ Payment processed but we could not deliver the gift. Please contact support.",
+    );
   }
 }
 
 // --- Reply action handler ---
 
-export async function handleMatchReplyAction(ctx: MyContext, env: Env, action: string): Promise<boolean> {
+export async function handleMatchReplyAction(
+  ctx: MyContext,
+  env: Env,
+  action: string,
+): Promise<boolean> {
   if (!ctx.from) return false;
   const userId = String(ctx.from.id);
 
@@ -1087,7 +1347,10 @@ export async function handleMatchReplyAction(ctx: MyContext, env: Env, action: s
 
 // --- Callback handlers ---
 
-export const matchCallbacks = async (ctx: MyContext, env: Env): Promise<void> => {
+export const matchCallbacks = async (
+  ctx: MyContext,
+  env: Env,
+): Promise<void> => {
   if (!ctx.callbackQuery?.data) {
     await ctx.answerCallbackQuery().catch(() => {});
     return;
@@ -1097,7 +1360,12 @@ export const matchCallbacks = async (ctx: MyContext, env: Env): Promise<void> =>
   if (data.startsWith("match:like:")) {
     await handleMatchAction(ctx, env, "like", data.replace("match:like:", ""));
   } else if (data.startsWith("match:dislike:")) {
-    await handleMatchAction(ctx, env, "dislike", data.replace("match:dislike:", ""));
+    await handleMatchAction(
+      ctx,
+      env,
+      "dislike",
+      data.replace("match:dislike:", ""),
+    );
   } else if (data.startsWith("match:skip:")) {
     await handleMatchAction(ctx, env, "skip", data.replace("match:skip:", ""));
   } else if (data.startsWith("dm:send:")) {
@@ -1127,7 +1395,7 @@ async function handleBuyDM(ctx: MyContext, env: Env, targetUserId: string) {
       `dm_credit_${userId}_1_${targetUserId}`,
       "",
       "XTR",
-      [{ label: "1 DM", amount: 50 }]
+      [{ label: "1 DM", amount: 50 }],
     );
 
     const keyboard = new InlineKeyboard()
@@ -1137,9 +1405,9 @@ async function handleBuyDM(ctx: MyContext, env: Env, targetUserId: string) {
 
     await ctx.reply(
       "⭐ *Buy 1 Direct Message*\n\n" +
-      "Send a DM to any user instantly — no mutual match required!\n\n" +
-      "Tap the button below to pay with Telegram Stars.",
-      { parse_mode: "Markdown", reply_markup: keyboard }
+        "Send a DM to any user instantly — no mutual match required!\n\n" +
+        "Tap the button below to pay with Telegram Stars.",
+      { parse_mode: "Markdown", reply_markup: keyboard },
     );
     await ctx.answerCallbackQuery().catch(() => {});
   } catch (error) {

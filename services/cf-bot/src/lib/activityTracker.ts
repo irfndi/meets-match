@@ -1,7 +1,7 @@
-import type { MiddlewareFn } from 'grammy';
-import type { MyContext } from '../types.js';
-import type { Env } from '../index.js';
-import { ApiServiceClient } from '../services/api-client.js';
+import type { MiddlewareFn } from "grammy";
+import type { MyContext } from "../types.js";
+import type { Env } from "../index.js";
+import { ApiServiceClient } from "../services/api-client.js";
 
 const DEBOUNCE_WINDOW_MS = 5 * 60 * 1000;
 const MAX_CACHE_SIZE = 10000;
@@ -24,8 +24,7 @@ export function activityTrackerMiddleware(env: Env): MiddlewareFn<MyContext> {
         try {
           const client = new ApiServiceClient(env.API_SERVICE);
           await client.updateLastActive({ userId });
-        } catch {
-        }
+        } catch {}
       }
     }
 

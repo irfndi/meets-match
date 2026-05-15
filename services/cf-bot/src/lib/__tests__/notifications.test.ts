@@ -1,12 +1,21 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { addNotification, getNotifications, clearNotifications, removeNotification } from "../notifications.js";
+import {
+  addNotification,
+  getNotifications,
+  clearNotifications,
+  removeNotification,
+} from "../notifications.js";
 
 function mockKV() {
   const store = new Map<string, string>();
   return {
     get: vi.fn(async (key: string) => store.get(key) ?? null),
-    put: vi.fn(async (key: string, value: string, _opts?: unknown) => { store.set(key, value); }),
-    delete: vi.fn(async (key: string) => { store.delete(key); }),
+    put: vi.fn(async (key: string, value: string, _opts?: unknown) => {
+      store.set(key, value);
+    }),
+    delete: vi.fn(async (key: string) => {
+      store.delete(key);
+    }),
     _store: store,
   };
 }
@@ -42,8 +51,18 @@ describe("Notification System", () => {
   });
 
   it("should add multiple notifications", async () => {
-    await addNotification(env, "123", { type: "like", fromUserId: "456", fromDisplayName: "Alice", timestamp: "t1" });
-    await addNotification(env, "123", { type: "like", fromUserId: "789", fromDisplayName: "Bob", timestamp: "t2" });
+    await addNotification(env, "123", {
+      type: "like",
+      fromUserId: "456",
+      fromDisplayName: "Alice",
+      timestamp: "t1",
+    });
+    await addNotification(env, "123", {
+      type: "like",
+      fromUserId: "789",
+      fromDisplayName: "Bob",
+      timestamp: "t2",
+    });
     const notifications = await getNotifications(env, "123");
     expect(notifications).toHaveLength(2);
   });
@@ -61,19 +80,36 @@ describe("Notification System", () => {
   });
 
   it("should clear all notifications", async () => {
-    await addNotification(env, "123", { type: "like", fromUserId: "456", fromDisplayName: "Alice", timestamp: "t1" });
+    await addNotification(env, "123", {
+      type: "like",
+      fromUserId: "456",
+      fromDisplayName: "Alice",
+      timestamp: "t1",
+    });
     await clearNotifications(env, "123");
     const notifications = await getNotifications(env, "123");
     expect(notifications).toHaveLength(0);
   });
 
   it("should remove a notification by index", async () => {
-    await addNotification(env, "123", { type: "like", fromUserId: "456", fromDisplayName: "Alice", timestamp: "t1" });
-    await addNotification(env, "123", { type: "like", fromUserId: "789", fromDisplayName: "Bob", timestamp: "t2" });
+    await addNotification(env, "123", {
+      type: "like",
+      fromUserId: "456",
+      fromDisplayName: "Alice",
+      timestamp: "t1",
+    });
+    await addNotification(env, "123", {
+      type: "like",
+      fromUserId: "789",
+      fromDisplayName: "Bob",
+      timestamp: "t2",
+    });
     await removeNotification(env, "123", 0);
     const notifications = await getNotifications(env, "123");
     expect(notifications).toHaveLength(1);
-    expect((notifications[0] as { fromDisplayName: string }).fromDisplayName).toBe("Bob");
+    expect(
+      (notifications[0] as { fromDisplayName: string }).fromDisplayName,
+    ).toBe("Bob");
   });
 
   it("should return empty array when no notifications exist", async () => {

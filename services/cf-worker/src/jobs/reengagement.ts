@@ -1,4 +1,4 @@
-import type { Env } from '../index.js';
+import type { Env } from "../index.js";
 
 const INACTIVE_DAYS_MIN = 7;
 const INACTIVE_DAYS_MAX = 30;
@@ -32,41 +32,49 @@ const MESSAGE_VARIANTS = [
       : `💘 People in your area haven't met you yet. Let's fix that!`,
 ];
 
-function pickVariant(index?: number): (name: string, count: number, genderLabel: string) => string {
+function pickVariant(
+  index?: number,
+): (name: string, count: number, genderLabel: string) => string {
   const idx = index ?? Math.floor(Math.random() * MESSAGE_VARIANTS.length);
   return MESSAGE_VARIANTS[idx % MESSAGE_VARIANTS.length];
 }
 
 function getOppositeGenderLabel(gender: string | null): string {
-  const g = (gender ?? '').toLowerCase();
-  if (g === 'male') return 'women';
-  if (g === 'female') return 'men';
-  return 'people';
+  const g = (gender ?? "").toLowerCase();
+  if (g === "male") return "women";
+  if (g === "female") return "men";
+  return "people";
 }
 
 async function countNearbyUsers(
   db: D1Database,
   userId: string,
-  gender: string | null
+  gender: string | null,
 ): Promise<number> {
   try {
-    const oppositeGender = getOppositeGenderLabel(gender) === 'women' ? 'female' : 'male';
+    const oppositeGender =
+      getOppositeGenderLabel(gender) === "women" ? "female" : "male";
     // Count active, profile-complete users of opposite gender (same city if available)
-    const { results } = await db.prepare(
-      `SELECT COUNT(*) as c FROM users
+    const { results } = await db
+      .prepare(
+        `SELECT COUNT(*) as c FROM users
        WHERE id != ?
          AND is_active = 1
          AND is_profile_complete = 1
-         AND gender = ?`
-    ).bind(userId, oppositeGender).all();
-    return Number((results?.[0] as Record<string, unknown> | undefined)?.c ?? 0);
+         AND gender = ?`,
+      )
+      .bind(userId, oppositeGender)
+      .all();
+    return Number(
+      (results?.[0] as Record<string, unknown> | undefined)?.c ?? 0,
+    );
   } catch {
     return 0;
   }
 }
 
 export async function runReengagementJob(env: Env): Promise<void> {
-  console.log('[reengagement] Starting re-engagement job');
+  console.log("[reengagement] Starting re-engagement job");
 
   const cutoffDate = new Date();
   cutoffDate.setDate(cutoffDate.getDate() - INACTIVE_DAYS_MIN);
@@ -80,19 +88,17 @@ export async function runReengagementJob(env: Env): Promise<void> {
        AND is_sleeping = 0
        AND (last_active <= ? OR last_active IS NULL)
        AND (last_reminded_at IS NULL OR last_reminded_at <= ?)
-       LIMIT ?`
-    ).bind(
-      cutoffDate.toISOString(),
-      maxDate.toISOString(),
-      BATCH_SIZE
-    ).all();
+       LIMIT ?`,
+    )
+      .bind(cutoffDate.toISOString(), maxDate.toISOString(), BATCH_SIZE)
+      .all();
 
     const candidates = (results ?? []) as Array<Record<string, unknown>>;
     console.log(`[reengagement] Found ${candidates.length} candidates`);
 
     for (const user of candidates) {
       const userId = String(user.id);
-      const firstName = String(user.first_name || 'there');
+      const firstName = String(user.first_name || "there");
       const gender = user.gender ? String(user.gender) : null;
 
       try {
@@ -101,35 +107,43 @@ export async function runReengagementJob(env: Env): Promise<void> {
         const variant = pickVariant();
         const message = variant(firstName, nearbyCount, genderLabel);
 
-        const response = await env.API_SERVICE.fetch(new Request('http://api/notifications', {
-          method: 'POST',
-          body: JSON.stringify({
-            userId,
-            type: 'REENGAGEMENT',
-            channel: 'TELEGRAM',
-            payload: JSON.stringify({
-              message,
-              action: 'find_match',
+        const response = await env.API_SERVICE.fetch(
+          new Request("http://api/notifications", {
+            method: "POST",
+            body: JSON.stringify({
+              userId,
+              type: "REENGAGEMENT",
+              channel: "TELEGRAM",
+              payload: JSON.stringify({
+                message,
+                action: "find_match",
+              }),
             }),
+            headers: { "Content-Type": "application/json" },
           }),
-          headers: { 'Content-Type': 'application/json' },
-        }));
+        );
 
         if (response.ok) {
           await env.DB.prepare(
-            'UPDATE users SET last_reminded_at = CURRENT_TIMESTAMP WHERE id = ?'
-          ).bind(userId).run();
-          console.log(`[reengagement] Sent to ${userId} (nearby=${nearbyCount})`);
+            "UPDATE users SET last_reminded_at = CURRENT_TIMESTAMP WHERE id = ?",
+          )
+            .bind(userId)
+            .run();
+          console.log(
+            `[reengagement] Sent to ${userId} (nearby=${nearbyCount})`,
+          );
         } else {
-          console.error(`[reengagement] Failed to enqueue for ${userId}: ${response.status}`);
+          console.error(
+            `[reengagement] Failed to enqueue for ${userId}: ${response.status}`,
+          );
         }
       } catch (error) {
         console.error(`[reengagement] Error for ${userId}:`, error);
       }
     }
 
-    console.log('[reengagement] Job complete');
+    console.log("[reengagement] Job complete");
   } catch (error) {
-    console.error('[reengagement] Job failed:', error);
+    console.error("[reengagement] Job failed:", error);
   }
 }

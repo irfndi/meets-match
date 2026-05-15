@@ -1,16 +1,28 @@
 import { InlineKeyboard } from "grammy";
 import type { MyContext } from "../types.js";
 import type { Env } from "../index.js";
-import { ensureUserExists, getProfileCompleteness, getMissingFieldsDisplay, isPhoneVerified } from "../lib/user-utils.js";
+import {
+  ensureUserExists,
+  getProfileCompleteness,
+  getMissingFieldsDisplay,
+  isPhoneVerified,
+} from "../lib/user-utils.js";
 import { promptPhoneVerification } from "../lib/conversations.js";
-import { getNotifications, removeNotification, type LikeNotification, type MutualMatchNotification } from "../lib/notifications.js";
+import {
+  getNotifications,
+  removeNotification,
+  type LikeNotification,
+  type MutualMatchNotification,
+} from "../lib/notifications.js";
 import { getMainMenuKeyboard } from "../lib/main-menu.js";
 import { type Language } from "../lib/i18n.js";
 import { ApiServiceClient } from "../services/api-client.js";
 
 function buildChatLink(otherUser: Record<string, unknown>): string {
   const username = otherUser.username as string | undefined;
-  const displayName = (otherUser.displayName ?? otherUser.first_name ?? "Someone") as string;
+  const displayName = (otherUser.displayName ??
+    otherUser.first_name ??
+    "Someone") as string;
   if (username) {
     return `💬 [Chat with ${displayName}](https://t.me/${username})`;
   }
@@ -27,10 +39,14 @@ function formatMatch(match: Record<string, unknown>): string {
 async function fetchMutualMatches(env: Env, userId: string) {
   try {
     const res = await env.API_SERVICE.fetch(
-      new Request(`http://api/matches?userId=${userId}&status=MATCHED&limit=50`)
+      new Request(
+        `http://api/matches?userId=${userId}&status=MATCHED&limit=50`,
+      ),
     );
     if (!res.ok) return [];
-    const data = (await res.json()) as { matches?: Array<Record<string, unknown>> };
+    const data = (await res.json()) as {
+      matches?: Array<Record<string, unknown>>;
+    };
     return data.matches ?? [];
   } catch {
     return [];
@@ -40,17 +56,22 @@ async function fetchMutualMatches(env: Env, userId: string) {
 async function fetchPendingLikes(env: Env, userId: string) {
   try {
     const res = await env.API_SERVICE.fetch(
-      new Request(`http://api/users/${userId}/pending-likes`)
+      new Request(`http://api/users/${userId}/pending-likes`),
     );
     if (!res.ok) return [];
-    const data = (await res.json()) as { pendingLikes?: Array<Record<string, unknown>> };
+    const data = (await res.json()) as {
+      pendingLikes?: Array<Record<string, unknown>>;
+    };
     return data.pendingLikes ?? [];
   } catch {
     return [];
   }
 }
 
-export const matchesCommand = async (ctx: MyContext, env: Env): Promise<void> => {
+export const matchesCommand = async (
+  ctx: MyContext,
+  env: Env,
+): Promise<void> => {
   if (!ctx.from) {
     await ctx.reply("Could not identify you. Try again.");
     return;
@@ -68,12 +89,12 @@ export const matchesCommand = async (ctx: MyContext, env: Env): Promise<void> =>
   if (!complete) {
     await ctx.reply(
       `⚠️ *Almost there!*\n\nComplete your profile before viewing matches:\n\n${getMissingFieldsDisplay(missing)}\n\nTap *👤 Profile* to finish setting up.`,
-      { parse_mode: "Markdown", reply_markup: getMainMenuKeyboard() }
+      { parse_mode: "Markdown", reply_markup: getMainMenuKeyboard() },
     );
     return;
   }
 
-  const lang = (user.language as Language) ?? 'en';
+  const lang = (user.language as Language) ?? "en";
   if (!isPhoneVerified(user)) {
     await promptPhoneVerification(ctx, env, lang);
     return;
@@ -83,15 +104,24 @@ export const matchesCommand = async (ctx: MyContext, env: Env): Promise<void> =>
 
   // 1. Show stored notifications (mutual matches + likes)
   const notifications = await getNotifications(env, userId);
-  const mutualNotifications = notifications.filter((n): n is MutualMatchNotification => n.type === "mutual_match");
-  const likeNotifications = notifications.filter((n): n is LikeNotification => n.type === "like");
+  const mutualNotifications = notifications.filter(
+    (n): n is MutualMatchNotification => n.type === "mutual_match",
+  );
+  const likeNotifications = notifications.filter(
+    (n): n is LikeNotification => n.type === "like",
+  );
 
   if (mutualNotifications.length > 0) {
-    await ctx.reply(`💕 You have ${mutualNotifications.length} new mutual match(es)!`);
+    await ctx.reply(
+      `💕 You have ${mutualNotifications.length} new mutual match(es)!`,
+    );
     for (const notif of mutualNotifications) {
       const msg = [
         `💕 It's a match with ${notif.otherDisplayName}!`,
-        buildChatLink({ displayName: notif.otherDisplayName, username: notif.otherUsername }),
+        buildChatLink({
+          displayName: notif.otherDisplayName,
+          username: notif.otherUsername,
+        }),
       ].join("\n");
       await ctx.reply(msg, { parse_mode: "Markdown" });
     }
@@ -101,12 +131,14 @@ export const matchesCommand = async (ctx: MyContext, env: Env): Promise<void> =>
     const keyboard = new InlineKeyboard();
     for (let i = 0; i < likeNotifications.length; i++) {
       const notif = likeNotifications[i];
-      keyboard.text(`❤️ ${notif.fromDisplayName}`, `likes:view:${notif.fromUserId}`).row();
+      keyboard
+        .text(`❤️ ${notif.fromDisplayName}`, `likes:view:${notif.fromUserId}`)
+        .row();
     }
     keyboard.text("⏭ Dismiss all", "likes:dismiss");
     await ctx.reply(
       `💕 ${likeNotifications.length} person(s) liked your profile! Want to check them out?`,
-      { reply_markup: keyboard }
+      { reply_markup: keyboard },
     );
   }
 
@@ -122,7 +154,7 @@ export const matchesCommand = async (ctx: MyContext, env: Env): Promise<void> =>
   if (totalMatches === 0 && totalPending === 0 && notifications.length === 0) {
     await ctx.reply(
       "💑 *No matches yet.*\n\nUse *🔍 Find Match* to discover people, then like someone who likes you back!",
-      { parse_mode: "Markdown", reply_markup: getMainMenuKeyboard() }
+      { parse_mode: "Markdown", reply_markup: getMainMenuKeyboard() },
     );
     return;
   }
@@ -131,28 +163,38 @@ export const matchesCommand = async (ctx: MyContext, env: Env): Promise<void> =>
     await ctx.reply(`💑 You have ${totalMatches} mutual match(es):`);
     for (const match of mutualMatches) {
       // Fetch the other user's profile
-      const otherUserId = match.user1Id === userId ? match.user2Id : match.user1Id;
+      const otherUserId =
+        match.user1Id === userId ? match.user2Id : match.user1Id;
       try {
         const client = new ApiServiceClient(env.API_SERVICE);
         const userRes = await client.getUser({ userId: String(otherUserId) });
         const otherUser = userRes.user as Record<string, unknown>;
         const msg = formatMatch(otherUser);
         const chatLink = buildChatLink(otherUser);
-        const mediaUrls = (otherUser.mediaUrls ?? []) as Array<{ url: string; type: string }>;
-        const firstImage = mediaUrls.find((m) => m.type === 'image');
-        const firstVideo = mediaUrls.find((m) => m.type === 'video');
+        const mediaUrls = (otherUser.mediaUrls ?? []) as Array<{
+          url: string;
+          type: string;
+        }>;
+        const firstImage = mediaUrls.find((m) => m.type === "image");
+        const firstVideo = mediaUrls.find((m) => m.type === "video");
         const text = `${msg}\n${chatLink}`;
 
         try {
           if (firstImage) {
-            await ctx.replyWithPhoto(firstImage.url, { caption: text, parse_mode: 'Markdown' });
+            await ctx.replyWithPhoto(firstImage.url, {
+              caption: text,
+              parse_mode: "Markdown",
+            });
           } else if (firstVideo) {
-            await ctx.replyWithVideo(firstVideo.url, { caption: text, parse_mode: 'Markdown' });
+            await ctx.replyWithVideo(firstVideo.url, {
+              caption: text,
+              parse_mode: "Markdown",
+            });
           } else {
-            await ctx.reply(text, { parse_mode: 'Markdown' });
+            await ctx.reply(text, { parse_mode: "Markdown" });
           }
         } catch {
-          await ctx.reply(text, { parse_mode: 'Markdown' });
+          await ctx.reply(text, { parse_mode: "Markdown" });
         }
       } catch {
         await ctx.reply(formatMatch(match));
@@ -163,19 +205,25 @@ export const matchesCommand = async (ctx: MyContext, env: Env): Promise<void> =>
   if (totalPending > 0) {
     const keyboard = new InlineKeyboard();
     for (const pending of pendingLikes) {
-      const name = (pending.displayName ?? pending.first_name ?? "Someone") as string;
+      const name = (pending.displayName ??
+        pending.first_name ??
+        "Someone") as string;
       keyboard.text(`❤️ ${name}`, `likes:view:${pending.id}`).row();
     }
-    await ctx.reply(
-      `💕 ${totalPending} person(s) liked you! See them now?`,
-      { reply_markup: keyboard }
-    );
+    await ctx.reply(`💕 ${totalPending} person(s) liked you! See them now?`, {
+      reply_markup: keyboard,
+    });
   }
 
-  await ctx.reply("Use the menu below to navigate:", { reply_markup: getMainMenuKeyboard() });
+  await ctx.reply("Use the menu below to navigate:", {
+    reply_markup: getMainMenuKeyboard(),
+  });
 };
 
-export const matchesCallbacks = async (ctx: MyContext, env: Env): Promise<void> => {
+export const matchesCallbacks = async (
+  ctx: MyContext,
+  env: Env,
+): Promise<void> => {
   if (!ctx.from || !ctx.callbackQuery?.data) {
     await ctx.answerCallbackQuery().catch(() => {});
     return;
@@ -192,7 +240,9 @@ export const matchesCallbacks = async (ctx: MyContext, env: Env): Promise<void> 
       }
     }
     await ctx.answerCallbackQuery("Dismissed.").catch(() => {});
-    await ctx.editMessageText("💕 You can see your likes anytime with /matches.").catch(() => {});
+    await ctx
+      .editMessageText("💕 You can see your likes anytime with /matches.")
+      .catch(() => {});
     return;
   }
 
@@ -204,15 +254,20 @@ export const matchesCallbacks = async (ctx: MyContext, env: Env): Promise<void> 
       const client = new ApiServiceClient(env.API_SERVICE);
       const userRes = await client.getUser({ userId: targetUserId });
       const targetUser = userRes.user as Record<string, unknown>;
-      const name = (targetUser.displayName ?? targetUser.first_name ?? "Unknown") as string;
+      const name = (targetUser.displayName ??
+        targetUser.first_name ??
+        "Unknown") as string;
       const age = targetUser.age ?? "?";
       const bio = targetUser.bio ? `\n📝 ${targetUser.bio}` : "";
       const interests = targetUser.interests
         ? `\n🌟 ${Array.isArray(targetUser.interests) ? (targetUser.interests as string[]).join(", ") : String(targetUser.interests)}`
         : "";
-      const mediaUrls = (targetUser.mediaUrls ?? []) as Array<{ url: string; type: string }>;
-      const firstImage = mediaUrls.find((m) => m.type === 'image');
-      const firstVideo = mediaUrls.find((m) => m.type === 'video');
+      const mediaUrls = (targetUser.mediaUrls ?? []) as Array<{
+        url: string;
+        type: string;
+      }>;
+      const firstImage = mediaUrls.find((m) => m.type === "image");
+      const firstVideo = mediaUrls.find((m) => m.type === "video");
 
       const keyboard = new InlineKeyboard()
         .text("❤️ Like back", `match:like:${targetUserId}`)
@@ -222,9 +277,15 @@ export const matchesCallbacks = async (ctx: MyContext, env: Env): Promise<void> 
       const text = `${name}, ${age}${bio}${interests}`;
       try {
         if (firstImage) {
-          await ctx.replyWithPhoto(firstImage.url, { caption: text, reply_markup: keyboard });
+          await ctx.replyWithPhoto(firstImage.url, {
+            caption: text,
+            reply_markup: keyboard,
+          });
         } else if (firstVideo) {
-          await ctx.replyWithVideo(firstVideo.url, { caption: text, reply_markup: keyboard });
+          await ctx.replyWithVideo(firstVideo.url, {
+            caption: text,
+            reply_markup: keyboard,
+          });
         } else {
           await ctx.reply(text, { reply_markup: keyboard });
         }
@@ -234,7 +295,9 @@ export const matchesCallbacks = async (ctx: MyContext, env: Env): Promise<void> 
 
       // Remove this like notification
       const notifications = await getNotifications(env, userId);
-      const idx = notifications.findIndex((n) => n.type === "like" && n.fromUserId === targetUserId);
+      const idx = notifications.findIndex(
+        (n) => n.type === "like" && n.fromUserId === targetUserId,
+      );
       if (idx >= 0) await removeNotification(env, userId, idx);
     } catch {
       await ctx.reply("Could not load profile. Please try again.");

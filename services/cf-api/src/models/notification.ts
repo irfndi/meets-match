@@ -18,14 +18,25 @@ import { NotFoundError, DatabaseError } from "@meetsmatch/cf-shared";
 export class NotificationRepository {
   constructor(private readonly db: D1Database) {}
 
-  create(req: EnqueueNotificationRequest): Effect.Effect<typeof Notification.Type, DatabaseError, never> {
+  create(
+    req: EnqueueNotificationRequest,
+  ): Effect.Effect<typeof Notification.Type, DatabaseError, never> {
     return Effect.tryPromise({
       try: async () => {
         const id = crypto.randomUUID();
-        await this.db.prepare(
-          `INSERT INTO notifications (id, user_id, type, channel, payload, status, priority, attempt_count, max_attempts, created_at)
-           VALUES (?, ?, ?, ?, ?, 'pending', 0, 0, 5, CURRENT_TIMESTAMP)`
-        ).bind(id, req.userId, req.type, req.channel ?? "TELEGRAM", JSON.stringify(req.payload ?? {})).run();
+        await this.db
+          .prepare(
+            `INSERT INTO notifications (id, user_id, type, channel, payload, status, priority, attempt_count, max_attempts, created_at)
+           VALUES (?, ?, ?, ?, ?, 'pending', 0, 0, 5, CURRENT_TIMESTAMP)`,
+          )
+          .bind(
+            id,
+            req.userId,
+            req.type,
+            req.channel ?? "TELEGRAM",
+            JSON.stringify(req.payload ?? {}),
+          )
+          .run();
         return {
           id,
           userId: req.userId,
@@ -42,31 +53,57 @@ export class NotificationRepository {
     });
   }
 
-  getById(req: GetNotificationRequest): Effect.Effect<typeof Notification.Type, NotFoundError | DatabaseError, never> {
+  getById(
+    req: GetNotificationRequest,
+  ): Effect.Effect<
+    typeof Notification.Type,
+    NotFoundError | DatabaseError,
+    never
+  > {
     return Effect.tryPromise({
       try: async () => {
-        const result = await this.db.prepare("SELECT * FROM notifications WHERE id = ?").bind(req.notificationId).first();
-        if (!result) throw new NotFoundError("Notification", req.notificationId);
+        const result = await this.db
+          .prepare("SELECT * FROM notifications WHERE id = ?")
+          .bind(req.notificationId)
+          .first();
+        if (!result)
+          throw new NotFoundError("Notification", req.notificationId);
         return this.toNotification(result);
       },
-      catch: (error) => (error instanceof NotFoundError ? error : new DatabaseError("getById", error)),
+      catch: (error) =>
+        error instanceof NotFoundError
+          ? error
+          : new DatabaseError("getById", error),
     });
   }
 
   markDelivered(id: string): Effect.Effect<boolean, DatabaseError, never> {
     return Effect.tryPromise({
       try: async () => {
-        await this.db.prepare("UPDATE notifications SET status = 'delivered', delivered_at = CURRENT_TIMESTAMP WHERE id = ?").bind(id).run();
+        await this.db
+          .prepare(
+            "UPDATE notifications SET status = 'delivered', delivered_at = CURRENT_TIMESTAMP WHERE id = ?",
+          )
+          .bind(id)
+          .run();
         return true;
       },
       catch: (error) => new DatabaseError("markDelivered", error),
     });
   }
 
-  markFailed(id: string, errorMessage: string): Effect.Effect<boolean, DatabaseError, never> {
+  markFailed(
+    id: string,
+    errorMessage: string,
+  ): Effect.Effect<boolean, DatabaseError, never> {
     return Effect.tryPromise({
       try: async () => {
-        await this.db.prepare("UPDATE notifications SET status = 'failed', last_error = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(errorMessage, id).run();
+        await this.db
+          .prepare(
+            "UPDATE notifications SET status = 'failed', last_error = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+          )
+          .bind(errorMessage, id)
+          .run();
         return true;
       },
       catch: (error) => new DatabaseError("markFailed", error),
@@ -76,24 +113,55 @@ export class NotificationRepository {
   moveToDLQ(id: string): Effect.Effect<boolean, DatabaseError, never> {
     return Effect.tryPromise({
       try: async () => {
-        await this.db.prepare("UPDATE notifications SET status = 'dlq', dlq_at = CURRENT_TIMESTAMP WHERE id = ?").bind(id).run();
+        await this.db
+          .prepare(
+            "UPDATE notifications SET status = 'dlq', dlq_at = CURRENT_TIMESTAMP WHERE id = ?",
+          )
+          .bind(id)
+          .run();
         return true;
       },
       catch: (error) => new DatabaseError("moveToDLQ", error),
     });
   }
 
-  getQueueStats(): Effect.Effect<typeof GetQueueStatsResponse.Type, DatabaseError, never> {
+  getQueueStats(): Effect.Effect<
+    typeof GetQueueStatsResponse.Type,
+    DatabaseError,
+    never
+  > {
     return Effect.tryPromise({
       try: async () => {
-        const pending = await this.db.prepare("SELECT COUNT(*) as c FROM notifications WHERE status = 'pending'").first();
-        const processing = await this.db.prepare("SELECT COUNT(*) as c FROM notifications WHERE status = 'processing'").first();
-        const delivered = await this.db.prepare("SELECT COUNT(*) as c FROM notifications WHERE status = 'delivered'").first();
-        const failed = await this.db.prepare("SELECT COUNT(*) as c FROM notifications WHERE status = 'failed'").first();
-        const dlq = await this.db.prepare("SELECT COUNT(*) as c FROM notifications WHERE status = 'dlq'").first();
+        const pending = await this.db
+          .prepare(
+            "SELECT COUNT(*) as c FROM notifications WHERE status = 'pending'",
+          )
+          .first();
+        const processing = await this.db
+          .prepare(
+            "SELECT COUNT(*) as c FROM notifications WHERE status = 'processing'",
+          )
+          .first();
+        const delivered = await this.db
+          .prepare(
+            "SELECT COUNT(*) as c FROM notifications WHERE status = 'delivered'",
+          )
+          .first();
+        const failed = await this.db
+          .prepare(
+            "SELECT COUNT(*) as c FROM notifications WHERE status = 'failed'",
+          )
+          .first();
+        const dlq = await this.db
+          .prepare(
+            "SELECT COUNT(*) as c FROM notifications WHERE status = 'dlq'",
+          )
+          .first();
         return {
           pendingCount: Number((pending as Record<string, unknown>).c ?? 0),
-          processingCount: Number((processing as Record<string, unknown>).c ?? 0),
+          processingCount: Number(
+            (processing as Record<string, unknown>).c ?? 0,
+          ),
           deliveredCount: Number((delivered as Record<string, unknown>).c ?? 0),
           failedCount: Number((failed as Record<string, unknown>).c ?? 0),
           dlqCount: Number((dlq as Record<string, unknown>).c ?? 0),
@@ -103,24 +171,46 @@ export class NotificationRepository {
     });
   }
 
-  getDLQStats(): Effect.Effect<typeof GetDLQStatsResponse.Type, DatabaseError, never> {
+  getDLQStats(): Effect.Effect<
+    typeof GetDLQStatsResponse.Type,
+    DatabaseError,
+    never
+  > {
     return Effect.tryPromise({
       try: async () => {
-        const result = await this.db.prepare("SELECT COUNT(*) as c FROM notifications WHERE status = 'dlq'").first();
-        return { totalMessages: Number((result as Record<string, unknown>).c ?? 0) };
+        const result = await this.db
+          .prepare(
+            "SELECT COUNT(*) as c FROM notifications WHERE status = 'dlq'",
+          )
+          .first();
+        return {
+          totalMessages: Number((result as Record<string, unknown>).c ?? 0),
+        };
       },
       catch: (error) => new DatabaseError("getDLQStats", error),
     });
   }
 
-  replayDLQ(req: ReplayDLQRequest): Effect.Effect<number, DatabaseError, never> {
+  replayDLQ(
+    req: ReplayDLQRequest,
+  ): Effect.Effect<number, DatabaseError, never> {
     return Effect.tryPromise({
       try: async () => {
         const limit = req.limit ?? 100;
-        const { results } = await this.db.prepare("SELECT id FROM notifications WHERE status = 'dlq' LIMIT ?").bind(String(limit)).all();
-        const ids = (results ?? []).map((r) => String((r as Record<string, unknown>).id));
+        const { results } = await this.db
+          .prepare("SELECT id FROM notifications WHERE status = 'dlq' LIMIT ?")
+          .bind(String(limit))
+          .all();
+        const ids = (results ?? []).map((r) =>
+          String((r as Record<string, unknown>).id),
+        );
         for (const id of ids) {
-          await this.db.prepare("UPDATE notifications SET status = 'pending', dlq_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(id).run();
+          await this.db
+            .prepare(
+              "UPDATE notifications SET status = 'pending', dlq_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            )
+            .bind(id)
+            .run();
         }
         return ids.length;
       },
@@ -128,32 +218,51 @@ export class NotificationRepository {
     });
   }
 
-  createAttempt(notificationId: string, status: string, errorMessage?: string, errorCode?: string, durationMs?: number): Effect.Effect<boolean, DatabaseError, never> {
+  createAttempt(
+    notificationId: string,
+    status: string,
+    errorMessage?: string,
+    errorCode?: string,
+    durationMs?: number,
+  ): Effect.Effect<boolean, DatabaseError, never> {
     return Effect.tryPromise({
       try: async () => {
-        await this.db.prepare(
-          `INSERT INTO notification_delivery_attempts (notification_id, status, error_message, error_code, duration_ms)
-           VALUES (?, ?, ?, ?, ?)`
-        ).bind(
-          notificationId,
-          status,
-          errorMessage ?? null,
-          errorCode ?? null,
-          durationMs ?? null
-        ).run();
+        await this.db
+          .prepare(
+            `INSERT INTO notification_delivery_attempts (notification_id, status, error_message, error_code, duration_ms)
+           VALUES (?, ?, ?, ?, ?)`,
+          )
+          .bind(
+            notificationId,
+            status,
+            errorMessage ?? null,
+            errorCode ?? null,
+            durationMs ?? null,
+          )
+          .run();
         return true;
       },
       catch: (error) => new DatabaseError("createAttempt", error),
     });
   }
 
-  private toNotification(row: Record<string, unknown>): typeof Notification.Type {
+  private toNotification(
+    row: Record<string, unknown>,
+  ): typeof Notification.Type {
     return {
       id: String(row.id),
       userId: String(row.user_id),
-      type: String(row.type) as typeof import("@meetsmatch/cf-shared").NotificationType.Type,
-      channel: row.channel ? String(row.channel) as typeof import("@meetsmatch/cf-shared").NotificationChannel.Type : undefined,
-      status: String(row.status).toUpperCase() as typeof NotificationStatus.Type,
+      type: String(
+        row.type,
+      ) as typeof import("@meetsmatch/cf-shared").NotificationType.Type,
+      channel: row.channel
+        ? (String(
+            row.channel,
+          ) as typeof import("@meetsmatch/cf-shared").NotificationChannel.Type)
+        : undefined,
+      status: String(
+        row.status,
+      ).toUpperCase() as typeof NotificationStatus.Type,
       payload: row.payload ? String(row.payload) : undefined,
       retryCount: row.attempt_count ? Number(row.attempt_count) : 0,
       maxRetries: row.max_attempts ? Number(row.max_attempts) : 5,

@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { getProfileCompleteness, getMissingFieldsDisplay } from "../user-utils.js";
+import {
+  getProfileCompleteness,
+  getMissingFieldsDisplay,
+} from "../user-utils.js";
 
 describe("getProfileCompleteness", () => {
   it("returns complete for fully filled profile", () => {
@@ -22,7 +25,15 @@ describe("getProfileCompleteness", () => {
     const user = { id: "1" };
     const result = getProfileCompleteness(user as any);
     expect(result.complete).toBe(false);
-    expect(result.missing).toEqual(["displayName", "birthDate", "gender", "bio", "location", "interests", "mediaUrls"]);
+    expect(result.missing).toEqual([
+      "displayName",
+      "birthDate",
+      "gender",
+      "bio",
+      "location",
+      "interests",
+      "mediaUrls",
+    ]);
   });
 
   it("detects missing location when only country is provided", () => {
@@ -108,7 +119,11 @@ describe("getProfileCompleteness", () => {
 
 describe("getMissingFieldsDisplay", () => {
   it("formats missing fields with emojis", () => {
-    const result = getMissingFieldsDisplay(["displayName", "birthDate", "interests"]);
+    const result = getMissingFieldsDisplay([
+      "displayName",
+      "birthDate",
+      "interests",
+    ]);
     expect(result).toContain("👤 Name");
     expect(result).toContain("🎂 Age");
     expect(result).toContain("🌟 Interests");

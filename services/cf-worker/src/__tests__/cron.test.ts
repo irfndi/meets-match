@@ -1,12 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-function mockD1(countValue: number, results: Array<Record<string, unknown>> = []) {
+function mockD1(
+  countValue: number,
+  results: Array<Record<string, unknown>> = [],
+) {
   return {
     prepare() {
       return {
         bind() {
           return {
-            first: async () => (typeof countValue === "number" ? { c: countValue } : null),
+            first: async () =>
+              typeof countValue === "number" ? { c: countValue } : null,
             all: async () => ({ results }),
             run: async () => ({ success: true }),
           };
@@ -16,12 +20,25 @@ function mockD1(countValue: number, results: Array<Record<string, unknown>> = []
   } as unknown as D1Database;
 }
 
-function mockEnv(dlqCount = 5, candidates: Array<Record<string, unknown>> = []) {
+function mockEnv(
+  dlqCount = 5,
+  candidates: Array<Record<string, unknown>> = [],
+) {
   return {
     DB: mockD1(dlqCount, candidates),
     KV: {} as KVNamespace,
-    API_SERVICE: { fetch: vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true }), { headers: { "Content-Type": "application/json" } })) } as unknown as Fetcher,
-    BOT_SERVICE: { fetch: vi.fn().mockResolvedValue(new Response()) } as unknown as Fetcher,
+    API_SERVICE: {
+      fetch: vi
+        .fn()
+        .mockResolvedValue(
+          new Response(JSON.stringify({ ok: true }), {
+            headers: { "Content-Type": "application/json" },
+          }),
+        ),
+    } as unknown as Fetcher,
+    BOT_SERVICE: {
+      fetch: vi.fn().mockResolvedValue(new Response()),
+    } as unknown as Fetcher,
     ENVIRONMENT: "test",
     REENGAGEMENT_SCHEDULE: "0 10 * * *",
     DLQ_PROCESSOR_SCHEDULE: "*/5 * * * *",
@@ -46,7 +63,8 @@ describe("Cron Jobs", () => {
     const env = mockEnv(0, candidates);
     await runReengagementJob(env as any);
 
-    const calls = (env.API_SERVICE.fetch as ReturnType<typeof vi.fn>).mock.calls;
+    const calls = (env.API_SERVICE.fetch as ReturnType<typeof vi.fn>).mock
+      .calls;
     expect(calls.length).toBe(2);
 
     for (const call of calls) {

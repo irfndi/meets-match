@@ -5,8 +5,12 @@ function mockKV() {
   const store = new Map<string, string>();
   return {
     get: vi.fn(async (key: string) => store.get(key) ?? null),
-    put: vi.fn(async (key: string, value: string) => { store.set(key, value); }),
-    delete: vi.fn(async (key: string) => { store.delete(key); }),
+    put: vi.fn(async (key: string, value: string) => {
+      store.set(key, value);
+    }),
+    delete: vi.fn(async (key: string) => {
+      store.delete(key);
+    }),
     _store: store,
   };
 }
@@ -18,7 +22,14 @@ function mockCtx(text?: string): MyContext {
     deleteMessage: vi.fn().mockResolvedValue(undefined),
     editMessageText: vi.fn().mockResolvedValue(undefined),
     from: { id: 123, first_name: "Test", is_bot: false, language_code: "en" },
-    message: text ? { text, message_id: 1, date: 1, chat: { id: 123, type: "private" as const } } : undefined,
+    message: text
+      ? {
+          text,
+          message_id: 1,
+          date: 1,
+          chat: { id: 123, type: "private" as const },
+        }
+      : undefined,
     callbackQuery: undefined,
     chat: { id: 123, type: "private" as const },
   } as unknown as MyContext;
@@ -27,8 +38,11 @@ function mockCtx(text?: string): MyContext {
 function createMockApiService(responseMap: Record<string, () => Response>) {
   return {
     fetch: vi.fn().mockImplementation((req: Request) => {
-      const url = typeof req === "string" ? req : (req as any).url || String(req);
-      const sortedPatterns = Object.entries(responseMap).sort((a, b) => b[0].length - a[0].length);
+      const url =
+        typeof req === "string" ? req : (req as any).url || String(req);
+      const sortedPatterns = Object.entries(responseMap).sort(
+        (a, b) => b[0].length - a[0].length,
+      );
       for (const [pattern, factory] of sortedPatterns) {
         if (url.includes(pattern)) return Promise.resolve(factory());
       }
@@ -43,7 +57,12 @@ const completeUser = {
   age: 25,
   gender: "male",
   bio: "Hello",
-  location: { city: "Jakarta", country: "Indonesia", latitude: -6.2, longitude: 106.8 },
+  location: {
+    city: "Jakarta",
+    country: "Indonesia",
+    latitude: -6.2,
+    longitude: 106.8,
+  },
   interests: ["Hiking"],
   phoneNumber: "+1234567890",
   isProfileComplete: true,
@@ -63,8 +82,12 @@ describe("Integration: Main Menu Keyboard Routing", () => {
     const env = {
       KV: kv as unknown as KVNamespace,
       API_SERVICE: createMockApiService({
-        "/users/123": () => new Response(JSON.stringify({ user: completeUser }), { status: 200 }),
-        "/users/123/potential-matches": () => new Response(JSON.stringify({ potentialMatches: [] }), { status: 200 }),
+        "/users/123": () =>
+          new Response(JSON.stringify({ user: completeUser }), { status: 200 }),
+        "/users/123/potential-matches": () =>
+          new Response(JSON.stringify({ potentialMatches: [] }), {
+            status: 200,
+          }),
       }),
     };
     await matchCommand(ctx, env);
@@ -77,9 +100,12 @@ describe("Integration: Main Menu Keyboard Routing", () => {
     const env = {
       KV: kv as unknown as KVNamespace,
       API_SERVICE: createMockApiService({
-        "/users/123": () => new Response(JSON.stringify({ user: completeUser }), { status: 200 }),
-        "/matches?userId=123": () => new Response(JSON.stringify({ matches: [] }), { status: 200 }),
-        "/users/123/pending-likes": () => new Response(JSON.stringify({ pendingLikes: [] }), { status: 200 }),
+        "/users/123": () =>
+          new Response(JSON.stringify({ user: completeUser }), { status: 200 }),
+        "/matches?userId=123": () =>
+          new Response(JSON.stringify({ matches: [] }), { status: 200 }),
+        "/users/123/pending-likes": () =>
+          new Response(JSON.stringify({ pendingLikes: [] }), { status: 200 }),
       }),
     };
     await matchesCommand(ctx, env);
@@ -92,7 +118,8 @@ describe("Integration: Main Menu Keyboard Routing", () => {
     const env = {
       KV: kv as unknown as KVNamespace,
       API_SERVICE: createMockApiService({
-        "/users/123": () => new Response(JSON.stringify({ user: completeUser }), { status: 200 }),
+        "/users/123": () =>
+          new Response(JSON.stringify({ user: completeUser }), { status: 200 }),
       }),
     };
     await profileCommand(ctx, env);
@@ -105,7 +132,8 @@ describe("Integration: Main Menu Keyboard Routing", () => {
     const env = {
       KV: kv as unknown as KVNamespace,
       API_SERVICE: createMockApiService({
-        "/users/123": () => new Response(JSON.stringify({ user: completeUser }), { status: 200 }),
+        "/users/123": () =>
+          new Response(JSON.stringify({ user: completeUser }), { status: 200 }),
       }),
     };
     await settingsCommand(ctx, env);
@@ -122,8 +150,17 @@ describe("Integration: Profile Completion Flow", () => {
     env = {
       KV: kv as unknown as KVNamespace,
       API_SERVICE: createMockApiService({
-        "/users/123": () => new Response(JSON.stringify({ user: { id: "123", displayName: "Test", language: "en" } }), { status: 200 }),
-        "/users": () => new Response(JSON.stringify({ user: { id: "123" } }), { status: 201 }),
+        "/users/123": () =>
+          new Response(
+            JSON.stringify({
+              user: { id: "123", displayName: "Test", language: "en" },
+            }),
+            { status: 200 },
+          ),
+        "/users": () =>
+          new Response(JSON.stringify({ user: { id: "123" } }), {
+            status: 201,
+          }),
       }),
     };
   });
@@ -132,12 +169,15 @@ describe("Integration: Profile Completion Flow", () => {
     const { startCommand } = await import("../handlers/start.js");
     const ctx = mockCtx("/start");
     env.API_SERVICE = createMockApiService({
-      "/users/123": () => new Response(JSON.stringify({ error: "not found" }), { status: 404 }),
-      "/users": () => new Response(JSON.stringify({ user: { id: "123" } }), { status: 201 }),
+      "/users/123": () =>
+        new Response(JSON.stringify({ error: "not found" }), { status: 404 }),
+      "/users": () =>
+        new Response(JSON.stringify({ user: { id: "123" } }), { status: 201 }),
     });
     await startCommand(ctx, env);
     expect(ctx.reply).toHaveBeenCalled();
-    const message = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+    const message = (ctx.reply as ReturnType<typeof vi.fn>).mock
+      .calls[0][0] as string;
     expect(message).toContain("Choose your language");
   });
 });
@@ -151,10 +191,40 @@ describe("Integration: Match Lifecycle", () => {
     env = {
       KV: kv as unknown as KVNamespace,
       API_SERVICE: createMockApiService({
-        "/users/123": () => new Response(JSON.stringify({ user: completeUser }), { status: 200 }),
-        "/users/456": () => new Response(JSON.stringify({ user: { id: "456", displayName: "Alice", age: 24, username: "alice" } }), { status: 200 }),
-        "/matches": () => new Response(JSON.stringify({ match: { id: "m1", user1Id: "123", user2Id: "456", status: "PENDING" } }), { status: 201 }),
-        "/matches/m1/like": () => new Response(JSON.stringify({ isMutual: true, match: { id: "m1", status: "MATCHED" } }), { status: 200 }),
+        "/users/123": () =>
+          new Response(JSON.stringify({ user: completeUser }), { status: 200 }),
+        "/users/456": () =>
+          new Response(
+            JSON.stringify({
+              user: {
+                id: "456",
+                displayName: "Alice",
+                age: 24,
+                username: "alice",
+              },
+            }),
+            { status: 200 },
+          ),
+        "/matches": () =>
+          new Response(
+            JSON.stringify({
+              match: {
+                id: "m1",
+                user1Id: "123",
+                user2Id: "456",
+                status: "PENDING",
+              },
+            }),
+            { status: 201 },
+          ),
+        "/matches/m1/like": () =>
+          new Response(
+            JSON.stringify({
+              isMutual: true,
+              match: { id: "m1", status: "MATCHED" },
+            }),
+            { status: 200 },
+          ),
       }),
     };
   });
@@ -163,8 +233,19 @@ describe("Integration: Match Lifecycle", () => {
     const { matchCallbacks } = await import("../handlers/match.js");
     const ctx = mockCtx();
     (ctx as any).editMessageReplyMarkup = vi.fn().mockResolvedValue(undefined);
-    await env.KV.put("match_queue:123", JSON.stringify({ matches: [{ id: "456", displayName: "Alice", age: 24 }], index: 0 }));
-    ctx.callbackQuery = { id: "cb1", from: { id: 123, is_bot: false, first_name: "Test" }, data: "match:like:456", message: { message_id: 1, chat: { id: 123, type: "private" }, date: 1 } } as any;
+    await env.KV.put(
+      "match_queue:123",
+      JSON.stringify({
+        matches: [{ id: "456", displayName: "Alice", age: 24 }],
+        index: 0,
+      }),
+    );
+    ctx.callbackQuery = {
+      id: "cb1",
+      from: { id: 123, is_bot: false, first_name: "Test" },
+      data: "match:like:456",
+      message: { message_id: 1, chat: { id: 123, type: "private" }, date: 1 },
+    } as any;
     await matchCallbacks(ctx, env);
     expect(ctx.reply).toHaveBeenCalled();
     // Should send mutual match message

@@ -20,14 +20,16 @@ export interface Report {
 export class ReportRepository {
   constructor(private readonly db: D1Database) {}
 
-  create(req: CreateReportRequest): Effect.Effect<Report, DatabaseError, never> {
+  create(
+    req: CreateReportRequest,
+  ): Effect.Effect<Report, DatabaseError, never> {
     return Effect.tryPromise({
       try: async () => {
         const id = crypto.randomUUID();
         await this.db
           .prepare(
             `INSERT INTO reports (id, reporter_id, reported_id, reason, status, created_at)
-             VALUES (?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP)`
+             VALUES (?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP)`,
           )
           .bind(id, req.reporterId, req.reportedId, req.reason ?? null)
           .run();

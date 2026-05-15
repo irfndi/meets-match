@@ -1,4 +1,12 @@
-import { Array, Boolean, Literal, Number, String, Struct, optional } from "effect/Schema";
+import {
+  Array,
+  Boolean,
+  Literal,
+  Number,
+  String,
+  Struct,
+  optional,
+} from "effect/Schema";
 import type { UserService } from "./user.js";
 import type { MatchService } from "./match.js";
 import type { NotificationService } from "./notification.js";

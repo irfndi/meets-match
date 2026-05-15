@@ -108,15 +108,11 @@ describe("Errors", () => {
         new DatabaseError("QUERY", new Error("timeout")),
       ];
 
-      const notFoundErrors = errors.filter(
-        (e) => e._tag === "NotFoundError",
-      );
+      const notFoundErrors = errors.filter((e) => e._tag === "NotFoundError");
       const validationErrors = errors.filter(
         (e) => e._tag === "ValidationError",
       );
-      const databaseErrors = errors.filter(
-        (e) => e._tag === "DatabaseError",
-      );
+      const databaseErrors = errors.filter((e) => e._tag === "DatabaseError");
 
       expect(notFoundErrors).toHaveLength(1);
       expect(validationErrors).toHaveLength(1);

@@ -3,11 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 function readMigration(filename: string): string {
-  const filePath = resolve(
-    __dirname,
-    "../../migrations",
-    filename,
-  );
+  const filePath = resolve(__dirname, "../../migrations", filename);
   return readFileSync(filePath, "utf-8");
 }
 
@@ -20,7 +16,12 @@ function getMigrationFiles(): string[] {
     .sort();
 }
 
-const expectedTables = ["users", "matches", "notifications", "delivery_attempts"] as const;
+const expectedTables = [
+  "users",
+  "matches",
+  "notifications",
+  "delivery_attempts",
+] as const;
 
 describe("D1 Migrations", () => {
   describe("Migration files", () => {

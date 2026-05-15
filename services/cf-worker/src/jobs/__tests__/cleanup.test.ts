@@ -40,13 +40,17 @@ function mockD1(rows: Array<Record<string, unknown>> = []) {
 
 function mockApiService() {
   return {
-    fetch: vi.fn().mockResolvedValue(new Response(JSON.stringify({ success: true }))),
+    fetch: vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ success: true }))),
   };
 }
 
 function mockBotService() {
   return {
-    fetch: vi.fn().mockResolvedValue(new Response(JSON.stringify({ success: true }))),
+    fetch: vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ success: true }))),
   };
 }
 
@@ -66,7 +70,9 @@ describe("runCleanupJob", () => {
   });
 
   it("should delete media for users inactive 30+ days", async () => {
-    const oldDate = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000).toISOString();
+    const oldDate = new Date(
+      Date.now() - 31 * 24 * 60 * 60 * 1000,
+    ).toISOString();
     const db = mockD1([
       {
         id: "1",
@@ -74,7 +80,12 @@ describe("runCleanupJob", () => {
         hidden_from_matches: 0,
         media_deleted_at: null,
         last_interaction_at: oldDate,
-        media_urls: JSON.stringify([{ url: "https://media.meetsmatch.irfndi.workers.dev/1/test.jpg", type: "image" }]),
+        media_urls: JSON.stringify([
+          {
+            url: "https://media.meetsmatch.irfndi.workers.dev/1/test.jpg",
+            type: "image",
+          },
+        ]),
       },
     ]);
     const apiService = mockApiService();

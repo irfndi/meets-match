@@ -6,7 +6,9 @@ function mockKV() {
   const store = new Map<string, string>();
   return {
     get: async (key: string) => store.get(key) ?? null,
-    put: async (key: string, value: string) => { store.set(key, value); },
+    put: async (key: string, value: string) => {
+      store.set(key, value);
+    },
     _store: store,
   };
 }
@@ -14,10 +16,17 @@ function mockKV() {
 describe("GeocodingService", () => {
   it("should return cached results on KV hit", async () => {
     const kv = mockKV();
-    kv._store.set("geo:search:test:en:3", JSON.stringify([{ city: "TestCity", country: "TC", latitude: 1, longitude: 2 }]));
+    kv._store.set(
+      "geo:search:test:en:3",
+      JSON.stringify([
+        { city: "TestCity", country: "TC", latitude: 1, longitude: 2 },
+      ]),
+    );
     const service = new GeocodingService(kv as unknown as KVNamespace);
     const { Effect } = await import("effect");
-    const results = await Effect.runPromise(service.searchCities("test", { limit: 3 }));
+    const results = await Effect.runPromise(
+      service.searchCities("test", { limit: 3 }),
+    );
     expect(results[0].city).toBe("TestCity");
   });
 });

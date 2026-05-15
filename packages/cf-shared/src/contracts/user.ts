@@ -1,4 +1,12 @@
-import { Array, Boolean, Literal, Number, String, Struct, optional } from "effect/Schema";
+import {
+  Array,
+  Boolean,
+  Literal,
+  Number,
+  String,
+  Struct,
+  optional,
+} from "effect/Schema";
 
 // --- Enums ---
 
@@ -44,11 +52,15 @@ export const User = Struct({
   birthDate: optional(String),
   gender: optional(Gender),
   interests: optional(Array(String)),
-  mediaUrls: optional(Array(Struct({
-    url: String,
-    type: Literal("image", "video"),
-    uploadedAt: String,
-  }))),
+  mediaUrls: optional(
+    Array(
+      Struct({
+        url: String,
+        type: Literal("image", "video"),
+        uploadedAt: String,
+      }),
+    ),
+  ),
   location: optional(Location),
   preferences: optional(Preferences),
   isActive: optional(Boolean),
@@ -126,12 +138,14 @@ export type UpdateLastActiveResponse = typeof UpdateLastActiveResponse.Type;
 export const UpdateLastRemindedAtRequest = Struct({
   userId: String,
 });
-export type UpdateLastRemindedAtRequest = typeof UpdateLastRemindedAtRequest.Type;
+export type UpdateLastRemindedAtRequest =
+  typeof UpdateLastRemindedAtRequest.Type;
 
 export const UpdateLastRemindedAtResponse = Struct({
   success: Boolean,
 });
-export type UpdateLastRemindedAtResponse = typeof UpdateLastRemindedAtResponse.Type;
+export type UpdateLastRemindedAtResponse =
+  typeof UpdateLastRemindedAtResponse.Type;
 
 // --- Service Interface (for Service Bindings) ---
 
@@ -139,8 +153,10 @@ export interface UserService {
   readonly getUser: (req: GetUserRequest) => Promise<GetUserResponse>;
   readonly createUser: (req: CreateUserRequest) => Promise<CreateUserResponse>;
   readonly updateUser: (req: UpdateUserRequest) => Promise<UpdateUserResponse>;
-  readonly updateLastActive: (req: UpdateLastActiveRequest) => Promise<UpdateLastActiveResponse>;
-  readonly updateLastRemindedAt: (req: UpdateLastRemindedAtRequest) => Promise<UpdateLastRemindedAtResponse>;
+  readonly updateLastActive: (
+    req: UpdateLastActiveRequest,
+  ) => Promise<UpdateLastActiveResponse>;
+  readonly updateLastRemindedAt: (
+    req: UpdateLastRemindedAtRequest,
+  ) => Promise<UpdateLastRemindedAtResponse>;
 }
-
-

@@ -1,4 +1,12 @@
-import { Array, Boolean, Literal, Number, String, Struct, optional } from "effect/Schema";
+import {
+  Array,
+  Boolean,
+  Literal,
+  Number,
+  String,
+  Struct,
+  optional,
+} from "effect/Schema";
 
 // --- Enums ---
 
@@ -12,7 +20,7 @@ export const NotificationType = Literal(
   "SYSTEM",
   "REENGAGEMENT_GENTLE",
   "REENGAGEMENT_URGENT",
-  "REENGAGEMENT_LAST_CHANCE"
+  "REENGAGEMENT_LAST_CHANCE",
 );
 export type NotificationType = typeof NotificationType.Type;
 
@@ -21,7 +29,7 @@ export const NotificationChannel = Literal(
   "TELEGRAM",
   "EMAIL",
   "PUSH",
-  "SMS"
+  "SMS",
 );
 export type NotificationChannel = typeof NotificationChannel.Type;
 
@@ -31,7 +39,7 @@ export const NotificationStatus = Literal(
   "PROCESSING",
   "DELIVERED",
   "FAILED",
-  "DLQ"
+  "DLQ",
 );
 export type NotificationStatus = typeof NotificationStatus.Type;
 
@@ -73,7 +81,8 @@ export const EnqueueNotificationResponse = Struct({
   notificationId: String,
   status: NotificationStatus,
 });
-export type EnqueueNotificationResponse = typeof EnqueueNotificationResponse.Type;
+export type EnqueueNotificationResponse =
+  typeof EnqueueNotificationResponse.Type;
 
 export const GetNotificationRequest = Struct({
   notificationId: String,
@@ -135,36 +144,52 @@ export const GetReengagementCandidatesRequest = Struct({
   maxInactiveDays: optional(Number),
   limit: optional(Number),
 });
-export type GetReengagementCandidatesRequest = typeof GetReengagementCandidatesRequest.Type;
+export type GetReengagementCandidatesRequest =
+  typeof GetReengagementCandidatesRequest.Type;
 
 export const GetReengagementCandidatesResponse = Struct({
   userIds: Array(String),
 });
-export type GetReengagementCandidatesResponse = typeof GetReengagementCandidatesResponse.Type;
+export type GetReengagementCandidatesResponse =
+  typeof GetReengagementCandidatesResponse.Type;
 
 export const LogNotificationResultRequest = Struct({
   notificationId: String,
   status: NotificationStatus,
   errorMessage: optional(String),
 });
-export type LogNotificationResultRequest = typeof LogNotificationResultRequest.Type;
+export type LogNotificationResultRequest =
+  typeof LogNotificationResultRequest.Type;
 
 export const LogNotificationResultResponse = Struct({
   success: Boolean,
 });
-export type LogNotificationResultResponse = typeof LogNotificationResultResponse.Type;
+export type LogNotificationResultResponse =
+  typeof LogNotificationResultResponse.Type;
 
 // --- Service Interface ---
 
 export interface NotificationService {
-  readonly enqueueNotification: (req: EnqueueNotificationRequest) => Promise<EnqueueNotificationResponse>;
-  readonly getNotification: (req: GetNotificationRequest) => Promise<GetNotificationResponse>;
-  readonly getDLQStats: (req: GetDLQStatsRequest) => Promise<GetDLQStatsResponse>;
+  readonly enqueueNotification: (
+    req: EnqueueNotificationRequest,
+  ) => Promise<EnqueueNotificationResponse>;
+  readonly getNotification: (
+    req: GetNotificationRequest,
+  ) => Promise<GetNotificationResponse>;
+  readonly getDLQStats: (
+    req: GetDLQStatsRequest,
+  ) => Promise<GetDLQStatsResponse>;
   readonly replayDLQ: (req: ReplayDLQRequest) => Promise<ReplayDLQResponse>;
-  readonly getQueueStats: (req: GetQueueStatsRequest) => Promise<GetQueueStatsResponse>;
-  readonly sendNotification: (req: SendNotificationRequest) => Promise<SendNotificationResponse>;
-  readonly getReengagementCandidates: (req: GetReengagementCandidatesRequest) => Promise<GetReengagementCandidatesResponse>;
-  readonly logNotificationResult: (req: LogNotificationResultRequest) => Promise<LogNotificationResultResponse>;
+  readonly getQueueStats: (
+    req: GetQueueStatsRequest,
+  ) => Promise<GetQueueStatsResponse>;
+  readonly sendNotification: (
+    req: SendNotificationRequest,
+  ) => Promise<SendNotificationResponse>;
+  readonly getReengagementCandidates: (
+    req: GetReengagementCandidatesRequest,
+  ) => Promise<GetReengagementCandidatesResponse>;
+  readonly logNotificationResult: (
+    req: LogNotificationResultRequest,
+  ) => Promise<LogNotificationResultResponse>;
 }
-
-
