@@ -51,7 +51,8 @@ function getGitInfo(): VersionInfo {
   // Prerelease tags (e.g. -pre, -rc, -beta) deploy to dev, not production.
   const ref = process.env.GITHUB_REF ?? "";
   const isProdTag =
-    ref.startsWith("refs/tags/v") && !/-(pre|rc|beta|alpha)/i.test(ref);
+    ref.startsWith("refs/tags/v") &&
+    !/-(pre|rc|beta|alpha|snapshot|dev|nightly|canary)/i.test(ref);
   const isProd = process.env.CF_ENV === "production" || isProdTag;
 
   return {

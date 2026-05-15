@@ -5,11 +5,11 @@
   "type": "module",
   "main": "./dist/index.js",
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "npx tsx ../../scripts/generate-version.ts cf-worker && wrangler dev",
     "deploy": "wrangler deploy",
-    "build": "tsc -p tsconfig.json",
+    "build": "npx tsx ../../scripts/generate-version.ts cf-worker && tsc -p tsconfig.json",
     "test": "vitest",
-    "lint": "tsc --noEmit"
+    "lint": "npx tsx ../../scripts/generate-version.ts cf-worker && tsc --noEmit"
   },
   "dependencies": {
     "@effect/platform": "^0.96.1",
