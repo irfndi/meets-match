@@ -758,10 +758,7 @@ export class ApiRouter {
       const userMedia = await runEffect(this.userRepo.getMedia(userId));
       const allowed = userMedia.some((m) => m.url === url);
       if (!allowed) {
-        return jsonResponse(
-          { error: "URL does not belong to this user" },
-          403,
-        );
+        return jsonResponse({ error: "URL does not belong to this user" }, 403);
       }
 
       // Extract key from URL and delete from R2
