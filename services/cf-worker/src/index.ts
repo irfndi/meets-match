@@ -34,7 +34,7 @@ export default {
     env: Env,
     ctx: ExecutionContext,
   ): Promise<void> {
-    const isDLQ = batch.queue.includes("dlq");
+    const isDLQ = batch.queue.endsWith("-dlq");
 
     for (const message of batch.messages) {
       try {

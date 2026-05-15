@@ -29,7 +29,7 @@ export async function runBirthdayJob(env: Env): Promise<void> {
       );
 
       try {
-        // Find mutual matches for this user
+        // Find mutual matches for this user (only active, non-sleeping users)
         const { results: matches } = await env.DB.prepare(
           `SELECT
             CASE
@@ -37,10 +37,21 @@ export async function runBirthdayJob(env: Env): Promise<void> {
               ELSE m.user1_id
             END as match_user_id
           FROM matches m
+          JOIN users u ON u.id = CASE
+            WHEN m.user1_id = ? THEN m.user2_id
+            ELSE m.user1_id
+          END
           WHERE m.status = 'matched'
-          AND (m.user1_id = ? OR m.user2_id = ?)`,
+          AND (m.user1_id = ? OR m.user2_id = ?)
+          AND u.is_active = 1
+          AND (u.is_sleeping = 0 OR u.is_sleeping IS NULL)`,
         )
-          .bind(birthdayUserId, birthdayUserId, birthdayUserId)
+          .bind(
+            birthdayUserId,
+            birthdayUserId,
+            birthdayUserId,
+            birthdayUserId,
+          )
           .all();
 
         const matchIds = (matches ?? []).map((m) =>
@@ -53,7 +64,8 @@ export async function runBirthdayJob(env: Env): Promise<void> {
         // Notify each match
         for (const matchUserId of matchIds) {
           try {
-            const safeName = firstName.replace(/[_*\[\]`\\]/g, "\\$&");
+            const safeName = firstName
+              .replace(/[_*\[\]`\.!#+\-={}|~()><\\]/g, "\\$&");
             const response = await env.API_SERVICE.fetch(
               new Request("http://api/notifications", {
                 method: "POST",

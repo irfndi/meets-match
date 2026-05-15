@@ -549,7 +549,8 @@ async function handleMatchAction(
     const status = await getInteractionStatus(env, userId);
     const tier = status?.tier ?? "free";
 
-    if (action === "skip" && tier === "free") {
+    // Only enforce limits when we have valid status data (fail-open on API errors)
+    if (status && action === "skip" && tier === "free") {
       const keyboard = new InlineKeyboard()
         .text("👑 Get Premium", "premium:show")
         .row()
@@ -562,8 +563,8 @@ async function handleMatchAction(
       return;
     }
 
-    if ((action === "like" || action === "dislike") && tier === "free") {
-      if (action === "like" && (status?.likesRemaining ?? 0) <= 0) {
+    if (status && (action === "like" || action === "dislike") && tier === "free") {
+      if (action === "like" && status.likesRemaining <= 0) {
         const keyboard = new InlineKeyboard()
           .text("👑 Get Premium", "premium:show")
           .row()
@@ -575,7 +576,7 @@ async function handleMatchAction(
         await ctx.answerCallbackQuery().catch(() => {});
         return;
       }
-      if (action === "dislike" && (status?.dislikesRemaining ?? 0) <= 0) {
+      if (action === "dislike" && status.dislikesRemaining <= 0) {
         const keyboard = new InlineKeyboard()
           .text("👑 Get Premium", "premium:show")
           .row()

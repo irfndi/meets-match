@@ -1,10 +1,14 @@
 import type { Env } from "../index.js";
+import { createLogger } from "@meetsmatch/cf-shared";
+
+const log = createLogger("cf-worker");
 
 interface UserRow {
   id: string;
   hidden_from_matches: number;
   media_deleted_at: string | null;
   last_active: string | null;
+  media_urls: string;
 }
 
 /**
@@ -38,7 +42,7 @@ export async function runCleanupJob(env: Env): Promise<void> {
 
   // Find users whose media should be deleted
   const usersToClean = await env.DB.prepare(
-    `SELECT id, hidden_from_matches, media_deleted_at, last_active
+    `SELECT id, hidden_from_matches, media_deleted_at, last_active, media_urls
      FROM users
      WHERE media_deleted_at IS NULL
        AND media_urls IS NOT NULL
@@ -53,40 +57,51 @@ export async function runCleanupJob(env: Env): Promise<void> {
 
   for (const row of rows) {
     try {
-      // Get user's media URLs to delete from R2
-      const mediaRow = (await env.DB.prepare(
-        "SELECT media_urls FROM users WHERE id = ?",
-      )
-        .bind(row.id)
-        .first()) as { media_urls: string } | null;
+      const mediaUrls = row.media_urls
+        ? (JSON.parse(row.media_urls) as Array<{ url: string; type: string }>)
+        : [];
+      let allDeleted = true;
 
-      if (mediaRow && mediaRow.media_urls) {
-        const mediaUrls = JSON.parse(mediaRow.media_urls) as Array<{
-          url: string;
-          type: string;
-        }>;
-        for (const media of mediaUrls) {
-          try {
-            // Extract R2 key from public URL: https://media.meetsmatch.irfndi.workers.dev/{key}
-            const url = new URL(media.url);
-            const key = url.pathname.slice(1); // remove leading /
-            if (key) {
-              // Delete from R2 via API service (R2 is bound to cf-api)
-              await env.API_SERVICE.fetch(
-                new Request(`http://api/users/${row.id}/media`, {
-                  method: "DELETE",
-                  body: JSON.stringify({ url: media.url }),
-                  headers: { "Content-Type": "application/json" },
-                }),
-              );
-            }
-          } catch (r2Error) {
-            console.error(
-              `[cleanup] Failed to delete R2 object for user ${row.id}:`,
-              r2Error,
+      for (const media of mediaUrls) {
+        try {
+          // Extract R2 key from public URL: https://media.meetsmatch.irfndi.workers.dev/{key}
+          const url = new URL(media.url);
+          const key = url.pathname.slice(1); // remove leading /
+          if (key) {
+            // Delete from R2 via API service (R2 is bound to cf-api)
+            const response = await env.API_SERVICE.fetch(
+              new Request(`http://api/users/${row.id}/media`, {
+                method: "DELETE",
+                body: JSON.stringify({ url: media.url }),
+                headers: { "Content-Type": "application/json" },
+              }),
             );
+            if (!response.ok) {
+              log.error(
+                "cleanup",
+                `R2 deletion returned ${response.status}`,
+                { userId: row.id, url: media.url },
+              );
+              allDeleted = false;
+            }
           }
+        } catch (r2Error) {
+          log.error(
+            "cleanup",
+            "Failed to delete R2 object",
+            { userId: row.id, url: media.url },
+            r2Error,
+          );
+          allDeleted = false;
         }
+      }
+
+      // Only mark media as deleted if all R2 deletions succeeded
+      if (!allDeleted) {
+        log.error("cleanup", "Skipping DB update due to R2 deletion failures", {
+          userId: row.id,
+        });
+        continue;
       }
 
       // Mark media as deleted and profile incomplete

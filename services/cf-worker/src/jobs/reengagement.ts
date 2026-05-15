@@ -55,16 +55,31 @@ async function countNearbyUsers(
   gender: string | null,
 ): Promise<number> {
   try {
-    const oppositeGender =
-      getOppositeGenderLabel(gender) === "women" ? "female" : "male";
-    // Count active, profile-complete users of opposite gender (same city if available)
+    const g = (gender ?? "").toLowerCase();
+    if (g !== "male" && g !== "female") {
+      // Unknown gender: count all active, profile-complete users
+      const { results } = await db
+        .prepare(
+          `SELECT COUNT(*) as c FROM users
+           WHERE id != ?
+             AND is_active = 1
+             AND is_profile_complete = 1`,
+        )
+        .bind(userId)
+        .all();
+      return Number(
+        (results?.[0] as Record<string, unknown> | undefined)?.c ?? 0,
+      );
+    }
+    const oppositeGender = g === "male" ? "female" : "male";
+    // Count active, profile-complete users of opposite gender
     const { results } = await db
       .prepare(
         `SELECT COUNT(*) as c FROM users
-       WHERE id != ?
-         AND is_active = 1
-         AND is_profile_complete = 1
-         AND gender = ?`,
+         WHERE id != ?
+           AND is_active = 1
+           AND is_profile_complete = 1
+           AND gender = ?`,
       )
       .bind(userId, oppositeGender)
       .all();

@@ -543,7 +543,8 @@ export default {
           const fromName = escapeMd(payload.fromDisplayName ?? "Someone");
           message = `💕 *New Like!*\n\n${fromName} liked your profile!`;
           if (payload.messageText) {
-            message += `\n\n💌 *Message:* "${String(payload.messageText)}"`;
+            const safeText = escapeMd(String(payload.messageText));
+            message += `\n\n💌 *Message:* "${safeText}"`;
           }
           if (payload.mediaUrl) {
             message += `\n\n📎 They also sent a photo/video with their like.`;
