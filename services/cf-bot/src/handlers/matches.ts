@@ -52,7 +52,12 @@ async function fetchMutualMatches(env: Env, userId: string) {
     };
     return data.matches ?? [];
   } catch (error) {
-    log.error("fetchMutualMatches", "Failed to fetch mutual matches", { userId }, error);
+    log.error(
+      "fetchMutualMatches",
+      "Failed to fetch mutual matches",
+      { userId },
+      error,
+    );
     return [];
   }
 }
@@ -68,7 +73,12 @@ async function fetchPendingLikes(env: Env, userId: string) {
     };
     return data.pendingLikes ?? [];
   } catch (error) {
-    log.error("fetchPendingLikes", "Failed to fetch pending likes", { userId }, error);
+    log.error(
+      "fetchPendingLikes",
+      "Failed to fetch pending likes",
+      { userId },
+      error,
+    );
     return [];
   }
 }

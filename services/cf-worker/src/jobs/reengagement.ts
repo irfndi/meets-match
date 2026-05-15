@@ -72,7 +72,12 @@ async function countNearbyUsers(
       (results?.[0] as Record<string, unknown> | undefined)?.c ?? 0,
     );
   } catch (error) {
-    log.error("getPotentialMatchCount", "Failed to count potential matches", { userId }, error);
+    log.error(
+      "getPotentialMatchCount",
+      "Failed to count potential matches",
+      { userId },
+      error,
+    );
     return 0;
   }
 }

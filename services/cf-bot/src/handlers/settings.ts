@@ -294,7 +294,12 @@ async function fetchUserPreferences(
     if (!user) return null;
     return (user.preferences as Record<string, unknown>) ?? {};
   } catch (error) {
-    log.error("fetchUserPreferences", "Failed to fetch user preferences", { userId }, error);
+    log.error(
+      "fetchUserPreferences",
+      "Failed to fetch user preferences",
+      { userId },
+      error,
+    );
     return null;
   }
 }
@@ -314,7 +319,12 @@ async function updateUserPreferences(
     );
     return response.ok;
   } catch (error) {
-    log.error("updateUserPreferences", "Failed to update user preferences", { userId }, error);
+    log.error(
+      "updateUserPreferences",
+      "Failed to update user preferences",
+      { userId },
+      error,
+    );
     return false;
   }
 }

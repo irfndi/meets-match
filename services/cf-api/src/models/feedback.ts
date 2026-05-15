@@ -22,16 +22,24 @@ export interface Feedback {
 export class FeedbackRepository {
   constructor(private readonly db: D1Database) {}
 
-  create(req: CreateFeedbackRequest): Effect.Effect<Feedback, DatabaseError, never> {
+  create(
+    req: CreateFeedbackRequest,
+  ): Effect.Effect<Feedback, DatabaseError, never> {
     return Effect.tryPromise({
       try: async () => {
         const id = crypto.randomUUID();
         await this.db
           .prepare(
             `INSERT INTO feedback (id, user_id, type, message, media_url, status, created_at)
-             VALUES (?, ?, ?, ?, ?, 'open', CURRENT_TIMESTAMP)`
+             VALUES (?, ?, ?, ?, ?, 'open', CURRENT_TIMESTAMP)`,
           )
-          .bind(id, req.userId, req.type ?? "bug", req.message ?? null, req.mediaUrl ?? null)
+          .bind(
+            id,
+            req.userId,
+            req.type ?? "bug",
+            req.message ?? null,
+            req.mediaUrl ?? null,
+          )
           .run();
         return {
           id,

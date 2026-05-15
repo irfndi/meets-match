@@ -116,20 +116,12 @@ export function createLogger(service: string) {
         "warn",
         buildLogEntry("warn", service, operation, message, context, error),
       ),
-    info: (
-      operation: string,
-      message: string,
-      context?: LogContext,
-    ) =>
+    info: (operation: string, message: string, context?: LogContext) =>
       output(
         "info",
         buildLogEntry("info", service, operation, message, context),
       ),
-    debug: (
-      operation: string,
-      message: string,
-      context?: LogContext,
-    ) =>
+    debug: (operation: string, message: string, context?: LogContext) =>
       output(
         "debug",
         buildLogEntry("debug", service, operation, message, context),

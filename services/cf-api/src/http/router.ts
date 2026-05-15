@@ -861,7 +861,12 @@ export class ApiRouter {
       );
       return jsonResponse({ success: true, feedbackId: result.id });
     } catch (error) {
-      log.error("createFeedback", "Failed to create feedback", undefined, error);
+      log.error(
+        "createFeedback",
+        "Failed to create feedback",
+        undefined,
+        error,
+      );
       return jsonResponse({ error: "Failed to create feedback" }, 500);
     }
   }
@@ -872,7 +877,12 @@ export class ApiRouter {
       await runEffect(this.userRepo.updateLastInteraction(userId));
       return jsonResponse({ success: true });
     } catch (error) {
-      log.error("updateInteraction", "Failed to update interaction", undefined, error);
+      log.error(
+        "updateInteraction",
+        "Failed to update interaction",
+        undefined,
+        error,
+      );
       return jsonResponse({ error: "Failed to update interaction" }, 500);
     }
   }

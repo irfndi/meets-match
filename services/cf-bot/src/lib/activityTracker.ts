@@ -28,7 +28,12 @@ export function activityTrackerMiddleware(env: Env): MiddlewareFn<MyContext> {
           const client = new ApiServiceClient(env.API_SERVICE);
           await client.updateLastActive({ userId });
         } catch (error) {
-          log.error("activityTracker", "Failed to update last active", { userId }, error);
+          log.error(
+            "activityTracker",
+            "Failed to update last active",
+            { userId },
+            error,
+          );
         }
       }
     }

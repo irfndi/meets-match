@@ -33,7 +33,13 @@ export class ReportRepository {
             `INSERT INTO reports (id, reporter_id, reported_id, reason, media_url, status, created_at)
              VALUES (?, ?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP)`,
           )
-          .bind(id, req.reporterId, req.reportedId, req.reason ?? null, req.mediaUrl ?? null)
+          .bind(
+            id,
+            req.reporterId,
+            req.reportedId,
+            req.reason ?? null,
+            req.mediaUrl ?? null,
+          )
           .run();
         return {
           id,

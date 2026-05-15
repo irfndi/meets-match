@@ -36,7 +36,12 @@ async function getInteractionStatus(
       tier: string;
     };
   } catch (error) {
-    log.error("getInteractionStatus", "Failed to get interaction status", { userId }, error);
+    log.error(
+      "getInteractionStatus",
+      "Failed to get interaction status",
+      { userId },
+      error,
+    );
     return null;
   }
 }
@@ -61,7 +66,12 @@ async function getReferralInfo(
         const referralRes = await client.getReferralCode(userId);
         code = referralRes.code;
       } catch (error) {
-        log.error("getReferralCode", "Failed to get referral code", { userId }, error);
+        log.error(
+          "getReferralCode",
+          "Failed to get referral code",
+          { userId },
+          error,
+        );
       }
     }
 
@@ -71,7 +81,12 @@ async function getReferralInfo(
       bonus: Number(user.referralBonusSwipes ?? 0),
     };
   } catch (error) {
-    log.error("getReferralInfo", "Failed to get referral info", { userId }, error);
+    log.error(
+      "getReferralInfo",
+      "Failed to get referral info",
+      { userId },
+      error,
+    );
     return null;
   }
 }

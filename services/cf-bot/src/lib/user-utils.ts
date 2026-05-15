@@ -179,7 +179,12 @@ export async function ensureUserExists(
       return { user: response.user as UserProfile, created: false };
     }
   } catch (error) {
-    log.error("ensureUserExists", "Failed to fetch existing user, will try create", { userId }, error);
+    log.error(
+      "ensureUserExists",
+      "Failed to fetch existing user, will try create",
+      { userId },
+      error,
+    );
   }
 
   // Create user if not found
@@ -214,7 +219,12 @@ export async function updateUserProfileComplete(
     );
     return response.ok;
   } catch (error) {
-    log.error("updateUserProfileComplete", "Failed to update profile complete", { userId }, error);
+    log.error(
+      "updateUserProfileComplete",
+      "Failed to update profile complete",
+      { userId },
+      error,
+    );
     return false;
   }
 }

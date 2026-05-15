@@ -87,7 +87,12 @@ async function fetchUserLang(env: Env, userId: string): Promise<Language> {
     const data = (await res.json()) as { user?: Record<string, unknown> };
     return getLang(data.user ?? {});
   } catch (error) {
-    log.error("fetchUserLang", "Failed to fetch user language", { userId }, error);
+    log.error(
+      "fetchUserLang",
+      "Failed to fetch user language",
+      { userId },
+      error,
+    );
     return "en";
   }
 }
@@ -158,7 +163,12 @@ async function fetchPotentialMatches(
       relaxed: data.relaxed ?? false,
     };
   } catch (error) {
-    log.error("fetchPotentialMatches", "Failed to fetch potential matches", { userId }, error);
+    log.error(
+      "fetchPotentialMatches",
+      "Failed to fetch potential matches",
+      { userId },
+      error,
+    );
     return { matches: [], relaxed: false };
   }
 }

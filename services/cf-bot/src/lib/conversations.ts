@@ -91,7 +91,12 @@ export async function checkMandatoryUpdates(
 
     return false;
   } catch (error) {
-    log.error("checkMandatoryUpdates", "Failed to check mandatory updates", { userId }, error);
+    log.error(
+      "checkMandatoryUpdates",
+      "Failed to check mandatory updates",
+      { userId },
+      error,
+    );
     return false;
   }
 }
@@ -144,7 +149,12 @@ export async function checkAndUpdateProfileComplete(
     }
     return false;
   } catch (error) {
-    log.error("checkAndUpdateProfileComplete", "Failed to check profile completeness", { userId }, error);
+    log.error(
+      "checkAndUpdateProfileComplete",
+      "Failed to check profile completeness",
+      { userId },
+      error,
+    );
     return false;
   }
 }

@@ -40,7 +40,12 @@ async function setUserLanguage(
     );
     return res.ok;
   } catch (error) {
-    log.error("setUserLanguage", "Failed to set user language", { userId, language }, error);
+    log.error(
+      "setUserLanguage",
+      "Failed to set user language",
+      { userId, language },
+      error,
+    );
     return false;
   }
 }
