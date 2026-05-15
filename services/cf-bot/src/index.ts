@@ -598,8 +598,6 @@ export default {
           headers: { "Content-Type": "application/json" },
         });
       } catch (error) {
-        const errorMessage =
-          error instanceof Error ? error.message : String(error);
         console.error("Send notification error:", error);
         return new Response(
           JSON.stringify({ error: "Internal Server Error" }),
