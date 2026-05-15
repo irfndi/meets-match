@@ -15,7 +15,7 @@ import { getMainMenuKeyboard } from "../lib/main-menu.js";
 import { createLogger } from "@meetsmatch/cf-shared";
 
 const log = createLogger("cf-bot");
-import { t, type Language } from "../lib/i18n.js";
+import { t, DEFAULT_LANGUAGE, type Language } from "../lib/i18n.js";
 
 function getSettingsKeyboard() {
   return new InlineKeyboard()
@@ -86,8 +86,9 @@ export const settingsCommand = async (
       ? (prefs.genderPreference as string[]).join(", ")
       : "Not set";
 
+  const lang = (result.user.language as Language) ?? DEFAULT_LANGUAGE;
   const lines = [
-    "⚙️ *Settings*",
+    t("settingsTitle", lang),
     "",
     "*Current Preferences:*",
     `🎯 Age Range: ${ageRange}`,

@@ -125,6 +125,7 @@ interface Translations {
   giftReceived: string;
   giftGated: string;
   giftCancelled: string;
+  menuPrompt: string;
 }
 
 const en: Translations = {
@@ -307,9 +308,14 @@ const en: Translations = {
   giftGated:
     "🔒 *Gifts are a Premium feature*\n\nUpgrade to Premium to send gifts to your matches!",
   giftCancelled: "Gift cancelled.",
+  menuPrompt: "Use the menu below to get started:",
 };
 
 const dictionaries: Record<Language, Translations> = { en };
+
+function escapeMd(value: string): string {
+  return value.replace(/[_*\[\]`\\]/g, "\\$&");
+}
 
 export function t(
   key: keyof Translations,
@@ -320,7 +326,7 @@ export function t(
   let text = dict[key];
   if (vars) {
     for (const [k, v] of Object.entries(vars)) {
-      text = text.replaceAll(`{${k}}`, v);
+      text = text.replaceAll(`{${k}}`, escapeMd(v));
     }
   }
   return text;

@@ -18,6 +18,7 @@ import {
   type MutualMatchNotification,
 } from "../lib/notifications.js";
 import { getMainMenuKeyboard } from "../lib/main-menu.js";
+import { t } from "../lib/i18n.js";
 import { type Language } from "../lib/i18n.js";
 import { ApiServiceClient } from "../services/api-client.js";
 
@@ -167,10 +168,10 @@ export const matchesCommand = async (
   const totalPending = pendingLikes.length;
 
   if (totalMatches === 0 && totalPending === 0 && notifications.length === 0) {
-    await ctx.reply(
-      "💑 *No matches yet.*\n\nUse *🔍 Find Match* to discover people, then like someone who likes you back!",
-      { parse_mode: "Markdown", reply_markup: getMainMenuKeyboard() },
-    );
+    await ctx.reply(t("matchesNoMatches", lang), {
+      parse_mode: "Markdown",
+      reply_markup: getMainMenuKeyboard(),
+    });
     return;
   }
 
