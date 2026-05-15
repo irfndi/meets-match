@@ -36,6 +36,18 @@ export class UserRepository {
     return Effect.tryPromise({
       try: async () => {
         const user = req.user;
+        let age = user.age ?? null;
+        if (age == null && user.birthDate) {
+          const birthDate = new Date(user.birthDate);
+          if (!Number.isNaN(birthDate.getTime())) {
+            const now = new Date();
+            age = now.getFullYear() - birthDate.getFullYear();
+            const monthDelta = now.getMonth() - birthDate.getMonth();
+            if (monthDelta < 0 || (monthDelta === 0 && now.getDate() < birthDate.getDate())) {
+              age--;
+            }
+          }
+        }
         const existing = await this.db.prepare("SELECT id FROM users WHERE id = ?").bind(user.id).first();
         if (existing) {
           return user;
@@ -51,7 +63,7 @@ export class UserRepository {
             user.displayName ?? "User",
             user.lastName ?? null,
             user.bio ?? null,
-            user.age ?? null,
+            age,
             user.birthDate ?? null,
             user.gender ?? null,
             JSON.stringify(user.interests ?? []),

@@ -5,7 +5,7 @@ import { MatchRepository } from "../models/match.js";
 import { NotificationRepository } from "../models/notification.js";
 import { ReportRepository } from "../models/report.js";
 import { GeocodingService } from "../models/geocoding.js";
-import { AppError, NotFoundError, DatabaseError } from "@meetsmatch/cf-shared";
+import { AppError, NotFoundError, DatabaseError, ValidationError } from "@meetsmatch/cf-shared";
 
 async function runEffect<A, E>(effect: Effect.Effect<A, E, never>): Promise<A> {
   const exit = await Effect.runPromiseExit(effect);
@@ -130,6 +130,7 @@ export class ApiRouter {
       return jsonResponse({ user: result });
     } catch (error) {
       if (error instanceof NotFoundError) return jsonResponse({ error: error.message }, 404);
+      if (error instanceof ValidationError) return jsonResponse({ error: error.message }, 400);
       return jsonResponse({ error: "Database error" }, 500);
     }
   }

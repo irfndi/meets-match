@@ -98,15 +98,17 @@ export const settingsCallbacks = async (ctx: MyContext, env: Env): Promise<void>
         new Request(`http://api/users/${userId}`, { method: "GET" })
       );
       let userAge = 25;
+      let lang: Language = "en";
       if (userRes.ok) {
         const userData = await userRes.json() as { user?: Record<string, unknown> };
         const bd = userData.user?.birthDate as string | undefined;
         const age = userData.user?.age as number | undefined;
         userAge = (bd ? computeAgeFromBirthDate(bd) : age) ?? 25;
+        lang = (userData.user?.language as Language) ?? "en";
       }
 
       await startConversation(env.KV, userId, "age-range");
-      await ctx.reply(t("ageRangeSelectMin", "en"), {
+      await ctx.reply(t("ageRangeSelectMin", lang), {
         reply_markup: buildAgeGridKeyboard("min", userAge),
       });
       await ctx.answerCallbackQuery().catch(() => {});
@@ -141,11 +143,13 @@ export async function handleAgeRangeCallback(ctx: MyContext, env: Env, data: str
     new Request(`http://api/users/${userId}`, { method: "GET" })
   );
   let userAge = 25;
+  let lang: Language = "en";
   if (userRes.ok) {
     const userData = await userRes.json() as { user?: Record<string, unknown> };
     const bd = userData.user?.birthDate as string | undefined;
     const age = userData.user?.age as number | undefined;
     userAge = (bd ? computeAgeFromBirthDate(bd) : age) ?? 25;
+    lang = (userData.user?.language as Language) ?? "en";
   }
 
   if (data.startsWith("agerange:manual:")) {
@@ -170,7 +174,7 @@ export async function handleAgeRangeCallback(ctx: MyContext, env: Env, data: str
       return true;
     }
     await setConversationState(env.KV, { userId, field: "age-range", step: 1, data: { min } });
-    await ctx.editMessageText(t("ageRangeSelectMax", "en", { min: String(min) }), {
+    await ctx.editMessageText(t("ageRangeSelectMax", lang, { min: String(min) }), {
       parse_mode: "Markdown",
       reply_markup: buildAgeGridKeyboard("max", userAge, min),
     }).catch(() => {});
@@ -196,12 +200,12 @@ export async function handleAgeRangeCallback(ctx: MyContext, env: Env, data: str
     await clearConversationState(env.KV, userId);
 
     if (success) {
-      await ctx.editMessageText(t("ageRangeUpdated", "en", { min: String(min), max: String(max) }), {
+      await ctx.editMessageText(t("ageRangeUpdated", lang, { min: String(min), max: String(max) }), {
         parse_mode: "Markdown",
       }).catch(() => {});
       await ctx.reply("👇 Use the menu below to navigate:", { reply_markup: getMainMenuKeyboard() });
     } else {
-      await ctx.reply(t("genericError", "en"), { reply_markup: getMainMenuKeyboard() }).catch(() => {});
+      await ctx.reply(t("genericError", lang), { reply_markup: getMainMenuKeyboard() }).catch(() => {});
     }
     await ctx.answerCallbackQuery().catch(() => {});
     return true;
