@@ -22,25 +22,6 @@ interface VersionInfo {
 }
 
 function getGitInfo(): VersionInfo {
-  // Try to get the current git tag (for prod releases)
-  let version: string;
-  try {
-    version = execSync("git describe --tags --exact-match HEAD", {
-      encoding: "utf-8",
-      stdio: ["pipe", "pipe", "ignore"],
-    }).trim();
-  } catch {
-    // No exact tag — use short commit hash
-    try {
-      version = execSync("git rev-parse --short HEAD", {
-        encoding: "utf-8",
-        stdio: ["pipe", "pipe", "ignore"],
-      }).trim();
-    } catch {
-      version = "unknown";
-    }
-  }
-
   const commit = (() => {
     try {
       return execSync("git rev-parse --short HEAD", {
@@ -52,12 +33,26 @@ function getGitInfo(): VersionInfo {
     }
   })();
 
+  let version: string;
+  try {
+    // Try to get the current git tag (for prod releases)
+    version = execSync("git describe --tags --exact-match HEAD", {
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "ignore"],
+    }).trim();
+  } catch {
+    // No exact tag — use short commit hash
+    version = commit;
+  }
+
   const builtAt = new Date().toISOString();
 
-  // Determine environment from CI or git tag presence
-  const isProd =
-    process.env.CF_ENV === "production" ||
-    process.env.GITHUB_REF?.startsWith("refs/tags/v");
+  // Determine environment from CI or git tag presence.
+  // Prerelease tags (e.g. -pre, -rc, -beta) deploy to dev, not production.
+  const ref = process.env.GITHUB_REF ?? "";
+  const isProdTag =
+    ref.startsWith("refs/tags/v") && !/-(pre|rc|beta|alpha)/i.test(ref);
+  const isProd = process.env.CF_ENV === "production" || isProdTag;
 
   return {
     version,
@@ -70,7 +65,7 @@ function getGitInfo(): VersionInfo {
 function generateVersionFile(
   servicePath: string,
   info: VersionInfo,
-  serviceName: string
+  serviceName: string,
 ) {
   const fileName = "src/lib/version.ts";
   const outputPath = resolve(projectRoot, servicePath, fileName);

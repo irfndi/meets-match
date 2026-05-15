@@ -18,8 +18,8 @@
     "effect": "^3.21.2"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260511.1",
-    "typescript": "^5.9.3",
+    "@cloudflare/workers-types": "^4.20260515.1",
+    "typescript": "^6.0.3",
     "vitest": "^4.1.6",
     "wrangler": "^4.91.0"
   }

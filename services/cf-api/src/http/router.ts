@@ -65,7 +65,11 @@ export class ApiRouter {
     try {
       switch (true) {
         case url.pathname === "/health":
-          return jsonResponse({ status: "ok", service: "cf-api", version: getVersionInfo() });
+          return jsonResponse({
+            status: "ok",
+            service: "cf-api",
+            version: getVersionInfo(),
+          });
 
         case url.pathname === "/users" && method === "POST":
           return this.handleCreateUser(request);

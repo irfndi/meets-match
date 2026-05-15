@@ -43,7 +43,7 @@ export const aboutCommand = async (ctx: MyContext): Promise<void> => {
     `*Version:* \`${version}\``,
     `*Environment:* ${environment}`,
     `*Last updated:* ${builtAt}`,
-    `*Server age:* ${serverAge}`,
+    `*Build age:* ${serverAge}`,
     "",
     "Need help? Use /help",
   ].join("\n");

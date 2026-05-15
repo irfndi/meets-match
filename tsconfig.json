@@ -12,6 +12,7 @@
     "declarationMap": true,
     "sourceMap": true,
     "composite": true,
+    "ignoreDeprecations": "6.0",
     "baseUrl": ".",
     "paths": {
       "@meetsmatch/cf-shared": ["packages/cf-shared/src"],
