@@ -35,7 +35,13 @@ import {
 } from "./lib/conversations.js";
 import { handleProfileCallback, handleMediaCallback } from "./menus/profile.js";
 import { getNotifications, clearNotifications } from "./lib/notifications.js";
-import { getMainMenuKeyboard } from "./lib/main-menu.js";
+import {
+  getMainMenuKeyboard,
+  MENU_FIND_MATCH,
+  MENU_MY_MATCHES,
+  MENU_PROFILE,
+  MENU_SETTINGS,
+} from "./lib/main-menu.js";
 import { InlineKeyboard } from "grammy";
 import { t, type Language } from "./lib/i18n.js";
 
@@ -114,18 +120,8 @@ function createBot(env: Env): Bot<MyContext> {
     return next();
   });
 
-  // Register visible BotFather commands (clean, minimal set)
-  void bot.api.setMyCommands([
-    { command: "start", description: "Get started with MeetMatch" },
-    { command: "profile", description: "View or edit your profile" },
-    { command: "match", description: "Find your next match" },
-    { command: "matches", description: "View your matches and likes" },
-    { command: "settings", description: "Adjust match preferences" },
-    { command: "premium", description: "Upgrade to Premium" },
-    { command: "referral", description: "Invite friends for bonus swipes" },
-    { command: "help", description: "How to use MeetMatch" },
-    { command: "about", description: "About MeetMatch" },
-  ]);
+  // Bot commands are registered once via scripts/setup-bot-commands.ts
+  // to avoid rate-limiting and latency in the serverless handler.
 
   bot.command("start", (ctx) => startCommand(ctx, env));
   bot.command("help", helpCommand);
@@ -315,13 +311,13 @@ function createBot(env: Env): Bot<MyContext> {
 
     // Main menu keyboard buttons take priority over conversations
     switch (text) {
-      case "🔍 Find Match":
+      case MENU_FIND_MATCH:
         return matchCommand(ctx, env);
-      case "💕 My Matches":
+      case MENU_MY_MATCHES:
         return matchesCommand(ctx, env);
-      case "👤 Profile":
+      case MENU_PROFILE:
         return profileCommand(ctx, env);
-      case "⚙️ Settings":
+      case MENU_SETTINGS:
         return settingsCommand(ctx, env);
     }
 
@@ -357,10 +353,9 @@ function createBot(env: Env): Bot<MyContext> {
       if (queueHandled) return;
     }
 
-    await ctx.reply(
-      "I'm not sure what you mean. Use the menu below or try /help for guidance.",
-      { reply_markup: getMainMenuKeyboard() },
-    );
+    await ctx.reply(t("fallbackMessage", "en"), {
+      reply_markup: getMainMenuKeyboard(),
+    });
   });
 
   return bot;

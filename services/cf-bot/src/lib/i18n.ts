@@ -78,6 +78,7 @@ interface Translations {
   genericError: string;
   genericCancel: string;
   genericCancelled: string;
+  fallbackMessage: string;
   notificationsNewLikes: string;
   notificationsNewMutual: string;
   notificationsCheckMatches: string;
@@ -124,6 +125,7 @@ interface Translations {
   giftReceived: string;
   giftGated: string;
   giftCancelled: string;
+  menuPrompt: string;
 }
 
 const en: Translations = {
@@ -234,6 +236,8 @@ const en: Translations = {
   genericError: "❌ Sorry, something went wrong. Please try again later.",
   genericCancel: "Cancel",
   genericCancelled: "Cancelled.",
+  fallbackMessage:
+    "I'm not sure what you mean. Use the menu below or try /help for guidance.",
   notificationsNewLikes: "❤️ new like(s)",
   notificationsNewMutual: "💕 new mutual match(es)",
   notificationsCheckMatches:
@@ -304,9 +308,14 @@ const en: Translations = {
   giftGated:
     "🔒 *Gifts are a Premium feature*\n\nUpgrade to Premium to send gifts to your matches!",
   giftCancelled: "Gift cancelled.",
+  menuPrompt: "Use the menu below to get started:",
 };
 
 const dictionaries: Record<Language, Translations> = { en };
+
+function escapeMd(value: string): string {
+  return value.replace(/[_*\[\]`\\]/g, "\\$&");
+}
 
 export function t(
   key: keyof Translations,
@@ -317,7 +326,7 @@ export function t(
   let text = dict[key];
   if (vars) {
     for (const [k, v] of Object.entries(vars)) {
-      text = text.replace(new RegExp(`{${k}}`, "g"), v);
+      text = text.replaceAll(`{${k}}`, escapeMd(v));
     }
   }
   return text;

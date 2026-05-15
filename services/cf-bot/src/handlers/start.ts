@@ -17,6 +17,11 @@ import {
   type Language,
 } from "../lib/i18n.js";
 
+function getLanguageLabel(lang: Language): string {
+  const found = SUPPORTED_LANGUAGES.find((l) => l.code === lang);
+  return found ? `${found.label} ${found.flag}` : lang;
+}
+
 export function buildLanguageKeyboard(): InlineKeyboard {
   const keyboard = new InlineKeyboard();
   for (const lang of SUPPORTED_LANGUAGES) {
@@ -124,11 +129,13 @@ export const languageCallback = async (
   // Store language preference
   await setUserLanguage(env, userId, selectedLang);
 
-  await ctx.answerCallbackQuery("Language set to English 🇬🇧").catch(() => {});
+  await ctx
+    .answerCallbackQuery(`Language set to ${getLanguageLabel(selectedLang)}`)
+    .catch(() => {});
   await ctx
     .editMessageText(t("welcomeNew", selectedLang), { parse_mode: "Markdown" })
     .catch(() => {});
-  await ctx.reply("Use the menu below to get started:", {
+  await ctx.reply(t("menuPrompt", selectedLang), {
     reply_markup: getMainMenuKeyboard(),
   });
   return true;
