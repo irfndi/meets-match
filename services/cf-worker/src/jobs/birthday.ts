@@ -46,12 +46,7 @@ export async function runBirthdayJob(env: Env): Promise<void> {
           AND u.is_active = 1
           AND (u.is_sleeping = 0 OR u.is_sleeping IS NULL)`,
         )
-          .bind(
-            birthdayUserId,
-            birthdayUserId,
-            birthdayUserId,
-            birthdayUserId,
-          )
+          .bind(birthdayUserId, birthdayUserId, birthdayUserId, birthdayUserId)
           .all();
 
         const matchIds = (matches ?? []).map((m) =>
@@ -64,8 +59,10 @@ export async function runBirthdayJob(env: Env): Promise<void> {
         // Notify each match
         for (const matchUserId of matchIds) {
           try {
-            const safeName = firstName
-              .replace(/[_*\[\]`\.!#+\-={}|~()><\\]/g, "\\$&");
+            const safeName = firstName.replace(
+              /[_*\[\]`\.!#+\-={}|~()><\\]/g,
+              "\\$&",
+            );
             const response = await env.API_SERVICE.fetch(
               new Request("http://api/notifications", {
                 method: "POST",

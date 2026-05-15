@@ -77,11 +77,10 @@ export async function runCleanupJob(env: Env): Promise<void> {
               }),
             );
             if (!response.ok) {
-              log.error(
-                "cleanup",
-                `R2 deletion returned ${response.status}`,
-                { userId: row.id, url: media.url },
-              );
+              log.error("cleanup", `R2 deletion returned ${response.status}`, {
+                userId: row.id,
+                url: media.url,
+              });
               allDeleted = false;
             }
           }

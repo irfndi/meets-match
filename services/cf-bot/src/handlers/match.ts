@@ -563,7 +563,11 @@ async function handleMatchAction(
       return;
     }
 
-    if (status && (action === "like" || action === "dislike") && tier === "free") {
+    if (
+      status &&
+      (action === "like" || action === "dislike") &&
+      tier === "free"
+    ) {
       if (action === "like" && status.likesRemaining <= 0) {
         const keyboard = new InlineKeyboard()
           .text("👑 Get Premium", "premium:show")
