@@ -5,3 +5,4 @@ export * from "./contracts/health.js";
 export * from "./contracts/bindings.js";
 export * from "./errors.js";
 export * from "./structured-log.js";
+export * from "./version.js";

@@ -18,6 +18,7 @@ import {
   ValidationError,
   createLogger,
 } from "@meetsmatch/cf-shared";
+import { getVersionInfo } from "../lib/version.js";
 
 const log = createLogger("cf-api");
 
@@ -64,7 +65,11 @@ export class ApiRouter {
     try {
       switch (true) {
         case url.pathname === "/health":
-          return jsonResponse({ status: "ok", service: "cf-api" });
+          return jsonResponse({
+            status: "ok",
+            service: "cf-api",
+            version: getVersionInfo(),
+          });
 
         case url.pathname === "/users" && method === "POST":
           return this.handleCreateUser(request);
