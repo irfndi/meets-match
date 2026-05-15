@@ -857,9 +857,10 @@ export class ApiRouter {
         return jsonResponse({ error: "userId is required" }, 400);
       }
       const allowedTypes = new Set(["bug", "feature", "other"]);
-      const type = typeRaw && allowedTypes.has(typeRaw)
-        ? (typeRaw as "bug" | "feature" | "other")
-        : undefined;
+      const type =
+        typeRaw && allowedTypes.has(typeRaw)
+          ? (typeRaw as "bug" | "feature" | "other")
+          : undefined;
       const result = await runEffect(
         this.feedbackRepo.create({ userId, type, message, mediaUrl }),
       );
