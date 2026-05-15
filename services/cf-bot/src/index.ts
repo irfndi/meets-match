@@ -339,7 +339,7 @@ function createBot(env: Env): Bot<MyContext> {
         const client = new ApiServiceClient(env.API_SERVICE);
         await client.updateUser({
           userId,
-          user: { subscriptionTier: tier },
+          user: { id: userId, subscriptionTier: tier },
         });
         await ctx.reply(
           t("premiumPurchased", "en", {

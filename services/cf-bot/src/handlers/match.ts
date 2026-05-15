@@ -438,7 +438,7 @@ async function sendMatchCard(
   tier: string,
 ): Promise<void> {
   const text = buildMatchCard(match);
-  const mediaUrls = (match.mediaUrls ?? []) as Array<{
+  const mediaUrls = (match.mediaUrls ?? []) as unknown as Array<{
     url: string;
     type: string;
   }>;
@@ -657,7 +657,8 @@ async function handleMatchAction(
     let myMediaUrl: string | undefined;
     try {
       const myProfile = await client.getUser({ userId });
-      const myMediaUrls = (myProfile.user?.mediaUrls ?? []) as Array<{
+      const myMediaUrls = (myProfile.user?.mediaUrls ??
+        []) as unknown as Array<{
         url: string;
         type: string;
       }>;
@@ -1123,7 +1124,8 @@ export async function handleLikeMessageConversation(
     let myMediaUrl: string | undefined;
     try {
       const myProfile = await client.getUser({ userId });
-      const myMediaUrls = (myProfile.user?.mediaUrls ?? []) as Array<{
+      const myMediaUrls = (myProfile.user?.mediaUrls ??
+        []) as unknown as Array<{
         url: string;
         type: string;
       }>;
@@ -1244,7 +1246,8 @@ export async function handleLikeMessageMedia(
     let myMediaUrl: string | undefined;
     try {
       const myProfile = await client.getUser({ userId });
-      const myMediaUrls = (myProfile.user?.mediaUrls ?? []) as Array<{
+      const myMediaUrls = (myProfile.user?.mediaUrls ??
+        []) as unknown as Array<{
         url: string;
         type: string;
       }>;
