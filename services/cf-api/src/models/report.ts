@@ -6,6 +6,7 @@ export interface CreateReportRequest {
   reporterId: string;
   reportedId: string;
   reason?: string;
+  mediaUrl?: string;
 }
 
 export interface Report {
@@ -13,6 +14,7 @@ export interface Report {
   reporterId: string;
   reportedId: string;
   reason: string | null;
+  mediaUrl: string | null;
   status: "pending" | "reviewed" | "dismissed" | "actioned";
   createdAt: string;
 }
@@ -28,10 +30,10 @@ export class ReportRepository {
         const id = crypto.randomUUID();
         await this.db
           .prepare(
-            `INSERT INTO reports (id, reporter_id, reported_id, reason, status, created_at)
-             VALUES (?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP)`,
+            `INSERT INTO reports (id, reporter_id, reported_id, reason, media_url, status, created_at)
+             VALUES (?, ?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP)`,
           )
-          .bind(id, req.reporterId, req.reportedId, req.reason ?? null)
+          .bind(id, req.reporterId, req.reportedId, req.reason ?? null, req.mediaUrl ?? null)
           .run();
         return {
           id,

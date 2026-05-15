@@ -9,13 +9,17 @@ import { UserRepository } from "../models/user.js";
 import { MatchRepository } from "../models/match.js";
 import { NotificationRepository } from "../models/notification.js";
 import { ReportRepository } from "../models/report.js";
+import { FeedbackRepository } from "../models/feedback.js";
 import { GeocodingService } from "../models/geocoding.js";
 import {
   AppError,
   NotFoundError,
   DatabaseError,
   ValidationError,
+  createLogger,
 } from "@meetsmatch/cf-shared";
+
+const log = createLogger("cf-api");
 
 async function runEffect<A, E>(effect: Effect.Effect<A, E, never>): Promise<A> {
   const exit = await Effect.runPromiseExit(effect);
@@ -41,6 +45,7 @@ export class ApiRouter {
   private readonly matchRepo: MatchRepository;
   private readonly notificationRepo: NotificationRepository;
   private readonly reportRepo: ReportRepository;
+  private readonly feedbackRepo: FeedbackRepository;
   private readonly geoService: GeocodingService;
 
   constructor(private readonly env: ApiEnv) {
@@ -48,6 +53,7 @@ export class ApiRouter {
     this.matchRepo = new MatchRepository(env.DB, this.userRepo);
     this.notificationRepo = new NotificationRepository(env.DB);
     this.reportRepo = new ReportRepository(env.DB);
+    this.feedbackRepo = new FeedbackRepository(env.DB);
     this.geoService = new GeocodingService(env.KV);
   }
 
@@ -156,11 +162,13 @@ export class ApiRouter {
           return this.handleGeocode(url.searchParams);
         case url.pathname === "/queue-stats" && method === "GET":
           return this.handleQueueStats();
+        case url.pathname === "/feedback" && method === "POST":
+          return this.handleFeedback(request);
         default:
           return jsonResponse({ error: "Not Found" }, 404);
       }
     } catch (error) {
-      console.error("API error:", error);
+      log.error("route", "Unhandled API error", undefined, error);
       return jsonResponse({ error: "Internal Server Error" }, 500);
     }
   }
@@ -185,6 +193,7 @@ export class ApiRouter {
         return jsonResponse({ error: error.message }, 404);
       if (error instanceof ValidationError)
         return jsonResponse({ error: error.message }, 400);
+      log.error("getUser", "Handler failed", undefined, error);
       return jsonResponse({ error: "Database error" }, 500);
     }
   }
@@ -227,6 +236,7 @@ export class ApiRouter {
 
       return jsonResponse({ potentialMatches: result, relaxed });
     } catch (error) {
+      log.error("potentialMatches", "Handler failed", undefined, error);
       return jsonResponse({ error: "Failed to get potential matches" }, 500);
     }
   }
@@ -242,6 +252,7 @@ export class ApiRouter {
       );
       return jsonResponse({ pendingLikes: result });
     } catch (error) {
+      log.error("pendingLikes", "Handler failed", undefined, error);
       return jsonResponse({ error: "Failed to get pending likes" }, 500);
     }
   }
@@ -252,6 +263,7 @@ export class ApiRouter {
       await runEffect(this.userRepo.updateLastActive({ userId }));
       return jsonResponse({ success: true });
     } catch (error) {
+      log.error("lastActive", "Handler failed", undefined, error);
       return jsonResponse({ error: "Database error" }, 500);
     }
   }
@@ -262,6 +274,7 @@ export class ApiRouter {
       await runEffect(this.userRepo.updateLastRemindedAt({ userId }));
       return jsonResponse({ success: true });
     } catch (error) {
+      log.error("lastRemindedAt", "Handler failed", undefined, error);
       return jsonResponse({ error: "Database error" }, 500);
     }
   }
@@ -284,6 +297,7 @@ export class ApiRouter {
     } catch (error) {
       if (error instanceof NotFoundError)
         return jsonResponse({ error: error.message }, 404);
+      log.error("updateUser", "Handler failed", undefined, error);
       return jsonResponse({ error: "Database error" }, 500);
     }
   }
@@ -332,6 +346,7 @@ export class ApiRouter {
       );
       return jsonResponse({ matches: result });
     } catch (error) {
+      log.error("matchList", "Handler failed", undefined, error);
       return jsonResponse({ error: "Failed to get matches" }, 500);
     }
   }
@@ -344,6 +359,7 @@ export class ApiRouter {
     } catch (error) {
       if (error instanceof NotFoundError)
         return jsonResponse({ error: error.message }, 404);
+      log.error("getMatch", "Handler failed", undefined, error);
       return jsonResponse({ error: "Database error" }, 500);
     }
   }
@@ -393,6 +409,7 @@ export class ApiRouter {
     } catch (error) {
       if (error instanceof NotFoundError)
         return jsonResponse({ error: error.message }, 404);
+      log.error("matchAction", "Handler failed", undefined, error);
       return jsonResponse({ error: "Database error" }, 500);
     }
   }
@@ -442,6 +459,7 @@ export class ApiRouter {
           ),
         ).catch(() => {});
       }
+      log.error("enqueueNotification", "Handler failed", undefined, error);
       return jsonResponse({ error: "Failed to enqueue notification" }, 500);
     }
   }
@@ -491,6 +509,7 @@ export class ApiRouter {
       }
       return jsonResponse({ error: "Missing query or lat/lon" }, 400);
     } catch (error) {
+      log.error("geocode", "Handler failed", undefined, error);
       return jsonResponse({ error: "Geocoding error" }, 500);
     }
   }
@@ -500,6 +519,7 @@ export class ApiRouter {
       const result = await runEffect(this.notificationRepo.getQueueStats());
       return jsonResponse(result);
     } catch (error) {
+      log.error("queueStats", "Handler failed", undefined, error);
       return jsonResponse({ error: "Failed to get stats" }, 500);
     }
   }
@@ -512,6 +532,7 @@ export class ApiRouter {
     } catch (error) {
       if (error instanceof NotFoundError)
         return jsonResponse({ error: error.message }, 404);
+      log.error("swipeStatus", "Handler failed", undefined, error);
       return jsonResponse({ error: "Failed to get swipe status" }, 500);
     }
   }
@@ -524,6 +545,7 @@ export class ApiRouter {
     } catch (error) {
       if (error instanceof NotFoundError)
         return jsonResponse({ error: error.message }, 404);
+      log.error("recordSwipe", "Handler failed", undefined, error);
       return jsonResponse({ error: "Failed to record swipe" }, 500);
     }
   }
@@ -540,6 +562,7 @@ export class ApiRouter {
     } catch (error) {
       if (error instanceof NotFoundError)
         return jsonResponse({ error: error.message }, 404);
+      log.error("interactionStatus", "Handler failed", undefined, error);
       return jsonResponse({ error: "Failed to get interaction status" }, 500);
     }
   }
@@ -552,6 +575,7 @@ export class ApiRouter {
     } catch (error) {
       if (error instanceof NotFoundError)
         return jsonResponse({ error: error.message }, 404);
+      log.error("recordLike", "Handler failed", undefined, error);
       return jsonResponse({ error: "Failed to record like" }, 500);
     }
   }
@@ -564,6 +588,7 @@ export class ApiRouter {
     } catch (error) {
       if (error instanceof NotFoundError)
         return jsonResponse({ error: error.message }, 404);
+      log.error("recordDislike", "Handler failed", undefined, error);
       return jsonResponse({ error: "Failed to record dislike" }, 500);
     }
   }
@@ -578,6 +603,7 @@ export class ApiRouter {
     } catch (error) {
       if (error instanceof NotFoundError)
         return jsonResponse({ error: error.message }, 404);
+      log.error("referralCode", "Handler failed", undefined, error);
       return jsonResponse({ error: "Failed to get referral code" }, 500);
     }
   }
@@ -595,6 +621,7 @@ export class ApiRouter {
     } catch (error) {
       if (error instanceof NotFoundError)
         return jsonResponse({ error: error.message }, 404);
+      log.error("applyReferral", "Handler failed", undefined, error);
       return jsonResponse({ error: "Failed to apply referral" }, 500);
     }
   }
@@ -607,6 +634,7 @@ export class ApiRouter {
     } catch (error) {
       if (error instanceof NotFoundError)
         return jsonResponse({ error: error.message }, 404);
+      log.error("dmStatus", "Handler failed", undefined, error);
       return jsonResponse({ error: "Failed to get DM status" }, 500);
     }
   }
@@ -619,6 +647,7 @@ export class ApiRouter {
     } catch (error) {
       if (error instanceof NotFoundError)
         return jsonResponse({ error: error.message }, 404);
+      log.error("sendDM", "Handler failed", undefined, error);
       return jsonResponse({ error: "Failed to send DM" }, 500);
     }
   }
@@ -647,6 +676,7 @@ export class ApiRouter {
     } catch (error) {
       if (error instanceof NotFoundError)
         return jsonResponse({ error: error.message }, 404);
+      log.error("purchaseDMCredits", "Handler failed", undefined, error);
       return jsonResponse({ error: "Failed to purchase DM credits" }, 500);
     }
   }
@@ -737,7 +767,7 @@ export class ApiRouter {
       await runEffect(this.userRepo.recordMediaUpload(userId));
       return jsonResponse(result);
     } catch (error) {
-      console.error(`[api:media] Upload failed for user ${userId}:`, error);
+      log.error("uploadMedia", "Upload failed", { userId }, error);
       if (error instanceof NotFoundError)
         return jsonResponse({ error: error.message }, 404);
       return jsonResponse({ error: "Failed to upload media" }, 500);
@@ -775,6 +805,7 @@ export class ApiRouter {
     } catch (error) {
       if (error instanceof NotFoundError)
         return jsonResponse({ error: error.message }, 404);
+      log.error("deleteMedia", "Handler failed", undefined, error);
       return jsonResponse({ error: "Failed to delete media" }, 500);
     }
   }
@@ -787,6 +818,7 @@ export class ApiRouter {
     } catch (error) {
       if (error instanceof NotFoundError)
         return jsonResponse({ error: error.message }, 404);
+      log.error("restoreProfile", "Handler failed", undefined, error);
       return jsonResponse({ error: "Failed to restore profile" }, 500);
     }
   }
@@ -800,15 +832,37 @@ export class ApiRouter {
       const body = (await request.json()) as Record<string, unknown>;
       const reporterId = String(body.reporterId ?? "");
       const reason = body.reason ? String(body.reason) : undefined;
+      const mediaUrl = body.mediaUrl ? String(body.mediaUrl) : undefined;
       if (!reporterId) {
         return jsonResponse({ error: "reporterId is required" }, 400);
       }
       const result = await runEffect(
-        this.reportRepo.create({ reporterId, reportedId, reason }),
+        this.reportRepo.create({ reporterId, reportedId, reason, mediaUrl }),
       );
       return jsonResponse({ success: true, reportId: result.id });
     } catch (error) {
+      log.error("createReport", "Failed to create report", undefined, error);
       return jsonResponse({ error: "Failed to create report" }, 500);
+    }
+  }
+
+  private async handleFeedback(request: Request): Promise<Response> {
+    try {
+      const body = (await request.json()) as Record<string, unknown>;
+      const userId = String(body.userId ?? "");
+      const type = body.type ? String(body.type) : undefined;
+      const message = body.message ? String(body.message) : undefined;
+      const mediaUrl = body.mediaUrl ? String(body.mediaUrl) : undefined;
+      if (!userId) {
+        return jsonResponse({ error: "userId is required" }, 400);
+      }
+      const result = await runEffect(
+        this.feedbackRepo.create({ userId, type, message, mediaUrl }),
+      );
+      return jsonResponse({ success: true, feedbackId: result.id });
+    } catch (error) {
+      log.error("createFeedback", "Failed to create feedback", undefined, error);
+      return jsonResponse({ error: "Failed to create feedback" }, 500);
     }
   }
 
@@ -818,6 +872,7 @@ export class ApiRouter {
       await runEffect(this.userRepo.updateLastInteraction(userId));
       return jsonResponse({ success: true });
     } catch (error) {
+      log.error("updateInteraction", "Failed to update interaction", undefined, error);
       return jsonResponse({ error: "Failed to update interaction" }, 500);
     }
   }

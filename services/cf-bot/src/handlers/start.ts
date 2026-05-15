@@ -7,6 +7,9 @@ import {
   getMissingFieldsDisplay,
 } from "../lib/user-utils.js";
 import { getMainMenuKeyboard } from "../lib/main-menu.js";
+import { createLogger } from "@meetsmatch/cf-shared";
+
+const log = createLogger("cf-bot");
 import {
   t,
   SUPPORTED_LANGUAGES,
@@ -36,7 +39,8 @@ async function setUserLanguage(
       }),
     );
     return res.ok;
-  } catch {
+  } catch (error) {
+    log.error("setUserLanguage", "Failed to set user language", { userId, language }, error);
     return false;
   }
 }

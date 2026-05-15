@@ -4,6 +4,9 @@ import type { Env } from "../index.js";
 import { ensureUserExists } from "../lib/user-utils.js";
 import { getMainMenuKeyboard } from "../lib/main-menu.js";
 import { ApiServiceClient } from "../services/api-client.js";
+import { createLogger } from "@meetsmatch/cf-shared";
+
+const log = createLogger("cf-bot");
 
 const PREMIUM_PRICE = "$4.99/month";
 const PREMIUM_PLUS_PRICE = "$9.99/month";
@@ -32,7 +35,8 @@ async function getInteractionStatus(
       dislikesTotal: number;
       tier: string;
     };
-  } catch {
+  } catch (error) {
+    log.error("getInteractionStatus", "Failed to get interaction status", { userId }, error);
     return null;
   }
 }
@@ -56,8 +60,8 @@ async function getReferralInfo(
         const client = new ApiServiceClient(env.API_SERVICE);
         const referralRes = await client.getReferralCode(userId);
         code = referralRes.code;
-      } catch {
-        // Fallback to null if referral endpoint fails
+      } catch (error) {
+        log.error("getReferralCode", "Failed to get referral code", { userId }, error);
       }
     }
 
@@ -66,7 +70,8 @@ async function getReferralInfo(
       count: Number(user.referralCount ?? 0),
       bonus: Number(user.referralBonusSwipes ?? 0),
     };
-  } catch {
+  } catch (error) {
+    log.error("getReferralInfo", "Failed to get referral info", { userId }, error);
     return null;
   }
 }
@@ -77,7 +82,8 @@ async function getBotUsername(ctx: MyContext): Promise<string | undefined> {
   try {
     const me = await ctx.api.getMe();
     return me.username;
-  } catch {
+  } catch (error) {
+    log.error("getBotUsername", "Failed to get bot username", undefined, error);
     return undefined;
   }
 }

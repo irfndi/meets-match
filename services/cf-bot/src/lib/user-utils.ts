@@ -1,6 +1,9 @@
 import type { MyContext } from "../types.js";
 import type { Env } from "../index.js";
 import { ApiServiceClient } from "../services/api-client.js";
+import { createLogger } from "@meetsmatch/cf-shared";
+
+const log = createLogger("cf-bot");
 
 export interface UserProfile {
   id: string;
@@ -175,8 +178,8 @@ export async function ensureUserExists(
     if (response.user) {
       return { user: response.user as UserProfile, created: false };
     }
-  } catch {
-    // User doesn't exist or API error — proceed to create
+  } catch (error) {
+    log.error("ensureUserExists", "Failed to fetch existing user, will try create", { userId }, error);
   }
 
   // Create user if not found
@@ -210,7 +213,8 @@ export async function updateUserProfileComplete(
       }),
     );
     return response.ok;
-  } catch {
+  } catch (error) {
+    log.error("updateUserProfileComplete", "Failed to update profile complete", { userId }, error);
     return false;
   }
 }

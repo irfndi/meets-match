@@ -9,6 +9,9 @@ import {
 import { getMainMenuKeyboard } from "./main-menu.js";
 import { t, type Language } from "./i18n.js";
 import { InlineKeyboard } from "grammy";
+import { createLogger } from "@meetsmatch/cf-shared";
+
+const log = createLogger("cf-bot");
 import {
   handleReportConversation,
   handleLikeMessageConversation,
@@ -87,7 +90,8 @@ export async function checkMandatoryUpdates(
     }
 
     return false;
-  } catch {
+  } catch (error) {
+    log.error("checkMandatoryUpdates", "Failed to check mandatory updates", { userId }, error);
     return false;
   }
 }
@@ -106,7 +110,8 @@ async function updateUser(
       }),
     );
     return response.ok;
-  } catch {
+  } catch (error) {
+    log.error("updateUser", "Failed to update user", { userId }, error);
     return false;
   }
 }
@@ -119,7 +124,8 @@ async function getUser(env: Env, userId: string): Promise<UserProfile | null> {
     if (!response.ok) return null;
     const data = (await response.json()) as { user?: Record<string, unknown> };
     return (data.user ?? null) as UserProfile | null;
-  } catch {
+  } catch (error) {
+    log.error("getUser", "Failed to get user", { userId }, error);
     return null;
   }
 }
@@ -137,7 +143,8 @@ export async function checkAndUpdateProfileComplete(
       return true;
     }
     return false;
-  } catch {
+  } catch (error) {
+    log.error("checkAndUpdateProfileComplete", "Failed to check profile completeness", { userId }, error);
     return false;
   }
 }
@@ -177,7 +184,8 @@ async function verifyLocation(
     const data = (await res.json()) as GeocodeResult[];
     if (data.length === 0) return null;
     return data[0];
-  } catch {
+  } catch (error) {
+    log.error("verifyLocation", "Geocoding failed", { city, country }, error);
     return null;
   }
 }

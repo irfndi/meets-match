@@ -1,6 +1,9 @@
 import { InlineKeyboard } from "grammy";
 import type { MyContext } from "../types.js";
 import type { Env } from "../index.js";
+import { createLogger } from "@meetsmatch/cf-shared";
+
+const log = createLogger("cf-bot");
 import {
   ensureUserExists,
   getProfileCompleteness,
@@ -48,7 +51,8 @@ async function fetchMutualMatches(env: Env, userId: string) {
       matches?: Array<Record<string, unknown>>;
     };
     return data.matches ?? [];
-  } catch {
+  } catch (error) {
+    log.error("fetchMutualMatches", "Failed to fetch mutual matches", { userId }, error);
     return [];
   }
 }
@@ -63,7 +67,8 @@ async function fetchPendingLikes(env: Env, userId: string) {
       pendingLikes?: Array<Record<string, unknown>>;
     };
     return data.pendingLikes ?? [];
-  } catch {
+  } catch (error) {
+    log.error("fetchPendingLikes", "Failed to fetch pending likes", { userId }, error);
     return [];
   }
 }

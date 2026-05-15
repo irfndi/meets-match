@@ -1,6 +1,9 @@
 import { InlineKeyboard, Keyboard } from "grammy";
 import type { MyContext } from "../types.js";
 import type { Env } from "../index.js";
+import { createLogger } from "@meetsmatch/cf-shared";
+
+const log = createLogger("cf-bot");
 import {
   ensureUserExists,
   getProfileCompleteness,
@@ -83,7 +86,8 @@ async function fetchUserLang(env: Env, userId: string): Promise<Language> {
     if (!res.ok) return "en";
     const data = (await res.json()) as { user?: Record<string, unknown> };
     return getLang(data.user ?? {});
-  } catch {
+  } catch (error) {
+    log.error("fetchUserLang", "Failed to fetch user language", { userId }, error);
     return "en";
   }
 }
@@ -153,7 +157,8 @@ async function fetchPotentialMatches(
       matches: data.potentialMatches ?? [],
       relaxed: data.relaxed ?? false,
     };
-  } catch {
+  } catch (error) {
+    log.error("fetchPotentialMatches", "Failed to fetch potential matches", { userId }, error);
     return { matches: [], relaxed: false };
   }
 }

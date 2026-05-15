@@ -1,4 +1,7 @@
 import type { Env } from "../index.js";
+import { createLogger } from "@meetsmatch/cf-shared";
+
+const log = createLogger("cf-worker");
 
 const INACTIVE_DAYS_MIN = 7;
 const INACTIVE_DAYS_MAX = 30;
@@ -68,7 +71,8 @@ async function countNearbyUsers(
     return Number(
       (results?.[0] as Record<string, unknown> | undefined)?.c ?? 0,
     );
-  } catch {
+  } catch (error) {
+    log.error("getPotentialMatchCount", "Failed to count potential matches", { userId }, error);
     return 0;
   }
 }

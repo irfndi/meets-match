@@ -12,6 +12,9 @@ import {
   computeAgeFromBirthDate,
 } from "../lib/user-utils.js";
 import { getMainMenuKeyboard } from "../lib/main-menu.js";
+import { createLogger } from "@meetsmatch/cf-shared";
+
+const log = createLogger("cf-bot");
 import { t, type Language } from "../lib/i18n.js";
 
 function getSettingsKeyboard() {
@@ -290,7 +293,8 @@ async function fetchUserPreferences(
     const user = data.user;
     if (!user) return null;
     return (user.preferences as Record<string, unknown>) ?? {};
-  } catch {
+  } catch (error) {
+    log.error("fetchUserPreferences", "Failed to fetch user preferences", { userId }, error);
     return null;
   }
 }
@@ -309,7 +313,8 @@ async function updateUserPreferences(
       }),
     );
     return response.ok;
-  } catch {
+  } catch (error) {
+    log.error("updateUserPreferences", "Failed to update user preferences", { userId }, error);
     return false;
   }
 }
