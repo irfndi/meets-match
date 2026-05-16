@@ -3,6 +3,7 @@ import { runDLQHealthCheck } from "./jobs/dlqHealth.js";
 import { runBirthdayJob } from "./jobs/birthday.js";
 import { runCleanupJob } from "./jobs/cleanup.js";
 import { runSubscriptionExpiryJob } from "./jobs/subscriptionExpiry.js";
+import { getVersionInfo } from "./lib/version.js";
 
 export interface Env {
   DB: D1Database;
@@ -23,7 +24,11 @@ export default {
     ctx: ExecutionContext,
   ): Promise<Response> {
     return new Response(
-      JSON.stringify({ status: "ok", service: "cf-worker" }),
+      JSON.stringify({
+        status: "ok",
+        service: "cf-worker",
+        version: getVersionInfo(),
+      }),
       {
         status: 200,
         headers: { "Content-Type": "application/json" },

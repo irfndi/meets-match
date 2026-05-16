@@ -1,4 +1,5 @@
 import { Bot, session } from "grammy";
+import { getVersionInfo } from "./lib/version.js";
 import type { MyContext } from "./types.js";
 import { startCommand, languageCallback } from "./handlers/start.js";
 import { helpCommand, aboutCommand } from "./handlers/help.js";
@@ -627,10 +628,17 @@ export default {
     const url = new URL(request.url);
 
     if (url.pathname === "/health" || url.pathname === "/") {
-      return new Response(JSON.stringify({ status: "ok", service: "cf-bot" }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({
+          status: "ok",
+          service: "cf-bot",
+          version: getVersionInfo(),
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
     }
 
     if (url.pathname === "/webhook") {
