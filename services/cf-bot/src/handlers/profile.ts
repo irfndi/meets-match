@@ -9,6 +9,9 @@ import {
 } from "../lib/user-utils.js";
 import { getMainMenuKeyboard } from "../lib/main-menu.js";
 import { escapeMarkdownV2 } from "../lib/i18n.js";
+import { createLogger } from "@meetsmatch/cf-shared";
+
+const log = createLogger("cf-bot");
 
 function escapeProfileField(value: unknown): string {
   const text = typeof value === "string" ? value : String(value);
@@ -124,7 +127,16 @@ export const profileCommand = async (
         reply_markup: keyboard,
       });
     }
-  } catch {
+  } catch (err) {
+    log.error(
+      "profileCommand",
+      "failed to send media for profile",
+      {
+        userId: String(ctx.from?.id ?? "unknown"),
+        chatId: String(ctx.chat?.id ?? "unknown"),
+      },
+      err instanceof Error ? err : new Error(String(err)),
+    );
     await ctx.reply(text, {
       parse_mode: "MarkdownV2",
       reply_markup: keyboard,
