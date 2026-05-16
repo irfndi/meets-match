@@ -1,6 +1,10 @@
 import { Effect } from "effect";
 import type { D1Database } from "@cloudflare/workers-types";
-import { NotFoundError, DatabaseError, ValidationError } from "@meetsmatch/cf-shared";
+import {
+  NotFoundError,
+  DatabaseError,
+  ValidationError,
+} from "@meetsmatch/cf-shared";
 
 export class BlockRepository {
   constructor(private readonly db: D1Database) {}
@@ -8,7 +12,11 @@ export class BlockRepository {
   block(req: {
     blockerId: string;
     blockedId: string;
-  }): Effect.Effect<{ success: boolean }, DatabaseError | ValidationError, never> {
+  }): Effect.Effect<
+    { success: boolean },
+    DatabaseError | ValidationError,
+    never
+  > {
     return Effect.tryPromise({
       try: async () => {
         if (req.blockerId === req.blockedId) {
@@ -34,7 +42,11 @@ export class BlockRepository {
   unblock(req: {
     blockerId: string;
     blockedId: string;
-  }): Effect.Effect<{ success: boolean }, DatabaseError | ValidationError, never> {
+  }): Effect.Effect<
+    { success: boolean },
+    DatabaseError | ValidationError,
+    never
+  > {
     return Effect.tryPromise({
       try: async () => {
         if (req.blockerId === req.blockedId) {
