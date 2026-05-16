@@ -10,6 +10,7 @@ import { MatchRepository } from "../models/match.js";
 import { NotificationRepository } from "../models/notification.js";
 import { ReportRepository } from "../models/report.js";
 import { FeedbackRepository } from "../models/feedback.js";
+import { ErrorReportRepository } from "../models/error-report.js";
 import { BlockRepository } from "../models/block.js";
 import { GeocodingService } from "../models/geocoding.js";
 import {
@@ -51,6 +52,7 @@ export class ApiRouter {
   private readonly notificationRepo: NotificationRepository;
   private readonly reportRepo: ReportRepository;
   private readonly feedbackRepo: FeedbackRepository;
+  private readonly errorReportRepo: ErrorReportRepository;
   private readonly blockRepo: BlockRepository;
   private readonly geoService: GeocodingService;
 
@@ -61,6 +63,7 @@ export class ApiRouter {
     this.notificationRepo = new NotificationRepository(env.DB);
     this.reportRepo = new ReportRepository(env.DB);
     this.feedbackRepo = new FeedbackRepository(env.DB);
+    this.errorReportRepo = new ErrorReportRepository(env.DB);
     this.geoService = new GeocodingService(env.KV);
   }
 
@@ -183,6 +186,8 @@ export class ApiRouter {
           return this.handleQueueStats();
         case url.pathname === "/feedback" && method === "POST":
           return this.handleFeedback(request);
+        case url.pathname === "/error-reports" && method === "POST":
+          return this.handleErrorReport(request);
         case url.pathname === "/cron/downgrade-expired-subscriptions" &&
           method === "POST":
           return this.handleDowngradeExpiredSubscriptions();
@@ -897,6 +902,33 @@ export class ApiRouter {
         error,
       );
       return jsonResponse({ error: "Failed to create feedback" }, 500);
+    }
+  }
+
+  private async handleErrorReport(request: Request): Promise<Response> {
+    try {
+      const body = (await request.json()) as Record<string, unknown>;
+      const reporterId = String(body.reporterId ?? "");
+      const traceId = body.traceId ? String(body.traceId) : undefined;
+      const message = body.message ? String(body.message) : undefined;
+      const journey = body.journey ? String(body.journey) : undefined;
+
+      if (!reporterId) {
+        return jsonResponse({ error: "reporterId is required" }, 400);
+      }
+
+      const result = await runEffect(
+        this.errorReportRepo.create({ reporterId, traceId, message, journey }),
+      );
+      return jsonResponse({ success: true, reportId: result.id });
+    } catch (error) {
+      log.error(
+        "createErrorReport",
+        "Failed to create error report",
+        undefined,
+        error,
+      );
+      return jsonResponse({ error: "Failed to create error report" }, 500);
     }
   }
 

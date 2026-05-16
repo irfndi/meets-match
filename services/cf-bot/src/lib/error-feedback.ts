@@ -101,6 +101,27 @@ export async function handleErrorReportCallback(
       "```",
     ].join("\n");
 
+    // Persist to database via API
+    const apiResponse = await env.API_SERVICE.fetch(
+      new Request("http://api/error-reports", {
+        method: "POST",
+        body: JSON.stringify({
+          reporterId: userId,
+          traceId,
+          message: reportText,
+          journey: journeyText,
+        }),
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    if (!apiResponse.ok) {
+      log.error("handleErrorReport", "API failed to store report", {
+        userId,
+        status: apiResponse.status,
+      });
+    }
+
     // Send to bot owner / admin channel if configured
     const adminChatId = env.ADMIN_CHAT_ID;
     if (adminChatId) {
