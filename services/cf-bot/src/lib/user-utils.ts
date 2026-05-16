@@ -82,9 +82,6 @@ export function getProfileCompleteness(user: UserProfile): {
   if (!user.location || (!user.location.city && !user.location.latitude)) {
     missing.push("location");
   }
-  if (!user.interests || user.interests.length === 0) {
-    missing.push("interests");
-  }
   if (!user.mediaUrls || user.mediaUrls.length === 0) {
     missing.push("mediaUrls");
   }

@@ -5,8 +5,15 @@ import {
   ensureUserExists,
   getProfileCompleteness,
   getMissingFieldsDisplay,
+  isPhoneVerified,
+  type UserProfile,
 } from "../lib/user-utils.js";
 import { getMainMenuKeyboard } from "../lib/main-menu.js";
+import {
+  startConversation,
+  continueOnboarding,
+  promptPhoneVerification,
+} from "../lib/conversations.js";
 import { createLogger } from "@meetsmatch/cf-shared";
 
 const log = createLogger("cf-bot");
@@ -110,6 +117,12 @@ export const startCommand = async (ctx: MyContext, env: Env): Promise<void> => {
       return;
     }
 
+    // Profile complete — check phone verification
+    if (!isPhoneVerified(user)) {
+      await promptPhoneVerification(ctx, env, lang);
+      return;
+    }
+
     await ctx.reply(t("welcomeBack", lang), {
       reply_markup: getMainMenuKeyboard(),
       parse_mode: "Markdown",
@@ -143,6 +156,57 @@ export const languageCallback = async (
         parse_mode: "Markdown",
       })
       .catch(() => {});
+
+    // Fetch updated user profile to check completeness
+    const userRes = await env.API_SERVICE.fetch(
+      new Request(`http://api/users/${userId}`, { method: "GET" }),
+    );
+    if (!userRes.ok) {
+      log.warn(
+        "languageCallback",
+        "Failed to fetch user after language update",
+        {
+          userId,
+          status: userRes.status,
+        },
+      );
+      await ctx.reply(t("genericError", selectedLang));
+      return true;
+    }
+
+    const userData = (await userRes.json()) as { user?: UserProfile };
+    const user = userData.user;
+    if (!user) {
+      log.warn(
+        "languageCallback",
+        "User payload missing after language update",
+        {
+          userId,
+        },
+      );
+      await ctx.reply(t("genericError", selectedLang));
+      return true;
+    }
+
+    const { complete, missing } = getProfileCompleteness(user);
+    if (!complete) {
+      // Always start onboarding with name so user can confirm/edit their display name
+      await startConversation(env.KV, userId, "name");
+      const nameKeyboard = {
+        keyboard: [
+          [{ text: t("nameUseTelegramButton", selectedLang) }],
+          [{ text: t("genericCancel", selectedLang) }],
+        ],
+        resize_keyboard: true,
+        one_time_keyboard: true,
+      };
+      await ctx.reply(t("namePrompt", selectedLang), {
+        parse_mode: "Markdown",
+        reply_markup: nameKeyboard,
+      });
+      return true;
+    }
+
     await ctx.reply(t("menuPrompt", selectedLang), {
       reply_markup: getMainMenuKeyboard(),
     });

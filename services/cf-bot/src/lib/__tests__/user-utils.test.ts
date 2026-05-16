@@ -31,7 +31,6 @@ describe("getProfileCompleteness", () => {
       "gender",
       "bio",
       "location",
-      "interests",
       "mediaUrls",
     ]);
   });
@@ -68,7 +67,7 @@ describe("getProfileCompleteness", () => {
     expect(result.missing).toEqual([]);
   });
 
-  it("detects empty interests array", () => {
+  it("allows empty interests array (optional field)", () => {
     const user = {
       id: "1",
       displayName: "Test",
@@ -80,8 +79,8 @@ describe("getProfileCompleteness", () => {
       mediaUrls: [{ url: "test", type: "image", uploadedAt: "2024-01-01" }],
     };
     const result = getProfileCompleteness(user as any);
-    expect(result.complete).toBe(false);
-    expect(result.missing).toContain("interests");
+    expect(result.complete).toBe(true);
+    expect(result.missing).toEqual([]);
   });
 
   it("detects empty displayName", () => {

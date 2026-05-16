@@ -89,12 +89,11 @@ function createBot(env: Env): Bot<MyContext> {
   // Mandatory profile update check — runs before commands and callbacks
   bot.use(async (ctx, next) => {
     if (!ctx.from) return next();
-    // Skip if already in a birthdate conversation
+    // Skip if already in any conversation (let conversation handlers process input)
     const state = await env.KV.get(`conversation:${ctx.from.id}`);
-    if (state) {
-      const parsed = JSON.parse(state) as { field?: string };
-      if (parsed.field === "birthdate") return next();
-    }
+    if (state) return next();
+    // Skip if user is sharing their contact (phone verification in progress)
+    if (ctx.message?.contact) return next();
     const needsUpdate = await checkMandatoryUpdates(ctx, env);
     if (needsUpdate) return;
     return next();
