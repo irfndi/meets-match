@@ -405,13 +405,14 @@ function buildMatchCard(otherUser: Record<string, unknown>): string {
   let bio = "";
   if (otherUser.bio) {
     const bioText = String(otherUser.bio);
-    const escapedBio = escapeMarkdownV2(bioText);
     // Truncate long bios with spoiler expand/collapse
     const maxBioLen = 180;
     if (bioText.length > maxBioLen) {
-      bio = `\n📝 ${escapedBio.slice(0, maxBioLen)}||${escapedBio.slice(maxBioLen)}||`;
+      const visiblePart = escapeMarkdownV2(bioText.slice(0, maxBioLen));
+      const spoilerPart = escapeMarkdownV2(bioText.slice(maxBioLen));
+      bio = `\n📝 ${visiblePart}||${spoilerPart}||`;
     } else {
-      bio = `\n📝 ${escapedBio}`;
+      bio = `\n📝 ${escapeMarkdownV2(bioText)}`;
     }
   }
   const interests = otherUser.interests
