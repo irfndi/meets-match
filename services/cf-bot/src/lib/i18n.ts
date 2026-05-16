@@ -11,7 +11,7 @@ export const SUPPORTED_LANGUAGES: {
   { code: "id", label: "Indonesia", flag: "🇮🇩" },
 ];
 
-interface Translations {
+export interface Translations {
   welcomeNew: string;
   welcomeBack: string;
   welcomeBackIncomplete: string;
@@ -553,96 +553,94 @@ const id: Translations = {
     "• Kirim DM tanpa batas\n\n" +
     "Ketuk di bawah untuk upgrade!",
   premiumAdDismiss: "Nanti saja",
-  matchLikeSuccess: "❤️ You liked this profile!",
-  matchDislikeSuccess: "👎 Skipped.",
-  matchSkipSuccess: "⏩ Skipped.",
+  matchLikeSuccess: "❤️ Kamu menyukai profil ini!",
+  matchDislikeSuccess: "👎 Dilewati.",
+  matchSkipSuccess: "⏩ Dilewati.",
   matchLikeLimitReached:
-    "🛑 *Like Limit Reached*\n\nYou've used all your free likes for today.\n\nUpgrade to Premium for unlimited likes, or share your referral link to earn bonus likes!",
+    "🛑 *Batas Like Tercapai*\n\nKamu sudah menggunakan semua like gratis hari ini.\n\nUpgrade ke Premium untuk like tanpa batas, atau bagikan link referal untuk mendapatkan bonus like!",
   matchDislikeLimitReached:
-    "🛑 *Dislike Limit Reached*\n\nYou've used all your free dislikes for today.\n\nUpgrade to Premium for unlimited dislikes, or share your referral link to earn bonus likes!",
-  matchError: "Something went wrong. Please try again.",
+    "🛑 *Batas Dislike Tercapai*\n\nKamu sudah menggunakan semua dislike gratis hari ini.\n\nUpgrade ke Premium untuk dislike tanpa batas, atau bagikan link referal untuk mendapatkan bonus dislike!",
+  matchError: "Terjadi kesalahan. Coba lagi.",
   matchItsAMatch:
-    "🎉 *It's a Match!*\n\n" +
-    "You and *{name}* have liked each other! 💕\n\n" +
-    "Time to start something special ✨",
-  matchStartChatting:
-    "👉 [Start chatting with {name}](https://t.me/{username})",
-  matchSayHiTo: "Say hi to {pronoun} 👋",
+    "🎉 *Match!*\n\n" +
+    "Kamu dan *{name}* saling menyukai! 💕\n\n" +
+    "Saatnya memulai sesuatu yang istimewa ✨",
+  matchStartChatting: "👉 [Mulai chat dengan {name}](https://t.me/{username})",
+  matchSayHiTo: "Say hi ke {pronoun} 👋",
   matchNoUsername:
-    "💬 *{name}* hasn't set a Telegram username yet. You can share yours with them!",
+    "💬 *{name}* belum mengatur username Telegram. Kamu bisa membagikan username-mu!",
   matchesNoMatches:
-    "💑 *No matches yet.*\n\nUse *🔍 Find Match* to discover people, then like someone who likes you back!",
-  matchesMutualMatchesTitle: "💑 You have {count} mutual match(es):",
-  matchesPendingLikesTitle: "💕 {count} person(s) liked you! See them now?",
-  ageRangeSelectMin: "👇 Select *minimum* age:",
-  ageRangeSelectMax: "👇 Select *maximum* age (must be ≥ {min}):",
-  distanceSelect: "👇 Select max distance:",
-  genderPrefSelect: "👇 Select gender preference:",
-  notificationsCheckMatches:
-    "You have {items}! Check them out with *💕 My Matches*.",
+    "💑 *Belum ada match.*\n\nGunakan *🔍 Cari Match* untuk menemukan orang, lalu like seseorang yang juga menyukaimu!",
+  matchesMutualMatchesTitle: "💑 Kamu punya {count} mutual match:",
+  matchesPendingLikesTitle: "💕 {count} orang menyukaimu! Lihat sekarang?",
+  ageRangeSelectMin: "👇 Pilih usia *minimum*:",
+  ageRangeSelectMax: "👇 Pilih usia *maksimum* (harus ≥ {min}):",
+  distanceSelect: "👇 Pilih jarak maksimal:",
+  genderPrefSelect: "👇 Pilih preferensi jenis kelamin:",
+  notificationsCheckMatches: "Kamu punya {items}! Cek di *💕 Match Saya*.",
   dmGated:
-    "🔒 *Direct Messages are a Premium feature*\n\n" +
-    "Send a DM to anyone without waiting for a mutual match.\n\n" +
-    "*Options:*\n" +
-    "• Upgrade to Premium/Premium+ for unlimited DMs\n" +
-    "• Buy 1 DM with Telegram Stars (no subscription)",
-  dmSuccess: "✅ DM unlocked! You can now message *{name}* directly:",
-  dmFailed: "❌ Could not unlock DM. Please try again.",
-  dmError: "❌ Something went wrong. Please try again later.",
-  dmPurchased:
-    "✅ You bought {count} DM credit(s)! You now have {total} DM credit(s).",
+    "🔒 *Direct Message adalah fitur Premium*\n\n" +
+    "Kirim DM ke siapa saja tanpa menunggu mutual match.\n\n" +
+    "*Pilihan:*\n" +
+    "• Upgrade ke Premium/Premium+ untuk DM tanpa batas\n" +
+    "• Beli 1 DM dengan Telegram Stars (tanpa berlangganan)",
+  dmSuccess: "✅ DM terbuka! Kamu sekarang bisa chat *{name}* langsung:",
+  dmFailed: "❌ Gagal membuka DM. Coba lagi.",
+  dmError: "❌ Terjadi kesalahan. Coba lagi nanti.",
+  dmPurchased: "✅ Kamu membeli {count} kredit DM! Total kredit DM: {total}.",
   mediaRequiredPrompt:
-    "📸 *Media Required*\n\nPlease upload at least 1 photo or video to complete your profile.",
-  mediaManagerItemPhoto: "📷 Photo",
+    "📸 *Media Diperlukan*\n\nUnggah minimal 1 foto atau video untuk melengkapi profil.",
+  mediaManagerItemPhoto: "📷 Foto",
   mediaManagerItemVideo: "🎥 Video",
-  mediaManagerDeletePrompt: "Tap an item to delete it, or upload more:",
-  mediaManagerUploadPrompt: "Upload photos or videos to show on your profile:",
-  mediaDeleteSuccess: "✅ Deleted!",
-  mediaDeleteError: "❌ Failed to delete. Please try again.",
+  mediaManagerDeletePrompt:
+    "Ketuk item untuk menghapus, atau unggah lebih banyak:",
+  mediaManagerUploadPrompt: "Unggah foto atau video untuk profilmu:",
+  mediaDeleteSuccess: "✅ Terhapus!",
+  mediaDeleteError: "❌ Gagal menghapus. Coba lagi.",
   matchFallbackNotice:
-    "🔍 *Broadening your search…*\n\nYour current settings are a bit restrictive. Here are some profiles outside your usual preferences — try liking someone new!",
+    "🔍 *Memperluas pencarian…*\n\nPengaturanmu saat ini terlalu ketat. Berikut profil di luar preferensimu — coba like seseorang yang baru!",
   matchAdjustSettingsPrompt:
-    "Tap ⚙️ Settings to adjust your age range, distance, or gender preferences.",
+    "Ketuk ⚙️ Pengaturan untuk mengatur rentang usia, jarak, atau preferensi jenis kelamin.",
   hiddenFromMatches:
-    "👋 Your profile is now hidden from matches. Come back to stay visible!",
-  reportCancelled: "Report cancelled.",
+    "👋 Profilmu sekarang disembunyikan dari match. Kembali untuk tetap terlihat!",
+  reportCancelled: "Laporan dibatalkan.",
   rollbackNoAction:
-    "↩️ Nothing to undo. You haven't taken any action on a profile yet.",
-  rollbackSuccess: "↩️ Undone! The previous profile is back.",
+    "↩️ Tidak ada yang dibatalkan. Kamu belum melakukan aksi apa pun.",
+  rollbackSuccess: "↩️ Berhasil dibatalkan! Profil sebelumnya kembali.",
   rollbackGated:
-    "🔒 *Undo is a Premium+ feature*\n\nUpgrade to Premium or Premium+ to undo your last action!",
-  likeMessageSkipButton: "⏭ Skip",
-  giftTitle: "🎁 *Send a Gift*",
+    "🔒 *Undo adalah fitur Premium+*\n\nUpgrade ke Premium atau Premium+ untuk membatalkan aksi terakhirmu!",
+  likeMessageSkipButton: "⏭ Lewati",
+  giftTitle: "🎁 *Kirim Hadiah*",
   giftSelect:
-    "Choose a gift to send:\n\n🌹 Rose — 10 ⭐\n🍫 Chocolate — 25 ⭐\n🧸 Teddy Bear — 50 ⭐\n💎 Diamond — 100 ⭐",
-  giftSent: "🎁 You sent a *{gift}*! They'll receive it soon.",
-  giftReceived: "🎁 *New Gift!*\n\n{name} sent you a *{gift}*! 💕",
+    "Pilih hadiah yang ingin dikirim:\n\n🌹 Mawar — 10 ⭐\n🍫 Cokelat — 25 ⭐\n🧸 Beruang — 50 ⭐\n💎 Berlian — 100 ⭐",
+  giftSent: "🎁 Kamu mengirim *{gift}*! Mereka akan menerimanya segera.",
+  giftReceived: "🎁 *Hadiah Baru!*\n\n{name} mengirimmu *{gift}*! 💕",
   giftGated:
-    "🔒 *Gifts are a Premium feature*\n\nUpgrade to Premium to send gifts to your matches!",
-  giftCancelled: "Gift cancelled.",
+    "🔒 *Hadiah adalah fitur Premium*\n\nUpgrade ke Premium untuk mengirim hadiah ke match-mu!",
+  giftCancelled: "Hadiah dibatalkan.",
   helpTitle: "🤖 *MeetMatch Bot*",
   helpCommands:
-    "*Commands:*\n*/start* — Get started\n*/profile* — View or edit your profile\n*/match* — Find your next match\n*/matches* — View your matches and likes\n*/settings* — Adjust your preferences\n*/help* — Show this help\n*/about* — About MeetMatch",
+    "*Perintah:*\n*/start* — Mulai\n*/profile* — Lihat atau edit profil\n*/match* — Cari match berikutnya\n*/matches* — Lihat match dan like-mu\n*/settings* — Atur preferensi\n*/help* — Tampilkan bantuan\n*/about* — Tentang MeetMatch",
   helpTips:
-    "*Tips:*\n• Complete your profile for better matches\n• Use */settings* to adjust age range and distance\n• Matches are based on interests, location, and preferences",
-  helpContact: "Need help? Contact support.",
-  aboutTitle: "🌟 *About MeetMatch*",
+    "*Tips:*\n• Lengkapi profil untuk match yang lebih baik\n• Gunakan */settings* untuk mengatur rentang usia dan jarak\n• Match didasarkan pada minat, lokasi, dan preferensi",
+  helpContact: "Butuh bantuan? Hubungi support.",
+  aboutTitle: "🌟 *Tentang MeetMatch*",
   aboutDescription:
-    "MeetMatch helps you find people with similar interests near you.",
-  aboutBuiltWith: "Built with ❤️ using modern tech stack.",
-  aboutVersion: "*Version:* `{version}`",
+    "MeetMatch membantu kamu menemukan orang dengan minat serupa di dekatmu.",
+  aboutBuiltWith: "Dibangun dengan ❤️ menggunakan tech stack modern.",
+  aboutVersion: "*Versi:* `{version}`",
   aboutEnvironment: "*Environment:* {environment}",
-  aboutLastUpdated: "*Last updated:* {builtAt}",
-  aboutServerAge: "*Build age:* {serverAge}",
+  aboutLastUpdated: "*Terakhir diperbarui:* {builtAt}",
+  aboutServerAge: "*Usia build:* {serverAge}",
   premiumPurchased:
-    "✅ You're now on *{tier}*! Enjoy your upgraded experience.",
+    "✅ Kamu sekarang di *{tier}*! Nikmati pengalaman yang ditingkatkan.",
   premiumAdPrompt:
-    "👑 *Unlock Premium Features*\n\n" +
-    "• Unlimited likes & dislikes\n" +
-    "• Skip profiles you don't like\n" +
-    "• See who liked you\n" +
-    "• Send unlimited DMs\n\n" +
-    "Tap below to upgrade!",
+    "👑 *Buka Fitur Premium*\n\n" +
+    "• Like & dislike tanpa batas\n" +
+    "• Lewati profil yang tidak kamu suka\n" +
+    "• Lihat siapa yang menyukaimu\n" +
+    "• Kirim DM tanpa batas\n\n" +
+    "Ketuk di bawah untuk upgrade!",
 };
 
 const dictionaries: Record<Language, Translations> = { en, id };

@@ -4,15 +4,14 @@ import type { Env } from "../index.js";
 import {
   ensureUserExists,
   getProfileCompleteness,
-  getMissingFieldsDisplay,
   isPhoneVerified,
   type UserProfile,
 } from "../lib/user-utils.js";
 import { getMainMenuKeyboard } from "../lib/main-menu.js";
 import {
-  startConversation,
   continueOnboarding,
   promptPhoneVerification,
+  clearOnboardingProgress,
 } from "../lib/conversations.js";
 import { createLogger } from "@meetsmatch/cf-shared";
 
@@ -50,6 +49,15 @@ async function setUserLanguage(
         body: JSON.stringify({ user: { language } }),
       }),
     );
+    if (!res.ok) {
+      const bodyText = await res.text().catch(() => "<no body>");
+      log.error("setUserLanguage", "API returned error", {
+        userId,
+        language,
+        status: res.status,
+        body: bodyText,
+      });
+    }
     return res.ok;
   } catch (error) {
     log.error(
@@ -95,24 +103,14 @@ export const startCommand = async (ctx: MyContext, env: Env): Promise<void> => {
       }
     }
 
-    if (created) {
-      // New user — show language selection first
+    // For ALL incomplete users (new or existing), show language picker first
+    // so they can choose/change language before onboarding
+    const { complete } = getProfileCompleteness(user);
+
+    if (created || !complete) {
       await ctx.reply(
         "🌍 Choose your language / Pilih bahasa:\n(More languages coming soon!)",
         { reply_markup: buildLanguageKeyboard() },
-      );
-      return;
-    }
-
-    // Existing user — welcome back in their language
-    const { complete, missing } = getProfileCompleteness(user);
-
-    if (!complete) {
-      await ctx.reply(
-        t("welcomeBackIncomplete", lang, {
-          missing: getMissingFieldsDisplay(missing),
-        }),
-        { reply_markup: getMainMenuKeyboard(), parse_mode: "Markdown" },
       );
       return;
     }
@@ -123,6 +121,7 @@ export const startCommand = async (ctx: MyContext, env: Env): Promise<void> => {
       return;
     }
 
+    // Existing complete user — welcome back in their language
     await ctx.reply(t("welcomeBack", lang), {
       reply_markup: getMainMenuKeyboard(),
       parse_mode: "Markdown",
@@ -188,22 +187,30 @@ export const languageCallback = async (
       return true;
     }
 
-    const { complete, missing } = getProfileCompleteness(user);
+    log.info("languageCallback", "Fetched user after language update", {
+      userId,
+      selectedLang,
+      userLanguage: user.language,
+    });
+
+    const { complete } = getProfileCompleteness(user);
     if (!complete) {
-      // Always start onboarding with name so user can confirm/edit their display name
-      await startConversation(env.KV, userId, "name");
-      const nameKeyboard = {
-        keyboard: [
-          [{ text: t("nameUseTelegramButton", selectedLang) }],
-          [{ text: t("genericCancel", selectedLang) }],
-        ],
-        resize_keyboard: true,
-        one_time_keyboard: true,
-      };
-      await ctx.reply(t("namePrompt", selectedLang), {
-        parse_mode: "Markdown",
-        reply_markup: nameKeyboard,
-      });
+      // Clear any previous onboarding progress so the flow restarts fresh
+      // (allows users to change language and re-do onboarding from the beginning)
+      await clearOnboardingProgress(env.KV, userId);
+      // Start onboarding from the first step
+      const continued = await continueOnboarding(
+        ctx,
+        env,
+        userId,
+        selectedLang,
+      );
+      if (continued) return true;
+    }
+
+    // Profile fields complete — check phone verification before showing menu
+    if (!isPhoneVerified(user)) {
+      await promptPhoneVerification(ctx, env, selectedLang);
       return true;
     }
 

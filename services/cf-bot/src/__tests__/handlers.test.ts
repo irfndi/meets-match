@@ -110,7 +110,7 @@ describe("Bot Handlers", () => {
       expect(message).toContain("Welcome back");
     });
 
-    it("should prompt incomplete existing user to complete profile", async () => {
+    it("should show language picker for incomplete existing user", async () => {
       const ctx = mockCtx();
       const env = {
         API_SERVICE: createMockApiService({
@@ -124,8 +124,7 @@ describe("Bot Handlers", () => {
       expect(ctx.reply).toHaveBeenCalled();
       const message = (ctx.reply as ReturnType<typeof vi.fn>).mock
         .calls[0][0] as string;
-      expect(message).toContain("Welcome back");
-      expect(message).toContain("incomplete");
+      expect(message).toContain("Choose your language");
     });
   });
 

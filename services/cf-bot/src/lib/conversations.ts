@@ -8,7 +8,7 @@ import {
   type UserProfile,
 } from "./user-utils.js";
 import { getMainMenuKeyboard } from "./main-menu.js";
-import { t, type Language, escapeMd } from "./i18n.js";
+import { t, type Language, type Translations, escapeMd } from "./i18n.js";
 import { InlineKeyboard } from "grammy";
 import {
   createLogger,
@@ -45,9 +45,191 @@ export const FIELD_TO_CONVERSATION = {
 };
 
 /**
- * After a profile field is updated, check if there are more missing fields.
- * If yes, start the next conversation. If no, show the main menu.
- * Returns true if onboarding continued, false if profile is complete.
+ * Explicit onboarding step sequence.
+ * Each step defines when it should be shown during onboarding.
+ */
+const ONBOARDING_STEPS: Array<{
+  field: string;
+  promptKey: keyof Translations;
+  showOnce?: boolean;
+  skipIfPresent?: boolean;
+  skipIfVerified?: boolean;
+  keyboardType?: "text" | "gender" | "location" | "interests" | "name";
+}> = [
+  {
+    field: "name",
+    promptKey: "namePrompt",
+    showOnce: true,
+    keyboardType: "name",
+  },
+  {
+    field: "birthdate",
+    promptKey: "birthDatePrompt",
+    skipIfPresent: true,
+    keyboardType: "text",
+  },
+  {
+    field: "gender",
+    promptKey: "genderPrompt",
+    skipIfPresent: true,
+    keyboardType: "gender",
+  },
+  {
+    field: "bio",
+    promptKey: "bioPrompt",
+    skipIfPresent: true,
+    keyboardType: "text",
+  },
+  {
+    field: "location",
+    promptKey: "locationPrompt",
+    skipIfPresent: true,
+    keyboardType: "location",
+  },
+  {
+    field: "media",
+    promptKey: "mediaPrompt",
+    skipIfPresent: true,
+    keyboardType: "text",
+  },
+  {
+    field: "interests",
+    promptKey: "interestsPrompt",
+    showOnce: true,
+    keyboardType: "interests",
+  },
+  {
+    field: "phone",
+    promptKey: "phoneVerifyPrompt",
+    skipIfVerified: true,
+    keyboardType: "text",
+  },
+];
+
+const ONBOARDING_SEEN_TTL = 60 * 60 * 24; // 24 hours
+
+async function getOnboardingSeen(
+  kv: KVNamespace,
+  userId: string,
+): Promise<string[]> {
+  const raw = await kv.get(`onboarding:seen:${userId}`);
+  if (!raw) return [];
+  try {
+    return JSON.parse(raw) as string[];
+  } catch {
+    return [];
+  }
+}
+
+async function markOnboardingSeen(
+  kv: KVNamespace,
+  userId: string,
+  field: string,
+): Promise<void> {
+  const seen = await getOnboardingSeen(kv, userId);
+  if (!seen.includes(field)) {
+    seen.push(field);
+    await kv.put(`onboarding:seen:${userId}`, JSON.stringify(seen), {
+      expirationTtl: ONBOARDING_SEEN_TTL,
+    });
+  }
+}
+
+export async function clearOnboardingProgress(
+  kv: KVNamespace,
+  userId: string,
+): Promise<void> {
+  await kv.delete(`onboarding:seen:${userId}`);
+  await kv.delete(`onboarding:interests-skipped:${userId}`);
+}
+
+function shouldSkipStep(
+  step: (typeof ONBOARDING_STEPS)[number],
+  user: UserProfile,
+  seenFields: string[],
+): boolean {
+  if (step.showOnce && seenFields.includes(step.field)) return true;
+  if (step.skipIfVerified && isPhoneVerified(user)) return true;
+  if (step.skipIfPresent) {
+    switch (step.field) {
+      case "birthdate":
+        return !!user.birthDate && user.birthDate.trim().length > 0;
+      case "gender":
+        return !!user.gender;
+      case "bio":
+        return !!user.bio && user.bio.trim().length > 0;
+      case "location":
+        return (
+          !!user.location && (!!user.location.city || !!user.location.latitude)
+        );
+      case "media":
+        return Array.isArray(user.mediaUrls) && user.mediaUrls.length > 0;
+      default:
+        return false;
+    }
+  }
+  return false;
+}
+
+function buildStepKeyboard(
+  step: (typeof ONBOARDING_STEPS)[number],
+  lang: Language,
+): {
+  keyboard: Array<Array<{ text: string; request_location?: boolean }>>;
+  resize_keyboard: boolean;
+  one_time_keyboard: boolean;
+} {
+  const base = { resize_keyboard: true, one_time_keyboard: true };
+  switch (step.keyboardType) {
+    case "name":
+      return {
+        ...base,
+        keyboard: [
+          [{ text: t("nameUseTelegramButton", lang) }],
+          [{ text: t("genericCancel", lang) }],
+        ],
+      };
+    case "gender":
+      return {
+        ...base,
+        keyboard: [
+          [
+            { text: t("genderMaleButton", lang) },
+            { text: t("genderFemaleButton", lang) },
+          ],
+          [{ text: t("genericCancel", lang) }],
+        ],
+      };
+    case "location":
+      return {
+        ...base,
+        keyboard: [
+          [{ text: t("locationShareButton", lang), request_location: true }],
+          [{ text: t("locationTypeButton", lang) }],
+          [{ text: t("genericCancel", lang) }],
+        ],
+      };
+    case "interests":
+      return {
+        ...base,
+        keyboard: [
+          [{ text: t("interestsSkipButton", lang) }],
+          [{ text: t("genericCancel", lang) }],
+        ],
+      };
+    default:
+      return {
+        ...base,
+        keyboard: [[{ text: t("genericCancel", lang) }]],
+      };
+  }
+}
+
+/**
+ * After a profile field is updated, advance to the next onboarding step.
+ * Uses an explicit step sequence so the flow is predictable:
+ *   name → birthdate → gender → bio → location → media → interests → phone
+ * Returns true if a next step was started, false if onboarding is complete.
  */
 export async function continueOnboarding(
   ctx: MyContext,
@@ -63,99 +245,45 @@ export async function continueOnboarding(
     return true;
   }
 
-  const { complete, missing } = getProfileCompleteness(user);
-  if (complete) {
-    // Required profile fields complete — offer optional interests before phone check
-    const hasInterests =
-      Array.isArray(user.interests) && user.interests.length > 0;
-    const skippedInterests = await env.KV.get(
-      `onboarding:interests-skipped:${userId}`,
+  const seenFields = await getOnboardingSeen(env.KV, userId);
+
+  for (const step of ONBOARDING_STEPS) {
+    if (shouldSkipStep(step, user, seenFields)) continue;
+
+    await startConversation(env.KV, userId, step.field);
+
+    if (step.showOnce) {
+      await markOnboardingSeen(env.KV, userId, step.field);
+    }
+
+    const keyboard = buildStepKeyboard(step, lang);
+    console.log(
+      `[continueOnboarding] userId=${userId} step=${step.field} lang=${lang} keyboard=${JSON.stringify(keyboard)}`,
     );
-    if (!hasInterests && !skippedInterests) {
-      await startConversation(env.KV, userId, "interests");
-      const keyboard = {
+
+    if (step.field === "phone") {
+      // Phone step uses a special contact-sharing keyboard
+      const phoneKeyboard = {
         keyboard: [
-          [{ text: t("interestsSkipButton", lang) }],
-          [{ text: t("genericCancel", lang) }],
+          [{ text: t("phoneVerifyButton", lang), request_contact: true }],
         ],
         resize_keyboard: true,
         one_time_keyboard: true,
       };
-      await ctx.reply(t("interestsPrompt", lang), {
-        parse_mode: "Markdown",
-        reply_markup: keyboard,
-      });
+      await ctx.reply(t(step.promptKey, lang), { reply_markup: phoneKeyboard });
       return true;
     }
 
-    // Check phone verification as final step
-    if (!isPhoneVerified(user)) {
-      await promptPhoneVerification(ctx, env, lang);
-      return true;
-    }
-    return false;
-  }
-
-  const firstMissing = missing[0];
-  const mapping =
-    FIELD_TO_CONVERSATION[firstMissing as keyof typeof FIELD_TO_CONVERSATION];
-  if (!mapping) {
-    log.warn("continueOnboarding", "Unknown missing field", { firstMissing });
-    await ctx.reply(t("genericError", lang), {
-      reply_markup: getMainMenuKeyboard(),
-    });
-    return true;
-  }
-
-  await startConversation(env.KV, userId, mapping.field);
-
-  if (firstMissing === "location") {
-    const keyboard = {
-      keyboard: [
-        [{ text: t("locationShareButton", lang), request_location: true }],
-        [{ text: t("locationTypeButton", lang) }],
-        [{ text: t("genericCancel", lang) }],
-      ],
-      resize_keyboard: true,
-      one_time_keyboard: true,
-    };
-    await ctx.reply(t(mapping.promptKey, lang), {
+    await ctx.reply(t(step.promptKey, lang), {
       parse_mode: "Markdown",
       reply_markup: keyboard,
     });
     return true;
   }
 
-  if (firstMissing === "gender") {
-    const keyboard = {
-      keyboard: [
-        [
-          { text: t("genderMaleButton", lang) },
-          { text: t("genderFemaleButton", lang) },
-        ],
-        [{ text: t("genericCancel", lang) }],
-      ],
-      resize_keyboard: true,
-      one_time_keyboard: true,
-    };
-    await ctx.reply(t(mapping.promptKey, lang), {
-      parse_mode: "Markdown",
-      reply_markup: keyboard,
-    });
-    return true;
-  }
-
-  // Text fields: provide a Cancel button for consistency
-  const keyboard = {
-    keyboard: [[{ text: t("genericCancel", lang) }]],
-    resize_keyboard: true,
-    one_time_keyboard: true,
-  };
-  await ctx.reply(t(mapping.promptKey, lang), {
-    parse_mode: "Markdown",
-    reply_markup: keyboard,
-  });
-  return true;
+  // All steps complete — clean up onboarding tracking
+  await clearOnboardingProgress(env.KV, userId);
+  return false;
 }
 
 const CONVERSATION_TTL_SECONDS = 1800; // 30 minutes
@@ -471,6 +599,10 @@ export async function handleContactMessage(
 
   // Update user with phone number
   const success = await updateUser(env, userId, { phoneNumber });
+  if (success) {
+    // Clear any active phone-verification conversation
+    await clearConversationState(env.KV, userId);
+  }
   await ctx.reply(
     success ? t("phoneVerified", lang) : t("genericError", lang),
     { reply_markup: getMainMenuKeyboard() },

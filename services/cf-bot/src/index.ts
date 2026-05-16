@@ -89,6 +89,12 @@ function createBot(env: Env): Bot<MyContext> {
   // Mandatory profile update check — runs before commands and callbacks
   bot.use(async (ctx, next) => {
     if (!ctx.from) return next();
+    // Skip bot commands (let command handlers show language picker / welcome)
+    if (ctx.message?.text?.startsWith("/")) return next();
+    // Skip language selection callbacks so onboarding doesn't block language persistence
+    if (ctx.callbackQuery?.data?.startsWith("lang:")) return next();
+    // Skip pre-checkout queries (payment flow must not be blocked)
+    if (ctx.preCheckoutQuery) return next();
     // Skip if already in any conversation (let conversation handlers process input)
     const state = await env.KV.get(`conversation:${ctx.from.id}`);
     if (state) return next();
