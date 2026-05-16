@@ -479,7 +479,9 @@ export class MatchRepository {
             const viewedAt = row.viewed_at ? String(row.viewed_at) : null;
 
             // Determine current user's action in this match
-            const isUser1InMatch = row.user1_id === currentUser.id;
+            // Use String() to avoid type mismatch (D1 may return numbers for numeric IDs)
+            const isUser1InMatch =
+              String(row.user1_id ?? "") === currentUser.id;
             const myAction = isUser1InMatch ? user1Action : user2Action;
             const otherAction = isUser1InMatch ? user2Action : user1Action;
 
