@@ -91,17 +91,16 @@ export async function handleErrorReportCallback(
     }
 
     // Also log it server-side
-    log.error(
-      "errorReport",
-      `User ${userId} reported error ${traceId}`,
-      { userId, traceId, journey: journey.events },
-    );
+    log.error("errorReport", `User ${userId} reported error ${traceId}`, {
+      userId,
+      traceId,
+      journey: journey.events,
+    });
 
     await ctx.answerCallbackQuery("Report sent. Thank you!").catch(() => {});
-    await ctx.reply(
-      "✅ Report sent! We'll look into it.",
-      { reply_markup: getMainMenuKeyboard() },
-    );
+    await ctx.reply("✅ Report sent! We'll look into it.", {
+      reply_markup: getMainMenuKeyboard(),
+    });
   } catch (error) {
     log.error("handleErrorReport", "Failed to send report", { userId }, error);
     await ctx

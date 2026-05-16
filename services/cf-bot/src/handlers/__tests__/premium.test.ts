@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { premiumCommand, referralCommand, premiumCallbacks } from "../premium.js";
+import {
+  premiumCommand,
+  referralCommand,
+  premiumCallbacks,
+} from "../premium.js";
 import type { MyContext } from "../../types.js";
 
 function mockKV() {
@@ -133,7 +137,9 @@ describe("Premium Handlers", () => {
       await referralCommand(ctx, env);
       const call = (ctx.reply as any).mock.calls[0];
       const keyboard = call[1].reply_markup.inline_keyboard;
-      expect(keyboard.some((row: any) => row[0].text.includes("Share"))).toBe(true);
+      expect(keyboard.some((row: any) => row[0].text.includes("Share"))).toBe(
+        true,
+      );
     });
   });
 

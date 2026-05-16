@@ -51,7 +51,12 @@ export async function recordJourneyEvent(
       expirationTtl: JOURNEY_TTL_SECONDS,
     });
   } catch (error) {
-    log.error("recordJourneyEvent", "Failed to record journey", { userId }, error);
+    log.error(
+      "recordJourneyEvent",
+      "Failed to record journey",
+      { userId },
+      error,
+    );
   }
 }
 
@@ -68,7 +73,12 @@ export async function recordJourneyError(
       expirationTtl: JOURNEY_TTL_SECONDS,
     });
   } catch (error) {
-    log.error("recordJourneyError", "Failed to record error", { userId }, error);
+    log.error(
+      "recordJourneyError",
+      "Failed to record error",
+      { userId },
+      error,
+    );
   }
 }
 
