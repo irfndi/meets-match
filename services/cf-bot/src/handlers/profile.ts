@@ -8,10 +8,14 @@ import {
   computeAgeFromBirthDate,
 } from "../lib/user-utils.js";
 import { getMainMenuKeyboard } from "../lib/main-menu.js";
+import { escapeMarkdownV2 } from "../lib/i18n.js";
+import { createLogger } from "@meetsmatch/cf-shared";
 
-function escapeMarkdown(value: unknown): string {
+const log = createLogger("cf-bot");
+
+function escapeProfileField(value: unknown): string {
   const text = typeof value === "string" ? value : String(value);
-  return text.replace(/[_*\[\]`\\]/g, "\\$&");
+  return escapeMarkdownV2(text);
 }
 
 export const profileCommand = async (
@@ -32,17 +36,19 @@ export const profileCommand = async (
   }
 
   const { user } = result;
-  const name = escapeMarkdown(user.displayName || "Not set");
+  const name = escapeProfileField(user.displayName || "Not set");
   const computedAge = user.birthDate
     ? computeAgeFromBirthDate(user.birthDate)
     : user.age;
-  const ageDisplay =
-    computedAge !== undefined ? String(computedAge) : "Not set";
-  const gender =
+  const ageDisplay = escapeProfileField(
+    computedAge !== undefined ? String(computedAge) : "Not set",
+  );
+  const gender = escapeProfileField(
     typeof user.gender === "string" && user.gender
       ? user.gender.charAt(0).toUpperCase() + user.gender.slice(1)
-      : "Not set";
-  const bio = escapeMarkdown(user.bio || "Not set");
+      : "Not set",
+  );
+  const bio = escapeProfileField(user.bio || "Not set");
   const loc = user.location;
   let rawLocationText = "Not set";
   const city = loc?.city as string | undefined;
@@ -54,8 +60,8 @@ export const profileCommand = async (
   } else if (loc?.latitude) {
     rawLocationText = "📍 Shared";
   }
-  const locationText = escapeMarkdown(rawLocationText);
-  const interests = escapeMarkdown(
+  const locationText = escapeProfileField(rawLocationText);
+  const interests = escapeProfileField(
     user.interests && Array.isArray(user.interests) && user.interests.length > 0
       ? (user.interests as string[]).join(", ")
       : "Not set",
@@ -91,8 +97,49 @@ export const profileCommand = async (
 
   msgParts.push("", "Select a field to edit:");
 
-  await ctx.reply(msgParts.join("\n"), {
-    parse_mode: "Markdown",
-    reply_markup: getProfileMenu(env, mediaCount),
-  });
+  const text = msgParts.join("\n");
+  const mediaUrls = (user.mediaUrls ?? []) as Array<{
+    url: string;
+    type: string;
+  }>;
+  // Preserve media order: show the first uploaded item (image or video)
+  const firstRenderable = mediaUrls.find(
+    (m) => m.type === "image" || m.type === "video",
+  );
+  const keyboard = getProfileMenu(env, mediaCount);
+
+  try {
+    if (firstRenderable?.type === "image") {
+      await ctx.replyWithPhoto(firstRenderable.url, {
+        caption: text,
+        parse_mode: "MarkdownV2",
+        reply_markup: keyboard,
+      });
+    } else if (firstRenderable?.type === "video") {
+      await ctx.replyWithVideo(firstRenderable.url, {
+        caption: text,
+        parse_mode: "MarkdownV2",
+        reply_markup: keyboard,
+      });
+    } else {
+      await ctx.reply(text, {
+        parse_mode: "MarkdownV2",
+        reply_markup: keyboard,
+      });
+    }
+  } catch (err) {
+    log.error(
+      "profileCommand",
+      "failed to send media for profile",
+      {
+        userId: String(ctx.from?.id ?? "unknown"),
+        chatId: String(ctx.chat?.id ?? "unknown"),
+      },
+      err instanceof Error ? err : new Error(String(err)),
+    );
+    await ctx.reply(text, {
+      parse_mode: "MarkdownV2",
+      reply_markup: keyboard,
+    });
+  }
 };

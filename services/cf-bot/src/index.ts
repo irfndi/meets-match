@@ -18,6 +18,8 @@ import {
   settingsCommand,
   settingsCallbacks,
   handleAgeRangeCallback,
+  handleDistanceCallback,
+  handleGenderPrefCallback,
 } from "./handlers/settings.js";
 import {
   premiumCommand,
@@ -42,6 +44,7 @@ import {
   MENU_MY_MATCHES,
   MENU_PROFILE,
   MENU_SETTINGS,
+  MENU_PREMIUM,
 } from "./lib/main-menu.js";
 import { InlineKeyboard } from "grammy";
 import { t, type Language } from "./lib/i18n.js";
@@ -191,6 +194,12 @@ function createBot(env: Env): Bot<MyContext> {
       return;
     }
 
+    if (data === "settings:back") {
+      await settingsCommand(ctx, env);
+      await ctx.answerCallbackQuery().catch(() => {});
+      return;
+    }
+
     if (data.startsWith("settings:")) {
       return settingsCallbacks(ctx, env);
     }
@@ -200,7 +209,21 @@ function createBot(env: Env): Bot<MyContext> {
       if (handled) return;
     }
 
-    if (data.startsWith("premium:") || data.startsWith("referral:")) {
+    if (data.startsWith("distance:")) {
+      const handled = await handleDistanceCallback(ctx, env, data);
+      if (handled) return;
+    }
+
+    if (data.startsWith("genderpref:")) {
+      const handled = await handleGenderPrefCallback(ctx, env, data);
+      if (handled) return;
+    }
+
+    if (
+      data.startsWith("premium:") ||
+      data.startsWith("referral:") ||
+      data.startsWith("premium_ad:")
+    ) {
       return premiumCallbacks(ctx, env);
     }
 
@@ -305,6 +328,33 @@ function createBot(env: Env): Bot<MyContext> {
     if (payload && payload.startsWith("gift_")) {
       await handleGiftPayment(ctx, env, payload);
     }
+
+    if (payload && payload.startsWith("premium_")) {
+      const parts = payload.split("_");
+      const userId = parts[2];
+      const tier = parts.slice(3).join("_");
+      if (!userId || !tier) return;
+      if (tier !== "premium" && tier !== "premium_plus") return;
+
+      try {
+        const client = new ApiServiceClient(env.API_SERVICE);
+        await client.updateUser({
+          userId,
+          user: { id: userId, subscriptionTier: tier },
+        });
+        await ctx.reply(
+          t("premiumPurchased", "en", {
+            tier: tier === "premium_plus" ? "Premium+ 💎" : "Premium 👑",
+          }),
+          { reply_markup: getMainMenuKeyboard() },
+        );
+      } catch (error) {
+        console.error("Premium purchase error:", error);
+        await ctx.reply(
+          "❌ Payment processed but we could not activate your subscription. Please contact support.",
+        );
+      }
+    }
   });
 
   bot.on("message:text", async (ctx) => {
@@ -320,6 +370,8 @@ function createBot(env: Env): Bot<MyContext> {
         return profileCommand(ctx, env);
       case MENU_SETTINGS:
         return settingsCommand(ctx, env);
+      case MENU_PREMIUM:
+        return premiumCommand(ctx, env);
     }
 
     // Match action reply keyboard — only if there's an active match queue

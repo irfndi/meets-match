@@ -64,9 +64,11 @@ interface Translations {
   ageRangeInvalid: string;
   ageRangeUpdated: string;
   distancePrompt: string;
+  distanceSelect: string;
   distanceInvalid: string;
   distanceUpdated: string;
   genderPrefPrompt: string;
+  genderPrefSelect: string;
   genderPrefInvalid: string;
   genderPrefUpdated: string;
   phoneVerifyPrompt: string;
@@ -137,6 +139,9 @@ interface Translations {
   aboutEnvironment: string;
   aboutLastUpdated: string;
   aboutServerAge: string;
+  premiumPurchased: string;
+  premiumAdPrompt: string;
+  premiumAdDismiss: string;
 }
 
 const en: Translations = {
@@ -226,11 +231,13 @@ const en: Translations = {
     "Invalid range. Min must be 12–80, max must be ≥ min and ≤ 80. Try again or type *Cancel*.",
   ageRangeUpdated: "✅ Age range updated to *{min}–{max}*!",
   distancePrompt: "Enter max distance in km (1–500). Type *Cancel* to abort.",
+  distanceSelect: "👇 Select max distance:",
   distanceInvalid:
     "Enter a valid integer distance in km (1–500). Try again or type *Cancel*.",
   distanceUpdated: "✅ Max distance set to *{distance} km*!",
   genderPrefPrompt:
     "Enter preferred genders separated by commas (*male, female, other, prefer_not_to_say*). Type *Cancel* to abort.",
+  genderPrefSelect: "👇 Select gender preference:",
   genderPrefInvalid:
     "Enter valid genders separated by commas (*male, female, other, prefer_not_to_say*). Try again or type *Cancel*.",
   genderPrefUpdated: "✅ Gender preference set to: *{preferences}*!",
@@ -334,12 +341,26 @@ const en: Translations = {
   aboutEnvironment: "*Environment:* {environment}",
   aboutLastUpdated: "*Last updated:* {builtAt}",
   aboutServerAge: "*Build age:* {serverAge}",
+  premiumPurchased:
+    "✅ You're now on *{tier}*! Enjoy your upgraded experience.",
+  premiumAdPrompt:
+    "👑 *Unlock Premium Features*\n\n" +
+    "• Unlimited likes & dislikes\n" +
+    "• Skip profiles you don't like\n" +
+    "• See who liked you\n" +
+    "• Send unlimited DMs\n\n" +
+    "Tap below to upgrade!",
+  premiumAdDismiss: "Maybe later",
 };
 
 const dictionaries: Record<Language, Translations> = { en };
 
 function escapeMd(value: string): string {
   return value.replace(/[_*\[\]`\\]/g, "\\$&");
+}
+
+export function escapeMarkdownV2(value: string): string {
+  return value.replace(/[_*\[\]()~`>#+=|{}\.!\\-]/g, "\\$&");
 }
 
 export function t(

@@ -11,6 +11,7 @@ import {
   ensureUserExists,
   computeAgeFromBirthDate,
 } from "../lib/user-utils.js";
+import { ApiServiceClient } from "../services/api-client.js";
 import { getMainMenuKeyboard } from "../lib/main-menu.js";
 import { createLogger } from "@meetsmatch/cf-shared";
 
@@ -25,6 +26,32 @@ function getSettingsKeyboard() {
     .text("⚧ Gender Preference", "settings:gender-pref")
     .row()
     .text("❌ Close", "settings:close");
+}
+
+function buildDistanceKeyboard(): InlineKeyboard {
+  const keyboard = new InlineKeyboard();
+  const values = [5, 10, 25, 50, 100, 200];
+  values.forEach((val, i) => {
+    keyboard.text(`${val} km`, `distance:${val}`);
+    if ((i + 1) % 3 === 0) keyboard.row();
+  });
+  if (values.length % 3 !== 0) keyboard.row();
+  keyboard.text("✏️ Type manually", "distance:manual").row();
+  keyboard.text("← Back", "settings:back");
+  return keyboard;
+}
+
+function buildGenderPrefKeyboard(): InlineKeyboard {
+  return new InlineKeyboard()
+    .text("♂️ Male", "genderpref:male")
+    .text("♀️ Female", "genderpref:female")
+    .row()
+    .text("⚧ Other", "genderpref:other")
+    .text("🤫 Prefer not to say", "genderpref:prefer_not_to_say")
+    .row()
+    .text("✅ All genders", "genderpref:all")
+    .row()
+    .text("← Back", "settings:back");
 }
 
 function buildAgeGridKeyboard(
@@ -58,6 +85,24 @@ function buildAgeGridKeyboard(
   return keyboard;
 }
 
+function getDefaultPreferences(
+  user: Record<string, unknown>,
+): Record<string, unknown> {
+  const age = user.birthDate
+    ? computeAgeFromBirthDate(String(user.birthDate))
+    : (user.age as number | undefined);
+  const gender = user.gender as string | undefined;
+  if (!age || !gender) return {};
+  const minAge = Math.max(12, age - 7);
+  const maxAge = Math.min(80, age + 7);
+  const maxDistance = 25;
+  let genderPreference: string[];
+  if (gender === "male") genderPreference = ["female"];
+  else if (gender === "female") genderPreference = ["male"];
+  else genderPreference = ["male", "female", "other", "prefer_not_to_say"];
+  return { minAge, maxAge, maxDistance, genderPreference };
+}
+
 export const settingsCommand = async (
   ctx: MyContext,
   env: Env,
@@ -71,7 +116,13 @@ export const settingsCommand = async (
   }
 
   const userId = String(ctx.from.id);
-  const prefs = await fetchUserPreferences(env, userId);
+  const rawPrefs = await fetchUserPreferences(env, userId);
+  const defaults = getDefaultPreferences(
+    result.user as unknown as Record<string, unknown>,
+  );
+  // Merge defaults with existing prefs so partially set preferences
+  // still show calculated defaults for unset fields
+  const prefs = { ...defaults, ...rawPrefs };
 
   const ageRange =
     prefs?.minAge !== undefined && prefs?.maxAge !== undefined
@@ -112,24 +163,24 @@ export const settingsCallbacks = async (
   const userId = String(ctx.from.id);
   const data = ctx.callbackQuery.data;
 
+  // Fetch user once for language and defaults
+  const userRes = await env.API_SERVICE.fetch(
+    new Request(`http://api/users/${userId}`, { method: "GET" }),
+  );
+  let userData: Record<string, unknown> | undefined;
+  let userAge = 25;
+  let lang: Language = "en";
+  if (userRes.ok) {
+    const json = (await userRes.json()) as { user?: Record<string, unknown> };
+    userData = json.user;
+    const bd = userData?.birthDate as string | undefined;
+    const age = userData?.age as number | undefined;
+    userAge = (bd ? computeAgeFromBirthDate(bd) : age) ?? 25;
+    lang = (userData?.language as Language) ?? "en";
+  }
+
   switch (data) {
     case "settings:age-range": {
-      // Fetch user to get their age for dynamic grid
-      const userRes = await env.API_SERVICE.fetch(
-        new Request(`http://api/users/${userId}`, { method: "GET" }),
-      );
-      let userAge = 25;
-      let lang: Language = "en";
-      if (userRes.ok) {
-        const userData = (await userRes.json()) as {
-          user?: Record<string, unknown>;
-        };
-        const bd = userData.user?.birthDate as string | undefined;
-        const age = userData.user?.age as number | undefined;
-        userAge = (bd ? computeAgeFromBirthDate(bd) : age) ?? 25;
-        lang = (userData.user?.language as Language) ?? "en";
-      }
-
       await startConversation(env.KV, userId, "age-range");
       await ctx.reply(t("ageRangeSelectMin", lang), {
         reply_markup: buildAgeGridKeyboard("min", userAge),
@@ -137,22 +188,20 @@ export const settingsCallbacks = async (
       await ctx.answerCallbackQuery().catch(() => {});
       break;
     }
-    case "settings:distance":
-      await startConversation(env.KV, userId, "distance");
-      await ctx.reply(
-        "Enter max distance in km (e.g. *50*). Type *Cancel* to abort.",
-        { parse_mode: "Markdown" },
-      );
+    case "settings:distance": {
+      await ctx.reply(t("distanceSelect", lang), {
+        reply_markup: buildDistanceKeyboard(),
+      });
       await ctx.answerCallbackQuery().catch(() => {});
       break;
-    case "settings:gender-pref":
-      await startConversation(env.KV, userId, "gender-pref");
-      await ctx.reply(
-        "Enter preferred genders separated by commas (*male, female, other, prefer_not_to_say*). Type *Cancel* to abort.",
-        { parse_mode: "Markdown" },
-      );
+    }
+    case "settings:gender-pref": {
+      await ctx.reply(t("genderPrefSelect", lang), {
+        reply_markup: buildGenderPrefKeyboard(),
+      });
       await ctx.answerCallbackQuery().catch(() => {});
       break;
+    }
     case "settings:close":
       await ctx.answerCallbackQuery("Settings closed.").catch(() => {});
       await ctx.deleteMessage().catch(() => {});
@@ -179,10 +228,9 @@ export async function handleAgeRangeCallback(
   );
   let userAge = 25;
   let lang: Language = "en";
+  let userData: { user?: Record<string, unknown> } | undefined;
   if (userRes.ok) {
-    const userData = (await userRes.json()) as {
-      user?: Record<string, unknown>;
-    };
+    userData = (await userRes.json()) as { user?: Record<string, unknown> };
     const bd = userData.user?.birthDate as string | undefined;
     const age = userData.user?.age as number | undefined;
     userAge = (bd ? computeAgeFromBirthDate(bd) : age) ?? 25;
@@ -251,7 +299,11 @@ export async function handleAgeRangeCallback(
       return true;
     }
 
+    const existing = userData?.user?.preferences as
+      | Record<string, unknown>
+      | undefined;
     const success = await updateUserPreferences(env, userId, {
+      ...(existing ?? {}),
       minAge: min,
       maxAge: max,
     });
@@ -279,6 +331,136 @@ export async function handleAgeRangeCallback(
   }
 
   return false;
+}
+
+export async function handleDistanceCallback(
+  ctx: MyContext,
+  env: Env,
+  data: string,
+): Promise<boolean> {
+  if (!ctx.from) return false;
+  const userId = String(ctx.from.id);
+
+  const userRes = await env.API_SERVICE.fetch(
+    new Request(`http://api/users/${userId}`, { method: "GET" }),
+  );
+  let lang: Language = "en";
+  let userData: { user?: Record<string, unknown> } | undefined;
+  if (userRes.ok) {
+    userData = (await userRes.json()) as { user?: Record<string, unknown> };
+    lang = (userData.user?.language as Language) ?? "en";
+  }
+
+  if (data === "distance:manual") {
+    await startConversation(env.KV, userId, "distance");
+    await ctx.reply(
+      "Enter max distance in km (e.g. *50*). Type *Cancel* to abort.",
+      { parse_mode: "Markdown" },
+    );
+    await ctx.answerCallbackQuery().catch(() => {});
+    return true;
+  }
+
+  if (data.startsWith("distance:")) {
+    const val = parseInt(data.replace("distance:", ""), 10);
+    if (Number.isNaN(val) || val < 1 || val > 500) {
+      await ctx.answerCallbackQuery("Invalid distance.").catch(() => {});
+      return true;
+    }
+    const existing = userData?.user?.preferences as
+      | Record<string, unknown>
+      | undefined;
+    const success = await updateUserPreferences(env, userId, {
+      ...(existing ?? {}),
+      maxDistance: val,
+    });
+    if (success) {
+      await ctx
+        .editMessageText(
+          t("distanceUpdated", lang, { distance: String(val) }),
+          { parse_mode: "Markdown" },
+        )
+        .catch(() => {});
+      await ctx.reply("👇 Use the menu below to navigate:", {
+        reply_markup: getMainMenuKeyboard(),
+      });
+    } else {
+      await ctx
+        .reply(t("genericError", lang), { reply_markup: getMainMenuKeyboard() })
+        .catch(() => {});
+    }
+    await ctx.answerCallbackQuery().catch(() => {});
+    return true;
+  }
+
+  return false;
+}
+
+export async function handleGenderPrefCallback(
+  ctx: MyContext,
+  env: Env,
+  data: string,
+): Promise<boolean> {
+  if (!ctx.from) return false;
+  const userId = String(ctx.from.id);
+
+  const userRes = await env.API_SERVICE.fetch(
+    new Request(`http://api/users/${userId}`, { method: "GET" }),
+  );
+  let lang: Language = "en";
+  let existing: Record<string, unknown> | undefined;
+  if (userRes.ok) {
+    const userData = (await userRes.json()) as {
+      user?: Record<string, unknown>;
+    };
+    lang = (userData.user?.language as Language) ?? "en";
+    existing = userData.user?.preferences as
+      | Record<string, unknown>
+      | undefined;
+  }
+
+  let selected: string[] = [];
+  switch (data) {
+    case "genderpref:male":
+      selected = ["male"];
+      break;
+    case "genderpref:female":
+      selected = ["female"];
+      break;
+    case "genderpref:other":
+      selected = ["other"];
+      break;
+    case "genderpref:prefer_not_to_say":
+      selected = ["prefer_not_to_say"];
+      break;
+    case "genderpref:all":
+      selected = ["male", "female", "other", "prefer_not_to_say"];
+      break;
+    default:
+      return false;
+  }
+
+  const success = await updateUserPreferences(env, userId, {
+    ...(existing ?? {}),
+    genderPreference: selected,
+  });
+  if (success) {
+    await ctx
+      .editMessageText(
+        t("genderPrefUpdated", lang, { preferences: selected.join(", ") }),
+        { parse_mode: "Markdown" },
+      )
+      .catch(() => {});
+    await ctx.reply("👇 Use the menu below to navigate:", {
+      reply_markup: getMainMenuKeyboard(),
+    });
+  } else {
+    await ctx
+      .reply(t("genericError", lang), { reply_markup: getMainMenuKeyboard() })
+      .catch(() => {});
+  }
+  await ctx.answerCallbackQuery().catch(() => {});
+  return true;
 }
 
 async function fetchUserPreferences(

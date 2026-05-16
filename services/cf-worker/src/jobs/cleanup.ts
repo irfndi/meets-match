@@ -64,7 +64,7 @@ export async function runCleanupJob(env: Env): Promise<void> {
 
       for (const media of mediaUrls) {
         try {
-          // Extract R2 key from public URL: https://media.meetsmatch.irfndi.workers.dev/{key}
+          // Extract R2 key from public URL: https://pub-15c733bf3c734c6ea7fc120d0becd3ed.r2.dev/{key}
           const url = new URL(media.url);
           const key = url.pathname.slice(1); // remove leading /
           if (key) {

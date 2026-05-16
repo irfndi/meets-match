@@ -8,5 +8,10 @@
   "packageManager": "pnpm@9.15.4",
   "dependencies": {
     "deepsec": "^2.0.8"
+  },
+  "pnpm": {
+    "overrides": {
+      "@anthropic-ai/sdk": "0.91.1"
+    }
   }
 }

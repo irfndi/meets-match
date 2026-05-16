@@ -1,4 +1,4 @@
-const MEDIA_CDN_BASE = "https://media.meetsmatch.irfndi.workers.dev";
+const MEDIA_CDN_BASE = "https://pub-15c733bf3c734c6ea7fc120d0becd3ed.r2.dev";
 
 export function buildMediaKey(userId: string, ext: string): string {
   return `${userId}/${Date.now()}_${crypto.randomUUID()}.${ext}`;

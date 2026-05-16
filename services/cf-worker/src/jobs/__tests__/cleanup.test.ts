@@ -82,7 +82,7 @@ describe("runCleanupJob", () => {
         last_interaction_at: oldDate,
         media_urls: JSON.stringify([
           {
-            url: "https://media.meetsmatch.irfndi.workers.dev/1/test.jpg",
+            url: "https://pub-15c733bf3c734c6ea7fc120d0becd3ed.r2.dev/1/test.jpg",
             type: "image",
           },
         ]),
