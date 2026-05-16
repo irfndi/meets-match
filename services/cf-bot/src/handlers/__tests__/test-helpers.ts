@@ -39,10 +39,29 @@ export function mockCtx(overrides?: Partial<MyContext>): MyContext {
 export function createMockApiService(
   responseMap: Record<string, () => Response>,
 ) {
-  return {
-    fetch: vi.fn().mockImplementation((req: Request | string) => {
+  const requests: Array<{
+    url: string;
+    method: string;
+    body: unknown;
+  }> = [];
+
+  const service = {
+    fetch: vi.fn().mockImplementation(async (req: Request | string) => {
       const url =
         typeof req === "string" ? req : (req as any).url || String(req);
+      const method = typeof req === "string" ? "GET" : req.method || "GET";
+
+      let body: unknown = undefined;
+      if (typeof req !== "string" && req.body) {
+        try {
+          const text = await req.clone().text();
+          body = text ? JSON.parse(text) : undefined;
+        } catch {
+          body = undefined;
+        }
+      }
+      requests.push({ url, method, body });
+
       const sortedPatterns = Object.entries(responseMap).sort(
         (a, b) => b[0].length - a[0].length,
       );
@@ -51,5 +70,8 @@ export function createMockApiService(
       }
       return Promise.resolve(new Response(JSON.stringify({}), { status: 404 }));
     }),
+    _requests: requests,
   };
+
+  return service;
 }

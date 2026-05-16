@@ -1840,14 +1840,34 @@ export async function handleGiftPremiumPayment(
     const targetName = (targetRes.user?.displayName ?? "Someone") as string;
     const tierLabel = tier === "premium_plus" ? "Premium+ 💎" : "Premium 👑";
 
-    // Activate premium for target user
-    const expiresAt = new Date();
+    // Determine effective tier: never downgrade (premium_plus > premium > free)
+    const currentTier = (targetRes.user?.subscriptionTier as string) ?? "free";
+    const tierRank: Record<string, number> = {
+      premium_plus: 2,
+      premium: 1,
+      free: 0,
+    };
+    const effectiveTier =
+      (tierRank[tier] ?? 0) >= (tierRank[currentTier] ?? 0)
+        ? tier
+        : currentTier;
+
+    // Extend from the later of now or current expiry
+    const currentExpiresAt = targetRes.user?.subscriptionExpiresAt as
+      | string
+      | undefined;
+    const baseDate = currentExpiresAt ? new Date(currentExpiresAt) : new Date();
+    if (isNaN(baseDate.getTime()) || baseDate < new Date()) {
+      baseDate.setTime(Date.now());
+    }
+    const expiresAt = new Date(baseDate);
     expiresAt.setDate(expiresAt.getDate() + 30);
+
     await client.updateUser({
       userId: targetUserId,
       user: {
         id: targetUserId,
-        subscriptionTier: tier,
+        subscriptionTier: effectiveTier,
         subscriptionExpiresAt: expiresAt.toISOString(),
       },
     });
