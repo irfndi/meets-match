@@ -209,6 +209,10 @@ export class UserRepository {
           fields.push("subscription_tier = ?");
           values.push(user.subscriptionTier);
         }
+        if (user.subscriptionExpiresAt !== undefined) {
+          fields.push("subscription_expires_at = ?");
+          values.push(user.subscriptionExpiresAt);
+        }
         if (user.dailySwipesUsed !== undefined) {
           fields.push("daily_swipes_used = ?");
           values.push(user.dailySwipesUsed);
@@ -886,6 +890,9 @@ export class UserRepository {
       subscriptionTier: row.subscription_tier
         ? String(row.subscription_tier)
         : undefined,
+      subscriptionExpiresAt: row.subscription_expires_at
+        ? String(row.subscription_expires_at)
+        : undefined,
       dailySwipesUsed: row.daily_swipes_used
         ? Number(row.daily_swipes_used)
         : undefined,
@@ -979,7 +986,9 @@ export class UserRepository {
             .run();
         }
 
-        const total = tier === "premium" || tier === "premium_plus" ? 9999 : 10;
+        let total = 10;
+        if (tier === "premium") total = 50;
+        else if (tier === "premium_plus") total = 9999;
         return { remaining: Math.max(0, total - used), total, tier };
       },
       catch: (error) =>
@@ -1028,7 +1037,9 @@ export class UserRepository {
           resetAt = today;
         }
 
-        const total = tier === "premium" || tier === "premium_plus" ? 9999 : 10;
+        let total = 10;
+        if (tier === "premium") total = 50;
+        else if (tier === "premium_plus") total = 9999;
         if (used >= total) {
           return { remaining: 0, total };
         }
@@ -1215,6 +1226,23 @@ export class UserRepository {
         return true;
       },
       catch: (error) => new DatabaseError("clearMediaAndMarkIncomplete", error),
+    });
+  }
+
+  downgradeExpiredSubscriptions(): Effect.Effect<number, DatabaseError, never> {
+    return Effect.tryPromise({
+      try: async () => {
+        const now = new Date().toISOString();
+        const result = await this.db
+          .prepare(
+            "UPDATE users SET subscription_tier = 'free', subscription_expires_at = NULL WHERE subscription_expires_at IS NOT NULL AND subscription_expires_at < ?",
+          )
+          .bind(now)
+          .run();
+        return Number(result.meta?.changes ?? 0);
+      },
+      catch: (error) =>
+        new DatabaseError("downgradeExpiredSubscriptions", error),
     });
   }
 }

@@ -10,6 +10,7 @@ import { MatchRepository } from "../models/match.js";
 import { NotificationRepository } from "../models/notification.js";
 import { ReportRepository } from "../models/report.js";
 import { FeedbackRepository } from "../models/feedback.js";
+import { BlockRepository } from "../models/block.js";
 import { GeocodingService } from "../models/geocoding.js";
 import {
   AppError,
@@ -50,14 +51,16 @@ export class ApiRouter {
   private readonly notificationRepo: NotificationRepository;
   private readonly reportRepo: ReportRepository;
   private readonly feedbackRepo: FeedbackRepository;
+  private readonly blockRepo: BlockRepository;
   private readonly geoService: GeocodingService;
 
   constructor(private readonly env: ApiEnv) {
     this.userRepo = new UserRepository(env.DB);
-    this.matchRepo = new MatchRepository(env.DB, this.userRepo);
+    this.matchRepo = new MatchRepository(env.DB, this.userRepo, this.blockRepo);
     this.notificationRepo = new NotificationRepository(env.DB);
     this.reportRepo = new ReportRepository(env.DB);
     this.feedbackRepo = new FeedbackRepository(env.DB);
+    this.blockRepo = new BlockRepository(env.DB);
     this.geoService = new GeocodingService(env.KV);
   }
 
@@ -145,6 +148,14 @@ export class ApiRouter {
           method === "POST":
           return this.handleInteract(url.pathname);
         case url.pathname.startsWith("/users/") &&
+          url.pathname.endsWith("/block") &&
+          method === "POST":
+          return this.handleBlock(url.pathname, request);
+        case url.pathname.startsWith("/users/") &&
+          url.pathname.endsWith("/unblock") &&
+          method === "POST":
+          return this.handleUnblock(url.pathname, request);
+        case url.pathname.startsWith("/users/") &&
           url.pathname.endsWith("/last-active") &&
           method === "POST":
           return this.handleUpdateLastActive(url.pathname);
@@ -172,6 +183,9 @@ export class ApiRouter {
           return this.handleQueueStats();
         case url.pathname === "/feedback" && method === "POST":
           return this.handleFeedback(request);
+        case url.pathname === "/cron/downgrade-expired-subscriptions" &&
+          method === "POST":
+          return this.handleDowngradeExpiredSubscriptions();
         default:
           return jsonResponse({ error: "Not Found" }, 404);
       }
@@ -230,7 +244,7 @@ export class ApiRouter {
       );
       let relaxed = false;
 
-      // If strict filters return nothing, try relaxed filters
+      // If strict filters return nothing, try soft relaxed filters
       if (result.length === 0) {
         result = await runEffect(
           this.matchRepo.getPotentialMatches({
@@ -899,6 +913,69 @@ export class ApiRouter {
         error,
       );
       return jsonResponse({ error: "Failed to update interaction" }, 500);
+    }
+  }
+
+  private async handleBlock(path: string, request: Request): Promise<Response> {
+    const blockerId = path.replace("/users/", "").replace("/block", "");
+    try {
+      const body = (await request.json()) as Record<string, unknown>;
+      const blockedId = String(body.blockedId ?? "");
+      if (!blockedId) {
+        return jsonResponse({ error: "blockedId is required" }, 400);
+      }
+      const result = await runEffect(
+        this.blockRepo.block({ blockerId, blockedId }),
+      );
+      return jsonResponse(result);
+    } catch (error) {
+      if (error instanceof ValidationError)
+        return jsonResponse({ error: error.message }, 400);
+      log.error("block", "Failed to block user", undefined, error);
+      return jsonResponse({ error: "Failed to block user" }, 500);
+    }
+  }
+
+  private async handleUnblock(
+    path: string,
+    request: Request,
+  ): Promise<Response> {
+    const blockerId = path.replace("/users/", "").replace("/unblock", "");
+    try {
+      const body = (await request.json()) as Record<string, unknown>;
+      const blockedId = String(body.blockedId ?? "");
+      if (!blockedId) {
+        return jsonResponse({ error: "blockedId is required" }, 400);
+      }
+      const result = await runEffect(
+        this.blockRepo.unblock({ blockerId, blockedId }),
+      );
+      return jsonResponse(result);
+    } catch (error) {
+      if (error instanceof ValidationError)
+        return jsonResponse({ error: error.message }, 400);
+      log.error("unblock", "Failed to unblock user", undefined, error);
+      return jsonResponse({ error: "Failed to unblock user" }, 500);
+    }
+  }
+
+  private async handleDowngradeExpiredSubscriptions(): Promise<Response> {
+    try {
+      const count = await runEffect(
+        this.userRepo.downgradeExpiredSubscriptions(),
+      );
+      return jsonResponse({ success: true, downgraded: count });
+    } catch (error) {
+      log.error(
+        "downgradeExpiredSubscriptions",
+        "Handler failed",
+        undefined,
+        error,
+      );
+      return jsonResponse(
+        { error: "Failed to downgrade expired subscriptions" },
+        500,
+      );
     }
   }
 }

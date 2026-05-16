@@ -117,7 +117,7 @@ describe("Match Handlers", () => {
       });
       await matchCommand(ctx, env);
       expect(ctx.reply).toHaveBeenCalledWith(
-        expect.stringContaining("No potential matches"),
+        expect.stringContaining("No potential matches found"),
         expect.anything(),
       );
     });

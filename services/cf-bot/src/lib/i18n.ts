@@ -355,12 +355,31 @@ const en: Translations = {
 
 const dictionaries: Record<Language, Translations> = { en };
 
-function escapeMd(value: string): string {
+export function escapeMd(value: string): string {
   return value.replace(/[_*\[\]`\\]/g, "\\$&");
 }
 
 export function escapeMarkdownV2(value: string): string {
   return value.replace(/[_*\[\]()~`>#+=|{}\.!\\-]/g, "\\$&");
+}
+
+/**
+ * Tagged template literal for MarkdownV2 captions/messages.
+ * Automatically escapes all interpolated values while preserving
+ * intentional formatting in the static template parts.
+ *
+ * Usage:
+ *   mdv2`👤 *Your Profile*\n\n*Name:* ${rawDisplayName}`
+ */
+export function mdv2(
+  strings: TemplateStringsArray,
+  ...values: unknown[]
+): string {
+  return strings.reduce((result, str, i) => {
+    const val = values[i];
+    const escaped = val !== undefined ? escapeMarkdownV2(String(val)) : "";
+    return result + str + escaped;
+  }, "");
 }
 
 export function t(

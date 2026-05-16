@@ -19,11 +19,13 @@ import {
   ValidationError,
 } from "@meetsmatch/cf-shared";
 import { UserRepository } from "./user.js";
+import { BlockRepository } from "./block.js";
 
 export class MatchRepository {
   constructor(
     private readonly db: D1Database,
     private readonly userRepo?: UserRepository,
+    private readonly blockRepo?: BlockRepository,
   ) {}
 
   getById(
@@ -369,6 +371,7 @@ export class MatchRepository {
             m.status as match_status,
             m.user1_action, m.user2_action,
             m.updated_at as match_updated_at,
+            m.matched_at,
             pv.viewed_at
           FROM users u
           LEFT JOIN matches m ON (
@@ -385,14 +388,27 @@ export class MatchRepository {
           currentUser.id,
         ];
 
-        // Exclude profiles where current user already liked (pending) or mutual match
+        // Exclude blocked users (both directions)
+        sql += ` AND NOT EXISTS (
+          SELECT 1 FROM blocks b
+          WHERE (b.blocker_id = ? AND b.blocked_id = u.id)
+             OR (b.blocker_id = u.id AND b.blocked_id = ?)
+        )`;
+        values.push(currentUser.id, currentUser.id);
+
+        // Exclude profiles where current user already liked (pending) UNLESS the like is stale (>30 days)
+        // Include mutual matches for recycling (handled in JS scoring)
+        // Include rejected for cooldown (handled in JS)
         sql += ` AND (
           m.id IS NULL
           OR (
             m.status = 'pending' AND NOT (
-              (m.user1_id = ? AND m.user1_action = 'like' AND m.user2_action = 'none')
-              OR
-              (m.user2_id = ? AND m.user2_action = 'like' AND m.user1_action = 'none')
+              (
+                (m.user1_id = ? AND m.user1_action = 'like' AND m.user2_action = 'none')
+                OR
+                (m.user2_id = ? AND m.user2_action = 'like' AND m.user1_action = 'none')
+              )
+              AND (m.updated_at > datetime('now', '-30 days'))
             )
           )
           OR (
@@ -413,16 +429,20 @@ export class MatchRepository {
 
         // Apply preference filters.
         // Gender preference is always enforced (never relaxed).
-        // Age/distance filters are skipped only when relaxing filters.
-        if (!relaxFilters) {
-          if (prefs?.minAge && prefs.minAge > 0) {
-            sql += " AND u.age >= ?";
-            values.push(prefs.minAge);
-          }
-          if (prefs?.maxAge && prefs.maxAge > 0) {
-            sql += " AND u.age <= ?";
-            values.push(prefs.maxAge);
-          }
+        // Age/distance: strict uses exact prefs; soft relax widens by ±3 years / ×2 distance.
+        const minAge =
+          prefs?.minAge && prefs.minAge > 0 ? prefs.minAge : undefined;
+        const maxAge =
+          prefs?.maxAge && prefs.maxAge > 0 ? prefs.maxAge : undefined;
+        if (minAge !== undefined) {
+          const effectiveMin = relaxFilters ? Math.max(12, minAge - 3) : minAge;
+          sql += " AND u.age >= ?";
+          values.push(effectiveMin);
+        }
+        if (maxAge !== undefined) {
+          const effectiveMax = relaxFilters ? Math.min(80, maxAge + 3) : maxAge;
+          sql += " AND u.age <= ?";
+          values.push(effectiveMax);
         }
         if (prefs?.genderPreference && prefs.genderPreference.length > 0) {
           const placeholders = prefs.genderPreference.map(() => "?").join(",");
@@ -439,6 +459,7 @@ export class MatchRepository {
         const rows = (results ?? []) as Array<Record<string, unknown>>;
 
         // 3. Filter and score candidates
+        const now = new Date();
         const scored = rows
           .map((row) => {
             const candidate = this.rowToUser(row);
@@ -454,15 +475,58 @@ export class MatchRepository {
             const matchUpdatedAt = row.match_updated_at
               ? String(row.match_updated_at)
               : null;
+            const matchedAt = row.matched_at ? String(row.matched_at) : null;
             const viewedAt = row.viewed_at ? String(row.viewed_at) : null;
 
             // Determine current user's action in this match
             const isUser1InMatch = row.user1_id === currentUser.id;
             const myAction = isUser1InMatch ? user1Action : user2Action;
+            const otherAction = isUser1InMatch ? user2Action : user1Action;
 
-            // Distance hard constraint (skipped when relaxing filters or either user lacks coordinates)
+            // --- Bidirectional preference check ---
+            const candidatePrefs = candidate.preferences;
             if (
-              !relaxFilters &&
+              candidatePrefs?.genderPreference &&
+              candidatePrefs.genderPreference.length > 0 &&
+              currentUser.gender
+            ) {
+              if (
+                !candidatePrefs.genderPreference.includes(currentUser.gender)
+              ) {
+                return null;
+              }
+            }
+            if (
+              candidatePrefs?.minAge != null &&
+              candidatePrefs?.maxAge != null &&
+              currentUser.age != null
+            ) {
+              if (
+                currentUser.age < candidatePrefs.minAge ||
+                currentUser.age > candidatePrefs.maxAge
+              ) {
+                return null;
+              }
+            }
+            // Distance from candidate's perspective
+            if (
+              candidate.location?.latitude != null &&
+              candidate.location?.longitude != null &&
+              currentUser.location?.latitude != null &&
+              currentUser.location?.longitude != null &&
+              candidatePrefs?.maxDistance
+            ) {
+              const dist = haversine(
+                candidate.location.latitude,
+                candidate.location.longitude,
+                currentUser.location.latitude,
+                currentUser.location.longitude,
+              );
+              if (dist > candidatePrefs.maxDistance) return null;
+            }
+
+            // --- Current user's distance hard constraint ---
+            if (
               currentUser.location?.latitude != null &&
               currentUser.location?.longitude != null &&
               candidate.location?.latitude != null &&
@@ -475,11 +539,15 @@ export class MatchRepository {
                 candidate.location.latitude,
                 candidate.location.longitude,
               );
-              if (dist > prefs.maxDistance) return null;
+              const effectiveMaxDist = relaxFilters
+                ? Math.min(500, prefs.maxDistance * 2)
+                : prefs.maxDistance;
+              if (dist > effectiveMaxDist) return null;
             }
 
-            // Cooldown filtering
-            const now = new Date();
+            // --- Cooldown filtering ---
+
+            // Dislike cooldown: 3 days hard exclusion
             if (
               matchStatus === "rejected" &&
               myAction === "DISLIKE" &&
@@ -493,17 +561,38 @@ export class MatchRepository {
                 return null;
               }
             }
+
+            // Skip cooldown: 6 hours, BUT bypass if the other user liked us
             if (myAction === "SKIP" && matchUpdatedAt) {
-              const cooldownMs = 6 * 60 * 60 * 1000; // 6 hours
+              if (otherAction !== "LIKE") {
+                const cooldownMs = 6 * 60 * 60 * 1000; // 6 hours
+                if (
+                  now.getTime() - new Date(matchUpdatedAt).getTime() <
+                  cooldownMs
+                ) {
+                  return null;
+                }
+              }
+            }
+
+            // Pending like expiration: exclude fresh pending likes (<30 days)
+            // This is also handled in SQL, but added here as defensive fallback
+            if (
+              matchStatus === "pending" &&
+              myAction === "LIKE" &&
+              otherAction === "NONE" &&
+              matchUpdatedAt
+            ) {
+              const expireMs = 30 * 24 * 60 * 60 * 1000; // 30 days
               if (
                 now.getTime() - new Date(matchUpdatedAt).getTime() <
-                cooldownMs
+                expireMs
               ) {
                 return null;
               }
             }
 
-            // Calculate base score
+            // --- Calculate base score ---
             let baseScore = calculateMatchScore(currentUser, candidate).total;
 
             // Variety: penalize recently shown profiles
@@ -518,14 +607,32 @@ export class MatchRepository {
               }
             }
 
-            // Already matched: include but with very low priority
-            if (matchStatus === "matched") {
-              baseScore *= 0.05;
+            // Matched recycling: recent matches deprioritized, old matches normalize
+            if (matchStatus === "matched" && matchedAt) {
+              const daysSinceMatched =
+                (now.getTime() - new Date(matchedAt).getTime()) /
+                (1000 * 60 * 60 * 24);
+              if (daysSinceMatched < 14) {
+                baseScore *= 0.05; // Very low priority for fresh matches
+              } else if (daysSinceMatched < 30) {
+                baseScore *= 0.3; // Medium priority for 14-30 day matches
+              } // >30 days: normal priority (allow rematch)
             }
 
-            // Disliked after cooldown: lower priority
+            // Disliked after cooldown: lower priority, normalizes after 14 days
             if (matchStatus === "rejected" && myAction === "DISLIKE") {
-              baseScore *= 0.3;
+              const daysSinceDislike = matchUpdatedAt
+                ? (now.getTime() - new Date(matchUpdatedAt).getTime()) /
+                  (1000 * 60 * 60 * 24)
+                : 999;
+              if (daysSinceDislike < 14) {
+                baseScore *= 0.3;
+              } // 14-30 days stays at 0.3, >30 normalizes
+            }
+
+            // Skip with incoming like: slight penalty but still visible
+            if (myAction === "SKIP" && otherAction === "LIKE") {
+              baseScore *= 0.8;
             }
 
             // Premium boost: higher base random range for paid tiers
@@ -578,6 +685,7 @@ export class MatchRepository {
     return Effect.tryPromise({
       try: async () => {
         // Find users who liked the current user but current user hasn't responded
+        // Exclude blocked users (both directions)
         const { results } = await this.db
           .prepare(
             `
@@ -594,10 +702,22 @@ export class MatchRepository {
               (m.user1_id = ? AND m.user2_action = 'like' AND m.user1_action = 'none') OR
               (m.user2_id = ? AND m.user1_action = 'like' AND m.user2_action = 'none')
             )
+            AND NOT EXISTS (
+              SELECT 1 FROM blocks b
+              WHERE (b.blocker_id = ? AND b.blocked_id = u.id)
+                 OR (b.blocker_id = u.id AND b.blocked_id = ?)
+            )
           ORDER BY m.updated_at DESC
         `,
           )
-          .bind(req.userId, req.userId, req.userId, req.userId)
+          .bind(
+            req.userId,
+            req.userId,
+            req.userId,
+            req.userId,
+            req.userId,
+            req.userId,
+          )
           .all();
 
         return (results ?? []).map((r) =>

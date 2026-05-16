@@ -43,6 +43,24 @@ export function isPhoneVerified(user: UserProfile): boolean {
   return !!user.phoneNumber && user.phoneNumber.trim().length > 0;
 }
 
+export function getDefaultPreferences(
+  user: Record<string, unknown>,
+): Record<string, unknown> {
+  const age = user.birthDate
+    ? computeAgeFromBirthDate(String(user.birthDate))
+    : (user.age as number | undefined);
+  const gender = user.gender as string | undefined;
+  if (!age || !gender) return {};
+  const minAge = Math.max(12, age - 7);
+  const maxAge = Math.min(80, age + 7);
+  const maxDistance = 25;
+  let genderPreference: string[];
+  if (gender === "male") genderPreference = ["female"];
+  else if (gender === "female") genderPreference = ["male"];
+  else genderPreference = ["male", "female", "other", "prefer_not_to_say"];
+  return { minAge, maxAge, maxDistance, genderPreference };
+}
+
 export function getProfileCompleteness(user: UserProfile): {
   complete: boolean;
   missing: string[];

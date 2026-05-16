@@ -56,63 +56,68 @@ async function setUserLanguage(
 }
 
 export const startCommand = async (ctx: MyContext, env: Env): Promise<void> => {
-  if (!ctx.from) {
-    await ctx.reply(t("welcomeNew"));
-    return;
-  }
-
-  const result = await ensureUserExists(ctx, env);
-  if (!result) {
-    await ctx.reply(t("genericError"));
-    return;
-  }
-
-  const { user, created } = result;
-  const lang = (user.language as Language) ?? DEFAULT_LANGUAGE;
-
-  // Handle referral code from deep link: /start ref_XXXXXX
-  const startPayload = ctx.message?.text?.replace("/start", "").trim() ?? "";
-  if (startPayload.startsWith("ref_")) {
-    const code = startPayload.replace("ref_", "");
-    const applyRes = await env.API_SERVICE.fetch(
-      new Request(`http://api/users/${ctx.from.id}/apply-referral`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code }),
-      }),
-    );
-    if (applyRes.ok) {
-      const data = (await applyRes.json()) as { message?: string };
-      await ctx.reply(`🎉 ${data.message ?? "Referral applied!"}`);
+  try {
+    if (!ctx.from) {
+      await ctx.reply(t("welcomeNew"));
+      return;
     }
+
+    const result = await ensureUserExists(ctx, env);
+    if (!result) {
+      await ctx.reply(t("genericError"));
+      return;
+    }
+
+    const { user, created } = result;
+    const lang = (user.language as Language) ?? DEFAULT_LANGUAGE;
+
+    // Handle referral code from deep link: /start ref_XXXXXX
+    const startPayload = ctx.message?.text?.replace("/start", "").trim() ?? "";
+    if (startPayload.startsWith("ref_")) {
+      const code = startPayload.replace("ref_", "");
+      const applyRes = await env.API_SERVICE.fetch(
+        new Request(`http://api/users/${ctx.from.id}/apply-referral`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code }),
+        }),
+      );
+      if (applyRes.ok) {
+        const data = (await applyRes.json()) as { message?: string };
+        await ctx.reply(`🎉 ${data.message ?? "Referral applied!"}`);
+      }
+    }
+
+    if (created) {
+      // New user — show language selection first
+      await ctx.reply(
+        "🌍 Choose your language / Pilih bahasa:\n(More languages coming soon!)",
+        { reply_markup: buildLanguageKeyboard() },
+      );
+      return;
+    }
+
+    // Existing user — welcome back in their language
+    const { complete, missing } = getProfileCompleteness(user);
+
+    if (!complete) {
+      await ctx.reply(
+        t("welcomeBackIncomplete", lang, {
+          missing: getMissingFieldsDisplay(missing),
+        }),
+        { reply_markup: getMainMenuKeyboard(), parse_mode: "Markdown" },
+      );
+      return;
+    }
+
+    await ctx.reply(t("welcomeBack", lang), {
+      reply_markup: getMainMenuKeyboard(),
+      parse_mode: "Markdown",
+    });
+  } catch (error) {
+    log.error("startCommand", "Unhandled error", undefined, error);
+    await ctx.reply(t("genericError"));
   }
-
-  if (created) {
-    // New user — show language selection first
-    await ctx.reply(
-      "🌍 Choose your language / Pilih bahasa:\n(More languages coming soon!)",
-      { reply_markup: buildLanguageKeyboard() },
-    );
-    return;
-  }
-
-  // Existing user — welcome back in their language
-  const { complete, missing } = getProfileCompleteness(user);
-
-  if (!complete) {
-    await ctx.reply(
-      t("welcomeBackIncomplete", lang, {
-        missing: getMissingFieldsDisplay(missing),
-      }),
-      { reply_markup: getMainMenuKeyboard(), parse_mode: "Markdown" },
-    );
-    return;
-  }
-
-  await ctx.reply(t("welcomeBack", lang), {
-    reply_markup: getMainMenuKeyboard(),
-    parse_mode: "Markdown",
-  });
 };
 
 export const languageCallback = async (
@@ -123,20 +128,28 @@ export const languageCallback = async (
   if (!ctx.from) return false;
   if (!data.startsWith("lang:")) return false;
 
-  const selectedLang = data.replace("lang:", "") as Language;
-  const userId = String(ctx.from.id);
+  try {
+    const selectedLang = data.replace("lang:", "") as Language;
+    const userId = String(ctx.from.id);
 
-  // Store language preference
-  await setUserLanguage(env, userId, selectedLang);
+    // Store language preference
+    await setUserLanguage(env, userId, selectedLang);
 
-  await ctx
-    .answerCallbackQuery(`Language set to ${getLanguageLabel(selectedLang)}`)
-    .catch(() => {});
-  await ctx
-    .editMessageText(t("welcomeNew", selectedLang), { parse_mode: "Markdown" })
-    .catch(() => {});
-  await ctx.reply(t("menuPrompt", selectedLang), {
-    reply_markup: getMainMenuKeyboard(),
-  });
-  return true;
+    await ctx
+      .answerCallbackQuery(`Language set to ${getLanguageLabel(selectedLang)}`)
+      .catch(() => {});
+    await ctx
+      .editMessageText(t("welcomeNew", selectedLang), {
+        parse_mode: "Markdown",
+      })
+      .catch(() => {});
+    await ctx.reply(t("menuPrompt", selectedLang), {
+      reply_markup: getMainMenuKeyboard(),
+    });
+    return true;
+  } catch (error) {
+    log.error("languageCallback", "Unhandled error", undefined, error);
+    await ctx.answerCallbackQuery("❌ Something went wrong.").catch(() => {});
+    return false;
+  }
 };

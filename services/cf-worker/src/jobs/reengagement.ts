@@ -129,7 +129,11 @@ export async function runReengagementJob(env: Env): Promise<void> {
         const nearbyCount = await countNearbyUsers(env.DB, userId, gender);
         const genderLabel = getOppositeGenderLabel(gender);
         const variant = pickVariant();
-        const message = variant(firstName, nearbyCount, genderLabel);
+        const safeName = firstName.replace(
+          /[_*\[\]`\.!#+\-={}|~()><\\]/g,
+          "\\$&",
+        );
+        const message = variant(safeName, nearbyCount, genderLabel);
 
         const response = await env.API_SERVICE.fetch(
           new Request("http://api/notifications", {

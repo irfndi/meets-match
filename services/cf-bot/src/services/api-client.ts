@@ -1,4 +1,3 @@
-import { Effect } from "effect";
 import type { Fetcher } from "@cloudflare/workers-types";
 import {
   type GetUserRequest,
@@ -330,5 +329,35 @@ export class ApiServiceClient implements IUserService {
     );
     if (!response.ok) throw new Error(`API error: ${response.status}`);
     return (await response.json()) as { code: string };
+  }
+
+  async blockUser(
+    blockerId: string,
+    blockedId: string,
+  ): Promise<{ success: boolean }> {
+    const response = await this.binding.fetch(
+      new Request(`http://api/users/${blockerId}/block`, {
+        method: "POST",
+        body: JSON.stringify({ blockedId }),
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    if (!response.ok) throw new Error(`API error: ${response.status}`);
+    return (await response.json()) as { success: boolean };
+  }
+
+  async unblockUser(
+    blockerId: string,
+    blockedId: string,
+  ): Promise<{ success: boolean }> {
+    const response = await this.binding.fetch(
+      new Request(`http://api/users/${blockerId}/unblock`, {
+        method: "POST",
+        body: JSON.stringify({ blockedId }),
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    if (!response.ok) throw new Error(`API error: ${response.status}`);
+    return (await response.json()) as { success: boolean };
   }
 }

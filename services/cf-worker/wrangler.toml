@@ -38,13 +38,14 @@ service = "meetsmatch-bot"
 
 # Cron Triggers
 [triggers]
-crons = ["0 9 * * *", "0 10 * * *", "0 11 * * *", "*/5 * * * *"]
+crons = ["0 9 * * *", "0 10 * * *", "0 11 * * *", "*/5 * * * *", "0 0 * * *"]
 
 [vars]
 ENVIRONMENT = "development"
 REENGAGEMENT_SCHEDULE = "0 10 * * *"
 DLQ_PROCESSOR_SCHEDULE = "*/5 * * * *"
 BIRTHDAY_SCHEDULE = "0 9 * * *"
+SUBSCRIPTION_EXPIRY_SCHEDULE = "0 0 * * *"
 WORKER_CONCURRENCY = "10"
 
 # Secrets (set via wrangler secret put or .dev.vars):

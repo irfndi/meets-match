@@ -62,6 +62,10 @@ export interface Env {
 function createBot(env: Env): Bot<MyContext> {
   const bot = new Bot<MyContext>(env.BOT_TOKEN);
 
+  bot.catch((err) => {
+    console.error("Bot error:", err);
+  });
+
   bot.use(
     session({
       initial: () => ({}),
@@ -138,157 +142,184 @@ function createBot(env: Env): Bot<MyContext> {
   bot.command("referral", (ctx) => referralCommand(ctx, env));
 
   bot.on("callback_query:data", async (ctx) => {
-    const data = ctx.callbackQuery.data;
+    try {
+      const data = ctx.callbackQuery.data;
 
-    // Language selection callback
-    if (data.startsWith("lang:")) {
-      await languageCallback(ctx, env, data);
-      return;
-    }
+      // Language selection callback
+      if (data.startsWith("lang:")) {
+        await languageCallback(ctx, env, data);
+        return;
+      }
 
-    if (data.startsWith("profile:")) {
-      const handled = await handleProfileCallback(ctx, env, data);
-      if (handled) return;
-    }
+      if (data.startsWith("profile:")) {
+        const handled = await handleProfileCallback(ctx, env, data);
+        if (handled) return;
+      }
 
-    if (data === "media:back") {
-      await profileCommand(ctx, env);
-      await ctx.answerCallbackQuery().catch(() => {});
-      return;
-    }
+      if (data === "media:back") {
+        await profileCommand(ctx, env);
+        await ctx.answerCallbackQuery().catch(() => {});
+        return;
+      }
 
-    if (data.startsWith("media:")) {
-      const handled = await handleMediaCallback(ctx, env, data);
-      if (handled) return;
-    }
+      if (data.startsWith("media:")) {
+        const handled = await handleMediaCallback(ctx, env, data);
+        if (handled) return;
+      }
 
-    if (
-      data === "next_match" ||
-      data === "view_matches" ||
-      data.startsWith("match:") ||
-      data.startsWith("dm:")
-    ) {
-      return matchCallbacks(ctx, env);
-    }
+      if (
+        data === "next_match" ||
+        data === "view_matches" ||
+        data.startsWith("match:") ||
+        data.startsWith("dm:")
+      ) {
+        return await matchCallbacks(ctx, env);
+      }
 
-    if (data === "matches") {
-      return matchesCommand(ctx, env);
-    }
+      if (data === "matches") {
+        return await matchesCommand(ctx, env);
+      }
 
-    if (data === "find_match") {
-      return matchCommand(ctx, env);
-    }
+      if (data === "find_match") {
+        return await matchCommand(ctx, env);
+      }
 
-    if (
-      data === "matches_close" ||
-      data === "back_to_matches" ||
-      data.startsWith("view_match_user_") ||
-      data.startsWith("likes:")
-    ) {
-      return matchesCallbacks(ctx, env);
-    }
+      if (
+        data === "matches_close" ||
+        data === "back_to_matches" ||
+        data.startsWith("view_match_user_") ||
+        data.startsWith("likes:")
+      ) {
+        return await matchesCallbacks(ctx, env);
+      }
 
-    if (data === "settings:show") {
-      await settingsCommand(ctx, env);
-      await ctx.answerCallbackQuery().catch(() => {});
-      return;
-    }
+      if (data === "settings:show") {
+        await settingsCommand(ctx, env);
+        await ctx.answerCallbackQuery().catch(() => {});
+        return;
+      }
 
-    if (data === "settings:back") {
-      await settingsCommand(ctx, env);
-      await ctx.answerCallbackQuery().catch(() => {});
-      return;
-    }
+      if (data === "settings:back") {
+        await settingsCommand(ctx, env);
+        await ctx.answerCallbackQuery().catch(() => {});
+        return;
+      }
 
-    if (data.startsWith("settings:")) {
-      return settingsCallbacks(ctx, env);
-    }
+      if (data.startsWith("settings:")) {
+        return await settingsCallbacks(ctx, env);
+      }
 
-    if (data.startsWith("agerange:")) {
-      const handled = await handleAgeRangeCallback(ctx, env, data);
-      if (handled) return;
-    }
+      if (data.startsWith("agerange:")) {
+        const handled = await handleAgeRangeCallback(ctx, env, data);
+        if (handled) return;
+      }
 
-    if (data.startsWith("distance:")) {
-      const handled = await handleDistanceCallback(ctx, env, data);
-      if (handled) return;
-    }
+      if (data.startsWith("distance:")) {
+        const handled = await handleDistanceCallback(ctx, env, data);
+        if (handled) return;
+      }
 
-    if (data.startsWith("genderpref:")) {
-      const handled = await handleGenderPrefCallback(ctx, env, data);
-      if (handled) return;
-    }
+      if (data.startsWith("genderpref:")) {
+        const handled = await handleGenderPrefCallback(ctx, env, data);
+        if (handled) return;
+      }
 
-    if (
-      data.startsWith("premium:") ||
-      data.startsWith("referral:") ||
-      data.startsWith("premium_ad:")
-    ) {
-      return premiumCallbacks(ctx, env);
-    }
+      if (
+        data.startsWith("premium:") ||
+        data.startsWith("referral:") ||
+        data.startsWith("premium_ad:")
+      ) {
+        return await premiumCallbacks(ctx, env);
+      }
 
-    if (data === "media:retry") {
-      await ctx.deleteMessage().catch(() => {});
-      await ctx.answerCallbackQuery().catch(() => {});
-      return;
-    }
+      if (data === "media:retry") {
+        await ctx.deleteMessage().catch(() => {});
+        await ctx.answerCallbackQuery().catch(() => {});
+        return;
+      }
 
-    if (data === "media:cancel") {
-      await ctx.deleteMessage().catch(() => {});
-      await ctx.answerCallbackQuery().catch(() => {});
-      return;
-    }
+      if (data === "media:cancel") {
+        await ctx.deleteMessage().catch(() => {});
+        await ctx.answerCallbackQuery().catch(() => {});
+        return;
+      }
 
-    // Gift callbacks
-    if (data.startsWith("gift:") || data === "gift:cancel") {
-      const handled = await handleGiftCallback(ctx, env, data);
-      if (handled) return;
-    }
+      // Gift callbacks
+      if (data.startsWith("gift:") || data === "gift:cancel") {
+        const handled = await handleGiftCallback(ctx, env, data);
+        if (handled) return;
+      }
 
-    // DM callbacks (inline button on match card)
-    if (
-      data.startsWith("dm:send:") ||
-      data.startsWith("dm:buy:") ||
-      data === "dm:cancel"
-    ) {
-      return matchCallbacks(ctx, env);
+      // DM callbacks (inline button on match card)
+      if (
+        data.startsWith("dm:send:") ||
+        data.startsWith("dm:buy:") ||
+        data === "dm:cancel"
+      ) {
+        return await matchCallbacks(ctx, env);
+      }
+    } catch (error) {
+      console.error("Callback query error:", error);
+      await ctx
+        .answerCallbackQuery("❌ Something went wrong. Please try again.")
+        .catch(() => {});
     }
   });
 
   bot.on("message:contact", async (ctx) => {
-    const handled = await handleContactMessage(ctx, env);
-    if (handled) return;
+    try {
+      const handled = await handleContactMessage(ctx, env);
+      if (handled) return;
+    } catch (error) {
+      console.error("Contact message error:", error);
+      await ctx.reply("❌ Something went wrong. Please try again.");
+    }
   });
 
   bot.on("message:location", async (ctx) => {
-    const handled = await handleLocationMessage(ctx, env);
-    if (handled) return;
+    try {
+      const handled = await handleLocationMessage(ctx, env);
+      if (handled) return;
+    } catch (error) {
+      console.error("Location message error:", error);
+      await ctx.reply("❌ Something went wrong. Please try again.");
+    }
   });
 
   bot.on("message:photo", async (ctx) => {
-    // Check if in like-message conversation first
-    if (ctx.from) {
-      const state = await getConversationState(env.KV, String(ctx.from.id));
-      if (state && state.field === "like-message") {
-        await handleLikeMessagePhoto(ctx, env);
-        return;
+    try {
+      // Check if in like-message conversation first
+      if (ctx.from) {
+        const state = await getConversationState(env.KV, String(ctx.from.id));
+        if (state && state.field === "like-message") {
+          await handleLikeMessagePhoto(ctx, env);
+          return;
+        }
       }
+      const handled = await handleMediaMessage(ctx, env, "image");
+      if (handled) return;
+    } catch (error) {
+      console.error("Photo message error:", error);
+      await ctx.reply("❌ Something went wrong. Please try again.");
     }
-    const handled = await handleMediaMessage(ctx, env, "image");
-    if (handled) return;
   });
 
   bot.on("message:video", async (ctx) => {
-    // Check if in like-message conversation first
-    if (ctx.from) {
-      const state = await getConversationState(env.KV, String(ctx.from.id));
-      if (state && state.field === "like-message") {
-        await handleLikeMessageVideo(ctx, env);
-        return;
+    try {
+      // Check if in like-message conversation first
+      if (ctx.from) {
+        const state = await getConversationState(env.KV, String(ctx.from.id));
+        if (state && state.field === "like-message") {
+          await handleLikeMessageVideo(ctx, env);
+          return;
+        }
       }
+      const handled = await handleMediaMessage(ctx, env, "video");
+      if (handled) return;
+    } catch (error) {
+      console.error("Video message error:", error);
+      await ctx.reply("❌ Something went wrong. Please try again.");
     }
-    const handled = await handleMediaMessage(ctx, env, "video");
-    if (handled) return;
   });
 
   // Handle Telegram Stars payments
@@ -331,16 +362,22 @@ function createBot(env: Env): Bot<MyContext> {
 
     if (payload && payload.startsWith("premium_")) {
       const parts = payload.split("_");
-      const userId = parts[2];
-      const tier = parts.slice(3).join("_");
+      const userId = parts[1];
+      const tier = parts.slice(2).join("_");
       if (!userId || !tier) return;
       if (tier !== "premium" && tier !== "premium_plus") return;
 
       try {
         const client = new ApiServiceClient(env.API_SERVICE);
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + 30);
         await client.updateUser({
           userId,
-          user: { id: userId, subscriptionTier: tier },
+          user: {
+            id: userId,
+            subscriptionTier: tier,
+            subscriptionExpiresAt: expiresAt.toISOString(),
+          },
         });
         await ctx.reply(
           t("premiumPurchased", "en", {
@@ -358,57 +395,64 @@ function createBot(env: Env): Bot<MyContext> {
   });
 
   bot.on("message:text", async (ctx) => {
-    const text = ctx.message?.text;
+    try {
+      const text = ctx.message?.text;
 
-    // Main menu keyboard buttons take priority over conversations
-    switch (text) {
-      case MENU_FIND_MATCH:
-        return matchCommand(ctx, env);
-      case MENU_MY_MATCHES:
-        return matchesCommand(ctx, env);
-      case MENU_PROFILE:
-        return profileCommand(ctx, env);
-      case MENU_SETTINGS:
-        return settingsCommand(ctx, env);
-      case MENU_PREMIUM:
-        return premiumCommand(ctx, env);
-    }
-
-    // Match action reply keyboard — only if there's an active match queue
-    const actionMap: Record<string, string> = {
-      "❤️": "like",
-      "👎": "dislike",
-      "⏩": "skip",
-      "↩️": "undo",
-      "⚠️": "report",
-      "💌": "like-message",
-      "🎁 Send a gift": "gift",
-      "🏠 Main menu": "menu",
-    };
-
-    if (text && actionMap[text]) {
-      const action = actionMap[text];
-      if (action === "menu") {
-        await ctx.reply("Main menu:", { reply_markup: getMainMenuKeyboard() });
-        return;
+      // Main menu keyboard buttons take priority over conversations
+      switch (text) {
+        case MENU_FIND_MATCH:
+          return await matchCommand(ctx, env);
+        case MENU_MY_MATCHES:
+          return await matchesCommand(ctx, env);
+        case MENU_PROFILE:
+          return await profileCommand(ctx, env);
+        case MENU_SETTINGS:
+          return await settingsCommand(ctx, env);
+        case MENU_PREMIUM:
+          return await premiumCommand(ctx, env);
       }
-      const handled = await handleMatchReplyAction(ctx, env, action);
+
+      // Match action reply keyboard — only if there's an active match queue
+      const actionMap: Record<string, string> = {
+        "❤️": "like",
+        "👎": "dislike",
+        "⏩": "skip",
+        "↩️": "undo",
+        "⚠️": "report",
+        "💌": "like-message",
+        "🎁 Send a gift": "gift",
+        "🏠 Main menu": "menu",
+      };
+
+      if (text && actionMap[text]) {
+        const action = actionMap[text];
+        if (action === "menu") {
+          await ctx.reply("Main menu:", {
+            reply_markup: getMainMenuKeyboard(),
+          });
+          return;
+        }
+        const handled = await handleMatchReplyAction(ctx, env, action);
+        if (handled) return;
+      }
+
+      const handled = await handleConversationMessage(ctx, env);
       if (handled) return;
+
+      // Graceful fallback: if user sends ⏭ Skip without an active like-message
+      // conversation but has a match queue, treat it as a regular Like
+      if (text === "⏭ Skip") {
+        const queueHandled = await handleMatchReplyAction(ctx, env, "like");
+        if (queueHandled) return;
+      }
+
+      await ctx.reply(t("fallbackMessage", "en"), {
+        reply_markup: getMainMenuKeyboard(),
+      });
+    } catch (error) {
+      console.error("Text message error:", error);
+      await ctx.reply("❌ Something went wrong. Please try again.");
     }
-
-    const handled = await handleConversationMessage(ctx, env);
-    if (handled) return;
-
-    // Graceful fallback: if user sends ⏭ Skip without an active like-message
-    // conversation but has a match queue, treat it as a regular Like
-    if (text === "⏭ Skip") {
-      const queueHandled = await handleMatchReplyAction(ctx, env, "like");
-      if (queueHandled) return;
-    }
-
-    await ctx.reply(t("fallbackMessage", "en"), {
-      reply_markup: getMainMenuKeyboard(),
-    });
   });
 
   return bot;
@@ -613,13 +657,15 @@ export default {
           const giftName = escapeMd(payload.giftName ?? "gift");
           message = `🎁 *New Gift!*\n\n${fromName} sent you a ${giftEmoji} *${giftName}*! 💕`;
         } else if (type === "BIRTHDAY") {
-          message = payload.message || `🎂 Someone has a birthday today!`;
+          message =
+            escapeMd(payload.message as string) ||
+            `🎂 Someone has a birthday today!`;
           keyboard = new InlineKeyboard()
             .text("💕 View Matches", "matches")
             .row();
         } else if (type === "REENGAGEMENT") {
           message =
-            payload.message ||
+            escapeMd(payload.message as string) ||
             `We miss you on MeetMatch! Come back and find your next match! 💘`;
           const action = payload.action as string | undefined;
           if (action === "find_match") {
@@ -635,7 +681,9 @@ export default {
             .text("👤 Go to Profile", "profile:media")
             .row();
         } else {
-          message = payload.message || `You have a new ${type} notification!`;
+          message =
+            escapeMd(payload.message as string) ||
+            `You have a new ${type} notification!`;
         }
 
         await bot.api.sendMessage(userId, message, {

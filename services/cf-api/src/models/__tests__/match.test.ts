@@ -269,12 +269,19 @@ describe("MatchRepository.getPotentialMatches SQL", () => {
     );
 
     const sql = mockD1._capturedSql.find((s) => s.includes("FROM users u"));
-    expect(sql).not.toContain("u.age >= ?");
-    expect(sql).not.toContain("u.age <= ?");
+    // Soft relax still applies age bounds (±3 years) and gender filter
+    expect(sql).toContain("u.age >= ?");
+    expect(sql).toContain("u.age <= ?");
     expect(sql).toContain("u.gender IN (?)");
 
-    const values = mockD1._capturedValues.find((v) => v.length >= 8);
+    const values = mockD1._capturedValues.find((v) =>
+      v.some((x) => x === "female"),
+    );
+    expect(values).toBeDefined();
     expect(values).toContain("female");
+    // With minAge=20, maxAge=30, soft relax becomes 17-33
+    expect(values).toContain(17);
+    expect(values).toContain(33);
   });
 });
 
@@ -443,5 +450,228 @@ describe("MatchRepository.getPotentialMatches JS filtering", () => {
     expect(mockD1.batch).toHaveBeenCalled();
     const batchCalls = (mockD1.batch as any).mock.calls;
     expect(batchCalls[0][0]).toHaveLength(2);
+  });
+
+  it("excludes blocked users via SQL", async () => {
+    const currentUser = createDbRow({ id: "1", preferences: "{}" });
+    const mockD1 = createMockD1([], currentUser);
+    const userRepo = new UserRepository(mockD1);
+    const matchRepo = new MatchRepository(mockD1, userRepo);
+
+    await Effect.runPromise(
+      matchRepo.getPotentialMatches({ userId: "1", limit: 10 }),
+    );
+
+    const sql = mockD1._capturedSql.find((s) => s.includes("FROM users u"));
+    expect(sql).toContain("blocks");
+    expect(sql).toContain("NOT EXISTS");
+  });
+
+  it("filters out candidates whose preferences exclude current user (bidirectional)", async () => {
+    const currentUser = createDbRow({
+      id: "1",
+      age: 31,
+      gender: "male",
+      location: JSON.stringify({ latitude: 0, longitude: 0 }),
+      preferences: JSON.stringify({ maxDistance: 100 }),
+    });
+    const candidates = [
+      createDbRow({
+        id: "2",
+        first_name: "TooYoung",
+        age: 20,
+        gender: "female",
+        location: JSON.stringify({ latitude: 0, longitude: 0 }),
+        preferences: JSON.stringify({
+          minAge: 25,
+          maxAge: 30,
+          genderPreference: ["male"],
+          maxDistance: 100,
+        }),
+      }),
+      createDbRow({
+        id: "3",
+        first_name: "GoodMatch",
+        age: 20,
+        gender: "female",
+        location: JSON.stringify({ latitude: 0, longitude: 0 }),
+        preferences: JSON.stringify({
+          minAge: 25,
+          maxAge: 35,
+          genderPreference: ["male"],
+          maxDistance: 100,
+        }),
+      }),
+    ];
+
+    const mockD1 = createMockD1(candidates, currentUser);
+    const userRepo = new UserRepository(mockD1);
+    const matchRepo = new MatchRepository(mockD1, userRepo);
+
+    const result = await Effect.runPromise(
+      matchRepo.getPotentialMatches({ userId: "1", limit: 10 }),
+    );
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe("3");
+  });
+
+  it("filters out candidates whose gender preference excludes current user", async () => {
+    const currentUser = createDbRow({
+      id: "1",
+      age: 25,
+      gender: "male",
+      preferences: "{}",
+    });
+    const candidates = [
+      createDbRow({
+        id: "2",
+        first_name: "WantsFemale",
+        preferences: JSON.stringify({ genderPreference: ["female"] }),
+      }),
+      createDbRow({
+        id: "3",
+        first_name: "WantsMale",
+        preferences: JSON.stringify({ genderPreference: ["male"] }),
+      }),
+    ];
+
+    const mockD1 = createMockD1(candidates, currentUser);
+    const userRepo = new UserRepository(mockD1);
+    const matchRepo = new MatchRepository(mockD1, userRepo);
+
+    const result = await Effect.runPromise(
+      matchRepo.getPotentialMatches({ userId: "1", limit: 10 }),
+    );
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe("3");
+  });
+
+  it("bypasses skip cooldown when other user liked us", async () => {
+    const now = new Date().toISOString();
+    const currentUser = createDbRow({ id: "1", preferences: "{}" });
+    const candidates = [
+      createDbRow({
+        id: "2",
+        first_name: "SkippedButLikedBack",
+        preferences: "{}",
+        match_status: "pending",
+        user1_id: "1",
+        user2_id: "2",
+        user1_action: "skip",
+        user2_action: "like",
+        match_updated_at: now,
+      }),
+    ];
+
+    const mockD1 = createMockD1(candidates, currentUser);
+    const userRepo = new UserRepository(mockD1);
+    const matchRepo = new MatchRepository(mockD1, userRepo);
+
+    const result = await Effect.runPromise(
+      matchRepo.getPotentialMatches({ userId: "1", limit: 10 }),
+    );
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe("2");
+  });
+
+  it("includes expired pending likes (>30 days) in results", async () => {
+    const currentUser = createDbRow({ id: "1", preferences: "{}" });
+    const candidates = [
+      createDbRow({
+        id: "2",
+        first_name: "StaleLike",
+        preferences: "{}",
+        match_status: "pending",
+        user1_id: "1",
+        user2_id: "2",
+        user1_action: "like",
+        user2_action: "none",
+        match_updated_at: new Date(
+          Date.now() - 31 * 24 * 60 * 60 * 1000,
+        ).toISOString(),
+      }),
+    ];
+
+    const mockD1 = createMockD1(candidates, currentUser);
+    const userRepo = new UserRepository(mockD1);
+    const matchRepo = new MatchRepository(mockD1, userRepo);
+
+    const result = await Effect.runPromise(
+      matchRepo.getPotentialMatches({ userId: "1", limit: 10 }),
+    );
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe("2");
+  });
+
+  it("excludes fresh pending likes (<30 days)", async () => {
+    const currentUser = createDbRow({ id: "1", preferences: "{}" });
+    const candidates = [
+      createDbRow({
+        id: "2",
+        first_name: "FreshLike",
+        preferences: "{}",
+        match_status: "pending",
+        user1_id: "1",
+        user2_id: "2",
+        user1_action: "like",
+        user2_action: "none",
+        match_updated_at: new Date().toISOString(),
+      }),
+    ];
+
+    const mockD1 = createMockD1(candidates, currentUser);
+    const userRepo = new UserRepository(mockD1);
+    const matchRepo = new MatchRepository(mockD1, userRepo);
+
+    const result = await Effect.runPromise(
+      matchRepo.getPotentialMatches({ userId: "1", limit: 10 }),
+    );
+    expect(result).toHaveLength(0);
+  });
+
+  it("includes old mutual matches for recycling", async () => {
+    const currentUser = createDbRow({ id: "1", preferences: "{}" });
+    const candidates = [
+      createDbRow({
+        id: "2",
+        first_name: "OldMatch",
+        preferences: "{}",
+        match_status: "matched",
+        user1_id: "1",
+        user2_id: "2",
+        user1_action: "like",
+        user2_action: "like",
+        matched_at: new Date(
+          Date.now() - 31 * 24 * 60 * 60 * 1000,
+        ).toISOString(),
+      }),
+    ];
+
+    const mockD1 = createMockD1(candidates, currentUser);
+    const userRepo = new UserRepository(mockD1);
+    const matchRepo = new MatchRepository(mockD1, userRepo);
+
+    const result = await Effect.runPromise(
+      matchRepo.getPotentialMatches({ userId: "1", limit: 10 }),
+    );
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe("2");
+  });
+});
+
+describe("MatchRepository.getPendingLikes", () => {
+  it("excludes blocked users from pending likes", async () => {
+    const mockD1 = createMockD1(
+      [],
+      createDbRow({ id: "1", preferences: "{}" }),
+    );
+    const userRepo = new UserRepository(mockD1);
+    const matchRepo = new MatchRepository(mockD1, userRepo);
+
+    await Effect.runPromise(matchRepo.getPendingLikes({ userId: "1" }));
+
+    const sql = mockD1._capturedSql.find((s) => s.includes("FROM matches m"));
+    expect(sql).toContain("blocks");
+    expect(sql).toContain("NOT EXISTS");
   });
 });

@@ -7,7 +7,7 @@ import {
   type UserProfile,
 } from "./user-utils.js";
 import { getMainMenuKeyboard } from "./main-menu.js";
-import { t, type Language } from "./i18n.js";
+import { t, type Language, escapeMd } from "./i18n.js";
 import { InlineKeyboard } from "grammy";
 import {
   createLogger,
@@ -776,7 +776,7 @@ async function handleLocationTextConversation(
         state.userId,
       );
       await ctx.reply(
-        `📍 *${city}, ${country}* saved!\n\n` +
+        `📍 *${escapeMd(city)}, ${escapeMd(country)}* saved!\n\n` +
           `We could not verify the exact coordinates right now, but your city is recorded. ` +
           `Distance matching will work once we verify it.`,
         { parse_mode: "Markdown", reply_markup: getMainMenuKeyboard() },
@@ -812,7 +812,7 @@ async function handleLocationTextConversation(
       state.userId,
     );
     await ctx.reply(
-      `📍 Location verified: *${normalizedCity}, ${normalizedCountry}*`,
+      `📍 Location verified: *${escapeMd(normalizedCity)}, ${escapeMd(normalizedCountry)}*`,
       { parse_mode: "Markdown", reply_markup: getMainMenuKeyboard() },
     );
     if (becameComplete) await promptPhoneVerification(ctx, env, lang);

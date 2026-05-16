@@ -12,14 +12,55 @@ interface UserRow {
 }
 
 /**
- * Profile inactivity cleanup job:
- * 1. Hide profiles from matches after 14 days of inactivity
- * 2. Delete media after 30 days of inactivity and notify user
+ * Cleanup job:
+ * 1. Expire stale pending likes (>30 days) → reset liker's action to none
+ * 2. Recycle old mutual matches (>14 days) → reset to pending
+ * 3. Hide profiles from matches after 14 days of inactivity
+ * 4. Delete media after 30 days of inactivity and notify user
+ * 5. Clean old profile_views (>90 days)
  */
 export async function runCleanupJob(env: Env): Promise<void> {
   const now = new Date();
 
-  // 1. Hide profiles after 14 days of inactivity
+  // 1. Expire stale pending likes (>30 days)
+  const likeExpireCutoff = new Date(
+    now.getTime() - 30 * 24 * 60 * 60 * 1000,
+  ).toISOString();
+  const expiredLikes = await env.DB.prepare(
+    `UPDATE matches
+     SET user1_action = 'none', status = 'pending', updated_at = CURRENT_TIMESTAMP
+     WHERE user1_action = 'like' AND user2_action = 'none' AND updated_at < ?`,
+  )
+    .bind(likeExpireCutoff)
+    .run();
+  const expiredLikes2 = await env.DB.prepare(
+    `UPDATE matches
+     SET user2_action = 'none', status = 'pending', updated_at = CURRENT_TIMESTAMP
+     WHERE user2_action = 'like' AND user1_action = 'none' AND updated_at < ?`,
+  )
+    .bind(likeExpireCutoff)
+    .run();
+  console.log(
+    `[cleanup] Expired ${(expiredLikes.meta?.changes ?? 0) + (expiredLikes2.meta?.changes ?? 0)} stale pending likes`,
+  );
+
+  // 2. Recycle old mutual matches (>14 days)
+  const matchRecycleCutoff = new Date(
+    now.getTime() - 14 * 24 * 60 * 60 * 1000,
+  ).toISOString();
+  const recycledMatches = await env.DB.prepare(
+    `UPDATE matches
+     SET status = 'pending', user1_action = 'none', user2_action = 'none',
+         matched_at = NULL, updated_at = CURRENT_TIMESTAMP
+     WHERE status = 'matched' AND matched_at < ?`,
+  )
+    .bind(matchRecycleCutoff)
+    .run();
+  console.log(
+    `[cleanup] Recycled ${recycledMatches.meta?.changes ?? 0} old mutual matches`,
+  );
+
+  // 3. Hide profiles after 14 days of inactivity
   const hideCutoff = new Date(
     now.getTime() - 14 * 24 * 60 * 60 * 1000,
   ).toISOString();
@@ -35,7 +76,7 @@ export async function runCleanupJob(env: Env): Promise<void> {
     `[cleanup] Hidden ${hideResult.meta?.changes ?? 0} inactive profiles from matches`,
   );
 
-  // 2. Delete media after 30 days of inactivity
+  // 4. Delete media after 30 days of inactivity
   const deleteCutoff = new Date(
     now.getTime() - 30 * 24 * 60 * 60 * 1000,
   ).toISOString();
@@ -135,4 +176,17 @@ export async function runCleanupJob(env: Env): Promise<void> {
   }
 
   console.log(`[cleanup] Deleted media for ${deletedCount} inactive users`);
+
+  // 5. Clean old profile_views (>90 days)
+  const viewCutoff = new Date(
+    now.getTime() - 90 * 24 * 60 * 60 * 1000,
+  ).toISOString();
+  const viewCleanup = await env.DB.prepare(
+    `DELETE FROM profile_views WHERE viewed_at < ?`,
+  )
+    .bind(viewCutoff)
+    .run();
+  console.log(
+    `[cleanup] Removed ${viewCleanup.meta?.changes ?? 0} old profile view records`,
+  );
 }

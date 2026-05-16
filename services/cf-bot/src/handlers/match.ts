@@ -10,7 +10,7 @@ import {
   getMissingFieldsDisplay,
   isPhoneVerified,
   isBirthdayToday,
-  computeAgeFromBirthDate,
+  getDefaultPreferences,
   type UserProfile,
 } from "../lib/user-utils.js";
 import { addNotification } from "../lib/notifications.js";
@@ -72,7 +72,7 @@ async function getInteractionStatus(
 import { promptPhoneVerification } from "../lib/conversations.js";
 import { ApiServiceClient } from "../services/api-client.js";
 import { getMainMenuKeyboard } from "../lib/main-menu.js";
-import { t, type Language, escapeMarkdownV2 } from "../lib/i18n.js";
+import { t, type Language, mdv2, escapeMd } from "../lib/i18n.js";
 
 function getLang(user: Record<string, unknown> | UserProfile): Language {
   return (user.language as Language) ?? "en";
@@ -132,29 +132,15 @@ async function ensureDefaultPreferences(
     freshPrefs.genderPreference !== undefined;
   if (hasPrefs) return;
 
-  const age = user.birthDate
-    ? computeAgeFromBirthDate(String(user.birthDate))
-    : (user.age as number | undefined);
-  const gender = user.gender as string | undefined;
-  if (!age || !gender) return;
-
-  const minAge = Math.max(12, age - 7);
-  const maxAge = Math.min(80, age + 7);
-  const maxDistance = 25;
-
-  let genderPreference: string[];
-  if (gender === "male") genderPreference = ["female"];
-  else if (gender === "female") genderPreference = ["male"];
-  else genderPreference = ["male", "female", "other", "prefer_not_to_say"];
+  const defaults = getDefaultPreferences(user);
+  if (Object.keys(defaults).length === 0) return;
 
   try {
     await env.API_SERVICE.fetch(
       new Request(`http://api/users/${userId}`, {
         method: "PUT",
         body: JSON.stringify({
-          user: {
-            preferences: { minAge, maxAge, maxDistance, genderPreference },
-          },
+          user: { preferences: defaults },
         }),
         headers: { "Content-Type": "application/json" },
       }),
@@ -197,7 +183,7 @@ async function fetchPotentialMatches(
 
 const MATCH_QUEUE_TTL = 600; // 10 minutes
 const LAST_ACTION_TTL = 3600; // 1 hour
-const ACTION_LOCK_TTL = 5; // 5 seconds — prevent double-processing
+const ACTION_LOCK_TTL = 60; // 60 seconds — prevent double-processing (KV min TTL)
 const DM_BYPASS_LIMIT = 100;
 const DM_BYPASS_TTL = 86400; // 24 hours
 
@@ -206,6 +192,7 @@ interface MatchQueue {
   index: number;
   tier: string;
   relaxed: boolean;
+  myLocation?: { latitude: number; longitude: number };
 }
 
 interface LastAction {
@@ -337,6 +324,8 @@ function buildMatchCardKeyboard(targetUserId: string, tier: string) {
   keyboard.row();
   keyboard.text("💌", `match:like-message:${targetUserId}`);
   keyboard.text("📩 Send DM", `dm:send:${targetUserId}`);
+  keyboard.row();
+  keyboard.text("🚫 Block", `match:block:${targetUserId}`);
   return keyboard;
 }
 
@@ -385,42 +374,98 @@ function getGenderPronoun(gender: string | undefined): string {
   }
 }
 
-function buildMatchCard(otherUser: Record<string, unknown>): string {
-  const name = escapeMarkdownV2(
-    (otherUser.displayName ?? otherUser.first_name ?? "Someone") as string,
-  );
+function haversine(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number,
+): number {
+  const R = 6371; // Earth radius in km
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+function formatDistance(km: number): string {
+  if (km < 0.1) return "<100m";
+  if (km < 0.5) return `${Math.round(km * 1000)}m`;
+  if (km < 1) return "<1km";
+  if (km < 10) return `${Math.round(km * 10) / 10}km`;
+  return `${Math.round(km)}km+`;
+}
+
+function buildMatchCard(
+  otherUser: Record<string, unknown>,
+  myLocation?: { latitude: number; longitude: number },
+): string {
+  const name = (otherUser.displayName ??
+    otherUser.first_name ??
+    "Someone") as string;
   const age = otherUser.age ?? "?";
+  const gender = (otherUser.gender as string)?.charAt(0)?.toUpperCase() ?? "?";
   const birthdayBadge = isBirthdayToday(
     otherUser.birthDate as string | undefined,
   )
     ? " 🎂"
     : "";
+
   const loc = otherUser.location as Record<string, unknown> | undefined;
-  const locationText =
-    loc?.city && loc?.country
-      ? escapeMarkdownV2(`${loc.city}, ${loc.country}`)
-      : loc?.latitude
-        ? "📍 Nearby"
-        : "";
+  const city = loc?.city as string | undefined;
+  const country = loc?.country as string | undefined;
+  const lat = loc?.latitude as number | undefined;
+  const lon = loc?.longitude as number | undefined;
+
+  // Distance
+  let distanceText = "";
+  if (myLocation && lat != null && lon != null) {
+    const distKm = haversine(
+      myLocation.latitude,
+      myLocation.longitude,
+      lat,
+      lon,
+    );
+    distanceText = formatDistance(distKm);
+  }
+
+  // Location line: "📍 5.2km · Jakarta, Indonesia"
+  let locationLine = "";
+  if (city && country) {
+    locationLine = mdv2`📍 ${distanceText ? distanceText + " · " : ""}${city}, ${country}`;
+  } else if (distanceText) {
+    locationLine = mdv2`📍 ${distanceText}`;
+  } else if (lat != null) {
+    locationLine = "📍 Nearby";
+  }
+
   let bio = "";
   if (otherUser.bio) {
     const bioText = String(otherUser.bio);
-    // Truncate long bios with spoiler expand/collapse
     const maxBioLen = 180;
     if (bioText.length > maxBioLen) {
-      const visiblePart = escapeMarkdownV2(bioText.slice(0, maxBioLen));
-      const spoilerPart = escapeMarkdownV2(bioText.slice(maxBioLen));
-      bio = `\n📝 ${visiblePart}||${spoilerPart}||`;
+      const visiblePart = bioText.slice(0, maxBioLen);
+      const spoilerPart = bioText.slice(maxBioLen);
+      bio = mdv2`\n📝 ${visiblePart}||${spoilerPart}||`;
     } else {
-      bio = `\n📝 ${escapeMarkdownV2(bioText)}`;
+      bio = mdv2`\n📝 ${bioText}`;
     }
   }
-  const interests = otherUser.interests
-    ? `\n🌟 ${escapeMarkdownV2(Array.isArray(otherUser.interests) ? (otherUser.interests as string[]).join(", ") : String(otherUser.interests))}`
+  const interestsText = otherUser.interests
+    ? Array.isArray(otherUser.interests)
+      ? (otherUser.interests as string[]).join(", ")
+      : String(otherUser.interests)
     : "";
+  const interests = interestsText ? mdv2`\n🌟 ${interestsText}` : "";
 
-  const parts = [`👤 ${name}, ${age}${birthdayBadge}`];
-  if (locationText) parts.push(`📍 ${locationText}`);
+  // Format: "👤 Name, F20 🎂"
+  const parts = [mdv2`👤 ${name}, ${gender}${age}${birthdayBadge}`];
+  if (locationLine) parts.push(locationLine);
   if (bio) parts.push(bio);
   if (interests) parts.push(interests);
   return parts.join("\n");
@@ -432,9 +477,9 @@ function buildChatLink(otherUser: Record<string, unknown>): string {
     otherUser.first_name ??
     "Someone") as string;
   if (username) {
-    return `👉 [Start chatting with ${displayName}](https://t.me/${username})`;
+    return `👉 [Start chatting with ${escapeMd(displayName)}](https://t.me/${username})`;
   }
-  return `💬 ${displayName} hasn't set a username yet. You can share your username with them!`;
+  return `💬 ${escapeMd(displayName)} hasn't set a username yet. You can share your username with them!`;
 }
 
 async function sendMatchCard(
@@ -442,40 +487,61 @@ async function sendMatchCard(
   match: Record<string, unknown>,
   lang: Language,
   tier: string,
+  myLocation?: { latitude: number; longitude: number },
 ): Promise<void> {
-  const text = buildMatchCard(match);
+  const text = buildMatchCard(match, myLocation);
   const mediaUrls = (match.mediaUrls ?? []) as unknown as Array<{
     url: string;
     type: string;
   }>;
-  const firstImage = mediaUrls.find((m) => m.type === "image");
-  const firstVideo = mediaUrls.find((m) => m.type === "video");
+  // Preserve media order: show the first uploaded item (image or video)
+  const firstRenderable = mediaUrls.find(
+    (m) => m.type === "image" || m.type === "video",
+  );
   const inlineKeyboard = buildMatchCardKeyboard(String(match.id), tier);
 
   try {
-    if (firstImage) {
-      await ctx.replyWithPhoto(firstImage.url, {
+    if (firstRenderable?.type === "image") {
+      await ctx.replyWithPhoto(firstRenderable.url, {
         caption: text,
         parse_mode: "MarkdownV2",
         reply_markup: inlineKeyboard,
       });
-    } else if (firstVideo) {
-      await ctx.replyWithVideo(firstVideo.url, {
-        caption: text,
-        parse_mode: "MarkdownV2",
-        reply_markup: inlineKeyboard,
-      });
-    } else {
-      await ctx.reply(text, {
-        parse_mode: "MarkdownV2",
-        reply_markup: inlineKeyboard,
-      });
+      return;
     }
-  } catch {
+    if (firstRenderable?.type === "video") {
+      await ctx.replyWithVideo(firstRenderable.url, {
+        caption: text,
+        parse_mode: "MarkdownV2",
+        reply_markup: inlineKeyboard,
+      });
+      return;
+    }
     await ctx.reply(text, {
       parse_mode: "MarkdownV2",
       reply_markup: inlineKeyboard,
     });
+  } catch (err) {
+    log.error(
+      "sendMatchCard",
+      "Failed to send match card, trying text fallback",
+      { userId: String(ctx.from?.id ?? "unknown") },
+      err instanceof Error ? err : new Error(String(err)),
+    );
+    try {
+      await ctx.reply(text, {
+        parse_mode: "MarkdownV2",
+        reply_markup: inlineKeyboard,
+      });
+    } catch (err2) {
+      log.error(
+        "sendMatchCard",
+        "Text fallback also failed",
+        { userId: String(ctx.from?.id ?? "unknown") },
+        err2 instanceof Error ? err2 : new Error(String(err2)),
+      );
+      await ctx.reply("❌ Failed to show profile. Please try /match again.");
+    }
   }
 }
 
@@ -542,7 +608,7 @@ async function showNextMatch(
     }
   }
 
-  await sendMatchCard(ctx, match, lang, queue.tier);
+  await sendMatchCard(ctx, match, lang, queue.tier, queue.myLocation);
 }
 
 export const matchCommand = async (ctx: MyContext, env: Env): Promise<void> => {
@@ -551,82 +617,125 @@ export const matchCommand = async (ctx: MyContext, env: Env): Promise<void> => {
     return;
   }
 
-  const result = await ensureUserExists(ctx, env);
-  if (!result) {
-    await ctx.reply(t("genericError"));
-    return;
-  }
-
-  const { user } = result;
-  const lang = getLang(user);
-  const { complete, missing } = getProfileCompleteness(user);
-
-  if (!complete) {
-    await ctx.reply(
-      t("matchProfileIncomplete", lang, {
-        missing: getMissingFieldsDisplay(missing),
-      }),
-    );
-    return;
-  }
-
-  if (!isPhoneVerified(user)) {
-    await promptPhoneVerification(ctx, env, lang);
-    return;
-  }
-
   const userId = String(ctx.from.id);
-  const tier = (user.subscriptionTier as string) ?? "free";
 
-  // Set default preferences if none exist
-  await ensureDefaultPreferences(
-    env,
-    userId,
-    user as unknown as Record<string, unknown>,
-  );
-
-  // Clear any existing queue to start fresh
-  await clearMatchQueue(env.KV, userId);
-  await clearLastAction(env.KV, userId);
-
-  await ctx.reply(t("matchFinding", lang), {
-    parse_mode: "Markdown",
-    reply_markup: getMatchActionKeyboard(tier),
-  });
-
-  let { matches: users, relaxed } = await fetchPotentialMatches(env, userId, 5);
-  // Defensive: filter out own profile if API somehow returns it
-  users = users.filter((u) => String(u.id) !== userId);
-  if (users.length === 0) {
-    await ctx.reply(t("matchNoMatches", lang), {
-      parse_mode: "Markdown",
-      reply_markup: getMainMenuKeyboard(),
-    });
+  // Command lock: prevent duplicate /match processing from webhook retries
+  const lockKey = `match_command_lock:${userId}`;
+  const existing = await env.KV.get(lockKey);
+  if (existing) {
+    // Already processing — silently ignore duplicate invocation
     return;
   }
+  await env.KV.put(lockKey, "1", { expirationTtl: 60 });
 
-  // Show fallback notice if filters were relaxed
-  if (relaxed) {
-    const adjustKeyboard = new InlineKeyboard()
-      .text("⚙️ Update Settings", "settings:show")
-      .row()
-      .text("❌ Dismiss", "referral:dismiss");
-    await ctx.reply(
-      t("matchFallbackNotice", lang) +
-        "\n\n" +
-        t("matchAdjustSettingsPrompt", lang),
-      { parse_mode: "Markdown", reply_markup: adjustKeyboard },
+  try {
+    const result = await ensureUserExists(ctx, env);
+    if (!result) {
+      await ctx.reply(t("genericError"));
+      return;
+    }
+
+    const { user } = result;
+    const lang = getLang(user);
+    const { complete, missing } = getProfileCompleteness(user);
+
+    if (!complete) {
+      await ctx.reply(
+        t("matchProfileIncomplete", lang, {
+          missing: getMissingFieldsDisplay(missing),
+        }),
+      );
+      return;
+    }
+
+    if (!isPhoneVerified(user)) {
+      await promptPhoneVerification(ctx, env, lang);
+      return;
+    }
+
+    const tier = (user.subscriptionTier as string) ?? "free";
+
+    // Set default preferences if none exist
+    await ensureDefaultPreferences(
+      env,
+      userId,
+      user as unknown as Record<string, unknown>,
     );
-  }
 
-  // Store queue and show first match only
-  await setMatchQueue(env.KV, userId, {
-    matches: users,
-    index: 0,
-    tier,
-    relaxed,
-  });
-  await showNextMatch(ctx, env, userId, lang);
+    // Clear any existing queue to start fresh
+    await clearMatchQueue(env.KV, userId);
+    await clearLastAction(env.KV, userId);
+
+    await ctx.reply(t("matchFinding", lang), {
+      parse_mode: "Markdown",
+      reply_markup: getMatchActionKeyboard(tier),
+    });
+
+    let { matches: users, relaxed } = await fetchPotentialMatches(
+      env,
+      userId,
+      5,
+    );
+    // Defensive: filter out own profile if API somehow returns it
+    users = users.filter((u) => String(u.id) !== userId);
+    if (users.length === 0) {
+      const noMatchKeyboard = new InlineKeyboard()
+        .text("🎁 Invite Friends", "referral:show")
+        .row()
+        .text("⚙️ Update Settings", "settings:show");
+      await ctx.reply(
+        mdv2`🔍 *No potential matches found right now*\n\nYour community is still growing\\. Invite friends to discover more people and earn bonus likes\\!\n\nOr broaden your search in *⚙️ Settings*`,
+        { parse_mode: "MarkdownV2", reply_markup: noMatchKeyboard },
+      );
+      return;
+    }
+
+    // Show gentle notice if soft relaxed filters were used
+    if (relaxed) {
+      const adjustKeyboard = new InlineKeyboard()
+        .text("⚙️ Update Settings", "settings:show")
+        .row()
+        .text("❌ Dismiss", "referral:dismiss");
+      await ctx.reply(
+        mdv2`🔍 *Showing profiles slightly outside your preferences*\n\nWe expanded your search a little to help you discover more people near you.`,
+        { parse_mode: "MarkdownV2", reply_markup: adjustKeyboard },
+      );
+    }
+
+    // Extract current user's location for distance display on cards
+    const myLocation =
+      (user.location as Record<string, unknown> | undefined)?.latitude != null
+        ? {
+            latitude: Number(
+              (user.location as Record<string, unknown>).latitude,
+            ),
+            longitude: Number(
+              (user.location as Record<string, unknown>).longitude,
+            ),
+          }
+        : undefined;
+
+    // Store queue and show first match only
+    await setMatchQueue(env.KV, userId, {
+      matches: users,
+      index: 0,
+      tier,
+      relaxed,
+      myLocation,
+    });
+    await showNextMatch(ctx, env, userId, lang);
+  } catch (error) {
+    log.error(
+      "matchCommand",
+      "Unhandled error in match command",
+      { userId },
+      error instanceof Error ? error : new Error(String(error)),
+    );
+    await ctx.reply("❌ Something went wrong. Please try /match again.");
+  } finally {
+    // Release command lock immediately after processing
+    await env.KV.delete(lockKey);
+  }
 };
 
 async function handleMatchAction(
@@ -953,20 +1062,26 @@ export async function startReportConversation(
 ): Promise<void> {
   if (!ctx.from) return;
   const userId = String(ctx.from.id);
-  const lang = await fetchUserLang(env, userId);
 
-  await setConversationState(env.KV, {
-    userId,
-    field: "report",
-    step: 0,
-    data: { targetUserId },
-  });
+  try {
+    const lang = await fetchUserLang(env, userId);
 
-  const cancelKeyboard = new Keyboard().text("Cancel").resized();
-  await ctx.reply(t("reportPrompt", lang), {
-    parse_mode: "Markdown",
-    reply_markup: cancelKeyboard,
-  });
+    await setConversationState(env.KV, {
+      userId,
+      field: "report",
+      step: 0,
+      data: { targetUserId },
+    });
+
+    const cancelKeyboard = new Keyboard().text("Cancel").resized();
+    await ctx.reply(t("reportPrompt", lang), {
+      parse_mode: "Markdown",
+      reply_markup: cancelKeyboard,
+    });
+  } catch (error) {
+    log.error("startReportConversation", "Unhandled error", undefined, error);
+    await ctx.reply(t("genericError"), { reply_markup: getMainMenuKeyboard() });
+  }
 }
 
 export async function handleReportConversation(
@@ -1075,37 +1190,48 @@ export async function startLikeMessageConversation(
 ): Promise<void> {
   if (!ctx.from) return;
   const userId = String(ctx.from.id);
-  const lang = await fetchUserLang(env, userId);
 
-  // Check interaction limits
-  const status = await getInteractionStatus(env, userId);
-  if ((status?.likesRemaining ?? 0) <= 0 && status?.tier === "free") {
-    const keyboard = new InlineKeyboard()
-      .text("👑 Get Premium", "premium:show")
-      .row()
-      .text("🎁 Share for Bonus", "referral:show");
-    await ctx.reply(t("matchLikeLimitReached", lang), {
-      parse_mode: "Markdown",
-      reply_markup: keyboard,
+  try {
+    const lang = await fetchUserLang(env, userId);
+
+    // Check interaction limits
+    const status = await getInteractionStatus(env, userId);
+    if ((status?.likesRemaining ?? 0) <= 0 && status?.tier === "free") {
+      const keyboard = new InlineKeyboard()
+        .text("👑 Get Premium", "premium:show")
+        .row()
+        .text("🎁 Share for Bonus", "referral:show");
+      await ctx.reply(t("matchLikeLimitReached", lang), {
+        parse_mode: "Markdown",
+        reply_markup: keyboard,
+      });
+      return;
+    }
+
+    await setConversationState(env.KV, {
+      userId,
+      field: "like-message",
+      step: 0,
+      data: { targetUserId },
     });
-    return;
+
+    const skipKeyboard = new Keyboard()
+      .text(t("likeMessageSkipButton", lang))
+      .text("Cancel")
+      .resized();
+    await ctx.reply(t("likeMessagePrompt", lang), {
+      parse_mode: "Markdown",
+      reply_markup: skipKeyboard,
+    });
+  } catch (error) {
+    log.error(
+      "startLikeMessageConversation",
+      "Unhandled error",
+      undefined,
+      error,
+    );
+    await ctx.reply(t("genericError"), { reply_markup: getMainMenuKeyboard() });
   }
-
-  await setConversationState(env.KV, {
-    userId,
-    field: "like-message",
-    step: 0,
-    data: { targetUserId },
-  });
-
-  const skipKeyboard = new Keyboard()
-    .text(t("likeMessageSkipButton", lang))
-    .text("Cancel")
-    .resized();
-  await ctx.reply(t("likeMessagePrompt", lang), {
-    parse_mode: "Markdown",
-    reply_markup: skipKeyboard,
-  });
 }
 
 export async function handleLikeMessageConversation(
@@ -1361,48 +1487,37 @@ export async function startGiftSelection(
 ): Promise<void> {
   if (!ctx.from) return;
   const userId = String(ctx.from.id);
-  const lang = await fetchUserLang(env, userId);
 
-  // Check tier
-  const client = new ApiServiceClient(env.API_SERVICE);
-  const userRes = await client.getUser({ userId });
-  const tier = (userRes.user?.subscriptionTier as string) ?? "free";
+  try {
+    const lang = await fetchUserLang(env, userId);
 
-  if (tier === "free") {
-    const keyboard = new InlineKeyboard()
-      .text("👑 Get Premium", "premium:show")
-      .row()
-      .text("🎁 Share for Bonus", "referral:show");
-    await ctx.reply(t("giftGated", lang), {
+    // Store gift selection state
+    await setConversationState(env.KV, {
+      userId,
+      field: "gift",
+      step: 0,
+      data: { targetUserId },
+    });
+
+    const keyboard = new InlineKeyboard();
+    for (const gift of GIFTS) {
+      keyboard
+        .text(
+          `${gift.emoji} ${gift.name} (${gift.stars} ⭐)`,
+          `gift:buy:${gift.id}:${targetUserId}`,
+        )
+        .row();
+    }
+    keyboard.text("❌ Cancel", "gift:cancel");
+
+    await ctx.reply(`${t("giftTitle", lang)}\n\n${t("giftSelect", lang)}`, {
       parse_mode: "Markdown",
       reply_markup: keyboard,
     });
-    return;
+  } catch (error) {
+    log.error("startGiftSelection", "Unhandled error", undefined, error);
+    await ctx.reply(t("genericError"), { reply_markup: getMainMenuKeyboard() });
   }
-
-  // Store gift selection state
-  await setConversationState(env.KV, {
-    userId,
-    field: "gift",
-    step: 0,
-    data: { targetUserId },
-  });
-
-  const keyboard = new InlineKeyboard();
-  for (const gift of GIFTS) {
-    keyboard
-      .text(
-        `${gift.emoji} ${gift.name} (${gift.stars} ⭐)`,
-        `gift:buy:${gift.id}:${targetUserId}`,
-      )
-      .row();
-  }
-  keyboard.text("❌ Cancel", "gift:cancel");
-
-  await ctx.reply(`${t("giftTitle", lang)}\n\n${t("giftSelect", lang)}`, {
-    parse_mode: "Markdown",
-    reply_markup: keyboard,
-  });
 }
 
 export async function handleGiftCallback(
@@ -1531,38 +1646,47 @@ export async function handleMatchReplyAction(
   if (!ctx.from) return false;
   const userId = String(ctx.from.id);
 
-  const queue = await getMatchQueue(env.KV, userId);
-  if (!queue || queue.index >= queue.matches.length) {
-    await ctx.reply("Start matching first! Use /match or tap 🔍 Find Match.", {
-      reply_markup: getMainMenuKeyboard(),
-    });
+  try {
+    const queue = await getMatchQueue(env.KV, userId);
+    if (!queue || queue.index >= queue.matches.length) {
+      await ctx.reply(
+        "Start matching first! Use /match or tap 🔍 Find Match.",
+        {
+          reply_markup: getMainMenuKeyboard(),
+        },
+      );
+      return true;
+    }
+
+    const targetUserId = String(queue.matches[queue.index].id);
+
+    if (action === "report") {
+      await startReportConversation(ctx, env, targetUserId);
+      return true;
+    }
+
+    if (action === "undo") {
+      await handleRollback(ctx, env);
+      return true;
+    }
+
+    if (action === "like-message") {
+      await startLikeMessageConversation(ctx, env, targetUserId);
+      return true;
+    }
+
+    if (action === "gift") {
+      await startGiftSelection(ctx, env, targetUserId);
+      return true;
+    }
+
+    await handleMatchAction(ctx, env, action, targetUserId);
+    return true;
+  } catch (error) {
+    log.error("handleMatchReplyAction", "Unhandled error", undefined, error);
+    await ctx.reply(t("genericError"), { reply_markup: getMainMenuKeyboard() });
     return true;
   }
-
-  const targetUserId = String(queue.matches[queue.index].id);
-
-  if (action === "report") {
-    await startReportConversation(ctx, env, targetUserId);
-    return true;
-  }
-
-  if (action === "undo") {
-    await handleRollback(ctx, env);
-    return true;
-  }
-
-  if (action === "like-message") {
-    await startLikeMessageConversation(ctx, env, targetUserId);
-    return true;
-  }
-
-  if (action === "gift") {
-    await startGiftSelection(ctx, env, targetUserId);
-    return true;
-  }
-
-  await handleMatchAction(ctx, env, action, targetUserId);
-  return true;
 }
 
 // --- Callback handlers ---
@@ -1577,41 +1701,111 @@ export const matchCallbacks = async (
   }
   const data = ctx.callbackQuery.data;
 
-  if (data.startsWith("match:like:")) {
-    await handleMatchAction(ctx, env, "like", data.replace("match:like:", ""));
-  } else if (data.startsWith("match:dislike:")) {
-    await handleMatchAction(
-      ctx,
-      env,
-      "dislike",
-      data.replace("match:dislike:", ""),
-    );
-  } else if (data.startsWith("match:skip:")) {
-    await handleMatchAction(ctx, env, "skip", data.replace("match:skip:", ""));
-  } else if (data.startsWith("match:like-message:")) {
-    await startLikeMessageConversation(
-      ctx,
-      env,
-      data.replace("match:like-message:", ""),
-    );
-    await ctx.answerCallbackQuery().catch(() => {});
-  } else if (data.startsWith("match:undo:")) {
-    await handleRollback(ctx, env);
-    await ctx.answerCallbackQuery().catch(() => {});
-  } else if (data.startsWith("dm:send:")) {
-    await handleSendDM(ctx, env, data.replace("dm:send:", ""));
-  } else if (data.startsWith("dm:buy:")) {
-    // Backward compatibility: directly show invoice for the target user
-    await handleSendDM(ctx, env, data.replace("dm:buy:", ""));
-  } else if (data === "dm:cancel") {
-    await ctx.deleteMessage().catch(() => {});
-    await ctx.answerCallbackQuery().catch(() => {});
-  } else {
-    await ctx.answerCallbackQuery("Unknown action.").catch(() => {});
+  try {
+    if (data.startsWith("match:like:")) {
+      await handleMatchAction(
+        ctx,
+        env,
+        "like",
+        data.replace("match:like:", ""),
+      );
+    } else if (data.startsWith("match:dislike:")) {
+      await handleMatchAction(
+        ctx,
+        env,
+        "dislike",
+        data.replace("match:dislike:", ""),
+      );
+    } else if (data.startsWith("match:skip:")) {
+      await handleMatchAction(
+        ctx,
+        env,
+        "skip",
+        data.replace("match:skip:", ""),
+      );
+    } else if (data.startsWith("match:like-message:")) {
+      await startLikeMessageConversation(
+        ctx,
+        env,
+        data.replace("match:like-message:", ""),
+      );
+      await ctx.answerCallbackQuery().catch(() => {});
+    } else if (data.startsWith("match:undo:")) {
+      await handleRollback(ctx, env);
+      await ctx.answerCallbackQuery().catch(() => {});
+    } else if (data.startsWith("dm:send:")) {
+      await handleSendDM(ctx, env, data.replace("dm:send:", ""));
+    } else if (data.startsWith("match:block:")) {
+      await handleBlock(ctx, env, data.replace("match:block:", ""));
+      await ctx.answerCallbackQuery().catch(() => {});
+    } else if (data.startsWith("dm:buy:")) {
+      // Backward compatibility: directly show invoice for the target user
+      await handleSendDM(ctx, env, data.replace("dm:buy:", ""));
+    } else if (data === "dm:cancel") {
+      await ctx.deleteMessage().catch(() => {});
+      await ctx.answerCallbackQuery().catch(() => {});
+    } else {
+      await ctx.answerCallbackQuery("Unknown action.").catch(() => {});
+    }
+  } catch (error) {
+    log.error("matchCallbacks", "Unhandled error", undefined, error);
+    await ctx.answerCallbackQuery("❌ Something went wrong.").catch(() => {});
   }
 };
 
 async function handleBuyDM(ctx: MyContext, env: Env, targetUserId: string) {
   // Deprecated: combined into handleSendDM for single-step flow
   await handleSendDM(ctx, env, targetUserId);
+}
+
+async function handleBlock(
+  ctx: MyContext,
+  env: Env,
+  targetUserId: string,
+): Promise<void> {
+  if (!ctx.from) {
+    await ctx.answerCallbackQuery("Could not identify you.").catch(() => {});
+    return;
+  }
+  const userId = String(ctx.from.id);
+
+  // Step 1: Call API first. If this fails, nothing else should happen.
+  try {
+    const client = new ApiServiceClient(env.API_SERVICE);
+    await client.blockUser(userId, targetUserId);
+  } catch (error) {
+    log.error(
+      "handleBlock",
+      "API block call failed",
+      { userId, targetUserId },
+      error instanceof Error ? error : new Error(String(error)),
+    );
+    await ctx.reply("❌ Failed to block user. Please try again later.");
+    return;
+  }
+
+  // Step 2: Clean up UI — each step is independent, failures are non-fatal
+  await clearMatchQueue(env.KV, userId).catch(() => {});
+  await ctx.deleteMessage().catch(() => {});
+
+  await ctx.reply(
+    mdv2`🚫 Blocked\\. This user will no longer appear in your matches\\.`,
+    { parse_mode: "MarkdownV2" },
+  );
+
+  // Step 3: Show next match or main menu
+  try {
+    const lang = await fetchUserLang(env, userId);
+    const queue = await getMatchQueue(env.KV, userId);
+    if (queue && queue.index < queue.matches.length) {
+      await showNextMatch(ctx, env, userId, lang);
+    } else {
+      await ctx.reply(t("matchNoMatches", lang), {
+        parse_mode: "Markdown",
+        reply_markup: getMainMenuKeyboard(),
+      });
+    }
+  } catch {
+    // Non-fatal: user sees the block confirmation already
+  }
 }

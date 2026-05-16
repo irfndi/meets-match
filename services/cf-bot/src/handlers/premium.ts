@@ -111,99 +111,123 @@ export const premiumCommand = async (
 ): Promise<void> => {
   if (!ctx.from) return;
 
-  const result = await ensureUserExists(ctx, env);
-  if (!result) {
-    await ctx.reply("❌ Sorry, there was an error. Please try /start first.");
-    return;
-  }
-
-  const userId = String(ctx.from.id);
-  const status = await getInteractionStatus(env, userId);
-  const tier = status?.tier ?? "free";
-
-  const interactionLine = status
-    ? `❤️ ${status.likesRemaining}/${status.likesTotal} likes · 👎 ${status.dislikesRemaining}/${status.dislikesTotal} dislikes today`
-    : "";
-
-  const msg = [
-    "👑 *Premium Plans*",
-    "",
-    `*Current plan:* ${tier === "free" ? "Free" : tier === "premium" ? "Premium 👑" : "Premium+ 💎"}`,
-    interactionLine,
-    "",
-    "*Free Plan:*",
-    "• Browse unlimited profiles",
-    "• 15 likes + 35 dislikes per day",
-    "• No skip (Like or Dislike only)",
-    "",
-    `*Premium 👑 — ${PREMIUM_PRICE}*`,
-    "• Unlimited likes & dislikes",
-    "• ⏩ Skip profiles",
-    "• Priority matching",
-    "• See who liked you",
-    "",
-    `*Premium+ 💎 — ${PREMIUM_PLUS_PRICE}*`,
-    "• Everything in Premium",
-    "• Unlimited direct DMs",
-    "• Verified badge",
-    "• Advanced filters",
-  ]
-    .filter(Boolean)
-    .join("\n");
-
-  const keyboard = new InlineKeyboard();
-
-  // Free users can buy Premium; premium users upgrade via Premium+ button below
-  if (tier === "free") {
-    try {
-      const premiumLink = await ctx.api.createInvoiceLink(
-        "MeetMatch Premium",
-        "Upgrade to Premium — unlimited likes, skip, priority matching, and see who liked you.",
-        `premium_${userId}_premium`,
-        "",
-        "XTR",
-        [{ label: "Premium", amount: PREMIUM_STARS }],
-      );
-      keyboard
-        .url(`⭐ Buy Premium (${PREMIUM_STARS} Stars)`, premiumLink)
-        .row();
-    } catch (error) {
-      log.error(
-        "premiumInvoice",
-        "Failed to create Premium invoice",
-        { userId },
-        error,
-      );
+  try {
+    const result = await ensureUserExists(ctx, env);
+    if (!result) {
+      await ctx.reply("❌ Sorry, there was an error. Please try /start first.");
+      return;
     }
-  }
 
-  if (tier !== "premium_plus") {
-    try {
-      const plusLink = await ctx.api.createInvoiceLink(
-        "MeetMatch Premium+",
-        "Upgrade to Premium+ — everything in Premium plus unlimited DMs, verified badge, and advanced filters.",
-        `premium_${userId}_premium_plus`,
-        "",
-        "XTR",
-        [{ label: "Premium+", amount: PREMIUM_PLUS_STARS }],
-      );
-      keyboard
-        .url(`💎 Buy Premium+ (${PREMIUM_PLUS_STARS} Stars)`, plusLink)
-        .row();
-    } catch (error) {
-      log.error(
-        "premiumInvoice",
-        "Failed to create Premium+ invoice",
-        { userId },
-        error,
-      );
+    const userId = String(ctx.from.id);
+    const status = await getInteractionStatus(env, userId);
+    const tier = status?.tier ?? "free";
+
+    // Fetch expiry date for paid tiers
+    let expiryLine = "";
+    if (tier !== "free") {
+      try {
+        const client = new ApiServiceClient(env.API_SERVICE);
+        const userRes = await client.getUser({ userId });
+        const expiresAt = userRes.user?.subscriptionExpiresAt;
+        if (expiresAt) {
+          const date = new Date(expiresAt);
+          expiryLine = `📅 Expires: ${date.toLocaleDateString("en-GB")}`;
+        }
+      } catch {
+        // ignore
+      }
     }
+
+    const interactionLine = status
+      ? `❤️ ${status.likesRemaining}/${status.likesTotal} likes · 👎 ${status.dislikesRemaining}/${status.dislikesTotal} dislikes today`
+      : "";
+
+    const msg = [
+      "👑 *Premium Plans*",
+      "",
+      `*Current plan:* ${tier === "free" ? "Free" : tier === "premium" ? "Premium 👑" : "Premium+ 💎"}`,
+      expiryLine,
+      interactionLine,
+      "",
+      "*Free Plan:*",
+      "• Browse unlimited profiles",
+      "• 15 likes + 35 dislikes per day",
+      "• No skip (Like or Dislike only)",
+      "",
+      `*Premium 👑 — ${PREMIUM_PRICE}*`,
+      "• Unlimited likes & dislikes",
+      "• ⏩ Skip profiles",
+      "• Priority matching",
+      "• See who liked you",
+      "",
+      `*Premium+ 💎 — ${PREMIUM_PLUS_PRICE}*`,
+      "• Everything in Premium",
+      "• Unlimited direct DMs",
+      // TODO: Implement verified badge (isVerified field + badge rendering in cards/profile)
+      "• Verified badge",
+      // TODO: Implement advanced filters (relationshipType preference + UI in settings)
+      "• Advanced filters",
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    const keyboard = new InlineKeyboard();
+
+    // Free users can buy Premium; premium users upgrade via Premium+ button below
+    if (tier === "free") {
+      try {
+        const premiumLink = await ctx.api.createInvoiceLink(
+          "MeetMatch Premium",
+          "Upgrade to Premium — unlimited likes, skip, priority matching, and see who liked you.",
+          `premium_${userId}_premium`,
+          "",
+          "XTR",
+          [{ label: "Premium", amount: PREMIUM_STARS }],
+        );
+        keyboard
+          .url(`⭐ Buy Premium (${PREMIUM_STARS} Stars)`, premiumLink)
+          .row();
+      } catch (error) {
+        log.error(
+          "premiumInvoice",
+          "Failed to create Premium invoice",
+          { userId },
+          error,
+        );
+      }
+    }
+
+    if (tier !== "premium_plus") {
+      try {
+        const plusLink = await ctx.api.createInvoiceLink(
+          "MeetMatch Premium+",
+          "Upgrade to Premium+ — everything in Premium plus unlimited DMs, verified badge, and advanced filters.",
+          `premium_${userId}_premium_plus`,
+          "",
+          "XTR",
+          [{ label: "Premium+", amount: PREMIUM_PLUS_STARS }],
+        );
+        keyboard
+          .url(`💎 Buy Premium+ (${PREMIUM_PLUS_STARS} Stars)`, plusLink)
+          .row();
+      } catch (error) {
+        log.error(
+          "premiumInvoice",
+          "Failed to create Premium+ invoice",
+          { userId },
+          error,
+        );
+      }
+    }
+
+    keyboard.text("🎁 Share for Free Bonus", "referral:show").row();
+    keyboard.text("❌ Close", "premium:close");
+
+    await ctx.reply(msg, { parse_mode: "Markdown", reply_markup: keyboard });
+  } catch (error) {
+    log.error("premiumCommand", "Unhandled error", undefined, error);
+    await ctx.reply("❌ Something went wrong. Please try again later.");
   }
-
-  keyboard.text("🎁 Share for Free Bonus", "referral:show").row();
-  keyboard.text("❌ Close", "premium:close");
-
-  await ctx.reply(msg, { parse_mode: "Markdown", reply_markup: keyboard });
 };
 
 export const referralCommand = async (
@@ -212,54 +236,59 @@ export const referralCommand = async (
 ): Promise<void> => {
   if (!ctx.from) return;
 
-  const result = await ensureUserExists(ctx, env);
-  if (!result) {
-    await ctx.reply("❌ Sorry, there was an error. Please try /start first.");
-    return;
+  try {
+    const result = await ensureUserExists(ctx, env);
+    if (!result) {
+      await ctx.reply("❌ Sorry, there was an error. Please try /start first.");
+      return;
+    }
+
+    const userId = String(ctx.from.id);
+    const info = await getReferralInfo(env, userId);
+    const botUsername = await getBotUsername(ctx);
+    const code = info?.code;
+    const link =
+      botUsername && code
+        ? `https://t.me/${botUsername}?start=ref_${code}`
+        : null;
+
+    const statsLines = info
+      ? [
+          `👥 *Friends invited:* ${info.count}`,
+          `⭐ *Bonus earned:* +${info.bonus} likes/dislikes`,
+        ]
+      : [];
+
+    const msg = [
+      "🎁 *Invite Friends, Earn Bonus*",
+      "",
+      "Share your referral link with friends. When they join and complete their profile, *both of you get +5 bonus likes & dislikes!*",
+      "",
+      ...statsLines,
+      "",
+      `*Your referral code:* \`${code ?? "N/A"}\``,
+      link ? `\n*Your link:* ${link}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    const keyboard = new InlineKeyboard();
+    if (link) {
+      keyboard
+        .url(
+          "📤 Share on Telegram",
+          `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent("Join me on MeetMatch! 🎁")}`,
+        )
+        .row();
+      keyboard.copyText("📋 Copy Link", link).row();
+    }
+    keyboard.text("❌ Close", "referral:close");
+
+    await ctx.reply(msg, { parse_mode: "Markdown", reply_markup: keyboard });
+  } catch (error) {
+    log.error("referralCommand", "Unhandled error", undefined, error);
+    await ctx.reply("❌ Something went wrong. Please try again later.");
   }
-
-  const userId = String(ctx.from.id);
-  const info = await getReferralInfo(env, userId);
-  const botUsername = await getBotUsername(ctx);
-  const code = info?.code;
-  const link =
-    botUsername && code
-      ? `https://t.me/${botUsername}?start=ref_${code}`
-      : null;
-
-  const statsLines = info
-    ? [
-        `👥 *Friends invited:* ${info.count}`,
-        `⭐ *Bonus earned:* +${info.bonus} likes/dislikes`,
-      ]
-    : [];
-
-  const msg = [
-    "🎁 *Invite Friends, Earn Bonus*",
-    "",
-    "Share your referral link with friends. When they join and complete their profile, *both of you get +5 bonus likes & dislikes!*",
-    "",
-    ...statsLines,
-    "",
-    `*Your referral code:* \`${code ?? "N/A"}\``,
-    link ? `\n*Your link:* ${link}` : "",
-  ]
-    .filter(Boolean)
-    .join("\n");
-
-  const keyboard = new InlineKeyboard();
-  if (link) {
-    keyboard
-      .url(
-        "📤 Share on Telegram",
-        `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent("Join me on MeetMatch! 🎁")}`,
-      )
-      .row();
-    keyboard.copyText("📋 Copy Link", link).row();
-  }
-  keyboard.text("❌ Close", "referral:close");
-
-  await ctx.reply(msg, { parse_mode: "Markdown", reply_markup: keyboard });
 };
 
 export const premiumCallbacks = async (
@@ -269,33 +298,38 @@ export const premiumCallbacks = async (
   if (!ctx.from || !ctx.callbackQuery?.data) return;
   const data = ctx.callbackQuery.data;
 
-  if (data === "premium:show") {
-    await premiumCommand(ctx, env);
-    await ctx.answerCallbackQuery().catch(() => {});
-    return;
-  }
+  try {
+    if (data === "premium:show") {
+      await premiumCommand(ctx, env);
+      await ctx.answerCallbackQuery().catch(() => {});
+      return;
+    }
 
-  if (data === "premium:close") {
-    await ctx.deleteMessage().catch(() => {});
-    await ctx.answerCallbackQuery().catch(() => {});
-    return;
-  }
+    if (data === "premium:close") {
+      await ctx.deleteMessage().catch(() => {});
+      await ctx.answerCallbackQuery().catch(() => {});
+      return;
+    }
 
-  if (data === "referral:show") {
-    await referralCommand(ctx, env);
-    await ctx.answerCallbackQuery().catch(() => {});
-    return;
-  }
+    if (data === "referral:show") {
+      await referralCommand(ctx, env);
+      await ctx.answerCallbackQuery().catch(() => {});
+      return;
+    }
 
-  if (data === "referral:close" || data === "referral:dismiss") {
-    await ctx.deleteMessage().catch(() => {});
-    await ctx.answerCallbackQuery().catch(() => {});
-    return;
-  }
+    if (data === "referral:close" || data === "referral:dismiss") {
+      await ctx.deleteMessage().catch(() => {});
+      await ctx.answerCallbackQuery().catch(() => {});
+      return;
+    }
 
-  if (data === "premium_ad:dismiss") {
-    await ctx.deleteMessage().catch(() => {});
-    await ctx.answerCallbackQuery().catch(() => {});
-    return;
+    if (data === "premium_ad:dismiss") {
+      await ctx.deleteMessage().catch(() => {});
+      await ctx.answerCallbackQuery().catch(() => {});
+      return;
+    }
+  } catch (error) {
+    log.error("premiumCallbacks", "Unhandled error", undefined, error);
+    await ctx.answerCallbackQuery("❌ Something went wrong.").catch(() => {});
   }
 };

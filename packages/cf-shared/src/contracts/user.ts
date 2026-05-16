@@ -69,6 +69,7 @@ export const User = Struct({
   phoneNumber: optional(String),
   language: optional(String),
   subscriptionTier: optional(String),
+  subscriptionExpiresAt: optional(String),
   dailySwipesUsed: optional(Number),
   dailySwipesResetAt: optional(String),
   dailyLikesUsed: optional(Number),

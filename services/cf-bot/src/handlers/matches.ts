@@ -18,7 +18,7 @@ import {
   type MutualMatchNotification,
 } from "../lib/notifications.js";
 import { getMainMenuKeyboard } from "../lib/main-menu.js";
-import { t } from "../lib/i18n.js";
+import { t, escapeMd } from "../lib/i18n.js";
 import { type Language } from "../lib/i18n.js";
 import { ApiServiceClient } from "../services/api-client.js";
 
@@ -28,16 +28,16 @@ function buildChatLink(otherUser: Record<string, unknown>): string {
     otherUser.first_name ??
     "Someone") as string;
   if (username) {
-    return `💬 [Chat with ${displayName}](https://t.me/${username})`;
+    return `💬 [Chat with ${escapeMd(displayName)}](https://t.me/${username})`;
   }
-  return `💬 ${displayName} (no username set)`;
+  return `💬 ${escapeMd(displayName)} (no username set)`;
 }
 
 function formatMatch(match: Record<string, unknown>): string {
   const name = (match.displayName ?? match.first_name ?? "Unknown") as string;
   const age = match.age ?? "?";
-  const bio = match.bio ? `\n📝 ${match.bio}` : "";
-  return `💕 ${name}, ${age}${bio}\nMatched at: ${match.matched_at ?? "recently"}`;
+  const bio = match.bio ? `\n📝 ${escapeMd(String(match.bio))}` : "";
+  return `💕 ${escapeMd(name)}, ${age}${bio}\nMatched at: ${match.matched_at ?? "recently"}`;
 }
 
 async function fetchMutualMatches(env: Env, userId: string) {
@@ -93,147 +93,158 @@ export const matchesCommand = async (
     return;
   }
 
-  const result = await ensureUserExists(ctx, env);
-  if (!result) {
-    await ctx.reply("❌ Sorry, there was an error. Please try /start first.");
-    return;
-  }
-
-  const { user } = result;
-  const { complete, missing } = getProfileCompleteness(user);
-
-  if (!complete) {
-    await ctx.reply(
-      `⚠️ *Almost there!*\n\nComplete your profile before viewing matches:\n\n${getMissingFieldsDisplay(missing)}\n\nTap *👤 Profile* to finish setting up.`,
-      { parse_mode: "Markdown", reply_markup: getMainMenuKeyboard() },
-    );
-    return;
-  }
-
-  const lang = (user.language as Language) ?? "en";
-  if (!isPhoneVerified(user)) {
-    await promptPhoneVerification(ctx, env, lang);
-    return;
-  }
-
-  const userId = String(ctx.from.id);
-
-  // 1. Show stored notifications (mutual matches + likes)
-  const notifications = await getNotifications(env, userId);
-  const mutualNotifications = notifications.filter(
-    (n): n is MutualMatchNotification => n.type === "mutual_match",
-  );
-  const likeNotifications = notifications.filter(
-    (n): n is LikeNotification => n.type === "like",
-  );
-
-  if (mutualNotifications.length > 0) {
-    await ctx.reply(
-      `💕 You have ${mutualNotifications.length} new mutual match(es)!`,
-    );
-    for (const notif of mutualNotifications) {
-      const msg = [
-        `💕 It's a match with ${notif.otherDisplayName}!`,
-        buildChatLink({
-          displayName: notif.otherDisplayName,
-          username: notif.otherUsername,
-        }),
-      ].join("\n");
-      await ctx.reply(msg, { parse_mode: "Markdown" });
+  try {
+    const result = await ensureUserExists(ctx, env);
+    if (!result) {
+      await ctx.reply("❌ Sorry, there was an error. Please try /start first.");
+      return;
     }
-  }
 
-  if (likeNotifications.length > 0) {
-    const keyboard = new InlineKeyboard();
-    for (let i = 0; i < likeNotifications.length; i++) {
-      const notif = likeNotifications[i];
-      keyboard
-        .text(`❤️ ${notif.fromDisplayName}`, `likes:view:${notif.fromUserId}`)
-        .row();
+    const { user } = result;
+    const { complete, missing } = getProfileCompleteness(user);
+
+    if (!complete) {
+      await ctx.reply(
+        `⚠️ *Almost there!*\n\nComplete your profile before viewing matches:\n\n${getMissingFieldsDisplay(missing)}\n\nTap *👤 Profile* to finish setting up.`,
+        { parse_mode: "Markdown", reply_markup: getMainMenuKeyboard() },
+      );
+      return;
     }
-    keyboard.text("⏭ Dismiss all", "likes:dismiss");
-    await ctx.reply(
-      `💕 ${likeNotifications.length} person(s) liked your profile! Want to check them out?`,
-      { reply_markup: keyboard },
+
+    const lang = (user.language as Language) ?? "en";
+    if (!isPhoneVerified(user)) {
+      await promptPhoneVerification(ctx, env, lang);
+      return;
+    }
+
+    const userId = String(ctx.from.id);
+
+    // 1. Show stored notifications (mutual matches + likes)
+    const notifications = await getNotifications(env, userId);
+    const mutualNotifications = notifications.filter(
+      (n): n is MutualMatchNotification => n.type === "mutual_match",
     );
-  }
+    const likeNotifications = notifications.filter(
+      (n): n is LikeNotification => n.type === "like",
+    );
 
-  // 2. Fetch mutual matches from API
-  const mutualMatches = await fetchMutualMatches(env, userId);
+    if (mutualNotifications.length > 0) {
+      await ctx.reply(
+        `💕 You have ${mutualNotifications.length} new mutual match(es)!`,
+      );
+      for (const notif of mutualNotifications) {
+        const msg = [
+          `💕 It's a match with ${escapeMd(notif.otherDisplayName ?? "Someone")}!`,
+          buildChatLink({
+            displayName: notif.otherDisplayName,
+            username: notif.otherUsername,
+          }),
+        ].join("\n");
+        await ctx.reply(msg, { parse_mode: "Markdown" });
+      }
+    }
 
-  // 3. Fetch pending likes from API (users who liked you but you haven't responded)
-  const pendingLikes = await fetchPendingLikes(env, userId);
+    if (likeNotifications.length > 0) {
+      const keyboard = new InlineKeyboard();
+      for (let i = 0; i < likeNotifications.length; i++) {
+        const notif = likeNotifications[i];
+        keyboard
+          .text(`❤️ ${notif.fromDisplayName}`, `likes:view:${notif.fromUserId}`)
+          .row();
+      }
+      keyboard.text("⏭ Dismiss all", "likes:dismiss");
+      await ctx.reply(
+        `💕 ${likeNotifications.length} person(s) liked your profile! Want to check them out?`,
+        { reply_markup: keyboard },
+      );
+    }
 
-  const totalMatches = mutualMatches.length;
-  const totalPending = pendingLikes.length;
+    // 2. Fetch mutual matches from API
+    const mutualMatches = await fetchMutualMatches(env, userId);
 
-  if (totalMatches === 0 && totalPending === 0 && notifications.length === 0) {
-    await ctx.reply(t("matchesNoMatches", lang), {
-      parse_mode: "Markdown",
-      reply_markup: getMainMenuKeyboard(),
-    });
-    return;
-  }
+    // 3. Fetch pending likes from API (users who liked you but you haven't responded)
+    const pendingLikes = await fetchPendingLikes(env, userId);
 
-  if (totalMatches > 0) {
-    await ctx.reply(`💑 You have ${totalMatches} mutual match(es):`);
-    for (const match of mutualMatches) {
-      // Fetch the other user's profile
-      const otherUserId =
-        match.user1Id === userId ? match.user2Id : match.user1Id;
-      try {
-        const client = new ApiServiceClient(env.API_SERVICE);
-        const userRes = await client.getUser({ userId: String(otherUserId) });
-        const otherUser = userRes.user as Record<string, unknown>;
-        const msg = formatMatch(otherUser);
-        const chatLink = buildChatLink(otherUser);
-        const mediaUrls = (otherUser.mediaUrls ?? []) as Array<{
-          url: string;
-          type: string;
-        }>;
-        const firstImage = mediaUrls.find((m) => m.type === "image");
-        const firstVideo = mediaUrls.find((m) => m.type === "video");
-        const text = `${msg}\n${chatLink}`;
+    const totalMatches = mutualMatches.length;
+    const totalPending = pendingLikes.length;
 
+    if (
+      totalMatches === 0 &&
+      totalPending === 0 &&
+      notifications.length === 0
+    ) {
+      await ctx.reply(t("matchesNoMatches", lang), {
+        parse_mode: "Markdown",
+        reply_markup: getMainMenuKeyboard(),
+      });
+      return;
+    }
+
+    if (totalMatches > 0) {
+      await ctx.reply(`💑 You have ${totalMatches} mutual match(es):`);
+      for (const match of mutualMatches) {
+        // Fetch the other user's profile
+        const otherUserId =
+          match.user1Id === userId ? match.user2Id : match.user1Id;
         try {
-          if (firstImage) {
-            await ctx.replyWithPhoto(firstImage.url, {
-              caption: text,
-              parse_mode: "Markdown",
-            });
-          } else if (firstVideo) {
-            await ctx.replyWithVideo(firstVideo.url, {
-              caption: text,
-              parse_mode: "Markdown",
-            });
-          } else {
+          const client = new ApiServiceClient(env.API_SERVICE);
+          const userRes = await client.getUser({ userId: String(otherUserId) });
+          const otherUser = userRes.user as Record<string, unknown>;
+          const msg = formatMatch(otherUser);
+          const chatLink = buildChatLink(otherUser);
+          const mediaUrls = (otherUser.mediaUrls ?? []) as Array<{
+            url: string;
+            type: string;
+          }>;
+          // Preserve media order: show the first uploaded item (image or video)
+          const firstRenderable = mediaUrls.find(
+            (m) => m.type === "image" || m.type === "video",
+          );
+          const text = `${msg}\n${chatLink}`;
+
+          try {
+            if (firstRenderable?.type === "image") {
+              await ctx.replyWithPhoto(firstRenderable.url, {
+                caption: text,
+                parse_mode: "Markdown",
+              });
+            } else if (firstRenderable?.type === "video") {
+              await ctx.replyWithVideo(firstRenderable.url, {
+                caption: text,
+                parse_mode: "Markdown",
+              });
+            } else {
+              await ctx.reply(text, { parse_mode: "Markdown" });
+            }
+          } catch {
             await ctx.reply(text, { parse_mode: "Markdown" });
           }
         } catch {
-          await ctx.reply(text, { parse_mode: "Markdown" });
+          await ctx.reply(formatMatch(match));
         }
-      } catch {
-        await ctx.reply(formatMatch(match));
       }
     }
-  }
 
-  if (totalPending > 0) {
-    const keyboard = new InlineKeyboard();
-    for (const pending of pendingLikes) {
-      const name = (pending.displayName ??
-        pending.first_name ??
-        "Someone") as string;
-      keyboard.text(`❤️ ${name}`, `likes:view:${pending.id}`).row();
+    if (totalPending > 0) {
+      const keyboard = new InlineKeyboard();
+      for (const pending of pendingLikes) {
+        const name = (pending.displayName ??
+          pending.first_name ??
+          "Someone") as string;
+        keyboard.text(`❤️ ${name}`, `likes:view:${pending.id}`).row();
+      }
+      await ctx.reply(`💕 ${totalPending} person(s) liked you! See them now?`, {
+        reply_markup: keyboard,
+      });
     }
-    await ctx.reply(`💕 ${totalPending} person(s) liked you! See them now?`, {
-      reply_markup: keyboard,
-    });
-  }
 
-  await ctx.reply("Use the menu below to navigate:", {
-    reply_markup: getMainMenuKeyboard(),
-  });
+    await ctx.reply("Use the menu below to navigate:", {
+      reply_markup: getMainMenuKeyboard(),
+    });
+  } catch (error) {
+    log.error("matchesCommand", "Unhandled error", undefined, error);
+    await ctx.reply(t("genericError"), { reply_markup: getMainMenuKeyboard() });
+  }
 };
 
 export const matchesCallbacks = async (
@@ -247,79 +258,86 @@ export const matchesCallbacks = async (
   const userId = String(ctx.from.id);
   const data = ctx.callbackQuery.data;
 
-  if (data === "likes:dismiss") {
-    const notifications = await getNotifications(env, userId);
-    // Remove from end to beginning to preserve indices
-    for (let i = notifications.length - 1; i >= 0; i--) {
-      if (notifications[i].type === "like") {
-        await removeNotification(env, userId, i);
+  try {
+    if (data === "likes:dismiss") {
+      const notifications = await getNotifications(env, userId);
+      // Remove from end to beginning to preserve indices
+      for (let i = notifications.length - 1; i >= 0; i--) {
+        if (notifications[i].type === "like") {
+          await removeNotification(env, userId, i);
+        }
       }
+      await ctx.answerCallbackQuery("Dismissed.").catch(() => {});
+      await ctx
+        .editMessageText("💕 You can see your likes anytime with /matches.")
+        .catch(() => {});
+      return;
     }
-    await ctx.answerCallbackQuery("Dismissed.").catch(() => {});
-    await ctx
-      .editMessageText("💕 You can see your likes anytime with /matches.")
-      .catch(() => {});
-    return;
-  }
 
-  if (data.startsWith("likes:view:")) {
-    const targetUserId = data.replace("likes:view:", "");
-    await ctx.answerCallbackQuery("Loading profile...").catch(() => {});
+    if (data.startsWith("likes:view:")) {
+      const targetUserId = data.replace("likes:view:", "");
+      await ctx.answerCallbackQuery("Loading profile...").catch(() => {});
 
-    try {
-      const client = new ApiServiceClient(env.API_SERVICE);
-      const userRes = await client.getUser({ userId: targetUserId });
-      const targetUser = userRes.user as Record<string, unknown>;
-      const name = (targetUser.displayName ??
-        targetUser.first_name ??
-        "Unknown") as string;
-      const age = targetUser.age ?? "?";
-      const bio = targetUser.bio ? `\n📝 ${targetUser.bio}` : "";
-      const interests = targetUser.interests
-        ? `\n🌟 ${Array.isArray(targetUser.interests) ? (targetUser.interests as string[]).join(", ") : String(targetUser.interests)}`
-        : "";
-      const mediaUrls = (targetUser.mediaUrls ?? []) as Array<{
-        url: string;
-        type: string;
-      }>;
-      const firstImage = mediaUrls.find((m) => m.type === "image");
-      const firstVideo = mediaUrls.find((m) => m.type === "video");
-
-      const keyboard = new InlineKeyboard()
-        .text("❤️ Like back", `match:like:${targetUserId}`)
-        .text("👎 Pass", `match:dislike:${targetUserId}`)
-        .row();
-
-      const text = `${name}, ${age}${bio}${interests}`;
       try {
-        if (firstImage) {
-          await ctx.replyWithPhoto(firstImage.url, {
-            caption: text,
-            reply_markup: keyboard,
-          });
-        } else if (firstVideo) {
-          await ctx.replyWithVideo(firstVideo.url, {
-            caption: text,
-            reply_markup: keyboard,
-          });
-        } else {
+        const client = new ApiServiceClient(env.API_SERVICE);
+        const userRes = await client.getUser({ userId: targetUserId });
+        const targetUser = userRes.user as Record<string, unknown>;
+        const name = (targetUser.displayName ??
+          targetUser.first_name ??
+          "Unknown") as string;
+        const age = targetUser.age ?? "?";
+        const bio = targetUser.bio ? `\n📝 ${targetUser.bio}` : "";
+        const interests = targetUser.interests
+          ? `\n🌟 ${Array.isArray(targetUser.interests) ? (targetUser.interests as string[]).join(", ") : String(targetUser.interests)}`
+          : "";
+        const mediaUrls = (targetUser.mediaUrls ?? []) as Array<{
+          url: string;
+          type: string;
+        }>;
+        // Preserve media order: show the first uploaded item (image or video)
+        const firstRenderable = mediaUrls.find(
+          (m) => m.type === "image" || m.type === "video",
+        );
+
+        const keyboard = new InlineKeyboard()
+          .text("❤️ Like back", `match:like:${targetUserId}`)
+          .text("👎 Pass", `match:dislike:${targetUserId}`)
+          .row();
+
+        const text = `${name}, ${age}${bio}${interests}`;
+        try {
+          if (firstRenderable?.type === "image") {
+            await ctx.replyWithPhoto(firstRenderable.url, {
+              caption: text,
+              reply_markup: keyboard,
+            });
+          } else if (firstRenderable?.type === "video") {
+            await ctx.replyWithVideo(firstRenderable.url, {
+              caption: text,
+              reply_markup: keyboard,
+            });
+          } else {
+            await ctx.reply(text, { reply_markup: keyboard });
+          }
+        } catch {
           await ctx.reply(text, { reply_markup: keyboard });
         }
+
+        // Remove this like notification
+        const notifications = await getNotifications(env, userId);
+        const idx = notifications.findIndex(
+          (n) => n.type === "like" && n.fromUserId === targetUserId,
+        );
+        if (idx >= 0) await removeNotification(env, userId, idx);
       } catch {
-        await ctx.reply(text, { reply_markup: keyboard });
+        await ctx.reply("Could not load profile. Please try again.");
       }
-
-      // Remove this like notification
-      const notifications = await getNotifications(env, userId);
-      const idx = notifications.findIndex(
-        (n) => n.type === "like" && n.fromUserId === targetUserId,
-      );
-      if (idx >= 0) await removeNotification(env, userId, idx);
-    } catch {
-      await ctx.reply("Could not load profile. Please try again.");
+      return;
     }
-    return;
-  }
 
-  await ctx.answerCallbackQuery("Unknown action.").catch(() => {});
+    await ctx.answerCallbackQuery("Unknown action.").catch(() => {});
+  } catch (error) {
+    log.error("matchesCallbacks", "Unhandled error", undefined, error);
+    await ctx.answerCallbackQuery("❌ Something went wrong.").catch(() => {});
+  }
 };
