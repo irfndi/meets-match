@@ -145,7 +145,14 @@ export const languageCallback = async (
     const userId = String(ctx.from.id);
 
     // Store language preference
-    await setUserLanguage(env, userId, selectedLang);
+    const saved = await setUserLanguage(env, userId, selectedLang);
+    if (!saved) {
+      await ctx
+        .answerCallbackQuery("❌ Failed to set language. Please try again.")
+        .catch(() => {});
+      await ctx.reply(t("genericError", selectedLang));
+      return true;
+    }
 
     await ctx
       .answerCallbackQuery(`Language set to ${getLanguageLabel(selectedLang)}`)
