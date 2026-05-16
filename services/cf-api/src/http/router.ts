@@ -56,11 +56,11 @@ export class ApiRouter {
 
   constructor(private readonly env: ApiEnv) {
     this.userRepo = new UserRepository(env.DB);
+    this.blockRepo = new BlockRepository(env.DB);
     this.matchRepo = new MatchRepository(env.DB, this.userRepo, this.blockRepo);
     this.notificationRepo = new NotificationRepository(env.DB);
     this.reportRepo = new ReportRepository(env.DB);
     this.feedbackRepo = new FeedbackRepository(env.DB);
-    this.blockRepo = new BlockRepository(env.DB);
     this.geoService = new GeocodingService(env.KV);
   }
 
