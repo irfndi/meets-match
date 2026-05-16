@@ -840,12 +840,19 @@ export function calculateMatchScore(
     user2.interests &&
     user2.interests.length > 0
   ) {
+    // ⚡ Bolt Optimization: Use single Set for O(1) lookups instead of multiple
+    // Sets and slow array spreads. Avoids unnecessary garbage collection.
     const set1 = new Set(user1.interests);
     const set2 = new Set(user2.interests);
-    const intersection = new Set([...set1].filter((x) => set2.has(x)));
-    const union = new Set([...set1, ...set2]);
-    if (union.size > 0) {
-      score.interests = intersection.size / union.size;
+    let intersectionSize = 0;
+    for (const item of set1) {
+      if (set2.has(item)) {
+        intersectionSize++;
+      }
+    }
+    const unionSize = set1.size + set2.size - intersectionSize;
+    if (unionSize > 0) {
+      score.interests = intersectionSize / unionSize;
     }
   }
 
@@ -881,9 +888,11 @@ export function calculateMatchScore(
     user2.preferences.relationshipType.length > 0
   ) {
     prefChecks++;
-    const set1 = new Set(prefs.relationshipType);
+    // ⚡ Bolt Optimization: Avoid Set allocation overhead for small arrays.
+    // Directly use standard iteration to check for any overlap.
+    const relationshipType1 = prefs.relationshipType;
     const overlap = user2.preferences.relationshipType.some((rt) =>
-      set1.has(rt),
+      relationshipType1.includes(rt),
     );
     if (overlap) prefMatches++;
   }
