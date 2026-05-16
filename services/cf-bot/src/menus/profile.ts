@@ -41,31 +41,74 @@ export async function handleProfileCallback(
   }
 
   switch (data) {
-    case "profile:bio":
+    case "profile:bio": {
       await startConversation(env.KV, userId, "bio");
-      await ctx.reply(t("bioPrompt", lang));
+      const bioKeyboard = {
+        keyboard: [[{ text: t("genericCancel", lang) }]],
+        resize_keyboard: true,
+        one_time_keyboard: true,
+      };
+      await ctx.reply(t("bioPrompt", lang), { reply_markup: bioKeyboard });
       await ctx.answerCallbackQuery().catch(() => {});
       return true;
-    case "profile:birthdate":
+    }
+    case "profile:birthdate": {
       await startConversation(env.KV, userId, "birthdate");
-      await ctx.reply(t("birthDatePrompt", lang));
+      const birthKeyboard = {
+        keyboard: [[{ text: t("genericCancel", lang) }]],
+        resize_keyboard: true,
+        one_time_keyboard: true,
+      };
+      await ctx.reply(t("birthDatePrompt", lang), {
+        reply_markup: birthKeyboard,
+      });
       await ctx.answerCallbackQuery().catch(() => {});
       return true;
-    case "profile:name":
+    }
+    case "profile:name": {
       await startConversation(env.KV, userId, "name");
-      await ctx.reply(t("namePrompt", lang));
+      const nameKeyboard = {
+        keyboard: [
+          [{ text: t("nameUseTelegramButton", lang) }],
+          [{ text: t("genericCancel", lang) }],
+        ],
+        resize_keyboard: true,
+        one_time_keyboard: true,
+      };
+      await ctx.reply(t("namePrompt", lang), { reply_markup: nameKeyboard });
       await ctx.answerCallbackQuery().catch(() => {});
       return true;
-    case "profile:gender":
+    }
+    case "profile:gender": {
       await startConversation(env.KV, userId, "gender");
-      await ctx.reply(t("genderPrompt", lang));
+      const keyboard = {
+        keyboard: [
+          [
+            { text: t("genderMaleButton", lang) },
+            { text: t("genderFemaleButton", lang) },
+          ],
+          [{ text: t("genericCancel", lang) }],
+        ],
+        resize_keyboard: true,
+        one_time_keyboard: true,
+      };
+      await ctx.reply(t("genderPrompt", lang), { reply_markup: keyboard });
       await ctx.answerCallbackQuery().catch(() => {});
       return true;
-    case "profile:interests":
+    }
+    case "profile:interests": {
       await startConversation(env.KV, userId, "interests");
-      await ctx.reply(t("interestsPrompt", lang));
+      const interestsKeyboard = {
+        keyboard: [[{ text: t("genericCancel", lang) }]],
+        resize_keyboard: true,
+        one_time_keyboard: true,
+      };
+      await ctx.reply(t("interestsPrompt", lang), {
+        reply_markup: interestsKeyboard,
+      });
       await ctx.answerCallbackQuery().catch(() => {});
       return true;
+    }
     case "profile:location": {
       await startConversation(env.KV, userId, "location");
       const keyboard = {

@@ -4,10 +4,11 @@ import {
   getProfileCompleteness,
   updateUserProfileComplete,
   parseBirthDate,
+  isPhoneVerified,
   type UserProfile,
 } from "./user-utils.js";
 import { getMainMenuKeyboard } from "./main-menu.js";
-import { t, type Language, escapeMd } from "./i18n.js";
+import { t, type Language, type Translations, escapeMd } from "./i18n.js";
 import { InlineKeyboard } from "grammy";
 import {
   createLogger,
@@ -27,6 +28,262 @@ interface ConversationState {
   field: string;
   step: number;
   data?: Record<string, unknown>;
+}
+
+/**
+ * Map profile completeness field names to conversation fields and i18n prompt keys.
+ * Exported so the start handler can use the same mapping.
+ */
+export const FIELD_TO_CONVERSATION = {
+  displayName: { field: "name", promptKey: "namePrompt" as const },
+  birthDate: { field: "birthdate", promptKey: "birthDatePrompt" as const },
+  gender: { field: "gender", promptKey: "genderPrompt" as const },
+  bio: { field: "bio", promptKey: "bioPrompt" as const },
+  location: { field: "location", promptKey: "locationPrompt" as const },
+  interests: { field: "interests", promptKey: "interestsPrompt" as const },
+  mediaUrls: { field: "media", promptKey: "mediaPrompt" as const },
+};
+
+/**
+ * Explicit onboarding step sequence.
+ * Each step defines when it should be shown during onboarding.
+ */
+const ONBOARDING_STEPS: Array<{
+  field: string;
+  promptKey: keyof Translations;
+  showOnce?: boolean;
+  skipIfPresent?: boolean;
+  skipIfVerified?: boolean;
+  keyboardType?: "text" | "gender" | "location" | "interests" | "name";
+}> = [
+  {
+    field: "name",
+    promptKey: "namePrompt",
+    showOnce: true,
+    keyboardType: "name",
+  },
+  {
+    field: "birthdate",
+    promptKey: "birthDatePrompt",
+    skipIfPresent: true,
+    keyboardType: "text",
+  },
+  {
+    field: "gender",
+    promptKey: "genderPrompt",
+    skipIfPresent: true,
+    keyboardType: "gender",
+  },
+  {
+    field: "bio",
+    promptKey: "bioPrompt",
+    skipIfPresent: true,
+    keyboardType: "text",
+  },
+  {
+    field: "location",
+    promptKey: "locationPrompt",
+    skipIfPresent: true,
+    keyboardType: "location",
+  },
+  {
+    field: "media",
+    promptKey: "mediaPrompt",
+    skipIfPresent: true,
+    keyboardType: "text",
+  },
+  {
+    field: "interests",
+    promptKey: "interestsPrompt",
+    showOnce: true,
+    keyboardType: "interests",
+  },
+  {
+    field: "phone",
+    promptKey: "phoneVerifyPrompt",
+    skipIfVerified: true,
+    keyboardType: "text",
+  },
+];
+
+const ONBOARDING_SEEN_TTL = 60 * 60 * 24; // 24 hours
+
+async function getOnboardingSeen(
+  kv: KVNamespace,
+  userId: string,
+): Promise<string[]> {
+  const raw = await kv.get(`onboarding:seen:${userId}`);
+  if (!raw) return [];
+  try {
+    return JSON.parse(raw) as string[];
+  } catch {
+    return [];
+  }
+}
+
+async function markOnboardingSeen(
+  kv: KVNamespace,
+  userId: string,
+  field: string,
+): Promise<void> {
+  const seen = await getOnboardingSeen(kv, userId);
+  if (!seen.includes(field)) {
+    seen.push(field);
+    await kv.put(`onboarding:seen:${userId}`, JSON.stringify(seen), {
+      expirationTtl: ONBOARDING_SEEN_TTL,
+    });
+  }
+}
+
+export async function clearOnboardingProgress(
+  kv: KVNamespace,
+  userId: string,
+): Promise<void> {
+  await kv.delete(`onboarding:seen:${userId}`);
+  await kv.delete(`onboarding:interests-skipped:${userId}`);
+}
+
+function shouldSkipStep(
+  step: (typeof ONBOARDING_STEPS)[number],
+  user: UserProfile,
+  seenFields: string[],
+): boolean {
+  if (step.showOnce && seenFields.includes(step.field)) return true;
+  if (step.skipIfVerified && isPhoneVerified(user)) return true;
+  if (step.skipIfPresent) {
+    switch (step.field) {
+      case "birthdate":
+        return !!user.birthDate && user.birthDate.trim().length > 0;
+      case "gender":
+        return !!user.gender;
+      case "bio":
+        return !!user.bio && user.bio.trim().length > 0;
+      case "location":
+        return (
+          !!user.location && (!!user.location.city || !!user.location.latitude)
+        );
+      case "media":
+        return Array.isArray(user.mediaUrls) && user.mediaUrls.length > 0;
+      default:
+        return false;
+    }
+  }
+  return false;
+}
+
+function buildStepKeyboard(
+  step: (typeof ONBOARDING_STEPS)[number],
+  lang: Language,
+): {
+  keyboard: Array<Array<{ text: string; request_location?: boolean }>>;
+  resize_keyboard: boolean;
+  one_time_keyboard: boolean;
+} {
+  const base = { resize_keyboard: true, one_time_keyboard: true };
+  switch (step.keyboardType) {
+    case "name":
+      return {
+        ...base,
+        keyboard: [
+          [{ text: t("nameUseTelegramButton", lang) }],
+          [{ text: t("genericCancel", lang) }],
+        ],
+      };
+    case "gender":
+      return {
+        ...base,
+        keyboard: [
+          [
+            { text: t("genderMaleButton", lang) },
+            { text: t("genderFemaleButton", lang) },
+          ],
+          [{ text: t("genericCancel", lang) }],
+        ],
+      };
+    case "location":
+      return {
+        ...base,
+        keyboard: [
+          [{ text: t("locationShareButton", lang), request_location: true }],
+          [{ text: t("locationTypeButton", lang) }],
+          [{ text: t("genericCancel", lang) }],
+        ],
+      };
+    case "interests":
+      return {
+        ...base,
+        keyboard: [
+          [{ text: t("interestsSkipButton", lang) }],
+          [{ text: t("genericCancel", lang) }],
+        ],
+      };
+    default:
+      return {
+        ...base,
+        keyboard: [[{ text: t("genericCancel", lang) }]],
+      };
+  }
+}
+
+/**
+ * After a profile field is updated, advance to the next onboarding step.
+ * Uses an explicit step sequence so the flow is predictable:
+ *   name → birthdate → gender → bio → location → media → interests → phone
+ * Returns true if a next step was started, false if onboarding is complete.
+ */
+export async function continueOnboarding(
+  ctx: MyContext,
+  env: Env,
+  userId: string,
+  lang: Language,
+): Promise<boolean> {
+  const user = await getUser(env, userId);
+  if (!user) {
+    await ctx.reply(t("genericError", lang), {
+      reply_markup: getMainMenuKeyboard(),
+    });
+    return true;
+  }
+
+  const seenFields = await getOnboardingSeen(env.KV, userId);
+
+  for (const step of ONBOARDING_STEPS) {
+    if (shouldSkipStep(step, user, seenFields)) continue;
+
+    await startConversation(env.KV, userId, step.field);
+
+    if (step.showOnce) {
+      await markOnboardingSeen(env.KV, userId, step.field);
+    }
+
+    const keyboard = buildStepKeyboard(step, lang);
+    console.log(
+      `[continueOnboarding] userId=${userId} step=${step.field} lang=${lang} keyboard=${JSON.stringify(keyboard)}`,
+    );
+
+    if (step.field === "phone") {
+      // Phone step uses a special contact-sharing keyboard
+      const phoneKeyboard = {
+        keyboard: [
+          [{ text: t("phoneVerifyButton", lang), request_contact: true }],
+        ],
+        resize_keyboard: true,
+        one_time_keyboard: true,
+      };
+      await ctx.reply(t(step.promptKey, lang), { reply_markup: phoneKeyboard });
+      return true;
+    }
+
+    await ctx.reply(t(step.promptKey, lang), {
+      parse_mode: "Markdown",
+      reply_markup: keyboard,
+    });
+    return true;
+  }
+
+  // All steps complete — clean up onboarding tracking
+  await clearOnboardingProgress(env.KV, userId);
+  return false;
 }
 
 const CONVERSATION_TTL_SECONDS = 1800; // 30 minutes
@@ -90,6 +347,18 @@ export async function checkMandatoryUpdates(
           "Enter your birthdate in *DD.MM.YYYY* format (e.g. *15.03.1995*).",
         { parse_mode: "Markdown" },
       );
+      return true;
+    }
+
+    // Check profile completeness and phone verification for all users
+    const { complete } = getProfileCompleteness(user);
+    const lang: Language = (user.language as Language) ?? "en";
+    if (!complete) {
+      await continueOnboarding(ctx, env, userId, lang);
+      return true;
+    }
+    if (!isPhoneVerified(user)) {
+      await promptPhoneVerification(ctx, env, lang);
       return true;
     }
 
@@ -245,14 +514,27 @@ export async function handleConversationMessage(
     return true;
   }
 
+  // Handle optional interests Skip during onboarding
+  if (state.field === "interests" && text === t("interestsSkipButton", lang)) {
+    await clearConversationState(env.KV, userId);
+    await env.KV.put(`onboarding:interests-skipped:${userId}`, "1", {
+      expirationTtl: 2592000, // 30 days
+    });
+    await continueOnboarding(ctx, env, userId, lang);
+    return true;
+  }
+
   // Handle media conversation "Done" button
   if (state.field === "media" && text === t("mediaDoneButton", lang)) {
     await clearConversationState(env.KV, userId);
     const becameComplete = await checkAndUpdateProfileComplete(env, userId);
-    await ctx.reply(t("genericCancelled", lang), {
-      reply_markup: getMainMenuKeyboard(),
-    });
-    if (becameComplete) await promptPhoneVerification(ctx, env, lang);
+    const continued = await continueOnboarding(ctx, env, userId, lang);
+    if (!continued) {
+      await ctx.reply(t("genericCancelled", lang), {
+        reply_markup: getMainMenuKeyboard(),
+      });
+      if (becameComplete) await promptPhoneVerification(ctx, env, lang);
+    }
     return true;
   }
 
@@ -317,6 +599,10 @@ export async function handleContactMessage(
 
   // Update user with phone number
   const success = await updateUser(env, userId, { phoneNumber });
+  if (success) {
+    // Clear any active phone-verification conversation
+    await clearConversationState(env.KV, userId);
+  }
   await ctx.reply(
     success ? t("phoneVerified", lang) : t("genericError", lang),
     { reply_markup: getMainMenuKeyboard() },
@@ -383,11 +669,14 @@ export async function handleLocationMessage(
       env,
       state.userId,
     );
-    await ctx.reply(t("locationUpdated", lang), {
-      reply_markup: getMainMenuKeyboard(),
-    });
-    if (becameComplete) {
-      await promptPhoneVerification(ctx, env, lang);
+    const continued = await continueOnboarding(ctx, env, state.userId, lang);
+    if (!continued) {
+      await ctx.reply(t("locationUpdated", lang), {
+        reply_markup: getMainMenuKeyboard(),
+      });
+      if (becameComplete) {
+        await promptPhoneVerification(ctx, env, lang);
+      }
     }
   } else {
     await ctx.reply(t("genericError", lang), {
@@ -546,11 +835,14 @@ export async function handleMediaMessage(
 
     if (newCount >= 3) {
       await clearConversationState(env.KV, userId);
-      await ctx.reply(
-        t("mediaUploadSuccess", lang, { count: String(newCount) }),
-        { reply_markup: getMainMenuKeyboard() },
-      );
-      if (becameComplete) await promptPhoneVerification(ctx, env, lang);
+      const continued = await continueOnboarding(ctx, env, userId, lang);
+      if (!continued) {
+        await ctx.reply(
+          t("mediaUploadSuccess", lang, { count: String(newCount) }),
+          { reply_markup: getMainMenuKeyboard() },
+        );
+        if (becameComplete) await promptPhoneVerification(ctx, env, lang);
+      }
     } else {
       const keyboard = {
         keyboard: [[{ text: t("mediaDoneButton", lang) }]],
@@ -563,7 +855,7 @@ export async function handleMediaMessage(
           t("mediaDonePrompt", lang),
         { reply_markup: keyboard },
       );
-      if (becameComplete) await promptPhoneVerification(ctx, env, lang);
+      // Don't prompt phone verification yet — let user upload more or tap Done
     }
 
     return true;
@@ -594,10 +886,13 @@ async function handleBioConversation(
       env,
       state.userId,
     );
-    await ctx.reply(t("bioUpdated", lang), {
-      reply_markup: getMainMenuKeyboard(),
-    });
-    if (becameComplete) await promptPhoneVerification(ctx, env, lang);
+    const continued = await continueOnboarding(ctx, env, state.userId, lang);
+    if (!continued) {
+      await ctx.reply(t("bioUpdated", lang), {
+        reply_markup: getMainMenuKeyboard(),
+      });
+      if (becameComplete) await promptPhoneVerification(ctx, env, lang);
+    }
   } else {
     await ctx.reply(t("genericError", lang), {
       reply_markup: getMainMenuKeyboard(),
@@ -627,10 +922,13 @@ async function handleBirthDateConversation(
       env,
       state.userId,
     );
-    await ctx.reply(t("birthDateUpdated", lang), {
-      reply_markup: getMainMenuKeyboard(),
-    });
-    if (becameComplete) await promptPhoneVerification(ctx, env, lang);
+    const continued = await continueOnboarding(ctx, env, state.userId, lang);
+    if (!continued) {
+      await ctx.reply(t("birthDateUpdated", lang), {
+        reply_markup: getMainMenuKeyboard(),
+      });
+      if (becameComplete) await promptPhoneVerification(ctx, env, lang);
+    }
   } else {
     await ctx.reply(t("genericError", lang), {
       reply_markup: getMainMenuKeyboard(),
@@ -646,6 +944,33 @@ async function handleNameConversation(
   text: string,
   lang: Language,
 ): Promise<boolean> {
+  // Handle "Use my Telegram name" button
+  if (text === t("nameUseTelegramButton", lang)) {
+    const telegramName = ctx.from?.first_name ?? "User";
+    const success = await updateUser(env, state.userId, {
+      displayName: telegramName,
+    });
+    await clearConversationState(env.KV, state.userId);
+    if (success) {
+      const becameComplete = await checkAndUpdateProfileComplete(
+        env,
+        state.userId,
+      );
+      const continued = await continueOnboarding(ctx, env, state.userId, lang);
+      if (!continued) {
+        await ctx.reply(t("nameUpdated", lang, { name: telegramName }), {
+          reply_markup: getMainMenuKeyboard(),
+        });
+        if (becameComplete) await promptPhoneVerification(ctx, env, lang);
+      }
+    } else {
+      await ctx.reply(t("genericError", lang), {
+        reply_markup: getMainMenuKeyboard(),
+      });
+    }
+    return true;
+  }
+
   const name = text.trim();
   if (name.length < 1 || name.length > 50) {
     await ctx.reply(t("nameInvalid", lang));
@@ -658,10 +983,13 @@ async function handleNameConversation(
       env,
       state.userId,
     );
-    await ctx.reply(t("nameUpdated", lang, { name }), {
-      reply_markup: getMainMenuKeyboard(),
-    });
-    if (becameComplete) await promptPhoneVerification(ctx, env, lang);
+    const continued = await continueOnboarding(ctx, env, state.userId, lang);
+    if (!continued) {
+      await ctx.reply(t("nameUpdated", lang, { name }), {
+        reply_markup: getMainMenuKeyboard(),
+      });
+      if (becameComplete) await promptPhoneVerification(ctx, env, lang);
+    }
   } else {
     await ctx.reply(t("genericError", lang), {
       reply_markup: getMainMenuKeyboard(),
@@ -677,7 +1005,10 @@ async function handleGenderConversation(
   text: string,
   lang: Language,
 ): Promise<boolean> {
-  const genderMap: Record<string, string> = { Male: "male", Female: "female" };
+  const genderMap: Record<string, string> = {
+    [t("genderMaleButton", lang)]: "male",
+    [t("genderFemaleButton", lang)]: "female",
+  };
   const gender = genderMap[text];
   if (!gender) {
     await ctx.reply(t("genderInvalid", lang));
@@ -690,10 +1021,13 @@ async function handleGenderConversation(
       env,
       state.userId,
     );
-    await ctx.reply(t("genderUpdated", lang), {
-      reply_markup: getMainMenuKeyboard(),
-    });
-    if (becameComplete) await promptPhoneVerification(ctx, env, lang);
+    const continued = await continueOnboarding(ctx, env, state.userId, lang);
+    if (!continued) {
+      await ctx.reply(t("genderUpdated", lang), {
+        reply_markup: getMainMenuKeyboard(),
+      });
+      if (becameComplete) await promptPhoneVerification(ctx, env, lang);
+    }
   } else {
     await ctx.reply(t("genericError", lang), {
       reply_markup: getMainMenuKeyboard(),
@@ -723,16 +1057,23 @@ async function handleInterestsConversation(
   }
   const success = await updateUser(env, state.userId, { interests });
   await clearConversationState(env.KV, state.userId);
+  // Clear any skip flag since user provided interests
+  await env.KV.delete(`onboarding:interests-skipped:${state.userId}`).catch(
+    () => {},
+  );
   if (success) {
     const becameComplete = await checkAndUpdateProfileComplete(
       env,
       state.userId,
     );
-    await ctx.reply(
-      t("interestsUpdated", lang, { interests: interests.join(", ") }),
-      { reply_markup: getMainMenuKeyboard() },
-    );
-    if (becameComplete) await promptPhoneVerification(ctx, env, lang);
+    const continued = await continueOnboarding(ctx, env, state.userId, lang);
+    if (!continued) {
+      await ctx.reply(
+        t("interestsUpdated", lang, { interests: interests.join(", ") }),
+        { reply_markup: getMainMenuKeyboard() },
+      );
+      if (becameComplete) await promptPhoneVerification(ctx, env, lang);
+    }
   } else {
     await ctx.reply(t("genericError", lang), {
       reply_markup: getMainMenuKeyboard(),
@@ -775,13 +1116,16 @@ async function handleLocationTextConversation(
         env,
         state.userId,
       );
-      await ctx.reply(
-        `📍 *${escapeMd(city)}, ${escapeMd(country)}* saved!\n\n` +
-          `We could not verify the exact coordinates right now, but your city is recorded. ` +
-          `Distance matching will work once we verify it.`,
-        { parse_mode: "Markdown", reply_markup: getMainMenuKeyboard() },
-      );
-      if (becameComplete) await promptPhoneVerification(ctx, env, lang);
+      const continued = await continueOnboarding(ctx, env, state.userId, lang);
+      if (!continued) {
+        await ctx.reply(
+          `📍 *${escapeMd(city)}, ${escapeMd(country)}* saved!\n\n` +
+            `We could not verify the exact coordinates right now, but your city is recorded. ` +
+            `Distance matching will work once we verify it.`,
+          { parse_mode: "Markdown", reply_markup: getMainMenuKeyboard() },
+        );
+        if (becameComplete) await promptPhoneVerification(ctx, env, lang);
+      }
     } else {
       await ctx.reply(t("genericError", lang), {
         reply_markup: getMainMenuKeyboard(),
@@ -811,11 +1155,14 @@ async function handleLocationTextConversation(
       env,
       state.userId,
     );
-    await ctx.reply(
-      `📍 Location verified: *${escapeMd(normalizedCity)}, ${escapeMd(normalizedCountry)}*`,
-      { parse_mode: "Markdown", reply_markup: getMainMenuKeyboard() },
-    );
-    if (becameComplete) await promptPhoneVerification(ctx, env, lang);
+    const continued = await continueOnboarding(ctx, env, state.userId, lang);
+    if (!continued) {
+      await ctx.reply(
+        `📍 Location verified: *${escapeMd(normalizedCity)}, ${escapeMd(normalizedCountry)}*`,
+        { parse_mode: "Markdown", reply_markup: getMainMenuKeyboard() },
+      );
+      if (becameComplete) await promptPhoneVerification(ctx, env, lang);
+    }
   } else {
     await ctx.reply(t("genericError", lang), {
       reply_markup: getMainMenuKeyboard(),

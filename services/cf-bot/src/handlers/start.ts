@@ -4,9 +4,15 @@ import type { Env } from "../index.js";
 import {
   ensureUserExists,
   getProfileCompleteness,
-  getMissingFieldsDisplay,
+  isPhoneVerified,
+  type UserProfile,
 } from "../lib/user-utils.js";
 import { getMainMenuKeyboard } from "../lib/main-menu.js";
+import {
+  continueOnboarding,
+  promptPhoneVerification,
+  clearOnboardingProgress,
+} from "../lib/conversations.js";
 import { createLogger } from "@meetsmatch/cf-shared";
 
 const log = createLogger("cf-bot");
@@ -43,6 +49,15 @@ async function setUserLanguage(
         body: JSON.stringify({ user: { language } }),
       }),
     );
+    if (!res.ok) {
+      const bodyText = await res.text().catch(() => "<no body>");
+      log.error("setUserLanguage", "API returned error", {
+        userId,
+        language,
+        status: res.status,
+        body: bodyText,
+      });
+    }
     return res.ok;
   } catch (error) {
     log.error(
@@ -88,8 +103,11 @@ export const startCommand = async (ctx: MyContext, env: Env): Promise<void> => {
       }
     }
 
-    if (created) {
-      // New user — show language selection first
+    // For ALL incomplete users (new or existing), show language picker first
+    // so they can choose/change language before onboarding
+    const { complete } = getProfileCompleteness(user);
+
+    if (created || !complete) {
       await ctx.reply(
         "🌍 Choose your language / Pilih bahasa:\n(More languages coming soon!)",
         { reply_markup: buildLanguageKeyboard() },
@@ -97,19 +115,13 @@ export const startCommand = async (ctx: MyContext, env: Env): Promise<void> => {
       return;
     }
 
-    // Existing user — welcome back in their language
-    const { complete, missing } = getProfileCompleteness(user);
-
-    if (!complete) {
-      await ctx.reply(
-        t("welcomeBackIncomplete", lang, {
-          missing: getMissingFieldsDisplay(missing),
-        }),
-        { reply_markup: getMainMenuKeyboard(), parse_mode: "Markdown" },
-      );
+    // Profile complete — check phone verification
+    if (!isPhoneVerified(user)) {
+      await promptPhoneVerification(ctx, env, lang);
       return;
     }
 
+    // Existing complete user — welcome back in their language
     await ctx.reply(t("welcomeBack", lang), {
       reply_markup: getMainMenuKeyboard(),
       parse_mode: "Markdown",
@@ -133,7 +145,14 @@ export const languageCallback = async (
     const userId = String(ctx.from.id);
 
     // Store language preference
-    await setUserLanguage(env, userId, selectedLang);
+    const saved = await setUserLanguage(env, userId, selectedLang);
+    if (!saved) {
+      await ctx
+        .answerCallbackQuery("❌ Failed to set language. Please try again.")
+        .catch(() => {});
+      await ctx.reply(t("genericError", selectedLang));
+      return true;
+    }
 
     await ctx
       .answerCallbackQuery(`Language set to ${getLanguageLabel(selectedLang)}`)
@@ -143,6 +162,65 @@ export const languageCallback = async (
         parse_mode: "Markdown",
       })
       .catch(() => {});
+
+    // Fetch updated user profile to check completeness
+    const userRes = await env.API_SERVICE.fetch(
+      new Request(`http://api/users/${userId}`, { method: "GET" }),
+    );
+    if (!userRes.ok) {
+      log.warn(
+        "languageCallback",
+        "Failed to fetch user after language update",
+        {
+          userId,
+          status: userRes.status,
+        },
+      );
+      await ctx.reply(t("genericError", selectedLang));
+      return true;
+    }
+
+    const userData = (await userRes.json()) as { user?: UserProfile };
+    const user = userData.user;
+    if (!user) {
+      log.warn(
+        "languageCallback",
+        "User payload missing after language update",
+        {
+          userId,
+        },
+      );
+      await ctx.reply(t("genericError", selectedLang));
+      return true;
+    }
+
+    log.info("languageCallback", "Fetched user after language update", {
+      userId,
+      selectedLang,
+      userLanguage: user.language,
+    });
+
+    const { complete } = getProfileCompleteness(user);
+    if (!complete) {
+      // Clear any previous onboarding progress so the flow restarts fresh
+      // (allows users to change language and re-do onboarding from the beginning)
+      await clearOnboardingProgress(env.KV, userId);
+      // Start onboarding from the first step
+      const continued = await continueOnboarding(
+        ctx,
+        env,
+        userId,
+        selectedLang,
+      );
+      if (continued) return true;
+    }
+
+    // Profile fields complete — check phone verification before showing menu
+    if (!isPhoneVerified(user)) {
+      await promptPhoneVerification(ctx, env, selectedLang);
+      return true;
+    }
+
     await ctx.reply(t("menuPrompt", selectedLang), {
       reply_markup: getMainMenuKeyboard(),
     });

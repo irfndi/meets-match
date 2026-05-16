@@ -1,4 +1,4 @@
-export type Language = "en";
+export type Language = "en" | "id";
 
 export const DEFAULT_LANGUAGE: Language = "en";
 
@@ -6,9 +6,12 @@ export const SUPPORTED_LANGUAGES: {
   code: Language;
   label: string;
   flag: string;
-}[] = [{ code: "en", label: "English", flag: "🇬🇧" }];
+}[] = [
+  { code: "en", label: "English", flag: "🇬🇧" },
+  { code: "id", label: "Indonesia", flag: "🇮🇩" },
+];
 
-interface Translations {
+export interface Translations {
   welcomeNew: string;
   welcomeBack: string;
   welcomeBackIncomplete: string;
@@ -25,6 +28,10 @@ interface Translations {
   matchDislikeLimitReached: string;
   matchSkipGated: string;
   matchReferralPrompt: string;
+  referralSuccess: string;
+  referralInvalid: string;
+  referralSelf: string;
+  referralAlreadyUsed: string;
   matchError: string;
   matchItsAMatch: string;
   matchStartChatting: string;
@@ -44,14 +51,18 @@ interface Translations {
   ageInvalid: string;
   ageUpdated: string;
   namePrompt: string;
+  nameUseTelegramButton: string;
   nameInvalid: string;
   nameUpdated: string;
   genderPrompt: string;
+  genderMaleButton: string;
+  genderFemaleButton: string;
   genderInvalid: string;
   genderUpdated: string;
   interestsPrompt: string;
   interestsInvalid: string;
   interestsUpdated: string;
+  interestsSkipButton: string;
   locationPrompt: string;
   locationShareButton: string;
   locationTypeButton: string;
@@ -81,6 +92,10 @@ interface Translations {
   genericCancel: string;
   genericCancelled: string;
   fallbackMessage: string;
+  likeReceived: string;
+  mutualMatch: string;
+  notificationsTitle: string;
+  notificationsEmpty: string;
   notificationsNewLikes: string;
   notificationsNewMutual: string;
   notificationsCheckMatches: string;
@@ -114,10 +129,18 @@ interface Translations {
   hiddenFromMatches: string;
   reportPrompt: string;
   reportSubmitted: string;
+  reportError: string;
   reportCancelled: string;
+  feedbackPrompt: string;
+  feedbackSubmitted: string;
+  feedbackError: string;
+  blockConfirm: string;
+  blockSuccess: string;
+  unblockSuccess: string;
   rollbackNoAction: string;
   rollbackSuccess: string;
   rollbackGated: string;
+  matchMessagePrompt: string;
   likeMessagePrompt: string;
   likeMessageSkipButton: string;
   likeMessageSent: string;
@@ -140,6 +163,9 @@ interface Translations {
   aboutLastUpdated: string;
   aboutServerAge: string;
   premiumPurchased: string;
+  premiumTitle: string;
+  premiumSubtitle: string;
+  premiumFeatures: string;
   premiumAdPrompt: string;
   premiumAdDismiss: string;
 }
@@ -173,7 +199,13 @@ const en: Translations = {
     "🔒 *Skip is a Premium feature*\n\nFree users can only Like or Dislike.\n\nUpgrade to Premium to skip profiles and browse faster!",
   matchReferralPrompt:
     "👋 You're on a roll! Share MeetMatch with friends to earn bonus likes and dislikes! 🎁",
+  referralSuccess:
+    "🎉 *Referral successful!*\n\nYou earned *+{bonus}* bonus swipes!",
+  referralInvalid: "❌ Invalid or expired referral code.",
+  referralSelf: "❌ You can't use your own referral code.",
+  referralAlreadyUsed: "❌ You've already used a referral code before.",
   matchError: "Something went wrong. Please try again.",
+  matchMessagePrompt: "✉️ Send a message to your match:",
   matchItsAMatch:
     "🎉 *It's a Match!*\n\n" +
     "You and *{name}* have liked each other! 💕\n\n" +
@@ -204,9 +236,12 @@ const en: Translations = {
   ageUpdated: "✅ Age updated to {age}!",
   namePrompt:
     "What should we call you? Enter your display name (1–50 characters). Type *Cancel* to abort.",
+  nameUseTelegramButton: "👤 Use my Telegram name",
   nameInvalid: "Name must be 1–50 characters. Try again or type *Cancel*.",
   nameUpdated: "✅ Name updated to *{name}*!",
   genderPrompt: "Select your gender:",
+  genderMaleButton: "Male",
+  genderFemaleButton: "Female",
   genderInvalid:
     "Invalid selection. Please choose *Male* or *Female*, or type *Cancel*.",
   genderUpdated: "✅ Gender updated!",
@@ -214,6 +249,7 @@ const en: Translations = {
     "What are you into? Enter your interests separated by commas (max 10). Type *Cancel* to abort.",
   interestsInvalid:
     "Please enter at least one interest, separated by commas. Try again or type *Cancel*.",
+  interestsSkipButton: "⏭️ Skip",
   interestsUpdated: "✅ Interests updated: *{interests}*!",
   locationPrompt: "How would you like to set your location?",
   locationShareButton: "📍 Share my location",
@@ -256,6 +292,10 @@ const en: Translations = {
   genericCancelled: "Cancelled.",
   fallbackMessage:
     "I'm not sure what you mean. Use the menu below or try /help for guidance.",
+  likeReceived: "❤️ Someone liked you!",
+  mutualMatch: "🎉 *It's a Match!* You and {name} liked each other!",
+  notificationsTitle: "🔔 *Notifications*",
+  notificationsEmpty: "No new notifications.",
   notificationsNewLikes: "❤️ new like(s)",
   notificationsNewMutual: "💕 new mutual match(es)",
   notificationsCheckMatches:
@@ -308,7 +348,15 @@ const en: Translations = {
     "⚠️ *Report Profile*\n\nWhy are you reporting this profile? Type your reason below, or tap *Cancel*.",
   reportSubmitted:
     "✅ Report submitted. Thank you for keeping our community safe.",
+  reportError: "❌ Failed to submit report. Please try again.",
   reportCancelled: "Report cancelled.",
+  feedbackPrompt:
+    "💬 *Feedback*\n\nWhat suggestions or feedback do you have? Type *Cancel* to abort.",
+  feedbackSubmitted: "✅ Feedback submitted. Thank you!",
+  feedbackError: "❌ Failed to submit feedback. Please try again.",
+  blockConfirm: "Are you sure you want to block this user?",
+  blockSuccess: "✅ User blocked.",
+  unblockSuccess: "✅ User unblocked.",
   rollbackNoAction:
     "↩️ Nothing to undo. You haven't taken any action on a profile yet.",
   rollbackSuccess: "↩️ Undone! The previous profile is back.",
@@ -343,6 +391,14 @@ const en: Translations = {
   aboutServerAge: "*Build age:* {serverAge}",
   premiumPurchased:
     "✅ You're now on *{tier}*! Enjoy your upgraded experience.",
+  premiumTitle: "👑 *Premium*",
+  premiumSubtitle: "Unlock exclusive features with Premium:",
+  premiumFeatures:
+    "• Unlimited likes & dislikes\n" +
+    "• Skip profiles you don't like\n" +
+    "• See who liked you\n" +
+    "• Send unlimited DMs\n\n" +
+    "Tap below to upgrade!",
   premiumAdPrompt:
     "👑 *Unlock Premium Features*\n\n" +
     "• Unlimited likes & dislikes\n" +
@@ -353,7 +409,241 @@ const en: Translations = {
   premiumAdDismiss: "Maybe later",
 };
 
-const dictionaries: Record<Language, Translations> = { en };
+const id: Translations = {
+  welcomeNew:
+    "👋 *Selamat datang di MeetMatch!*\n\n" +
+    "Saya di sini untuk membantu kamu menemukan koneksi yang bermakna dengan orang-orang yang memiliki minat serupa.\n\n" +
+    "Mari mulai — ketuk *👤 Profil* di bawah untuk mengatur profilmu, lalu temukan match!",
+  welcomeBack: "👋 *Selamat datang kembali!*",
+  welcomeBackIncomplete:
+    "👋 *Selamat datang kembali!*\n\nProfilmu belum lengkap. Yang kurang: {missing}\n\nKetuk *👤 Profil* untuk melengkapi.",
+  profileTitle: "👤 *Profilmu*",
+  profileIncompleteWarning:
+    "⚠️ Profilmu belum lengkap. Lengkapi profil untuk mulai mencari match.",
+  profileSelectField: "Pilih bagian profil yang ingin diubah:",
+  matchProfileIncomplete:
+    "⚠️ Profilmu belum lengkap. Lengkapi dulu ya sebelum mencari match.",
+  matchFinding: "🔍 Mencari match untukmu...",
+  matchNoMatches:
+    "😕 Belum ada match saat ini. Coba lagi nanti atau ubah preferensi match-mu di *⚙️ Pengaturan*.",
+  matchSkipGated: "Kamu sudah mencapai batas swipe harian. Coba lagi besok!",
+  matchReferralPrompt:
+    "🎁 *Undang Teman*\n\n" +
+    "Bagikan kode referalmu dan dapatkan bonus swipe!\n\n" +
+    "Kode referalmu: `{code}`",
+  referralSuccess:
+    "🎉 *Referal berhasil!*\n\n" + "Kamu mendapatkan *+{bonus}* swipe bonus!",
+  referralInvalid: "❌ Kode referal tidak valid atau sudah kadaluarsa.",
+  referralSelf: "❌ Kamu tidak bisa menggunakan kode referalmu sendiri.",
+  referralAlreadyUsed:
+    "❌ Kamu sudah pernah menggunakan kode referal sebelumnya.",
+  settingsTitle: "⚙️ *Pengaturan*",
+  bioPrompt:
+    "Ceritakan tentang dirimu! Masukkan bio (maks 300 karakter). Ketik *Batal* untuk membatalkan.",
+  bioTooLong:
+    "Bio terlalu panjang. Maksimal 300 karakter. Coba lagi atau ketik *Batal*.",
+  bioUpdated: "✅ Bio diperbarui!",
+  birthDatePrompt:
+    "Kapan tanggal lahirmu? Masukkan tanggal lahir dalam format *DD.MM.YYYY* (contoh: *15.03.1995*). Ketik *Batal* untuk membatalkan.",
+  birthDateInvalid:
+    "Tanggal tidak valid. Gunakan format *DD.MM.YYYY* dan pastikan tanggalnya nyata antara 12–80 tahun yang lalu. Coba lagi atau ketik *Batal*.",
+  birthDateUpdated: "✅ Tanggal lahir diperbarui!",
+  agePrompt:
+    "Berapa umurmu? Masukkan umur (12–80). Ketik *Batal* untuk membatalkan.",
+  ageInvalid:
+    "Umur tidak valid. Harus antara 12–80. Coba lagi atau ketik *Batal*.",
+  ageUpdated: "✅ Umur diperbarui menjadi {age}!",
+  namePrompt:
+    "Siapa nama panggilanmu? Masukkan nama tampilan (1–50 karakter). Ketik *Batal* untuk membatalkan.",
+  nameUseTelegramButton: "👤 Gunakan nama Telegram",
+  nameInvalid: "Nama harus 1–50 karakter. Coba lagi atau ketik *Batal*.",
+  nameUpdated: "✅ Nama diperbarui menjadi *{name}*!",
+  genderPrompt: "Pilih jenis kelamin:",
+  genderMaleButton: "Laki-laki",
+  genderFemaleButton: "Perempuan",
+  genderInvalid:
+    "Pilihan tidak valid. Pilih *Laki-laki* atau *Perempuan*, atau ketik *Batal*.",
+  genderUpdated: "✅ Jenis kelamin diperbarui!",
+  interestsPrompt:
+    "Apa minatmu? Masukkan minat yang dipisahkan koma (maks 10). Ketik *Batal* untuk membatalkan.",
+  interestsInvalid:
+    "Masukkan setidaknya satu minat, dipisahkan koma. Coba lagi atau ketik *Batal*.",
+  interestsUpdated: "✅ Minat diperbarui!",
+  interestsSkipButton: "⏭️ Lewati",
+  locationPrompt: "Bagaimana cara mengatur lokasimu?",
+  locationShareButton: "📍 Bagikan lokasiku",
+  locationTypeButton: "⌨️ Ketik kota & negara",
+  locationTypePrompt:
+    "Masukkan kota dan negara dipisahkan koma (contoh: *Jakarta, Indonesia*). Ketik *Batal* untuk membatalkan.",
+  locationUpdated: "✅ Lokasi diperbarui!",
+  locationInvalid: "Lokasi tidak valid. Coba lagi atau ketik *Batal*.",
+  ageRangePrompt:
+    "Rentang usia match yang diinginkan? Masukkan format *min-max* (contoh: *18-25*). Ketik *Batal* untuk membatalkan.",
+  ageRangeInvalid:
+    "Rentang usia tidak valid. Gunakan format *min-max* (contoh: *18-25*). Coba lagi atau ketik *Batal*.",
+  ageRangeUpdated: "✅ Rentang usia diperbarui!",
+  distancePrompt:
+    "Jarak maksimal match (km)? Masukkan angka (5–500). Ketik *Batal* untuk membatalkan.",
+  distanceInvalid:
+    "Jarak tidak valid. Harus antara 5–500 km. Coba lagi atau ketik *Batal*.",
+  distanceUpdated: "✅ Jarak diperbarui!",
+  genderPrefPrompt:
+    "Jenis kelamin match yang diinginkan? Pilih atau masukkan dipisahkan koma (*laki-laki, perempuan, lainnya*). Ketik *Batal* untuk membatalkan.",
+  genderPrefInvalid:
+    "Jenis kelamin tidak valid. Pilih *laki-laki, perempuan, lainnya*. Coba lagi atau ketik *Batal*.",
+  genderPrefUpdated: "✅ Preferensi jenis kelamin diperbarui!",
+  phoneVerifyPrompt:
+    "📱 *Satu langkah lagi* — verifikasi nomor teleponmu untuk membangun kepercayaan dengan match-mu.\n\n" +
+    "Ketuk tombol di bawah untuk membagikan kontakmu. Nomormu hanya terlihat oleh match yang saling suka.",
+  phoneVerifyButton: "📲 Bagikan kontakku",
+  phoneVerified:
+    "✅ Nomor telepon terverifikasi! Profilmu sekarang lengkap. Gunakan *🔍 Cari Match* untuk mulai menemukan orang!",
+  phoneSkipped:
+    "⚠️ Verifikasi telepon dilewati. Kamu bisa verifikasi nanti di pengaturan.",
+  phoneShareOwn: "❌ Harap bagikan kontakmu sendiri.",
+  phoneFailed: "Tidak bisa mendapatkan nomor telepon. Coba lagi.",
+  reportPrompt: "Apa alasan laporan? Ketik *Batal* untuk membatalkan.",
+  reportSubmitted: "✅ Laporan dikirim. Terima kasih!",
+  reportError: "❌ Gagal mengirim laporan. Coba lagi.",
+  feedbackPrompt:
+    "💬 *Umpan Balik*\n\nApa saran atau masukanmu? Ketik *Batal* untuk membatalkan.",
+  feedbackSubmitted: "✅ Umpan balik dikirim. Terima kasih!",
+  feedbackError: "❌ Gagal mengirim umpan balik. Coba lagi.",
+  blockConfirm: "Apakah kamu yakin ingin memblokir pengguna ini?",
+  blockSuccess: "✅ Pengguna diblokir.",
+  unblockSuccess: "✅ Blokir dibatalkan.",
+  mediaPrompt:
+    "Kirimkan 1–3 foto atau video untuk profilmu. Ketuk 📎 untuk melampirkan.",
+  mediaInvalidType: "❌ Tipe file tidak didukung. Kirim foto atau video.",
+  mediaMaxReached: "❌ Maksimal {count}/3 media tercapai.",
+  mediaUploadSuccess: "✅ Media diunggah! Sekarang kamu punya {count}/3.",
+  mediaUploadError: "❌ Gagal mengunggah media. Coba lagi.",
+  mediaDonePrompt: "Kirim lebih banyak atau ketuk ✅ Selesai jika sudah.",
+  mediaDoneButton: "✅ Selesai",
+  mediaAddMoreButton: "📤 Tambah lagi",
+  mediaDeletedCleanup: "🗑️ Media dihapus dari profil.",
+  mediaManagerEmpty: "📸 *Manajer Media*\n\nBelum ada media di profilmu.",
+  mediaManagerTitle: "📸 *Manajer Media*\n\nMedia profilmu:",
+  mediaLimitReached:
+    "❌ *Batas unggahan tercapai!*\n\n" +
+    "Kamu sudah mencapai batas unggahan harian.\n\n" +
+    "🎁 *Dapatkan lebih banyak* dengan mengundang teman atau upgrade ke Premium!",
+  mediaRetryPrompt: "❌ Gagal mengunggah. Coba lagi?",
+  notificationsTitle: "🔔 *Notifikasi*",
+  notificationsEmpty: "Tidak ada notifikasi baru.",
+  likeReceived: "❤️ Seseorang menyukaimu!",
+  mutualMatch: "🎉 *Match baru!* Kamu dan {name} saling menyukai!",
+  matchMessagePrompt: "✉️ Kirim pesan ke match-mu:",
+  likeMessagePrompt: "💌 Tambahkan pesan dengan like-mu:",
+  likeMessageSent: "✅ Pesan dan like terkirim!",
+  menuPrompt: "Ada yang bisa saya bantu?",
+  genericError: "❌ Maaf, terjadi kesalahan. Coba lagi nanti.",
+  genericCancel: "Batal",
+  genericCancelled: "Dibatalkan.",
+  fallbackMessage:
+    "Saya tidak mengerti maksudmu. Gunakan menu di bawah atau coba /help untuk panduan.",
+  notificationsNewLikes: "❤️ {count} orang menyukaimu!",
+  notificationsNewMutual: "🎉 Match baru dengan {name}!",
+  premiumTitle: "👑 *Premium*",
+  premiumSubtitle: "Akses fitur eksklusif dengan Premium:",
+  premiumFeatures:
+    "• Suka & tidak suka tanpa batas\n" +
+    "• Lewati profil yang tidak kamu suka\n" +
+    "• Lihat siapa yang menyukaimu\n" +
+    "• Kirim DM tanpa batas\n\n" +
+    "Ketuk di bawah untuk upgrade!",
+  premiumAdDismiss: "Nanti saja",
+  matchLikeSuccess: "❤️ Kamu menyukai profil ini!",
+  matchDislikeSuccess: "👎 Dilewati.",
+  matchSkipSuccess: "⏩ Dilewati.",
+  matchLikeLimitReached:
+    "🛑 *Batas Like Tercapai*\n\nKamu sudah menggunakan semua like gratis hari ini.\n\nUpgrade ke Premium untuk like tanpa batas, atau bagikan link referal untuk mendapatkan bonus like!",
+  matchDislikeLimitReached:
+    "🛑 *Batas Dislike Tercapai*\n\nKamu sudah menggunakan semua dislike gratis hari ini.\n\nUpgrade ke Premium untuk dislike tanpa batas, atau bagikan link referal untuk mendapatkan bonus dislike!",
+  matchError: "Terjadi kesalahan. Coba lagi.",
+  matchItsAMatch:
+    "🎉 *Match!*\n\n" +
+    "Kamu dan *{name}* saling menyukai! 💕\n\n" +
+    "Saatnya memulai sesuatu yang istimewa ✨",
+  matchStartChatting: "👉 [Mulai chat dengan {name}](https://t.me/{username})",
+  matchSayHiTo: "Say hi ke {pronoun} 👋",
+  matchNoUsername:
+    "💬 *{name}* belum mengatur username Telegram. Kamu bisa membagikan username-mu!",
+  matchesNoMatches:
+    "💑 *Belum ada match.*\n\nGunakan *🔍 Cari Match* untuk menemukan orang, lalu like seseorang yang juga menyukaimu!",
+  matchesMutualMatchesTitle: "💑 Kamu punya {count} mutual match:",
+  matchesPendingLikesTitle: "💕 {count} orang menyukaimu! Lihat sekarang?",
+  ageRangeSelectMin: "👇 Pilih usia *minimum*:",
+  ageRangeSelectMax: "👇 Pilih usia *maksimum* (harus ≥ {min}):",
+  distanceSelect: "👇 Pilih jarak maksimal:",
+  genderPrefSelect: "👇 Pilih preferensi jenis kelamin:",
+  notificationsCheckMatches: "Kamu punya {items}! Cek di *💕 Match Saya*.",
+  dmGated:
+    "🔒 *Direct Message adalah fitur Premium*\n\n" +
+    "Kirim DM ke siapa saja tanpa menunggu mutual match.\n\n" +
+    "*Pilihan:*\n" +
+    "• Upgrade ke Premium/Premium+ untuk DM tanpa batas\n" +
+    "• Beli 1 DM dengan Telegram Stars (tanpa berlangganan)",
+  dmSuccess: "✅ DM terbuka! Kamu sekarang bisa chat *{name}* langsung:",
+  dmFailed: "❌ Gagal membuka DM. Coba lagi.",
+  dmError: "❌ Terjadi kesalahan. Coba lagi nanti.",
+  dmPurchased: "✅ Kamu membeli {count} kredit DM! Total kredit DM: {total}.",
+  mediaRequiredPrompt:
+    "📸 *Media Diperlukan*\n\nUnggah minimal 1 foto atau video untuk melengkapi profil.",
+  mediaManagerItemPhoto: "📷 Foto",
+  mediaManagerItemVideo: "🎥 Video",
+  mediaManagerDeletePrompt:
+    "Ketuk item untuk menghapus, atau unggah lebih banyak:",
+  mediaManagerUploadPrompt: "Unggah foto atau video untuk profilmu:",
+  mediaDeleteSuccess: "✅ Terhapus!",
+  mediaDeleteError: "❌ Gagal menghapus. Coba lagi.",
+  matchFallbackNotice:
+    "🔍 *Memperluas pencarian…*\n\nPengaturanmu saat ini terlalu ketat. Berikut profil di luar preferensimu — coba like seseorang yang baru!",
+  matchAdjustSettingsPrompt:
+    "Ketuk ⚙️ Pengaturan untuk mengatur rentang usia, jarak, atau preferensi jenis kelamin.",
+  hiddenFromMatches:
+    "👋 Profilmu sekarang disembunyikan dari match. Kembali untuk tetap terlihat!",
+  reportCancelled: "Laporan dibatalkan.",
+  rollbackNoAction:
+    "↩️ Tidak ada yang dibatalkan. Kamu belum melakukan aksi apa pun.",
+  rollbackSuccess: "↩️ Berhasil dibatalkan! Profil sebelumnya kembali.",
+  rollbackGated:
+    "🔒 *Undo adalah fitur Premium+*\n\nUpgrade ke Premium atau Premium+ untuk membatalkan aksi terakhirmu!",
+  likeMessageSkipButton: "⏭ Lewati",
+  giftTitle: "🎁 *Kirim Hadiah*",
+  giftSelect:
+    "Pilih hadiah yang ingin dikirim:\n\n🌹 Mawar — 10 ⭐\n🍫 Cokelat — 25 ⭐\n🧸 Beruang — 50 ⭐\n💎 Berlian — 100 ⭐",
+  giftSent: "🎁 Kamu mengirim *{gift}*! Mereka akan menerimanya segera.",
+  giftReceived: "🎁 *Hadiah Baru!*\n\n{name} mengirimmu *{gift}*! 💕",
+  giftGated:
+    "🔒 *Hadiah adalah fitur Premium*\n\nUpgrade ke Premium untuk mengirim hadiah ke match-mu!",
+  giftCancelled: "Hadiah dibatalkan.",
+  helpTitle: "🤖 *MeetMatch Bot*",
+  helpCommands:
+    "*Perintah:*\n*/start* — Mulai\n*/profile* — Lihat atau edit profil\n*/match* — Cari match berikutnya\n*/matches* — Lihat match dan like-mu\n*/settings* — Atur preferensi\n*/help* — Tampilkan bantuan\n*/about* — Tentang MeetMatch",
+  helpTips:
+    "*Tips:*\n• Lengkapi profil untuk match yang lebih baik\n• Gunakan */settings* untuk mengatur rentang usia dan jarak\n• Match didasarkan pada minat, lokasi, dan preferensi",
+  helpContact: "Butuh bantuan? Hubungi support.",
+  aboutTitle: "🌟 *Tentang MeetMatch*",
+  aboutDescription:
+    "MeetMatch membantu kamu menemukan orang dengan minat serupa di dekatmu.",
+  aboutBuiltWith: "Dibangun dengan ❤️ menggunakan tech stack modern.",
+  aboutVersion: "*Versi:* `{version}`",
+  aboutEnvironment: "*Environment:* {environment}",
+  aboutLastUpdated: "*Terakhir diperbarui:* {builtAt}",
+  aboutServerAge: "*Usia build:* {serverAge}",
+  premiumPurchased:
+    "✅ Kamu sekarang di *{tier}*! Nikmati pengalaman yang ditingkatkan.",
+  premiumAdPrompt:
+    "👑 *Buka Fitur Premium*\n\n" +
+    "• Like & dislike tanpa batas\n" +
+    "• Lewati profil yang tidak kamu suka\n" +
+    "• Lihat siapa yang menyukaimu\n" +
+    "• Kirim DM tanpa batas\n\n" +
+    "Ketuk di bawah untuk upgrade!",
+};
+
+const dictionaries: Record<Language, Translations> = { en, id };
 
 export function escapeMd(value: string): string {
   return value.replace(/[_*\[\]`\\]/g, "\\$&");
