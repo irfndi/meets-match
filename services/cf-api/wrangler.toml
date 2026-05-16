@@ -63,7 +63,26 @@ bucket_name = "meetsmatch-media"
 [env.production]
 name = "meetsmatch-api"
 
+[env.production.vars]
+ENVIRONMENT = "production"
+ENABLE_SENTRY = "false"
 
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "meetsmatch"
+database_id = "99d50fd1-a134-4bc6-8c2f-92cba3e437ea"
+
+[[env.production.kv_namespaces]]
+binding = "KV"
+id = "d1c3b0d80d3743708f441f39034a308f"
+
+[[env.production.queues.producers]]
+binding = "NOTIFICATION_QUEUE"
+queue = "notification-queue"
+
+[[env.production.r2_buckets]]
+binding = "MEDIA_BUCKET"
+bucket_name = "meetsmatch-media"
 
 [observability]
 enabled = false

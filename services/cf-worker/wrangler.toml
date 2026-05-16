@@ -91,7 +91,49 @@ crons = []
 [env.production]
 name = "meetsmatch-worker"
 
+[env.production.vars]
+ENVIRONMENT = "production"
+REENGAGEMENT_SCHEDULE = "0 10 * * *"
+DLQ_PROCESSOR_SCHEDULE = "*/5 * * * *"
+BIRTHDAY_SCHEDULE = "0 9 * * *"
+SUBSCRIPTION_EXPIRY_SCHEDULE = "0 0 * * *"
+WORKER_CONCURRENCY = "10"
 
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "meetsmatch"
+database_id = "99d50fd1-a134-4bc6-8c2f-92cba3e437ea"
+
+[[env.production.kv_namespaces]]
+binding = "KV"
+id = "d1c3b0d80d3743708f441f39034a308f"
+
+[[env.production.queues.consumers]]
+queue = "notification-queue"
+max_batch_size = 10
+max_batch_timeout = 30
+max_retries = 3
+dead_letter_queue = "dlq"
+
+[[env.production.queues.consumers]]
+queue = "dlq"
+max_batch_size = 1
+max_retries = 0
+
+[[env.production.services]]
+binding = "API_SERVICE"
+service = "meetsmatch-api"
+
+[[env.production.services]]
+binding = "BOT_SERVICE"
+service = "meetsmatch-bot"
+
+[[env.production.r2_buckets]]
+binding = "MEDIA_BUCKET"
+bucket_name = "meetsmatch-media"
+
+[env.production.triggers]
+crons = ["0 9 * * *", "0 10 * * *", "0 11 * * *", "*/5 * * * *", "0 0 * * *"]
 
 [observability]
 enabled = false
