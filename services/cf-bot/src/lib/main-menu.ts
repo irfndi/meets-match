@@ -5,6 +5,7 @@ export const MENU_MY_MATCHES = "💕 My Matches";
 export const MENU_PROFILE = "👤 Profile";
 export const MENU_SETTINGS = "⚙️ Settings";
 export const MENU_PREMIUM = "👑 Premium";
+export const MENU_REFERRAL = "🎁 Referral";
 
 /**
  * Persistent reply keyboard shown to users for easy navigation.
@@ -19,6 +20,7 @@ export function getMainMenuKeyboard(): Keyboard {
     .text(MENU_SETTINGS)
     .row()
     .text(MENU_PREMIUM)
+    .text(MENU_REFERRAL)
     .persistent()
     .resized();
 }

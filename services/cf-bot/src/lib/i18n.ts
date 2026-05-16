@@ -168,6 +168,11 @@ export interface Translations {
   premiumFeatures: string;
   premiumAdPrompt: string;
   premiumAdDismiss: string;
+  giftPremiumTitle: string;
+  giftPremiumSelect: string;
+  giftPremiumSent: string;
+  giftPremiumReceived: string;
+  giftPremiumError: string;
 }
 
 const en: Translations = {
@@ -377,7 +382,7 @@ const en: Translations = {
   menuPrompt: "Use the menu below to get started:",
   helpTitle: "🤖 *MeetMatch Bot*",
   helpCommands:
-    "*Commands:*\n*/start* — Get started\n*/profile* — View or edit your profile\n*/match* — Find your next match\n*/matches* — View your matches and likes\n*/settings* — Adjust your preferences\n*/help* — Show this help\n*/about* — About MeetMatch",
+    "*Commands:*\n*/start* — Get started\n*/profile* — View or edit your profile\n*/match* — Find your next match\n*/matches* — View your matches and likes\n*/settings* — Adjust your preferences\n*/referral* — Invite friends for bonus swipes\n*/feedback* — Send us feedback\n*/report* — Report a profile\n*/help* — Show this help\n*/about* — About MeetMatch",
   helpTips:
     "*Tips:*\n• Complete your profile for better matches\n• Use */settings* to adjust age range and distance\n• Matches are based on interests, location, and preferences",
   helpContact: "Need help? Contact support.",
@@ -407,6 +412,16 @@ const en: Translations = {
     "• Send unlimited DMs\n\n" +
     "Tap below to upgrade!",
   premiumAdDismiss: "Maybe later",
+  giftPremiumTitle: "🎁 *Gift Premium*",
+  giftPremiumSelect:
+    "Choose a plan to gift to this user:\n\n" +
+    "👑 Premium — unlimited likes, skip, priority matching\n" +
+    "💎 Premium+ — everything in Premium + unlimited DMs, verified badge",
+  giftPremiumSent: "✅ You gifted *{tier}* to *{name}*! They'll love it! 💕",
+  giftPremiumReceived:
+    "🎁 *Surprise!*\n\n*{name}* gifted you *{tier}*! Enjoy your upgraded experience! 💕",
+  giftPremiumError:
+    "❌ Could not process the gift. Please contact support if you were charged.",
 };
 
 const id: Translations = {
@@ -620,7 +635,7 @@ const id: Translations = {
   giftCancelled: "Hadiah dibatalkan.",
   helpTitle: "🤖 *MeetMatch Bot*",
   helpCommands:
-    "*Perintah:*\n*/start* — Mulai\n*/profile* — Lihat atau edit profil\n*/match* — Cari match berikutnya\n*/matches* — Lihat match dan like-mu\n*/settings* — Atur preferensi\n*/help* — Tampilkan bantuan\n*/about* — Tentang MeetMatch",
+    "*Perintah:*\n*/start* — Mulai\n*/profile* — Lihat atau edit profil\n*/match* — Cari match berikutnya\n*/matches* — Lihat match dan like-mu\n*/settings* — Atur preferensi\n*/referral* — Undang teman untuk bonus swipe\n*/feedback* — Kirim masukan\n*/report* — Laporkan profil\n*/help* — Tampilkan bantuan\n*/about* — Tentang MeetMatch",
   helpTips:
     "*Tips:*\n• Lengkapi profil untuk match yang lebih baik\n• Gunakan */settings* untuk mengatur rentang usia dan jarak\n• Match didasarkan pada minat, lokasi, dan preferensi",
   helpContact: "Butuh bantuan? Hubungi support.",
@@ -641,6 +656,17 @@ const id: Translations = {
     "• Lihat siapa yang menyukaimu\n" +
     "• Kirim DM tanpa batas\n\n" +
     "Ketuk di bawah untuk upgrade!",
+  giftPremiumTitle: "🎁 *Hadiah Premium*",
+  giftPremiumSelect:
+    "Pilih paket untuk dihadiahkan:\n\n" +
+    "👑 Premium — like tanpa batas, skip, prioritas match\n" +
+    "💎 Premium+ — semua fitur Premium + DM tanpa batas, badge verifikasi",
+  giftPremiumSent:
+    "✅ Kamu memberikan *{tier}* ke *{name}*! Semoga mereka suka! 💕",
+  giftPremiumReceived:
+    "🎁 *Kejutan!*\n\n*{name}* memberikanmu *{tier}*! Nikmati pengalaman yang ditingkatkan! 💕",
+  giftPremiumError:
+    "❌ Gagal memproses hadiah. Hubungi support jika kamu sudah membayar.",
 };
 
 const dictionaries: Record<Language, Translations> = { en, id };

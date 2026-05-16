@@ -5,6 +5,7 @@ import { ensureUserExists } from "../lib/user-utils.js";
 import { getMainMenuKeyboard } from "../lib/main-menu.js";
 import { ApiServiceClient } from "../services/api-client.js";
 import { createLogger } from "@meetsmatch/cf-shared";
+import { replyWithError } from "../lib/error-feedback.js";
 
 const log = createLogger("cf-bot");
 
@@ -226,7 +227,7 @@ export const premiumCommand = async (
     await ctx.reply(msg, { parse_mode: "Markdown", reply_markup: keyboard });
   } catch (error) {
     log.error("premiumCommand", "Unhandled error", undefined, error);
-    await ctx.reply("❌ Something went wrong. Please try again later.");
+    await replyWithError(ctx, env, "en", { command: "premium" });
   }
 };
 
@@ -287,7 +288,7 @@ export const referralCommand = async (
     await ctx.reply(msg, { parse_mode: "Markdown", reply_markup: keyboard });
   } catch (error) {
     log.error("referralCommand", "Unhandled error", undefined, error);
-    await ctx.reply("❌ Something went wrong. Please try again later.");
+    await replyWithError(ctx, env, "en", { command: "referral" });
   }
 };
 
@@ -330,6 +331,7 @@ export const premiumCallbacks = async (
     }
   } catch (error) {
     log.error("premiumCallbacks", "Unhandled error", undefined, error);
-    await ctx.answerCallbackQuery("❌ Something went wrong.").catch(() => {});
+    await replyWithError(ctx, env, "en", { action: "premium_callback" });
+    await ctx.answerCallbackQuery().catch(() => {});
   }
 };

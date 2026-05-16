@@ -10,6 +10,7 @@ import {
   getMatchActionKeyboard,
   handleGiftCallback,
   handleGiftPayment,
+  handleGiftPremiumPayment,
   startLikeMessageConversation,
 } from "./handlers/match.js";
 import { matchesCommand, matchesCallbacks } from "./handlers/matches.js";
@@ -35,6 +36,7 @@ import {
   handleMediaMessage,
   checkMandatoryUpdates,
   getConversationState,
+  startFeedbackConversation,
 } from "./lib/conversations.js";
 import { handleProfileCallback, handleMediaCallback } from "./menus/profile.js";
 import { getNotifications, clearNotifications } from "./lib/notifications.js";
@@ -45,9 +47,15 @@ import {
   MENU_PROFILE,
   MENU_SETTINGS,
   MENU_PREMIUM,
+  MENU_REFERRAL,
 } from "./lib/main-menu.js";
 import { InlineKeyboard } from "grammy";
 import { t, type Language } from "./lib/i18n.js";
+import {
+  handleErrorReportCallback,
+  recordCommandJourney,
+  replyWithError,
+} from "./lib/error-feedback.js";
 
 export interface Env {
   DB: D1Database;
@@ -57,6 +65,7 @@ export interface Env {
   BOT_TOKEN: string;
   TELEGRAM_WEBHOOK_SECRET?: string;
   ENVIRONMENT?: string;
+  ADMIN_CHAT_ID?: string;
 }
 
 function createBot(env: Env): Bot<MyContext> {
@@ -72,7 +81,12 @@ function createBot(env: Env): Bot<MyContext> {
       storage: {
         read: async (key) => {
           const value = await env.KV.get(`session:${key}`);
-          return value ? JSON.parse(value) : {};
+          if (!value) return {};
+          try {
+            return JSON.parse(value) as Record<string, unknown>;
+          } catch {
+            return {};
+          }
         },
         write: async (key, value) => {
           await env.KV.put(`session:${key}`, JSON.stringify(value));
@@ -145,6 +159,22 @@ function createBot(env: Env): Bot<MyContext> {
   bot.command("settings", (ctx) => settingsCommand(ctx, env));
   bot.command("premium", (ctx) => premiumCommand(ctx, env));
   bot.command("referral", (ctx) => referralCommand(ctx, env));
+  bot.command("feedback", (ctx) => startFeedbackConversation(ctx, env));
+  bot.command("report", async (ctx) => {
+    await ctx.reply(
+      "⚠️ To report a profile, tap the ⚠️ button when viewing a match card.",
+      { reply_markup: getMainMenuKeyboard() },
+    );
+  });
+
+  // Record journey for commands
+  bot.use(async (ctx, next) => {
+    if (ctx.message?.text?.startsWith("/")) {
+      const cmd = ctx.message.text.split(" ")[0].slice(1);
+      await recordCommandJourney(ctx, env, cmd);
+    }
+    return next();
+  });
 
   bot.on("callback_query:data", async (ctx) => {
     try {
@@ -176,7 +206,8 @@ function createBot(env: Env): Bot<MyContext> {
         data === "next_match" ||
         data === "view_matches" ||
         data.startsWith("match:") ||
-        data.startsWith("dm:")
+        data.startsWith("dm:") ||
+        data.startsWith("gift_premium:")
       ) {
         return await matchCallbacks(ctx, env);
       }
@@ -237,6 +268,21 @@ function createBot(env: Env): Bot<MyContext> {
         return await premiumCallbacks(ctx, env);
       }
 
+      if (data.startsWith("report_error:")) {
+        const traceId = data.replace("report_error:", "");
+        await handleErrorReportCallback(ctx, env, traceId);
+        return;
+      }
+
+      if (data === "menu:main") {
+        await ctx.deleteMessage().catch(() => {});
+        await ctx.reply("Main menu:", {
+          reply_markup: getMainMenuKeyboard(),
+        });
+        await ctx.answerCallbackQuery().catch(() => {});
+        return;
+      }
+
       if (data === "media:retry") {
         await ctx.deleteMessage().catch(() => {});
         await ctx.answerCallbackQuery().catch(() => {});
@@ -265,9 +311,8 @@ function createBot(env: Env): Bot<MyContext> {
       }
     } catch (error) {
       console.error("Callback query error:", error);
-      await ctx
-        .answerCallbackQuery("❌ Something went wrong. Please try again.")
-        .catch(() => {});
+      await replyWithError(ctx, env, "en", { action: "callback_query" });
+      await ctx.answerCallbackQuery().catch(() => {});
     }
   });
 
@@ -361,6 +406,10 @@ function createBot(env: Env): Bot<MyContext> {
       }
     }
 
+    if (payload && payload.startsWith("gift_premium_")) {
+      await handleGiftPremiumPayment(ctx, env, payload);
+    }
+
     if (payload && payload.startsWith("gift_")) {
       await handleGiftPayment(ctx, env, payload);
     }
@@ -415,6 +464,8 @@ function createBot(env: Env): Bot<MyContext> {
           return await settingsCommand(ctx, env);
         case MENU_PREMIUM:
           return await premiumCommand(ctx, env);
+        case MENU_REFERRAL:
+          return await referralCommand(ctx, env);
       }
 
       // Match action reply keyboard — only if there's an active match queue
@@ -456,7 +507,11 @@ function createBot(env: Env): Bot<MyContext> {
       });
     } catch (error) {
       console.error("Text message error:", error);
-      await ctx.reply("❌ Something went wrong. Please try again.");
+      const text = ctx.message?.text;
+      const action = text?.startsWith("/")
+        ? `command:${text.split(" ")[0].slice(1)}`
+        : "text_message";
+      await replyWithError(ctx, env, "en", { action });
     }
   });
 
@@ -661,6 +716,13 @@ export default {
           const giftEmoji = payload.giftEmoji ?? "🎁";
           const giftName = escapeMd(payload.giftName ?? "gift");
           message = `🎁 *New Gift!*\n\n${fromName} sent you a ${giftEmoji} *${giftName}*! 💕`;
+        } else if (type === "gift_premium") {
+          const fromName = escapeMd(payload.fromDisplayName ?? "Someone");
+          const tier = escapeMd(payload.tier ?? "Premium");
+          message = `🎁 *Premium Gift!*\n\n${fromName} gifted you *${tier}*! 💕\n\nEnjoy your upgraded experience!`;
+          keyboard = new InlineKeyboard()
+            .text("👑 View Premium", "premium:show")
+            .row();
         } else if (type === "BIRTHDAY") {
           message =
             escapeMd(payload.message as string) ||

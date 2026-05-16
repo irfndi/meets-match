@@ -9,7 +9,7 @@ import {
 } from "./user-utils.js";
 import { getMainMenuKeyboard } from "./main-menu.js";
 import { t, type Language, type Translations, escapeMd } from "./i18n.js";
-import { InlineKeyboard } from "grammy";
+import { InlineKeyboard, Keyboard } from "grammy";
 import {
   createLogger,
   buildMediaKey,
@@ -293,7 +293,12 @@ export async function getConversationState(
   userId: string,
 ): Promise<ConversationState | null> {
   const value = await kv.get(`conversation:${userId}`);
-  return value ? JSON.parse(value) : null;
+  if (!value) return null;
+  try {
+    return JSON.parse(value) as ConversationState;
+  } catch {
+    return null;
+  }
 }
 
 export async function setConversationState(
@@ -559,6 +564,8 @@ export async function handleConversationMessage(
       return handleGenderPrefConversation(ctx, env, state, text, lang);
     case "report":
       return handleReportConversation(ctx, env, text, lang);
+    case "feedback":
+      return handleFeedbackConversation(ctx, env, text, lang);
     case "like-message":
       return handleLikeMessageConversation(ctx, env, text, lang);
     default:
@@ -1320,5 +1327,75 @@ async function handleGenderPrefConversation(
       reply_markup: getMainMenuKeyboard(),
     });
   }
+  return true;
+}
+
+// --- Feedback conversation ---
+
+export async function startFeedbackConversation(
+  ctx: MyContext,
+  env: Env,
+): Promise<void> {
+  if (!ctx.from) return;
+  const userId = String(ctx.from.id);
+
+  try {
+    const user = await getUser(env, userId);
+    const lang: Language = (user?.language as Language) ?? "en";
+
+    await setConversationState(env.KV, {
+      userId,
+      field: "feedback",
+      step: 0,
+    });
+
+    const cancelKeyboard = new Keyboard()
+      .text(t("genericCancel", lang))
+      .resized();
+    await ctx.reply(t("feedbackPrompt", lang), {
+      parse_mode: "Markdown",
+      reply_markup: cancelKeyboard,
+    });
+  } catch (error) {
+    log.error("startFeedbackConversation", "Unhandled error", undefined, error);
+    await ctx.reply(t("genericError"), { reply_markup: getMainMenuKeyboard() });
+  }
+}
+
+export async function handleFeedbackConversation(
+  ctx: MyContext,
+  env: Env,
+  text: string,
+  lang: Language,
+): Promise<boolean> {
+  if (!ctx.from) return false;
+  const userId = String(ctx.from.id);
+  const state = await getConversationState(env.KV, userId);
+  if (!state || state.field !== "feedback") return false;
+
+  try {
+    await env.API_SERVICE.fetch(
+      new Request("http://api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, message: text }),
+      }),
+    );
+    await ctx.reply(t("feedbackSubmitted", lang), {
+      reply_markup: getMainMenuKeyboard(),
+    });
+  } catch (error) {
+    log.error(
+      "handleFeedbackConversation",
+      "Failed to submit feedback",
+      { userId },
+      error,
+    );
+    await ctx.reply(t("feedbackError", lang), {
+      reply_markup: getMainMenuKeyboard(),
+    });
+  }
+
+  await clearConversationState(env.KV, userId);
   return true;
 }

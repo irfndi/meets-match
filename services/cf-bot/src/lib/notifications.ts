@@ -21,6 +21,14 @@ export interface GiftNotification {
   timestamp: string;
 }
 
+export interface GiftPremiumNotification {
+  type: "gift_premium";
+  fromUserId: string;
+  fromDisplayName: string;
+  tier: string;
+  timestamp: string;
+}
+
 export interface MutualMatchNotification {
   type: "mutual_match";
   matchId: string;
@@ -34,7 +42,8 @@ export interface MutualMatchNotification {
 export type Notification =
   | LikeNotification
   | MutualMatchNotification
-  | GiftNotification;
+  | GiftNotification
+  | GiftPremiumNotification;
 
 export async function addNotification(
   env: Env,

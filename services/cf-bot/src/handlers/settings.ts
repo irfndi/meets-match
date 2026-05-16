@@ -15,6 +15,7 @@ import {
 import { ApiServiceClient } from "../services/api-client.js";
 import { getMainMenuKeyboard } from "../lib/main-menu.js";
 import { createLogger } from "@meetsmatch/cf-shared";
+import { replyWithError } from "../lib/error-feedback.js";
 
 const log = createLogger("cf-bot");
 import { t, DEFAULT_LANGUAGE, type Language, escapeMd } from "../lib/i18n.js";
@@ -139,7 +140,7 @@ export const settingsCommand = async (
     });
   } catch (error) {
     log.error("settingsCommand", "Unhandled error", undefined, error);
-    await ctx.reply(t("genericError"));
+    await replyWithError(ctx, env, "en", { command: "settings" });
   }
 };
 
@@ -203,7 +204,8 @@ export const settingsCallbacks = async (
     }
   } catch (error) {
     log.error("settingsCallbacks", "Unhandled error", undefined, error);
-    await ctx.answerCallbackQuery("❌ Something went wrong.").catch(() => {});
+    await replyWithError(ctx, env, "en", { action: "settings_callback" });
+    await ctx.answerCallbackQuery().catch(() => {});
   }
 };
 

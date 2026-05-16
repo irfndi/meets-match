@@ -10,6 +10,7 @@ import {
 import { getMainMenuKeyboard } from "../lib/main-menu.js";
 import { mdv2 } from "../lib/i18n.js";
 import { createLogger } from "@meetsmatch/cf-shared";
+import { replyWithError } from "../lib/error-feedback.js";
 
 const log = createLogger("cf-bot");
 
@@ -131,6 +132,6 @@ export const profileCommand = async (
     }
   } catch (error) {
     log.error("profileCommand", "Unhandled error", undefined, error);
-    await ctx.reply("❌ Something went wrong. Please try again later.");
+    await replyWithError(ctx, env, "en", { command: "profile" });
   }
 };

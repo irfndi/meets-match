@@ -14,6 +14,7 @@ import {
   type UserProfile,
 } from "../lib/user-utils.js";
 import { addNotification } from "../lib/notifications.js";
+import { replyWithError, recordActionJourney } from "../lib/error-feedback.js";
 import {
   getConversationState,
   setConversationState,
@@ -207,7 +208,12 @@ async function getMatchQueue(
   userId: string,
 ): Promise<MatchQueue | null> {
   const value = await kv.get(`match_queue:${userId}`);
-  return value ? JSON.parse(value) : null;
+  if (!value) return null;
+  try {
+    return JSON.parse(value) as MatchQueue;
+  } catch {
+    return null;
+  }
 }
 
 async function setMatchQueue(
@@ -229,7 +235,12 @@ async function getLastAction(
   userId: string,
 ): Promise<LastAction | null> {
   const value = await kv.get(`last_action:${userId}`);
-  return value ? JSON.parse(value) : null;
+  if (!value) return null;
+  try {
+    return JSON.parse(value) as LastAction;
+  } catch {
+    return null;
+  }
 }
 
 async function setLastAction(
@@ -276,25 +287,23 @@ async function getDMBypassStatus(
   userId: string,
 ): Promise<DMBypassStatus> {
   const value = await kv.get(`dm_bypass:${userId}`);
-  if (value) {
-    const parsed = JSON.parse(value) as DMBypassStatus;
-    const now = new Date();
-    const today = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate(),
-    ).toISOString();
-    if (parsed.resetAt < today) {
-      return { used: 0, resetAt: today };
-    }
-    return parsed;
-  }
   const now = new Date();
   const today = new Date(
     now.getFullYear(),
     now.getMonth(),
     now.getDate(),
   ).toISOString();
+  if (value) {
+    try {
+      const parsed = JSON.parse(value) as DMBypassStatus;
+      if (parsed.resetAt < today) {
+        return { used: 0, resetAt: today };
+      }
+      return parsed;
+    } catch {
+      // corrupted data, reset
+    }
+  }
   return { used: 0, resetAt: today };
 }
 
@@ -324,6 +333,8 @@ function buildMatchCardKeyboard(targetUserId: string, tier: string) {
   keyboard.row();
   keyboard.text("💌", `match:like-message:${targetUserId}`);
   keyboard.text("📩 Send DM", `dm:send:${targetUserId}`);
+  keyboard.row();
+  keyboard.text("🎁 Gift Premium", `gift_premium:show:${targetUserId}`);
   keyboard.row();
   keyboard.text("🚫 Block", `match:block:${targetUserId}`);
   return keyboard;
@@ -618,6 +629,7 @@ export const matchCommand = async (ctx: MyContext, env: Env): Promise<void> => {
   }
 
   const userId = String(ctx.from.id);
+  let lang: Language = "en";
 
   // Command lock: prevent duplicate /match processing from webhook retries
   const lockKey = `match_command_lock:${userId}`;
@@ -636,7 +648,7 @@ export const matchCommand = async (ctx: MyContext, env: Env): Promise<void> => {
     }
 
     const { user } = result;
-    const lang = getLang(user);
+    lang = getLang(user);
     const { complete, missing } = getProfileCompleteness(user);
 
     if (!complete) {
@@ -731,7 +743,7 @@ export const matchCommand = async (ctx: MyContext, env: Env): Promise<void> => {
       { userId },
       error instanceof Error ? error : new Error(String(error)),
     );
-    await ctx.reply("❌ Something went wrong. Please try /match again.");
+    await replyWithError(ctx, env, lang, { command: "match" });
   } finally {
     // Release command lock immediately after processing
     await env.KV.delete(lockKey);
@@ -912,14 +924,17 @@ async function handleMatchAction(
 
     // Visual feedback
     if (action === "like") {
+      await recordActionJourney(ctx, env, "like", targetUserId);
       await ctx.reply(t("matchLikeSuccess", lang), {
         reply_markup: getMatchActionKeyboard(tier),
       });
     } else if (action === "dislike") {
+      await recordActionJourney(ctx, env, "dislike", targetUserId);
       await ctx.reply(t("matchDislikeSuccess", lang), {
         reply_markup: getMatchActionKeyboard(tier),
       });
     } else if (action === "skip") {
+      await recordActionJourney(ctx, env, "skip", targetUserId);
       await ctx.reply(t("matchSkipSuccess", lang), {
         reply_markup: getMatchActionKeyboard(tier),
       });
@@ -1636,6 +1651,193 @@ export async function handleGiftPayment(
   }
 }
 
+// --- Gift Premium feature ---
+
+export async function startGiftPremiumSelection(
+  ctx: MyContext,
+  env: Env,
+  targetUserId: string,
+): Promise<void> {
+  if (!ctx.from) return;
+  const userId = String(ctx.from.id);
+  let lang: Language = "en";
+
+  try {
+    lang = await fetchUserLang(env, userId);
+
+    const keyboard = new InlineKeyboard()
+      .text("👑 Premium (500 ⭐)", `gift_premium:buy:premium:${targetUserId}`)
+      .row()
+      .text(
+        "💎 Premium+ (1000 ⭐)",
+        `gift_premium:buy:premium_plus:${targetUserId}`,
+      )
+      .row()
+      .text("❌ Cancel", "gift_premium:cancel");
+
+    await ctx.reply(
+      `${t("giftPremiumTitle", lang)}\n\n${t("giftPremiumSelect", lang)}`,
+      { parse_mode: "Markdown", reply_markup: keyboard },
+    );
+    await ctx.answerCallbackQuery().catch(() => {});
+  } catch (error) {
+    log.error("startGiftPremiumSelection", "Unhandled error", undefined, error);
+    await ctx.reply(t("genericError", lang), {
+      reply_markup: getMainMenuKeyboard(),
+    });
+    await ctx.answerCallbackQuery().catch(() => {});
+  }
+}
+
+export async function handleGiftPremiumCallback(
+  ctx: MyContext,
+  env: Env,
+  data: string,
+): Promise<boolean> {
+  if (!ctx.from) return false;
+  const userId = String(ctx.from.id);
+  const lang = await fetchUserLang(env, userId);
+
+  if (data === "gift_premium:cancel") {
+    await ctx.deleteMessage().catch(() => {});
+    await ctx.reply(t("giftCancelled", lang), {
+      reply_markup: getMainMenuKeyboard(),
+    });
+    await ctx.answerCallbackQuery().catch(() => {});
+    return true;
+  }
+
+  if (data.startsWith("gift_premium:buy:")) {
+    const parts = data.split(":");
+    const tier = parts[2];
+    const targetUserId = parts[3];
+
+    if (
+      !tier ||
+      !targetUserId ||
+      (tier !== "premium" && tier !== "premium_plus")
+    ) {
+      await ctx.answerCallbackQuery("Invalid selection.").catch(() => {});
+      return true;
+    }
+
+    try {
+      const bot = ctx.api;
+      const stars = tier === "premium_plus" ? 1000 : 500;
+      const tierLabel = tier === "premium_plus" ? "Premium+" : "Premium";
+      const invoiceLink = await bot.createInvoiceLink(
+        `Gift ${tierLabel}`,
+        `Gift ${tierLabel} to a friend on MeetMatch`,
+        `gift_premium_${userId}_${targetUserId}_${tier}`,
+        "",
+        "XTR",
+        [{ label: tierLabel, amount: stars }],
+      );
+
+      const keyboard = new InlineKeyboard()
+        .url(`⭐ Pay ${stars} Stars`, invoiceLink)
+        .row()
+        .text("❌ Cancel", "gift_premium:cancel");
+
+      await ctx.reply(
+        `🎁 *Gift ${tierLabel}*\n\nTap the button below to pay with Telegram Stars.`,
+        { parse_mode: "Markdown", reply_markup: keyboard },
+      );
+      await ctx.answerCallbackQuery().catch(() => {});
+    } catch (error) {
+      console.error("Gift premium invoice error:", error);
+      await ctx.reply(t("giftPremiumError", lang), {
+        reply_markup: getMainMenuKeyboard(),
+      });
+      await ctx.answerCallbackQuery().catch(() => {});
+    }
+    return true;
+  }
+
+  return false;
+}
+
+export async function handleGiftPremiumPayment(
+  ctx: MyContext,
+  env: Env,
+  payload: string,
+): Promise<void> {
+  if (!ctx.from) return;
+  const buyerId = String(ctx.from.id);
+  const lang = await fetchUserLang(env, buyerId);
+
+  // Parse payload: gift_premium_{buyerId}_{targetUserId}_{tier}
+  const parts = payload.split("_");
+  if (parts.length < 5 || parts[0] !== "gift" || parts[1] !== "premium") return;
+
+  const parsedBuyerId = parts[2];
+  const targetUserId = parts[3];
+  const tier = parts[4];
+
+  if (
+    parsedBuyerId !== buyerId ||
+    !targetUserId ||
+    (tier !== "premium" && tier !== "premium_plus")
+  ) {
+    return;
+  }
+
+  try {
+    const client = new ApiServiceClient(env.API_SERVICE);
+
+    // Get buyer and target user names
+    const [buyerRes, targetRes] = await Promise.all([
+      client.getUser({ userId: buyerId }),
+      client.getUser({ userId: targetUserId }),
+    ]);
+
+    const buyerName = (buyerRes.user?.displayName ?? "Someone") as string;
+    const targetName = (targetRes.user?.displayName ?? "Someone") as string;
+    const tierLabel = tier === "premium_plus" ? "Premium+ 💎" : "Premium 👑";
+
+    // Activate premium for target user
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 30);
+    await client.updateUser({
+      userId: targetUserId,
+      user: {
+        id: targetUserId,
+        subscriptionTier: tier,
+        subscriptionExpiresAt: expiresAt.toISOString(),
+      },
+    });
+
+    // Confirm to buyer
+    await ctx.reply(
+      t("giftPremiumSent", lang, { tier: tierLabel, name: targetName }),
+      { reply_markup: getMainMenuKeyboard() },
+    );
+
+    // Notify target user
+    await addNotification(env, targetUserId, {
+      type: "gift_premium",
+      fromUserId: buyerId,
+      fromDisplayName: buyerName,
+      tier,
+      timestamp: new Date().toISOString(),
+    });
+    await enqueueNotification(env, targetUserId, "gift_premium", {
+      fromDisplayName: buyerName,
+      tier: tierLabel,
+    });
+  } catch (error) {
+    log.error(
+      "handleGiftPremiumPayment",
+      "Payment processing failed",
+      { buyerId, targetUserId, tier },
+      error,
+    );
+    await ctx.reply(
+      "❌ Payment processed but we could not activate the gift. Please contact support.",
+    );
+  }
+}
+
 // --- Reply action handler ---
 
 export async function handleMatchReplyAction(
@@ -1684,7 +1886,7 @@ export async function handleMatchReplyAction(
     return true;
   } catch (error) {
     log.error("handleMatchReplyAction", "Unhandled error", undefined, error);
-    await ctx.reply(t("genericError"), { reply_markup: getMainMenuKeyboard() });
+    await replyWithError(ctx, env, "en", { action: "match_reply" });
     return true;
   }
 }
@@ -1738,6 +1940,11 @@ export const matchCallbacks = async (
     } else if (data.startsWith("match:block:")) {
       await handleBlock(ctx, env, data.replace("match:block:", ""));
       await ctx.answerCallbackQuery().catch(() => {});
+    } else if (data.startsWith("gift_premium:")) {
+      const handled = await handleGiftPremiumCallback(ctx, env, data);
+      if (!handled) {
+        await ctx.answerCallbackQuery("Unknown gift action.").catch(() => {});
+      }
     } else if (data.startsWith("dm:buy:")) {
       // Backward compatibility: directly show invoice for the target user
       await handleSendDM(ctx, env, data.replace("dm:buy:", ""));
@@ -1749,7 +1956,11 @@ export const matchCallbacks = async (
     }
   } catch (error) {
     log.error("matchCallbacks", "Unhandled error", undefined, error);
-    await ctx.answerCallbackQuery("❌ Something went wrong.").catch(() => {});
+    const data = ctx.callbackQuery?.data;
+    await replyWithError(ctx, env, "en", {
+      action: data ? `callback:${data}` : "unknown_callback",
+    });
+    await ctx.answerCallbackQuery().catch(() => {});
   }
 };
 

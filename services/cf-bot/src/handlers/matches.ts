@@ -21,6 +21,7 @@ import { getMainMenuKeyboard } from "../lib/main-menu.js";
 import { t, escapeMd } from "../lib/i18n.js";
 import { type Language } from "../lib/i18n.js";
 import { ApiServiceClient } from "../services/api-client.js";
+import { replyWithError } from "../lib/error-feedback.js";
 
 function buildChatLink(otherUser: Record<string, unknown>): string {
   const username = otherUser.username as string | undefined;
@@ -243,7 +244,7 @@ export const matchesCommand = async (
     });
   } catch (error) {
     log.error("matchesCommand", "Unhandled error", undefined, error);
-    await ctx.reply(t("genericError"), { reply_markup: getMainMenuKeyboard() });
+    await replyWithError(ctx, env, "en", { command: "matches" });
   }
 };
 
@@ -338,6 +339,7 @@ export const matchesCallbacks = async (
     await ctx.answerCallbackQuery("Unknown action.").catch(() => {});
   } catch (error) {
     log.error("matchesCallbacks", "Unhandled error", undefined, error);
-    await ctx.answerCallbackQuery("❌ Something went wrong.").catch(() => {});
+    await replyWithError(ctx, env, "en", { action: "matches_callback" });
+    await ctx.answerCallbackQuery().catch(() => {});
   }
 };

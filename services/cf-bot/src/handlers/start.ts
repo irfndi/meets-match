@@ -14,6 +14,7 @@ import {
   clearOnboardingProgress,
 } from "../lib/conversations.js";
 import { createLogger } from "@meetsmatch/cf-shared";
+import { replyWithError } from "../lib/error-feedback.js";
 
 const log = createLogger("cf-bot");
 import {
@@ -128,7 +129,7 @@ export const startCommand = async (ctx: MyContext, env: Env): Promise<void> => {
     });
   } catch (error) {
     log.error("startCommand", "Unhandled error", undefined, error);
-    await ctx.reply(t("genericError"));
+    await replyWithError(ctx, env, "en", { command: "start" });
   }
 };
 
@@ -139,9 +140,9 @@ export const languageCallback = async (
 ): Promise<boolean> => {
   if (!ctx.from) return false;
   if (!data.startsWith("lang:")) return false;
+  const selectedLang = data.replace("lang:", "") as Language;
 
   try {
-    const selectedLang = data.replace("lang:", "") as Language;
     const userId = String(ctx.from.id);
 
     // Store language preference
@@ -227,7 +228,8 @@ export const languageCallback = async (
     return true;
   } catch (error) {
     log.error("languageCallback", "Unhandled error", undefined, error);
-    await ctx.answerCallbackQuery("❌ Something went wrong.").catch(() => {});
+    await replyWithError(ctx, env, selectedLang, { action: "language_select" });
+    await ctx.answerCallbackQuery().catch(() => {});
     return false;
   }
 };
