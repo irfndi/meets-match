@@ -147,6 +147,15 @@ function createBot(env: Env): Bot<MyContext> {
     return next();
   });
 
+  // Record journey for commands — must be BEFORE command handlers
+  bot.use(async (ctx, next) => {
+    if (ctx.message?.text?.startsWith("/")) {
+      const cmd = ctx.message.text.split(" ")[0].slice(1);
+      await recordCommandJourney(ctx, env, cmd);
+    }
+    return next();
+  });
+
   // Bot commands are registered once via scripts/setup-bot-commands.ts
   // to avoid rate-limiting and latency in the serverless handler.
 
@@ -165,15 +174,6 @@ function createBot(env: Env): Bot<MyContext> {
       "⚠️ To report a profile, tap the ⚠️ button when viewing a match card.",
       { reply_markup: getMainMenuKeyboard() },
     );
-  });
-
-  // Record journey for commands
-  bot.use(async (ctx, next) => {
-    if (ctx.message?.text?.startsWith("/")) {
-      const cmd = ctx.message.text.split(" ")[0].slice(1);
-      await recordCommandJourney(ctx, env, cmd);
-    }
-    return next();
   });
 
   bot.on("callback_query:data", async (ctx) => {
@@ -408,9 +408,7 @@ function createBot(env: Env): Bot<MyContext> {
 
     if (payload && payload.startsWith("gift_premium_")) {
       await handleGiftPremiumPayment(ctx, env, payload);
-    }
-
-    if (payload && payload.startsWith("gift_")) {
+    } else if (payload && payload.startsWith("gift_")) {
       await handleGiftPayment(ctx, env, payload);
     }
 

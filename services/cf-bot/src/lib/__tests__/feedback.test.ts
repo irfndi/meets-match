@@ -101,6 +101,29 @@ describe("Feedback Conversation", () => {
       expect(kv.delete).toHaveBeenCalledWith("conversation:123");
     });
 
+    it("should show error when feedback API returns non-2xx", async () => {
+      await kv.put(
+        "conversation:123",
+        JSON.stringify({ userId: "123", field: "feedback", step: 0 }),
+      );
+      env.API_SERVICE = createMockApiService({
+        "/feedback": () =>
+          new Response(JSON.stringify({ error: "fail" }), { status: 500 }),
+      });
+      const handled = await handleFeedbackConversation(
+        ctx,
+        env,
+        "Great app!",
+        "en",
+      );
+      expect(handled).toBe(true);
+      expect(kv.delete).toHaveBeenCalledWith("conversation:123");
+      expect(ctx.reply).toHaveBeenCalledWith(
+        expect.stringContaining("Failed"),
+        expect.anything(),
+      );
+    });
+
     it("should return false when not in feedback conversation", async () => {
       const handled = await handleFeedbackConversation(
         ctx,

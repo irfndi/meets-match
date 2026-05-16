@@ -203,6 +203,16 @@ interface LastAction {
   timestamp: string;
 }
 
+function isValidMatchQueue(obj: unknown): obj is MatchQueue {
+  if (!obj || typeof obj !== "object") return false;
+  const q = obj as Record<string, unknown>;
+  return (
+    Array.isArray(q.matches) &&
+    typeof q.index === "number" &&
+    typeof q.tier === "string"
+  );
+}
+
 async function getMatchQueue(
   kv: KVNamespace,
   userId: string,
@@ -210,7 +220,8 @@ async function getMatchQueue(
   const value = await kv.get(`match_queue:${userId}`);
   if (!value) return null;
   try {
-    return JSON.parse(value) as MatchQueue;
+    const parsed = JSON.parse(value) as unknown;
+    return isValidMatchQueue(parsed) ? parsed : null;
   } catch {
     return null;
   }
@@ -230,6 +241,16 @@ async function clearMatchQueue(kv: KVNamespace, userId: string): Promise<void> {
   await kv.delete(`match_queue:${userId}`);
 }
 
+function isValidLastAction(obj: unknown): obj is LastAction {
+  if (!obj || typeof obj !== "object") return false;
+  const a = obj as Record<string, unknown>;
+  return (
+    typeof a.matchId === "string" &&
+    typeof a.targetUserId === "string" &&
+    typeof a.action === "string"
+  );
+}
+
 async function getLastAction(
   kv: KVNamespace,
   userId: string,
@@ -237,7 +258,8 @@ async function getLastAction(
   const value = await kv.get(`last_action:${userId}`);
   if (!value) return null;
   try {
-    return JSON.parse(value) as LastAction;
+    const parsed = JSON.parse(value) as unknown;
+    return isValidLastAction(parsed) ? parsed : null;
   } catch {
     return null;
   }
@@ -1707,6 +1729,13 @@ export async function handleGiftPremiumCallback(
     return true;
   }
 
+  if (data.startsWith("gift_premium:show:")) {
+    const targetUserId = data.replace("gift_premium:show:", "");
+    await startGiftPremiumSelection(ctx, env, targetUserId);
+    await ctx.answerCallbackQuery().catch(() => {});
+    return true;
+  }
+
   if (data.startsWith("gift_premium:buy:")) {
     const parts = data.split(":");
     const tier = parts[2];
@@ -1767,12 +1796,13 @@ export async function handleGiftPremiumPayment(
   const lang = await fetchUserLang(env, buyerId);
 
   // Parse payload: gift_premium_{buyerId}_{targetUserId}_{tier}
-  const parts = payload.split("_");
-  if (parts.length < 5 || parts[0] !== "gift" || parts[1] !== "premium") return;
+  // Tier may contain underscores (e.g. premium_plus)
+  const match = payload.match(/^gift_premium_(\d+)_(\d+)_(.+)$/);
+  if (!match) return;
 
-  const parsedBuyerId = parts[2];
-  const targetUserId = parts[3];
-  const tier = parts[4];
+  const parsedBuyerId = match[1];
+  const targetUserId = match[2];
+  const tier = match[3];
 
   if (
     parsedBuyerId !== buyerId ||

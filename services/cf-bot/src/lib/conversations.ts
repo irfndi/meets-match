@@ -1374,16 +1374,28 @@ export async function handleFeedbackConversation(
   if (!state || state.field !== "feedback") return false;
 
   try {
-    await env.API_SERVICE.fetch(
+    const response = await env.API_SERVICE.fetch(
       new Request("http://api/feedback", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId, message: text }),
       }),
     );
-    await ctx.reply(t("feedbackSubmitted", lang), {
-      reply_markup: getMainMenuKeyboard(),
-    });
+    if (!response.ok) {
+      const body = await response.text().catch(() => "unknown");
+      log.error("handleFeedbackConversation", "Feedback API returned non-ok", {
+        userId,
+        status: response.status,
+        body,
+      });
+      await ctx.reply(t("feedbackError", lang), {
+        reply_markup: getMainMenuKeyboard(),
+      });
+    } else {
+      await ctx.reply(t("feedbackSubmitted", lang), {
+        reply_markup: getMainMenuKeyboard(),
+      });
+    }
   } catch (error) {
     log.error(
       "handleFeedbackConversation",

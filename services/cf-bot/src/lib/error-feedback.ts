@@ -52,7 +52,6 @@ export async function replyWithError(
     .text("🏠 Main Menu", "menu:main");
 
   await ctx.reply(parts.join("\n"), {
-    parse_mode: "Markdown",
     reply_markup: keyboard,
   });
 }
@@ -85,9 +84,7 @@ export async function handleErrorReportCallback(
     // Send to bot owner / admin channel if configured
     const adminChatId = env.ADMIN_CHAT_ID;
     if (adminChatId) {
-      await ctx.api.sendMessage(adminChatId, reportText, {
-        parse_mode: "MarkdownV2",
-      });
+      await ctx.api.sendMessage(adminChatId, reportText).catch(() => {});
     }
 
     // Also log it server-side

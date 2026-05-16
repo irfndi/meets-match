@@ -28,12 +28,31 @@ function safeJsonParse<T>(value: string | null, fallback: T): T {
   }
 }
 
+function normalizeJourney(obj: unknown): UserJourney {
+  if (!obj || typeof obj !== "object") return { events: [] };
+  const j = obj as Record<string, unknown>;
+  const events = Array.isArray(j.events) ? j.events : [];
+  return {
+    events: events.filter(
+      (e): e is JourneyEvent =>
+        e &&
+        typeof e === "object" &&
+        typeof (e as JourneyEvent).ts === "string" &&
+        typeof (e as JourneyEvent).action === "string",
+    ),
+    lastErrorAt: typeof j.lastErrorAt === "string" ? j.lastErrorAt : undefined,
+    lastErrorTrace:
+      typeof j.lastErrorTrace === "string" ? j.lastErrorTrace : undefined,
+  };
+}
+
 export async function getJourney(
   kv: KVNamespace,
   userId: string,
 ): Promise<UserJourney> {
   const raw = await kv.get(`journey:${userId}`);
-  return safeJsonParse(raw, { events: [] });
+  const parsed = safeJsonParse(raw, { events: [] });
+  return normalizeJourney(parsed);
 }
 
 export async function recordJourneyEvent(
@@ -85,7 +104,10 @@ export async function recordJourneyError(
 export function formatJourneyForReport(journey: UserJourney): string {
   if (!journey.events.length) return "No recent activity recorded.";
   const lines = journey.events.slice(-10).map((e) => {
-    const time = new Date(e.ts).toISOString().slice(11, 19);
+    const tsValid = !Number.isNaN(Date.parse(e.ts));
+    const time = tsValid
+      ? new Date(e.ts).toISOString().slice(11, 19)
+      : "invalid time";
     const detail = e.detail ? ` (${e.detail})` : "";
     const target = e.targetId ? ` → ${e.targetId}` : "";
     return `${time} ${e.action}${detail}${target}`;

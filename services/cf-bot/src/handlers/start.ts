@@ -140,7 +140,11 @@ export const languageCallback = async (
 ): Promise<boolean> => {
   if (!ctx.from) return false;
   if (!data.startsWith("lang:")) return false;
-  const selectedLang = data.replace("lang:", "") as Language;
+  const langCode = data.replace("lang:", "");
+  const validLangs = new Set(SUPPORTED_LANGUAGES.map((l) => l.code));
+  const selectedLang: Language = validLangs.has(langCode as Language)
+    ? (langCode as Language)
+    : DEFAULT_LANGUAGE;
 
   try {
     const userId = String(ctx.from.id);
