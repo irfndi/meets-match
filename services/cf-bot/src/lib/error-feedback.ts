@@ -14,6 +14,16 @@ import { createLogger } from "@meetsmatch/cf-shared";
 
 const log = createLogger("cf-bot");
 
+export function isBotBlockedError(error: unknown): boolean {
+  if (error instanceof Error) {
+    return (
+      error.message.includes("403: Forbidden: bot was blocked by the user") ||
+      error.message.includes("Forbidden: bot was blocked by the user")
+    );
+  }
+  return false;
+}
+
 export interface ErrorContext {
   command?: string;
   action?: string;
@@ -51,9 +61,19 @@ export async function replyWithError(
     .row()
     .text("🏠 Main Menu", "menu:main");
 
-  await ctx.reply(parts.join("\n"), {
-    reply_markup: keyboard,
-  });
+  try {
+    await ctx.reply(parts.join("\n"), {
+      reply_markup: keyboard,
+    });
+  } catch (err) {
+    if (isBotBlockedError(err)) {
+      log.info("replyWithError", "User blocked bot, skipping error reply", {
+        userId,
+      });
+      return;
+    }
+    throw err;
+  }
 }
 
 export async function handleErrorReportCallback(

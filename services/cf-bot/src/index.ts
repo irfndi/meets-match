@@ -55,6 +55,7 @@ import {
   handleErrorReportCallback,
   recordCommandJourney,
   replyWithError,
+  isBotBlockedError,
 } from "./lib/error-feedback.js";
 
 export interface Env {
@@ -72,6 +73,10 @@ function createBot(env: Env): Bot<MyContext> {
   const bot = new Bot<MyContext>(env.BOT_TOKEN);
 
   bot.catch((err) => {
+    if (isBotBlockedError(err.error)) {
+      // Silently ignore when user blocks the bot
+      return;
+    }
     console.error("Bot error:", err);
   });
 
@@ -310,6 +315,10 @@ function createBot(env: Env): Bot<MyContext> {
         return await matchCallbacks(ctx, env);
       }
     } catch (error) {
+      if (isBotBlockedError(error)) {
+        await ctx.answerCallbackQuery().catch(() => {});
+        return;
+      }
       console.error("Callback query error:", error);
       await replyWithError(ctx, env, "en", { action: "callback_query" });
       await ctx.answerCallbackQuery().catch(() => {});
@@ -504,6 +513,9 @@ function createBot(env: Env): Bot<MyContext> {
         reply_markup: getMainMenuKeyboard(),
       });
     } catch (error) {
+      if (isBotBlockedError(error)) {
+        return;
+      }
       console.error("Text message error:", error);
       const text = ctx.message?.text;
       const action = text?.startsWith("/")
@@ -647,6 +659,9 @@ export default {
         await bot.handleUpdate(update);
         return new Response("OK", { status: 200 });
       } catch (error) {
+        if (isBotBlockedError(error)) {
+          return new Response("OK", { status: 200 });
+        }
         console.error("Webhook error:", error);
         return new Response(
           JSON.stringify({ error: "Internal Server Error" }),

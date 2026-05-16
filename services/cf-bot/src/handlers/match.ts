@@ -14,7 +14,11 @@ import {
   type UserProfile,
 } from "../lib/user-utils.js";
 import { addNotification } from "../lib/notifications.js";
-import { replyWithError, recordActionJourney } from "../lib/error-feedback.js";
+import {
+  replyWithError,
+  recordActionJourney,
+  isBotBlockedError,
+} from "../lib/error-feedback.js";
 import {
   getConversationState,
   setConversationState,
@@ -1610,8 +1614,14 @@ export async function handleGiftCallback(
       );
       await ctx.answerCallbackQuery().catch(() => {});
     } catch (error) {
+      if (isBotBlockedError(error)) {
+        await ctx.answerCallbackQuery().catch(() => {});
+        return true;
+      }
       console.error("Gift invoice error:", error);
-      await ctx.reply("❌ Could not create payment. Please try again later.");
+      await ctx
+        .reply("❌ Could not create payment. Please try again later.")
+        .catch(() => {});
       await ctx.answerCallbackQuery().catch(() => {});
     }
     return true;
@@ -1666,10 +1676,15 @@ export async function handleGiftPayment(
       giftName: gift.name,
     });
   } catch (error) {
+    if (isBotBlockedError(error)) {
+      return;
+    }
     console.error("Gift delivery error:", error);
-    await ctx.reply(
-      "❌ Payment processed but we could not deliver the gift. Please contact support.",
-    );
+    await ctx
+      .reply(
+        "❌ Payment processed but we could not deliver the gift. Please contact support.",
+      )
+      .catch(() => {});
   }
 }
 
@@ -1856,15 +1871,20 @@ export async function handleGiftPremiumPayment(
       tier: tierLabel,
     });
   } catch (error) {
+    if (isBotBlockedError(error)) {
+      return;
+    }
     log.error(
       "handleGiftPremiumPayment",
       "Payment processing failed",
       { buyerId, targetUserId, tier },
       error,
     );
-    await ctx.reply(
-      "❌ Payment processed but we could not activate the gift. Please contact support.",
-    );
+    await ctx
+      .reply(
+        "❌ Payment processed but we could not activate the gift. Please contact support.",
+      )
+      .catch(() => {});
   }
 }
 
