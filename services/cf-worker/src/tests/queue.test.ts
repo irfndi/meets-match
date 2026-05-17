@@ -132,7 +132,7 @@ describe("cf-worker queue handler", () => {
       userId: "user-3",
       type: "like",
     });
-    const batch = createMockBatch("notification-dlq", [message]);
+    const batch = createMockBatch("dlq", [message]);
 
     await worker.queue(
       batch,
