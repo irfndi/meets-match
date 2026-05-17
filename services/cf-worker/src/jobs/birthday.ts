@@ -24,7 +24,8 @@ export async function runBirthdayJob(env: Env): Promise<void> {
 
     // On Feb 28 of non-leap years, also update ages for leap-day (Feb 29) births
     let leapDayUsers: Array<Record<string, unknown>> = [];
-    const isLeapYear = (y: number) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+    const isLeapYear = (y: number) =>
+      (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
     if (month === "02" && day === "28" && !isLeapYear(now.getFullYear())) {
       const { results: leapResults } = await env.DB.prepare(
         `SELECT id, first_name, birth_date FROM users
@@ -35,7 +36,9 @@ export async function runBirthdayJob(env: Env): Promise<void> {
         .bind("02-29")
         .all();
       leapDayUsers = (leapResults ?? []) as Array<Record<string, unknown>>;
-      console.log(`[birthday] Found ${leapDayUsers.length} leap-day user(s) to refresh`);
+      console.log(
+        `[birthday] Found ${leapDayUsers.length} leap-day user(s) to refresh`,
+      );
     }
 
     const ageRefreshUsers = [...birthdayUsers, ...leapDayUsers];
@@ -59,10 +62,7 @@ export async function runBirthdayJob(env: Env): Promise<void> {
           .run();
         console.log(`[birthday] Updated age to ${age} for ${userId}`);
       } catch (error) {
-        console.error(
-          `[birthday] Failed to update age for ${userId}:`,
-          error,
-        );
+        console.error(`[birthday] Failed to update age for ${userId}:`, error);
       }
     }
 
