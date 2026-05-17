@@ -31,8 +31,13 @@ node_modules/
 .wrangler/
 .dev.vars
 
-# DeepSec
-.deepsec/data/
+# Clawpatch
+.clawpatch/features/
+.clawpatch/findings/
+.clawpatch/patches/
+.clawpatch/reports/
+.clawpatch/runs/
+.clawpatch/locks/
 
 # Auto-generated version files
 services/*/src/lib/version.ts

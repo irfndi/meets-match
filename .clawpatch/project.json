@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "projectId": "prj_https-github-com-irfndi-match-bo_6e2a730e6b",
+  "name": "@meetsmatch/monorepo",
+  "rootPath": ".",
+  "git": {
+    "remoteUrl": "https://github.com/irfndi/match-bot.git",
+    "defaultBranch": "main",
+    "currentBranch": "chore/remove-deepsec-migrate-clawpatch",
+    "headSha": "f20e18ff5d2072bf08758c2e3f67d0fd314b8af2"
+  },
+  "detected": {
+    "languages": [
+      "typescript",
+      "javascript"
+    ],
+    "frameworks": [
+      "vitest"
+    ],
+    "packageManagers": [
+      "pnpm",
+      "npm"
+    ],
+    "commands": {
+      "typecheck": null,
+      "lint": "pnpm lint",
+      "format": "pnpm format",
+      "test": "pnpm test"
+    }
+  },
+  "createdAt": "2026-05-17T08:17:13.211Z",
+  "updatedAt": "2026-05-17T08:17:13.211Z"
+}

@@ -8,13 +8,13 @@ build/
 *.tsbuildinfo
 
 # Cache directories
+.clawpatch/
 .venv/
 .mypy_cache/
 .ruff_cache/
 .pytest_cache/
 .uv-cache/
 .sisyphus/
-.deepsec/
 .vite/
 .vite-temp/
 
