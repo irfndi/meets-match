@@ -14,8 +14,8 @@
     ".clawpatch/**"
   ],
   "provider": {
-    "name": "opencode",
-    "model": null
+    "name": "acpx",
+    "model": "kimi"
   },
   "commands": {
     "typecheck": null,
