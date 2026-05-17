@@ -294,10 +294,10 @@ export class ApiServiceClient implements IUserService {
   }
 
   async interact(userId: string): Promise<{ success: boolean }> {
-    return this.request<{ success: boolean }>(
-      `/users/${userId}/interact`,
-      { method: "POST", idempotent: true },
-    );
+    return this.request<{ success: boolean }>(`/users/${userId}/interact`, {
+      method: "POST",
+      idempotent: true,
+    });
   }
 
   async getReferralCode(userId: string): Promise<{ code: string }> {
@@ -310,29 +310,23 @@ export class ApiServiceClient implements IUserService {
     blockerId: string,
     blockedId: string,
   ): Promise<{ success: boolean }> {
-    return this.request<{ success: boolean }>(
-      `/users/${blockerId}/block`,
-      {
-        method: "POST",
-        body: JSON.stringify({ blockedId }),
-        headers: { "Content-Type": "application/json" },
-        idempotent: true,
-      },
-    );
+    return this.request<{ success: boolean }>(`/users/${blockerId}/block`, {
+      method: "POST",
+      body: JSON.stringify({ blockedId }),
+      headers: { "Content-Type": "application/json" },
+      idempotent: true,
+    });
   }
 
   async unblockUser(
     blockerId: string,
     blockedId: string,
   ): Promise<{ success: boolean }> {
-    return this.request<{ success: boolean }>(
-      `/users/${blockerId}/unblock`,
-      {
-        method: "POST",
-        body: JSON.stringify({ blockedId }),
-        headers: { "Content-Type": "application/json" },
-        idempotent: true,
-      },
-    );
+    return this.request<{ success: boolean }>(`/users/${blockerId}/unblock`, {
+      method: "POST",
+      body: JSON.stringify({ blockedId }),
+      headers: { "Content-Type": "application/json" },
+      idempotent: true,
+    });
   }
 }

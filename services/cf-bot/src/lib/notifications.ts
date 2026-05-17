@@ -71,9 +71,13 @@ export async function addNotification(
     env.KV.put(key, JSON.stringify(notification), {
       expirationTtl: NOTIFICATION_TTL_SECONDS,
     }),
-    env.KV.put(list, JSON.stringify([...(await getNotificationIds(env, userId)), id]), {
-      expirationTtl: NOTIFICATION_TTL_SECONDS,
-    }),
+    env.KV.put(
+      list,
+      JSON.stringify([...(await getNotificationIds(env, userId)), id]),
+      {
+        expirationTtl: NOTIFICATION_TTL_SECONDS,
+      },
+    ),
   ]);
 }
 
