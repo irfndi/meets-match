@@ -357,7 +357,34 @@ export class MatchRepository {
           return [];
         }
 
-        const prefs = currentUser.preferences;
+        let prefs = currentUser.preferences ?? {};
+
+        // Compute default preferences for new users who haven't set any.
+        // This ensures gender filtering is always applied even if the bot-side
+        // default-preference save failed or hasn't run yet.
+        const hasGenderPref =
+          Array.isArray(prefs.genderPreference) &&
+          prefs.genderPreference.length > 0;
+        if (!hasGenderPref && currentUser.gender) {
+          const gender = currentUser.gender;
+          const defaultGenderPref =
+            gender === "male"
+              ? ["female"]
+              : gender === "female"
+                ? ["male"]
+                : ["male", "female", "other", "prefer_not_to_say"];
+          const defaults: Record<string, unknown> = {
+            genderPreference: defaultGenderPref,
+          };
+          if (currentUser.age != null) {
+            defaults.minAge = Math.max(12, currentUser.age - 7);
+            defaults.maxAge = Math.min(80, currentUser.age + 7);
+          }
+          if (prefs.maxDistance == null) {
+            defaults.maxDistance = 25;
+          }
+          prefs = { ...defaults, ...prefs };
+        }
 
         // 2. Build query for candidates including interacted profiles for cooldown/re-engagement
         // We fetch more candidates to allow filtering and variety

@@ -143,4 +143,30 @@ describe("profile handler", () => {
     await profileCommand(ctx, env);
     expect(ctx.reply).toHaveBeenCalled();
   });
+
+  it("trusts the age column over birthDate when manually updated", async () => {
+    const ctx = createCtx();
+    const env = createEnv({
+      birthDate: "1990-01-01",
+      age: 99,
+    });
+
+    await profileCommand(ctx, env);
+    const call = (ctx.reply as any).mock.calls[0];
+    expect(call[0]).toContain("99");
+    expect(call[0]).not.toContain("35"); // ~age from 1990-01-01
+  });
+
+  it("falls back to birthDate computation when age column is missing", async () => {
+    const ctx = createCtx();
+    const env = createEnv({
+      birthDate: "1990-01-01",
+      age: undefined,
+    });
+
+    await profileCommand(ctx, env);
+    const call = (ctx.reply as any).mock.calls[0];
+    // Age from 1990-01-01 should be present (around 35)
+    expect(call[0]).toMatch(/3[456]/);
+  });
 });

@@ -33,9 +33,9 @@ export const profileCommand = async (
     const { user } = result;
     const lang: Language = (user.language as Language) ?? "en";
     const name = user.displayName || t("profileInterestsNotSet", lang);
-    const computedAge = user.birthDate
-      ? computeAgeFromBirthDate(user.birthDate)
-      : user.age;
+    const computedAge =
+      user.age ??
+      (user.birthDate ? computeAgeFromBirthDate(user.birthDate) : undefined);
     const ageDisplay =
       computedAge !== undefined
         ? String(computedAge)

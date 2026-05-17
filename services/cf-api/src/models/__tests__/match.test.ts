@@ -283,6 +283,114 @@ describe("MatchRepository.getPotentialMatches SQL", () => {
     expect(values).toContain(17);
     expect(values).toContain(33);
   });
+
+  it("applies default gender preference when user has empty preferences", async () => {
+    const currentUser = createDbRow({
+      id: "1",
+      gender: "male",
+      age: 25,
+      preferences: "{}",
+    });
+    const mockD1 = createMockD1([], currentUser);
+    const userRepo = new UserRepository(mockD1);
+    const matchRepo = new MatchRepository(mockD1, userRepo);
+
+    await Effect.runPromise(
+      matchRepo.getPotentialMatches({ userId: "1", limit: 10 }),
+    );
+
+    const sql = mockD1._capturedSql.find((s) => s.includes("FROM users u"));
+    expect(sql).toContain("u.gender IN (?)");
+
+    const values = mockD1._capturedValues.find((v) =>
+      v.some((x) => x === "female"),
+    );
+    expect(values).toBeDefined();
+    expect(values).toContain("female");
+    // Default age range: 25-7=18, 25+7=32
+    expect(values).toContain(18);
+    expect(values).toContain(32);
+  });
+
+  it("applies default opposite-sex preference for female users", async () => {
+    const currentUser = createDbRow({
+      id: "1",
+      gender: "female",
+      age: 30,
+      preferences: "{}",
+    });
+    const mockD1 = createMockD1([], currentUser);
+    const userRepo = new UserRepository(mockD1);
+    const matchRepo = new MatchRepository(mockD1, userRepo);
+
+    await Effect.runPromise(
+      matchRepo.getPotentialMatches({ userId: "1", limit: 10 }),
+    );
+
+    const values = mockD1._capturedValues.find((v) =>
+      v.some((x) => x === "male"),
+    );
+    expect(values).toBeDefined();
+    expect(values).toContain("male");
+  });
+
+  it("applies all-genders default for 'other' gender with empty prefs", async () => {
+    const currentUser = createDbRow({
+      id: "1",
+      gender: "other",
+      age: 28,
+      preferences: "{}",
+    });
+    const mockD1 = createMockD1([], currentUser);
+    const userRepo = new UserRepository(mockD1);
+    const matchRepo = new MatchRepository(mockD1, userRepo);
+
+    await Effect.runPromise(
+      matchRepo.getPotentialMatches({ userId: "1", limit: 10 }),
+    );
+
+    const sql = mockD1._capturedSql.find((s) => s.includes("FROM users u"));
+    expect(sql).toContain("u.gender IN (?,?,?,?)");
+
+    const values = mockD1._capturedValues.find((v) =>
+      v.some((x) => x === "male"),
+    );
+    expect(values).toBeDefined();
+    expect(values).toContain("male");
+    expect(values).toContain("female");
+    expect(values).toContain("other");
+    expect(values).toContain("prefer_not_to_say");
+  });
+
+  it("does not override existing gender preference with defaults", async () => {
+    const currentUser = createDbRow({
+      id: "1",
+      gender: "male",
+      age: 25,
+      preferences: JSON.stringify({
+        genderPreference: ["male", "other"],
+        minAge: 20,
+        maxAge: 40,
+      }),
+    });
+    const mockD1 = createMockD1([], currentUser);
+    const userRepo = new UserRepository(mockD1);
+    const matchRepo = new MatchRepository(mockD1, userRepo);
+
+    await Effect.runPromise(
+      matchRepo.getPotentialMatches({ userId: "1", limit: 10 }),
+    );
+
+    const values = mockD1._capturedValues.find((v) =>
+      v.some((x) => x === "male"),
+    );
+    expect(values).toBeDefined();
+    expect(values).toContain("male");
+    expect(values).toContain("other");
+    expect(values).not.toContain("female");
+    expect(values).toContain(20);
+    expect(values).toContain(40);
+  });
 });
 
 describe("MatchRepository.getPotentialMatches JS filtering", () => {

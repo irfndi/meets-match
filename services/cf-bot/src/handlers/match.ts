@@ -144,7 +144,7 @@ async function ensureDefaultPreferences(
   if (Object.keys(defaults).length === 0) return;
 
   try {
-    await env.API_SERVICE.fetch(
+    const res = await env.API_SERVICE.fetch(
       new Request(`http://api/users/${userId}`, {
         method: "PUT",
         body: JSON.stringify({
@@ -153,8 +153,19 @@ async function ensureDefaultPreferences(
         headers: { "Content-Type": "application/json" },
       }),
     );
+    if (!res.ok) {
+      log.error("ensureDefaultPreferences", "API returned non-ok", {
+        userId,
+        status: res.status,
+      });
+    }
   } catch (error) {
-    console.error("Failed to set default preferences:", error);
+    log.error(
+      "ensureDefaultPreferences",
+      "Failed to set default preferences",
+      { userId },
+      error instanceof Error ? error : new Error(String(error)),
+    );
   }
 }
 

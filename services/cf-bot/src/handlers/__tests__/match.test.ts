@@ -508,5 +508,32 @@ describe("Match Handlers", () => {
         expect.anything(),
       );
     });
+
+    it("still proceeds to find matches when default preference PUT fails", async () => {
+      const consoleErrorSpy = vi
+        .spyOn(console, "error")
+        .mockImplementation(() => {});
+      env.API_SERVICE = createMockApiService({
+        "/users/123": () =>
+          new Response(JSON.stringify({ user: completeUser }), { status: 200 }),
+        "PUT:/users/123": () =>
+          new Response(JSON.stringify({ error: "DB error" }), { status: 500 }),
+        "/potential-matches": () =>
+          new Response(JSON.stringify({ potentialMatches: [] }), {
+            status: 200,
+          }),
+      });
+      await matchCommand(ctx, env);
+      // Should still show "finding" and then "no matches"
+      expect(ctx.reply).toHaveBeenCalledWith(
+        expect.stringContaining("Finding"),
+        expect.anything(),
+      );
+      expect(ctx.reply).toHaveBeenCalledWith(
+        expect.stringContaining("No potential matches found"),
+        expect.anything(),
+      );
+      consoleErrorSpy.mockRestore();
+    });
   });
 });

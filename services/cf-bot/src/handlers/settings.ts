@@ -208,7 +208,7 @@ export const settingsCallbacks = async (
       userData = json.user;
       const bd = userData?.birthDate as string | undefined;
       const age = userData?.age as number | undefined;
-      userAge = (bd ? computeAgeFromBirthDate(bd) : age) ?? 25;
+      userAge = (age ?? (bd ? computeAgeFromBirthDate(bd) : undefined)) ?? 25;
       lang = (userData?.language as Language) ?? "en";
     }
 
@@ -285,7 +285,7 @@ export async function handleAgeRangeCallback(
       userData = (await userRes.json()) as { user?: Record<string, unknown> };
       const bd = userData.user?.birthDate as string | undefined;
       const age = userData.user?.age as number | undefined;
-      userAge = (bd ? computeAgeFromBirthDate(bd) : age) ?? 25;
+      userAge = (age ?? (bd ? computeAgeFromBirthDate(bd) : undefined)) ?? 25;
       lang = (userData.user?.language as Language) ?? "en";
     }
 
