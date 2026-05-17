@@ -24,21 +24,17 @@ queue = "notification-queue"
 
 [vars]
 ENVIRONMENT = "development"
-ENABLE_SENTRY = "false"
 
 # Cron triggers are handled by cf-worker, not cf-api
 
-# Secrets (set via wrangler secret put or .dev.vars):
-# SENTRY_DSN
-# SENTRY_ENVIRONMENT
-# SENTRY_RELEASE
+# Observability: configure OTLP destinations in Cloudflare dashboard
+# then add their names to the destinations arrays below.
 
 [env.dev]
 name = "meetsmatch-api-dev"
 
 [env.dev.vars]
 ENVIRONMENT = "development"
-ENABLE_SENTRY = "false"
 
 [[env.dev.d1_databases]]
 binding = "DB"
@@ -65,7 +61,6 @@ name = "meetsmatch-api"
 
 [env.production.vars]
 ENVIRONMENT = "production"
-ENABLE_SENTRY = "false"
 
 [[env.production.d1_databases]]
 binding = "DB"
@@ -93,8 +88,12 @@ enabled = true
 head_sampling_rate = 1
 persist = true
 invocation_logs = true
+# Add destination names after creating them in Cloudflare dashboard:
+# destinations = ["sentry-logs"]
 
 [observability.traces]
 enabled = true
 persist = true
 head_sampling_rate = 1
+# Add destination names after creating them in Cloudflare dashboard:
+# destinations = ["sentry-traces"]

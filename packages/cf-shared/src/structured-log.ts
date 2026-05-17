@@ -9,7 +9,9 @@
  * - message
  * - optional context (userId, extra metadata)
  *
- * Future: wire to Sentry when ENABLE_SENTRY=true.
+ * Logs are automatically captured by Cloudflare Workers observability
+ * and can be exported via OpenTelemetry to any OTLP-compatible
+ * backend (Sentry, Honeycomb, Datadog, etc.). See wrangler.toml.
  */
 
 declare const console: {

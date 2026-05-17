@@ -49,9 +49,10 @@ SUBSCRIPTION_EXPIRY_SCHEDULE = "0 0 * * *"
 WORKER_CONCURRENCY = "10"
 
 # Secrets (set via wrangler secret put or .dev.vars):
-# SENTRY_DSN
-# SENTRY_ENVIRONMENT
-# SENTRY_RELEASE
+# (none required — observability uses Cloudflare dashboard OTLP destinations)
+
+# Observability: configure OTLP destinations in Cloudflare dashboard
+# then add their names to the destinations arrays below.
 
 [env.dev]
 name = "meetsmatch-worker-dev"
@@ -144,8 +145,12 @@ enabled = true
 head_sampling_rate = 1
 persist = true
 invocation_logs = true
+# Add destination names after creating them in Cloudflare dashboard:
+# destinations = ["sentry-logs"]
 
 [observability.traces]
 enabled = true
 persist = true
 head_sampling_rate = 1
+# Add destination names after creating them in Cloudflare dashboard:
+# destinations = ["sentry-traces"]
