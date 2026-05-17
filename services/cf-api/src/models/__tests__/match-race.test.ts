@@ -57,9 +57,7 @@ describe("MatchRepository race conditions", () => {
       const matchRepo = new MatchRepository(db, userRepo);
 
       // Start user1's like() — will pause at UPDATE
-      const p1 = runEffect(
-        matchRepo.like({ matchId: "m1", userId: "u1" }),
-      );
+      const p1 = runEffect(matchRepo.like({ matchId: "m1", userId: "u1" }));
 
       // Give p1 time to reach the barrier (read stale state)
       await new Promise((r) => setTimeout(r, 10));
@@ -167,9 +165,7 @@ describe("MatchRepository race conditions", () => {
       const matchRepo = new MatchRepository(db, userRepo);
 
       // Start undo() for user1 — will pause at UPDATE
-      const pUndo = runEffect(
-        matchRepo.undo({ matchId: "m1", userId: "u1" }),
-      );
+      const pUndo = runEffect(matchRepo.undo({ matchId: "m1", userId: "u1" }));
       await new Promise((r) => setTimeout(r, 10));
 
       // User2 likes while undo is paused
