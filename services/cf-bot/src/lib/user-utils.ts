@@ -1,6 +1,6 @@
 import type { MyContext } from "../types.js";
 import type { Env } from "../index.js";
-import { ApiServiceClient } from "../services/api-client.js";
+import { ApiServiceClient, ApiError } from "../services/api-client.js";
 import { createLogger } from "@meetsmatch/cf-shared";
 
 const log = createLogger("cf-bot");
@@ -194,12 +194,17 @@ export async function ensureUserExists(
       return { user: response.user as UserProfile, created: false };
     }
   } catch (error) {
-    log.error(
-      "ensureUserExists",
-      "Failed to fetch existing user, will try create",
-      { userId },
-      error,
-    );
+    if (error instanceof ApiError && error.status === 404) {
+      // Expected for new users — don't log as error
+      log.info("ensureUserExists", "User not found, will create", { userId });
+    } else {
+      log.error(
+        "ensureUserExists",
+        "Failed to fetch existing user, will try create",
+        { userId },
+        error,
+      );
+    }
   }
 
   // Create user if not found
