@@ -164,7 +164,9 @@ describe("getMissingFieldsDisplay", () => {
 });
 
 describe("ensureUserExists", () => {
-  const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+  const consoleErrorSpy = vi
+    .spyOn(console, "error")
+    .mockImplementation(() => {});
   const consoleLogSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
   beforeEach(() => {
@@ -182,9 +184,12 @@ describe("ensureUserExists", () => {
     const env = {
       API_SERVICE: createMockApiService({
         "/users/123": () =>
-          new Response(JSON.stringify({ user: { id: "123", displayName: "Test" } }), {
-            status: 200,
-          }),
+          new Response(
+            JSON.stringify({ user: { id: "123", displayName: "Test" } }),
+            {
+              status: 200,
+            },
+          ),
       }),
     } as any;
 
@@ -201,11 +206,15 @@ describe("ensureUserExists", () => {
     const ctx = mockCtx();
     const env = {
       API_SERVICE: createMockApiService({
-        "/users/123": () => new Response(JSON.stringify({ error: "Not found" }), { status: 404 }),
+        "/users/123": () =>
+          new Response(JSON.stringify({ error: "Not found" }), { status: 404 }),
         "/users": () =>
-          new Response(JSON.stringify({ user: { id: "123", displayName: "Test" } }), {
-            status: 200,
-          }),
+          new Response(
+            JSON.stringify({ user: { id: "123", displayName: "Test" } }),
+            {
+              status: 200,
+            },
+          ),
       }),
     } as any;
 
@@ -225,11 +234,15 @@ describe("ensureUserExists", () => {
     const ctx = mockCtx();
     const env = {
       API_SERVICE: createMockApiService({
-        "/users/123": () => new Response(JSON.stringify({ error: "DB down" }), { status: 500 }),
+        "/users/123": () =>
+          new Response(JSON.stringify({ error: "DB down" }), { status: 500 }),
         "/users": () =>
-          new Response(JSON.stringify({ user: { id: "123", displayName: "Test" } }), {
-            status: 200,
-          }),
+          new Response(
+            JSON.stringify({ user: { id: "123", displayName: "Test" } }),
+            {
+              status: 200,
+            },
+          ),
       }),
     } as any;
 
@@ -241,15 +254,19 @@ describe("ensureUserExists", () => {
     expect(consoleErrorSpy).toHaveBeenCalledTimes(1);
     const logEntry = JSON.parse(consoleErrorSpy.mock.calls[0][0]);
     expect(logEntry.level).toBe("error");
-    expect(logEntry.message).toBe("Failed to fetch existing user, will try create");
+    expect(logEntry.message).toBe(
+      "Failed to fetch existing user, will try create",
+    );
   });
 
   it("returns null when both getUser and createUser fail", async () => {
     const ctx = mockCtx();
     const env = {
       API_SERVICE: createMockApiService({
-        "/users/123": () => new Response(JSON.stringify({ error: "DB down" }), { status: 500 }),
-        "/users": () => new Response(JSON.stringify({ error: "DB down" }), { status: 500 }),
+        "/users/123": () =>
+          new Response(JSON.stringify({ error: "DB down" }), { status: 500 }),
+        "/users": () =>
+          new Response(JSON.stringify({ error: "DB down" }), { status: 500 }),
       }),
     } as any;
 
