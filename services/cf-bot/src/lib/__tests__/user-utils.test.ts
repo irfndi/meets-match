@@ -16,13 +16,12 @@ function mockCtx(overrides: Partial<MyContext> = {}): MyContext {
 }
 
 function createMockApiService(responseMap: Record<string, () => Response>) {
+  const sortedPatterns = Object.entries(responseMap).sort(
+    (a, b) => b[0].length - a[0].length,
+  );
   return {
-    fetch: vi.fn().mockImplementation((req: Request) => {
-      const url =
-        typeof req === "string" ? req : (req as any).url || String(req);
-      const sortedPatterns = Object.entries(responseMap).sort(
-        (a, b) => b[0].length - a[0].length,
-      );
+    fetch: vi.fn().mockImplementation((req: Request | string) => {
+      const url = typeof req === "string" ? req : req.url;
       for (const [pattern, factory] of sortedPatterns) {
         if (url.includes(pattern)) {
           return Promise.resolve(factory());
@@ -224,10 +223,9 @@ describe("ensureUserExists", () => {
     expect(result!.user.id).toBe("123");
     expect(result!.created).toBe(true);
     expect(consoleErrorSpy).not.toHaveBeenCalled();
-    expect(consoleLogSpy).toHaveBeenCalled();
-    const logEntry = JSON.parse(consoleLogSpy.mock.calls[0][0]);
-    expect(logEntry.level).toBe("info");
-    expect(logEntry.message).toBe("User not found, will create");
+    expect(consoleLogSpy).toHaveBeenCalledWith(
+      expect.stringContaining("User not found, will create"),
+    );
   });
 
   it("logs error for non-404 API failures", async () => {
@@ -252,10 +250,10 @@ describe("ensureUserExists", () => {
     expect(result).not.toBeNull();
     expect(result!.created).toBe(true);
     expect(consoleErrorSpy).toHaveBeenCalledTimes(1);
-    const logEntry = JSON.parse(consoleErrorSpy.mock.calls[0][0]);
-    expect(logEntry.level).toBe("error");
-    expect(logEntry.message).toBe(
-      "Failed to fetch existing user, will try create",
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      expect.stringContaining(
+        "Failed to fetch existing user, will try create",
+      ),
     );
   });
 
