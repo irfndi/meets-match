@@ -64,6 +64,8 @@ describe("Error Feedback", () => {
       API_SERVICE: createMockApiService({
         "/error-reports": () =>
           new Response(JSON.stringify({ id: "r1" }), { status: 201 }),
+        "/health": () =>
+          new Response(JSON.stringify({ version: "1.2.3" }), { status: 200 }),
       }),
     };
   });
@@ -171,7 +173,12 @@ describe("Error Feedback", () => {
           url: expect.stringContaining("error-reports"),
         }),
       );
-      const req = env.API_SERVICE.fetch.mock.calls[0][0] as Request;
+      // Find the error-reports call (health check may also be called)
+      const reportCall = env.API_SERVICE.fetch.mock.calls.find((call: any) =>
+        String(call[0].url ?? call[0]).includes("error-reports"),
+      );
+      expect(reportCall).toBeDefined();
+      const req = reportCall![0] as Request;
       const body = JSON.parse(await req.text());
       expect(body.reporterId).toBe("123");
       expect(body.traceId).toBe("TRACE001");

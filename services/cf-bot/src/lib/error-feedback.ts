@@ -10,6 +10,7 @@ import {
 } from "./journey.js";
 import { getMainMenuKeyboard } from "./main-menu.js";
 import { t, type Language } from "./i18n.js";
+import { getVersionInfo } from "./version.js";
 import { createLogger } from "@meetsmatch/cf-shared";
 import {
   classifySeverity,
@@ -53,6 +54,132 @@ export interface ErrorContext {
   action?: string;
   targetUserId?: string;
   extra?: string;
+  userTier?: string;
+  userLanguage?: string;
+}
+
+interface ErrorReportPayload {
+  reporterId: string;
+  traceId: string;
+  message: string;
+  journey: string;
+  severity: "high" | "low";
+  source: string;
+  botVersion: string;
+  apiVersion: string;
+  errorStack?: string;
+  userLanguage?: string;
+  userTier?: string;
+  triggerInput?: string;
+  kvSession?: string;
+  cfMetadata?: string;
+}
+
+/** Fetch API version via service binding (lightweight health check). */
+async function fetchApiVersion(env: Env): Promise<string> {
+  try {
+    const res = await env.API_SERVICE.fetch(new Request("http://api/health"));
+    if (res.ok) {
+      const data = (await res.json()) as Record<string, unknown>;
+      const version = (data.version as Record<string, string> | undefined)
+        ?.version;
+      if (version) return version;
+    }
+  } catch {
+    /* ignore */
+  }
+  return "unknown";
+}
+
+/** Build the enriched error report payload. */
+async function buildErrorReportPayload(
+  ctx: MyContext,
+  env: Env,
+  traceId: string,
+  context: ErrorContext | undefined,
+  error: unknown,
+): Promise<ErrorReportPayload> {
+  const userId = ctx.from ? String(ctx.from.id) : "unknown";
+  const source = buildErrorSource(context);
+  const severity = classifySeverity(context);
+
+  // Versions
+  const botVersion = getVersionInfo().version;
+  const apiVersion = await fetchApiVersion(env);
+
+  // Trigger input
+  const triggerInput =
+    ctx.message?.text ??
+    (ctx.callbackQuery?.data
+      ? `callback:${ctx.callbackQuery.data}`
+      : undefined);
+
+  // User context
+  const userLanguage =
+    context?.userLanguage ?? ctx.from?.language_code ?? undefined;
+  const userTier = context?.userTier ?? undefined;
+
+  // Stack trace
+  const errorStack = error instanceof Error ? error.stack : String(error);
+
+  // KV session snapshot
+  let kvSession: string | undefined;
+  try {
+    const sessionKey = `session:${userId}`;
+    const sessionRaw = await env.KV.get(sessionKey);
+    if (sessionRaw) {
+      kvSession = sessionRaw;
+    }
+  } catch {
+    /* ignore */
+  }
+
+  // Journey
+  const journey = await getJourney(env.KV, userId);
+  const journeyText = formatJourneyForReport(journey);
+
+  // Build report text for admin / message field
+  const reportLines = [
+    t("errorReportTitle", "en"),
+    "",
+    `🤖 *Bot:* \`${botVersion}\``,
+    `🔗 *API:* \`${apiVersion}\``,
+    `🎯 *Source:* ${source}`,
+    `⚡ *Severity:* ${severity}`,
+    "",
+    t("errorReportUser", "en", { userId }),
+    t("errorReportTraceId", "en", { traceId }),
+    t("errorReportTime", "en", { time: new Date().toISOString() }),
+  ];
+  if (userLanguage) reportLines.push(`🌐 *Language:* ${userLanguage}`);
+  if (userTier) reportLines.push(`👑 *Tier:* ${userTier}`);
+  if (triggerInput) reportLines.push(`📝 *Trigger:* \`${triggerInput}\``);
+  reportLines.push(
+    "",
+    t("errorReportJourney", "en"),
+    "```",
+    journeyText || t("errorReportNoActivity", "en"),
+    "```",
+  );
+  if (errorStack) {
+    reportLines.push("", "*Stack:*", "```", errorStack.slice(0, 2000), "```");
+  }
+
+  return {
+    reporterId: userId,
+    traceId,
+    message: reportLines.join("\n"),
+    journey: journeyText,
+    severity: severity === "high" ? "high" : "low",
+    source,
+    botVersion,
+    apiVersion,
+    errorStack,
+    userLanguage,
+    userTier,
+    triggerInput,
+    kvSession,
+  };
 }
 
 export async function replyWithError(
@@ -60,6 +187,7 @@ export async function replyWithError(
   env: Env,
   lang: Language = "en",
   context?: ErrorContext,
+  error?: unknown,
 ): Promise<void> {
   const userId = ctx.from ? String(ctx.from.id) : "unknown";
   const traceId = generateTraceId();
@@ -69,20 +197,31 @@ export async function replyWithError(
   // Record error in journey
   await recordJourneyError(env.KV, userId, traceId);
 
+  // Build enriched payload for background submission
+  const payloadPromise = buildErrorReportPayload(
+    ctx,
+    env,
+    traceId,
+    context,
+    error ?? new Error("replyWithError called without error"),
+  );
+
   // Admin alerting (skip for silent/expected errors like 403 bot blocked)
   if (severity !== "silent") {
-    const alertPayload = {
-      traceId,
-      userId,
-      source,
-      severity,
-      message: `Error in ${source} for user ${userId}`,
-    };
-    if (severity === "high") {
-      await sendImmediateAlert(env, alertPayload);
-    } else {
-      await queueAlert(env, alertPayload);
-    }
+    payloadPromise.then((payload) => {
+      const alertPayload = {
+        traceId,
+        userId,
+        source,
+        severity,
+        message: `Error in ${source} for user ${userId} (bot:${payload.botVersion} api:${payload.apiVersion})`,
+      };
+      if (severity === "high") {
+        sendImmediateAlert(env, alertPayload).catch(() => {});
+      } else {
+        queueAlert(env, alertPayload).catch(() => {});
+      }
+    });
   }
 
   // Build contextual message
@@ -126,32 +265,20 @@ export async function handleErrorReportCallback(
   const userId = String(ctx.from.id);
 
   try {
-    const journey = await getJourney(env.KV, userId);
-    const journeyText = formatJourneyForReport(journey);
-
-    const reportText = [
-      t("errorReportTitle", lang),
-      "",
-      t("errorReportUser", lang, { userId }),
-      t("errorReportTraceId", lang, { traceId }),
-      t("errorReportTime", lang, { time: new Date().toISOString() }),
-      "",
-      t("errorReportJourney", lang),
-      "```",
-      journeyText || t("errorReportNoActivity", lang),
-      "```",
-    ].join("\n");
+    // Re-build enriched payload with callback context
+    const payload = await buildErrorReportPayload(
+      ctx,
+      env,
+      traceId,
+      { action: "error_report_callback" },
+      new Error("User-submitted error report"),
+    );
 
     // Persist to database via API
     const apiResponse = await env.API_SERVICE.fetch(
       new Request("http://api/error-reports", {
         method: "POST",
-        body: JSON.stringify({
-          reporterId: userId,
-          traceId,
-          message: reportText,
-          journey: journeyText,
-        }),
+        body: JSON.stringify(payload),
         headers: { "Content-Type": "application/json" },
       }),
     );
@@ -173,14 +300,15 @@ export async function handleErrorReportCallback(
     // Send to bot owner / admin channel if configured
     const adminChatId = env.ADMIN_CHAT_ID;
     if (adminChatId) {
-      await ctx.api.sendMessage(adminChatId, reportText).catch(() => {});
+      await ctx.api.sendMessage(adminChatId, payload.message).catch(() => {});
     }
 
     // Also log it server-side
     log.error("errorReport", `User ${userId} reported error ${traceId}`, {
       userId,
       traceId,
-      journey: journey.events,
+      botVersion: payload.botVersion,
+      apiVersion: payload.apiVersion,
     });
 
     await ctx

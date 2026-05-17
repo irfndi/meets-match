@@ -926,6 +926,21 @@ export class ApiRouter {
           ? (body.severity as "high" | "low")
           : undefined;
       const source = body.source ? String(body.source) : undefined;
+      const botVersion = body.botVersion ? String(body.botVersion) : undefined;
+      const apiVersion = body.apiVersion ? String(body.apiVersion) : undefined;
+      const workerVersion = body.workerVersion
+        ? String(body.workerVersion)
+        : undefined;
+      const errorStack = body.errorStack ? String(body.errorStack) : undefined;
+      const userLanguage = body.userLanguage
+        ? String(body.userLanguage)
+        : undefined;
+      const userTier = body.userTier ? String(body.userTier) : undefined;
+      const triggerInput = body.triggerInput
+        ? String(body.triggerInput)
+        : undefined;
+      const kvSession = body.kvSession ? String(body.kvSession) : undefined;
+      const cfMetadata = body.cfMetadata ? String(body.cfMetadata) : undefined;
 
       if (!reporterId) {
         return jsonResponse({ error: "reporterId is required" }, 400);
@@ -939,6 +954,15 @@ export class ApiRouter {
           journey,
           severity,
           source,
+          botVersion,
+          apiVersion,
+          workerVersion,
+          errorStack,
+          userLanguage,
+          userTier,
+          triggerInput,
+          kvSession,
+          cfMetadata,
         }),
       );
       return jsonResponse({ success: true, reportId: result.id });

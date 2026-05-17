@@ -9,6 +9,15 @@ export interface CreateErrorReportRequest {
   journey?: string;
   severity?: "high" | "low";
   source?: string;
+  botVersion?: string;
+  apiVersion?: string;
+  workerVersion?: string;
+  errorStack?: string;
+  userLanguage?: string;
+  userTier?: string;
+  triggerInput?: string;
+  kvSession?: string;
+  cfMetadata?: string;
 }
 
 export interface ErrorReport {
@@ -21,6 +30,15 @@ export interface ErrorReport {
   severity: "high" | "low";
   alertSent: number;
   source: string | null;
+  botVersion: string | null;
+  apiVersion: string | null;
+  workerVersion: string | null;
+  errorStack: string | null;
+  userLanguage: string | null;
+  userTier: string | null;
+  triggerInput: string | null;
+  kvSession: string | null;
+  cfMetadata: string | null;
   createdAt: string;
 }
 
@@ -42,8 +60,11 @@ export class ErrorReportRepository {
         const id = crypto.randomUUID();
         await this.db
           .prepare(
-            `INSERT INTO error_reports (id, reporter_id, trace_id, message, journey, status, severity, source, created_at)
-             VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, CURRENT_TIMESTAMP)`,
+            `INSERT INTO error_reports (
+              id, reporter_id, trace_id, message, journey, status,
+              severity, source, bot_version, api_version, worker_version,
+              error_stack, user_language, user_tier, trigger_input, kv_session, cf_metadata, created_at
+            ) VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
           )
           .bind(
             id,
@@ -53,6 +74,15 @@ export class ErrorReportRepository {
             req.journey ?? null,
             req.severity ?? "low",
             req.source ?? null,
+            req.botVersion ?? null,
+            req.apiVersion ?? null,
+            req.workerVersion ?? null,
+            req.errorStack ?? null,
+            req.userLanguage ?? null,
+            req.userTier ?? null,
+            req.triggerInput ?? null,
+            req.kvSession ?? null,
+            req.cfMetadata ?? null,
           )
           .run();
         return {
@@ -65,6 +95,15 @@ export class ErrorReportRepository {
           severity: req.severity ?? "low",
           alertSent: 0,
           source: req.source ?? null,
+          botVersion: req.botVersion ?? null,
+          apiVersion: req.apiVersion ?? null,
+          workerVersion: req.workerVersion ?? null,
+          errorStack: req.errorStack ?? null,
+          userLanguage: req.userLanguage ?? null,
+          userTier: req.userTier ?? null,
+          triggerInput: req.triggerInput ?? null,
+          kvSession: req.kvSession ?? null,
+          cfMetadata: req.cfMetadata ?? null,
           createdAt: new Date().toISOString(),
         };
       },
@@ -80,7 +119,10 @@ export class ErrorReportRepository {
         const result = await this.db
           .prepare(
             `SELECT id, reporter_id as reporterId, trace_id as traceId, message, journey,
-                    status, severity, alert_sent as alertSent, source, created_at as createdAt
+                    status, severity, alert_sent as alertSent, source,
+                    bot_version as botVersion, api_version as apiVersion, worker_version as workerVersion,
+                    error_stack as errorStack, user_language as userLanguage, user_tier as userTier,
+                    trigger_input as triggerInput, kv_session as kvSession, cf_metadata as cfMetadata, created_at as createdAt
              FROM error_reports
              WHERE severity = 'low' AND alert_sent = 0
              ORDER BY created_at DESC
