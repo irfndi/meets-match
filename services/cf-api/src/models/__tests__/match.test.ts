@@ -1,6 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
 import { Effect } from "effect";
-import { MatchRepository, calculateMatchScore, haversine } from "../match.js";
+import {
+  MatchRepository,
+  calculateMatchScore,
+  haversine,
+  computeDefaultPreferences,
+} from "../match.js";
 import { UserRepository } from "../user.js";
 
 function createMockD1(
@@ -338,6 +343,34 @@ describe("MatchRepository.getPotentialMatches SQL", () => {
     const currentUser = createDbRow({
       id: "1",
       gender: "other",
+      age: 28,
+      preferences: "{}",
+    });
+    const mockD1 = createMockD1([], currentUser);
+    const userRepo = new UserRepository(mockD1);
+    const matchRepo = new MatchRepository(mockD1, userRepo);
+
+    await Effect.runPromise(
+      matchRepo.getPotentialMatches({ userId: "1", limit: 10 }),
+    );
+
+    const sql = mockD1._capturedSql.find((s) => s.includes("FROM users u"));
+    expect(sql).toContain("u.gender IN (?,?,?,?)");
+
+    const values = mockD1._capturedValues.find((v) =>
+      v.some((x) => x === "male"),
+    );
+    expect(values).toBeDefined();
+    expect(values).toContain("male");
+    expect(values).toContain("female");
+    expect(values).toContain("other");
+    expect(values).toContain("prefer_not_to_say");
+  });
+
+  it("applies all-genders default for 'prefer_not_to_say' gender with empty prefs", async () => {
+    const currentUser = createDbRow({
+      id: "1",
+      gender: "prefer_not_to_say",
       age: 28,
       preferences: "{}",
     });
@@ -781,5 +814,97 @@ describe("MatchRepository.getPendingLikes", () => {
     const sql = mockD1._capturedSql.find((s) => s.includes("FROM matches m"));
     expect(sql).toContain("blocks");
     expect(sql).toContain("NOT EXISTS");
+  });
+});
+
+describe("computeDefaultPreferences", () => {
+  it("returns opposite-sex preference for male users", () => {
+    const result = computeDefaultPreferences({
+      id: "1",
+      gender: "male",
+      age: 25,
+    } as any);
+    expect(result.genderPreference).toEqual(["female"]);
+    expect(result.minAge).toBe(18);
+    expect(result.maxAge).toBe(32);
+    expect(result.maxDistance).toBe(25);
+  });
+
+  it("returns opposite-sex preference for female users", () => {
+    const result = computeDefaultPreferences({
+      id: "1",
+      gender: "female",
+      age: 30,
+    } as any);
+    expect(result.genderPreference).toEqual(["male"]);
+    expect(result.minAge).toBe(23);
+    expect(result.maxAge).toBe(37);
+  });
+
+  it("returns all-genders preference for 'other' gender", () => {
+    const result = computeDefaultPreferences({
+      id: "1",
+      gender: "other",
+      age: 28,
+    } as any);
+    expect(result.genderPreference).toEqual([
+      "male",
+      "female",
+      "other",
+      "prefer_not_to_say",
+    ]);
+  });
+
+  it("returns all-genders preference for 'prefer_not_to_say' gender", () => {
+    const result = computeDefaultPreferences({
+      id: "1",
+      gender: "prefer_not_to_say",
+      age: 28,
+    } as any);
+    expect(result.genderPreference).toEqual([
+      "male",
+      "female",
+      "other",
+      "prefer_not_to_say",
+    ]);
+  });
+
+  it("clamps minAge to 12 and maxAge to 80", () => {
+    const result = computeDefaultPreferences({
+      id: "1",
+      gender: "male",
+      age: 15,
+    } as any);
+    expect(result.minAge).toBe(12); // 15-7=8, clamped to 12
+    expect(result.maxAge).toBe(22); // 15+7=22
+
+    const resultOld = computeDefaultPreferences({
+      id: "1",
+      gender: "male",
+      age: 78,
+    } as any);
+    expect(resultOld.minAge).toBe(71); // 78-7=71
+    expect(resultOld.maxAge).toBe(80); // 78+7=85, clamped to 80
+  });
+
+  it("handles missing age gracefully", () => {
+    const result = computeDefaultPreferences({
+      id: "1",
+      gender: "male",
+    } as any);
+    expect(result.genderPreference).toEqual(["female"]);
+    expect(result.minAge).toBeUndefined();
+    expect(result.maxAge).toBeUndefined();
+    expect(result.maxDistance).toBe(25);
+  });
+
+  it("handles missing gender gracefully", () => {
+    const result = computeDefaultPreferences({
+      id: "1",
+      age: 25,
+    } as any);
+    expect(result.genderPreference).toBeUndefined();
+    expect(result.minAge).toBe(18);
+    expect(result.maxAge).toBe(32);
   });
 });

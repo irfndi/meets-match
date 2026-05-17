@@ -21,6 +21,30 @@ import {
 import { UserRepository } from "./user.js";
 import { BlockRepository } from "./block.js";
 
+export function computeDefaultPreferences(
+  currentUser: typeof User.Type,
+): Record<string, unknown> {
+  const defaults: Record<string, unknown> = {};
+
+  if (currentUser.gender) {
+    const gender = currentUser.gender;
+    defaults.genderPreference =
+      gender === "male"
+        ? ["female"]
+        : gender === "female"
+          ? ["male"]
+          : ["male", "female", "other", "prefer_not_to_say"];
+  }
+
+  if (currentUser.age != null) {
+    defaults.minAge = Math.max(12, currentUser.age - 7);
+    defaults.maxAge = Math.min(80, currentUser.age + 7);
+  }
+
+  defaults.maxDistance = 25;
+  return defaults;
+}
+
 export class MatchRepository {
   constructor(
     private readonly db: D1Database,
@@ -366,23 +390,7 @@ export class MatchRepository {
           Array.isArray(prefs.genderPreference) &&
           prefs.genderPreference.length > 0;
         if (!hasGenderPref && currentUser.gender) {
-          const gender = currentUser.gender;
-          const defaultGenderPref =
-            gender === "male"
-              ? ["female"]
-              : gender === "female"
-                ? ["male"]
-                : ["male", "female", "other", "prefer_not_to_say"];
-          const defaults: Record<string, unknown> = {
-            genderPreference: defaultGenderPref,
-          };
-          if (currentUser.age != null) {
-            defaults.minAge = Math.max(12, currentUser.age - 7);
-            defaults.maxAge = Math.min(80, currentUser.age + 7);
-          }
-          if (prefs.maxDistance == null) {
-            defaults.maxDistance = 25;
-          }
+          const defaults = computeDefaultPreferences(currentUser);
           prefs = { ...defaults, ...prefs };
         }
 

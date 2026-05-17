@@ -36,11 +36,22 @@ function createMockApiService(responseMap: Record<string, () => Response>) {
     fetch: vi.fn().mockImplementation((req: Request) => {
       const url =
         typeof req === "string" ? req : (req as any).url || String(req);
+      const method = (req as any).method || "GET";
       const sortedPatterns = Object.entries(responseMap).sort(
         (a, b) => b[0].length - a[0].length,
       );
       for (const [pattern, factory] of sortedPatterns) {
-        if (url.includes(pattern)) return Promise.resolve(factory());
+        if (pattern.includes(":")) {
+          // Method-specific pattern: e.g. "PUT:/users/123"
+          const colonIdx = pattern.indexOf(":");
+          const patternMethod = pattern.slice(0, colonIdx);
+          const patternUrl = pattern.slice(colonIdx + 1);
+          if (method === patternMethod && url.includes(patternUrl)) {
+            return Promise.resolve(factory());
+          }
+        } else if (url.includes(pattern)) {
+          return Promise.resolve(factory());
+        }
       }
       return Promise.resolve(new Response(JSON.stringify({}), { status: 404 }));
     }),

@@ -46,9 +46,11 @@ export function isPhoneVerified(user: UserProfile): boolean {
 export function getDefaultPreferences(
   user: Record<string, unknown>,
 ): Record<string, unknown> {
-  const age = user.birthDate
-    ? computeAgeFromBirthDate(String(user.birthDate))
-    : (user.age as number | undefined);
+  const age =
+    (user.age as number | undefined) ??
+    (user.birthDate
+      ? computeAgeFromBirthDate(String(user.birthDate))
+      : undefined);
   const gender = user.gender as string | undefined;
   if (!age || !gender) return {};
   const minAge = Math.max(12, age - 7);
