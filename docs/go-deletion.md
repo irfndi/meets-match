@@ -70,12 +70,12 @@ grep -r "docker\|Dockerfile" --include="*.md" --include="*.yml" --include="*.yam
 grep -r "proto\|protobuf\|\.pb\." --include="*.ts" --include="*.js" . | grep -v "node_modules"
 
 # Build all TS services
-npx tsc -b services/cf-api
-npx tsc -b services/cf-bot
-npx tsc -b services/cf-worker
+pnpm exec tsc -b services/cf-api
+pnpm exec tsc -b services/cf-bot
+pnpm exec tsc -b services/cf-worker
 
 # Run integration tests
-npm test --workspaces
+pnpm test --recursive
 ```
 
 ## Commit Message

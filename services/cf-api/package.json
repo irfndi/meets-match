@@ -5,11 +5,11 @@
   "type": "module",
   "main": "./dist/index.js",
   "scripts": {
-    "dev": "npx tsx ../../scripts/generate-version.ts cf-api && wrangler dev",
-    "deploy": "CF_ENV=development npx tsx ../../scripts/generate-version.ts cf-api && wrangler deploy --env dev",
-    "build": "npx tsx ../../scripts/generate-version.ts cf-api && tsc -p tsconfig.json",
+    "dev": "tsx ../../scripts/generate-version.ts cf-api && wrangler dev",
+    "deploy": "CF_ENV=development tsx ../../scripts/generate-version.ts cf-api && wrangler deploy --env dev",
+    "build": "tsx ../../scripts/generate-version.ts cf-api && tsc -p tsconfig.json",
     "test": "vitest",
-    "lint": "npx tsx ../../scripts/generate-version.ts cf-api && tsc --noEmit"
+    "lint": "tsx ../../scripts/generate-version.ts cf-api && tsc --noEmit"
   },
   "dependencies": {
     "@effect/platform": "^0.96.1",

@@ -69,7 +69,7 @@ deploy-worker:
 
 db-check:
 	@echo "Checking D1 local connectivity..."
-	cd services/cf-api && npx wrangler d1 execute meetsmatch-db --local --command="SELECT 'D1 local DB ready';"
+	cd services/cf-api && pnpm exec wrangler d1 execute meetsmatch-db --local --command="SELECT 'D1 local DB ready';"
 
 # --- Cleanup ---
 
