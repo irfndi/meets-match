@@ -209,8 +209,8 @@ async function sendTelegramMessage(
   text: string,
 ): Promise<void> {
   if (!env.BOT_TOKEN) {
-    log.warn("sendTelegramMessage", "BOT_TOKEN not configured, skipping alert");
-    return;
+    log.error("sendTelegramMessage", "BOT_TOKEN not configured");
+    throw new Error("BOT_TOKEN not configured");
   }
   const url = `https://api.telegram.org/bot${env.BOT_TOKEN}/sendMessage`;
   const res = await fetch(url, {
