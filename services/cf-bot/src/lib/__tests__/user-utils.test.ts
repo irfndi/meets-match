@@ -251,9 +251,7 @@ describe("ensureUserExists", () => {
     expect(result!.created).toBe(true);
     expect(consoleErrorSpy).toHaveBeenCalledTimes(1);
     expect(consoleErrorSpy).toHaveBeenCalledWith(
-      expect.stringContaining(
-        "Failed to fetch existing user, will try create",
-      ),
+      expect.stringContaining("Failed to fetch existing user, will try create"),
     );
   });
 
