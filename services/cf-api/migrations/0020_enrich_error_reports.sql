@@ -9,6 +9,7 @@ ALTER TABLE error_reports ADD COLUMN user_language TEXT;
 ALTER TABLE error_reports ADD COLUMN user_tier TEXT;
 ALTER TABLE error_reports ADD COLUMN trigger_input TEXT;
 ALTER TABLE error_reports ADD COLUMN kv_session TEXT;
+ALTER TABLE error_reports ADD COLUMN cf_metadata TEXT;
 
 CREATE INDEX IF NOT EXISTS idx_error_reports_bot_version ON error_reports(bot_version);
 CREATE INDEX IF NOT EXISTS idx_error_reports_api_version ON error_reports(api_version);
