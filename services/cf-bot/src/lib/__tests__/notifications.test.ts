@@ -157,14 +157,26 @@ describe("Notification System", () => {
 
   it("should migrate legacy single-key notifications", async () => {
     const legacy = [
-      { type: "like", fromUserId: "456", fromDisplayName: "Alice", timestamp: "t1" },
-      { type: "like", fromUserId: "789", fromDisplayName: "Bob", timestamp: "t2" },
+      {
+        type: "like",
+        fromUserId: "456",
+        fromDisplayName: "Alice",
+        timestamp: "t1",
+      },
+      {
+        type: "like",
+        fromUserId: "789",
+        fromDisplayName: "Bob",
+        timestamp: "t2",
+      },
     ];
     kv._store.set("notifications:123", JSON.stringify(legacy));
 
     const notifications = await getNotifications(env, "123");
     expect(notifications).toHaveLength(2);
-    expect((notifications[0] as LikeNotification).fromDisplayName).toBe("Alice");
+    expect((notifications[0] as LikeNotification).fromDisplayName).toBe(
+      "Alice",
+    );
     expect((notifications[1] as LikeNotification).fromDisplayName).toBe("Bob");
     expect(notifications[0].id).toBeDefined();
     expect(notifications[1].id).toBeDefined();

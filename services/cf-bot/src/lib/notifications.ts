@@ -141,9 +141,13 @@ async function getNotificationIds(env: Env, userId: string): Promise<string[]> {
       const id = generateNotificationId();
       ids.push(id);
       writes.push(
-        env.KV.put(notificationKey(userId, id), JSON.stringify({ ...item, id }), {
-          expirationTtl: NOTIFICATION_TTL_SECONDS,
-        }),
+        env.KV.put(
+          notificationKey(userId, id),
+          JSON.stringify({ ...item, id }),
+          {
+            expirationTtl: NOTIFICATION_TTL_SECONDS,
+          },
+        ),
       );
     }
 

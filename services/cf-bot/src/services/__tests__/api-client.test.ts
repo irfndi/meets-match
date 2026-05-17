@@ -149,7 +149,9 @@ describe("updateUser", () => {
 
   it("throws Error with status code on failure", async () => {
     const { client } = createClient(err(500));
-    await expect(client.updateUser(body)).rejects.toThrow("API 500 on /users/u1");
+    await expect(client.updateUser(body)).rejects.toThrow(
+      "API 500 on /users/u1",
+    );
   });
 });
 
@@ -330,7 +332,9 @@ describe("createMatch", () => {
 
   it("throws Error with status code on failure", async () => {
     const { client } = createClient(err(400));
-    await expect(client.createMatch(body)).rejects.toThrow("API 400 on /matches");
+    await expect(client.createMatch(body)).rejects.toThrow(
+      "API 400 on /matches",
+    );
   });
 });
 
@@ -424,7 +428,9 @@ describe("recordLike", () => {
 
   it("throws Error with status code on failure", async () => {
     const { client } = createClient(err(429));
-    await expect(client.recordLike("u1")).rejects.toThrow("API 429 on /users/u1/record-like");
+    await expect(client.recordLike("u1")).rejects.toThrow(
+      "API 429 on /users/u1/record-like",
+    );
   });
 });
 
@@ -447,7 +453,9 @@ describe("recordDislike", () => {
 
   it("throws Error with status code on failure", async () => {
     const { client } = createClient(err(429));
-    await expect(client.recordDislike("u1")).rejects.toThrow("API 429 on /users/u1/record-dislike");
+    await expect(client.recordDislike("u1")).rejects.toThrow(
+      "API 429 on /users/u1/record-dislike",
+    );
   });
 });
 
@@ -469,7 +477,9 @@ describe("getDMStatus", () => {
 
   it("throws Error with status code on failure", async () => {
     const { client } = createClient(err(500));
-    await expect(client.getDMStatus("u1")).rejects.toThrow("API 500 on /users/u1/dm-status");
+    await expect(client.getDMStatus("u1")).rejects.toThrow(
+      "API 500 on /users/u1/dm-status",
+    );
   });
 });
 
@@ -492,7 +502,9 @@ describe("sendDM", () => {
 
   it("throws Error with status code on failure", async () => {
     const { client } = createClient(err(402));
-    await expect(client.sendDM("u1")).rejects.toThrow("API 402 on /users/u1/send-dm");
+    await expect(client.sendDM("u1")).rejects.toThrow(
+      "API 402 on /users/u1/send-dm",
+    );
   });
 });
 
@@ -668,7 +680,9 @@ describe("restoreProfile", () => {
 
   it("throws Error with status code on failure", async () => {
     const { client } = createClient(err(500));
-    await expect(client.restoreProfile("u1")).rejects.toThrow("API 500 on /users/u1/restore-profile");
+    await expect(client.restoreProfile("u1")).rejects.toThrow(
+      "API 500 on /users/u1/restore-profile",
+    );
   });
 });
 
@@ -691,7 +705,9 @@ describe("interact", () => {
 
   it("throws Error with status code on failure", async () => {
     const { client } = createClient(err(500));
-    await expect(client.interact("u1")).rejects.toThrow("API 500 on /users/u1/interact");
+    await expect(client.interact("u1")).rejects.toThrow(
+      "API 500 on /users/u1/interact",
+    );
   });
 });
 

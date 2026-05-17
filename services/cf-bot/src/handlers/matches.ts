@@ -358,7 +358,8 @@ export const matchesCallbacks = async (
         const notification = notifications.find(
           (n) => n.type === "like" && n.fromUserId === targetUserId,
         );
-        if (notification) await removeNotification(env, userId, notification.id);
+        if (notification)
+          await removeNotification(env, userId, notification.id);
       } catch {
         await ctx.reply(t("matchesCouldNotLoad", lang));
       }
