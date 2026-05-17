@@ -155,6 +155,21 @@ async function processNotificationMessage(
         .run();
       console.log(`[queue] Delivered ${notificationId} in ${durationMs}ms`);
       message.ack();
+    } else if (response.status === 410) {
+      const errorText = await response.text();
+      await env.DB.prepare(
+        "UPDATE notifications SET status = 'failed', last_error = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+      )
+        .bind(errorText, notificationId)
+        .run();
+      await env.DB.prepare(
+        `INSERT INTO notification_delivery_attempts (notification_id, status, error_message, duration_ms)
+         VALUES (?, 'permanent_failure', ?, ?)`,
+      )
+        .bind(notificationId, errorText, durationMs)
+        .run();
+      console.warn(`[queue] Permanent failure ${notificationId}: ${errorText}`);
+      message.ack();
     } else {
       const errorText = await response.text();
       await env.DB.prepare(

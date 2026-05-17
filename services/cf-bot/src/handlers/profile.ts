@@ -40,10 +40,18 @@ export const profileCommand = async (
       computedAge !== undefined
         ? String(computedAge)
         : t("profileInterestsNotSet", lang);
-    const gender =
+    const genderRaw =
       typeof user.gender === "string" && user.gender
-        ? user.gender.charAt(0).toUpperCase() + user.gender.slice(1)
-        : t("profileInterestsNotSet", lang);
+        ? user.gender.toLowerCase()
+        : null;
+    const gender =
+      genderRaw === "male"
+        ? t("genderDisplayMale", lang)
+        : genderRaw === "female"
+          ? t("genderDisplayFemale", lang)
+          : genderRaw
+            ? t("genderDisplayOther", lang)
+            : t("profileInterestsNotSet", lang);
     const bio = user.bio || t("profileInterestsNotSet", lang);
     const loc = user.location;
     let rawLocationText = t("profileInterestsNotSet", lang);
@@ -54,7 +62,7 @@ export const profileCommand = async (
     } else if (city) {
       rawLocationText = city;
     } else if (loc?.latitude) {
-      rawLocationText = "📍 Shared";
+      rawLocationText = t("profileLocationShared", lang);
     }
     const locationText = rawLocationText;
     const interests =

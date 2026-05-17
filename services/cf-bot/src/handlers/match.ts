@@ -83,7 +83,10 @@ function getLang(user: Record<string, unknown> | UserProfile): Language {
   return (user.language as Language) ?? "en";
 }
 
-async function fetchUserLang(env: Env, userId: string): Promise<Language> {
+export async function fetchUserLang(
+  env: Env,
+  userId: string,
+): Promise<Language> {
   try {
     const res = await env.API_SERVICE.fetch(
       new Request(`http://api/users/${userId}`, { method: "GET" }),
@@ -447,13 +450,20 @@ function formatDistance(km: number): string {
 
 function buildMatchCard(
   otherUser: Record<string, unknown>,
+  lang: Language,
   myLocation?: { latitude: number; longitude: number },
 ): string {
   const name = (otherUser.displayName ??
     otherUser.first_name ??
     "Someone") as string;
   const age = otherUser.age ?? "?";
-  const gender = (otherUser.gender as string)?.charAt(0)?.toUpperCase() ?? "?";
+  const genderRaw = (otherUser.gender as string)?.toLowerCase();
+  const gender =
+    genderRaw === "male"
+      ? t("matchCardMale", lang)
+      : genderRaw === "female"
+        ? t("matchCardFemale", lang)
+        : t("matchCardOther", lang);
   const birthdayBadge = isBirthdayToday(
     otherUser.birthDate as string | undefined,
   )
@@ -533,7 +543,7 @@ async function sendMatchCard(
   tier: string,
   myLocation?: { latitude: number; longitude: number },
 ): Promise<void> {
-  const text = buildMatchCard(match, myLocation);
+  const text = buildMatchCard(match, lang, myLocation);
   const mediaUrls = (match.mediaUrls ?? []) as unknown as Array<{
     url: string;
     type: string;
@@ -1049,14 +1059,13 @@ async function handleSendDM(ctx: MyContext, env: Env, targetUserId: string) {
           [{ label: "1 DM", amount: 50 }],
         );
         const keyboard = new InlineKeyboard()
-          .url("⭐ Pay 50 Stars", invoiceLink)
+          .url(t("payWithStarsButton", lang, { stars: "50" }), invoiceLink)
           .row()
-          .text("👑 Get Premium", "premium:show")
+          .text(t("dmGetPremiumButton", lang), "premium:show")
           .row()
-          .text("❌ Cancel", "dm:cancel");
+          .text(t("genericCancel", lang), "dm:cancel");
         await ctx.reply(
-          t("dmGated", lang) +
-            "\n\nTap the button below to pay with Telegram Stars.",
+          t("dmGated", lang) + "\n\n" + t("matchTapToPay", lang),
           { parse_mode: "Markdown", reply_markup: keyboard },
         );
       } catch {
@@ -1624,13 +1633,15 @@ export async function handleGiftCallback(
       );
 
       const keyboard = new InlineKeyboard()
-        .url(`⭐ Pay ${gift.stars} Stars`, invoiceLink)
+        .url(
+          t("payWithStarsButton", lang, { stars: String(gift.stars) }),
+          invoiceLink,
+        )
         .row()
-        .text("❌ Cancel", "gift:cancel");
+        .text(t("genericCancel", lang), "gift:cancel");
 
       await ctx.reply(
-        `🎁 *Send a ${gift.emoji} ${gift.name}*\n\n` +
-          `Tap the button below to pay with Telegram Stars.`,
+        t("giftTitle", lang) + "\n\n" + t("matchTapToPay", lang),
         { parse_mode: "Markdown", reply_markup: keyboard },
       );
       await ctx.answerCallbackQuery().catch(() => {});
@@ -1786,12 +1797,15 @@ export async function handleGiftPremiumCallback(
       );
 
       const keyboard = new InlineKeyboard()
-        .url(`⭐ Pay ${stars} Stars`, invoiceLink)
+        .url(
+          t("payWithStarsButton", lang, { stars: String(stars) }),
+          invoiceLink,
+        )
         .row()
-        .text("❌ Cancel", "gift_premium:cancel");
+        .text(t("genericCancel", lang), "gift_premium:cancel");
 
       await ctx.reply(
-        `🎁 *Gift ${tierLabel}*\n\nTap the button below to pay with Telegram Stars.`,
+        t("giftPremiumTitle", lang) + "\n\n" + t("matchTapToPay", lang),
         { parse_mode: "Markdown", reply_markup: keyboard },
       );
       await ctx.answerCallbackQuery().catch(() => {});

@@ -56,6 +56,9 @@ export interface Translations {
   genderPrompt: string;
   genderMaleButton: string;
   genderFemaleButton: string;
+  genderDisplayMale: string;
+  genderDisplayFemale: string;
+  genderDisplayOther: string;
   genderInvalid: string;
   genderUpdated: string;
   interestsPrompt: string;
@@ -213,6 +216,12 @@ export interface Translations {
   matchNoMatchesFoundBody: string;
   matchRelaxedSearchTitle: string;
   matchRelaxedSearchBody: string;
+  matchInviteFriendsButton: string;
+  matchUpdateSettingsButton: string;
+  matchDismissButton: string;
+  dmGetPremiumButton: string;
+  payWithStarsButton: string;
+  planFree: string;
   matchCouldNotIdentify: string;
   matchOwnProfile: string;
   matchProcessing: string;
@@ -224,6 +233,7 @@ export interface Translations {
   profileGenderLabel: string;
   profileBioLabel: string;
   profileLocationLabel: string;
+  profileLocationShared: string;
   profileInterestsLabel: string;
   profileMediaLabel: string;
   profileInterestsNotSet: string;
@@ -378,6 +388,9 @@ const en: Translations = {
   genderPrompt: "Select your gender:",
   genderMaleButton: "Male",
   genderFemaleButton: "Female",
+  genderDisplayMale: "Male",
+  genderDisplayFemale: "Female",
+  genderDisplayOther: "Other",
   genderInvalid:
     "Invalid selection. Please choose *Male* or *Female*, or type *Cancel*.",
   genderUpdated: "✅ Gender updated!",
@@ -598,6 +611,12 @@ const en: Translations = {
     "🔍 *Showing profiles slightly outside your preferences*",
   matchRelaxedSearchBody:
     "We expanded your search a little to help you discover more people near you.",
+  matchInviteFriendsButton: "🎁 Invite Friends",
+  matchUpdateSettingsButton: "⚙️ Update Settings",
+  matchDismissButton: "❌ Dismiss",
+  dmGetPremiumButton: "👑 Get Premium",
+  payWithStarsButton: "⭐ Pay {stars} Stars",
+  planFree: "Free",
   matchCouldNotIdentify: "Could not identify you. Try again.",
   matchOwnProfile: "❌ You can't interact with your own profile.",
   matchProcessing: "Processing... please wait.",
@@ -606,9 +625,10 @@ const en: Translations = {
   profileYourProfile: "👤 Your Profile",
   profileNameLabel: "Name: {value}",
   profileAgeLabel: "Age: {value}",
-  profileGenderLabel: "Gender: {value}",
+  profileGenderLabel: "Jenis Kelamin: {value}",
   profileBioLabel: "Bio: {value}",
   profileLocationLabel: "Location: {value}",
+  profileLocationShared: "📍 Shared",
   profileInterestsLabel: "Interests: {value}",
   profileMediaLabel: "Media: {value}",
   profileInterestsNotSet: "Not set",
@@ -751,6 +771,9 @@ const id: Translations = {
   genderPrompt: "Pilih jenis kelamin:",
   genderMaleButton: "Laki-laki",
   genderFemaleButton: "Perempuan",
+  genderDisplayMale: "Laki-laki",
+  genderDisplayFemale: "Perempuan",
+  genderDisplayOther: "Lainnya",
   genderInvalid:
     "Pilihan tidak valid. Pilih *Laki-laki* atau *Perempuan*, atau ketik *Batal*.",
   genderUpdated: "✅ Jenis kelamin diperbarui!",
@@ -985,6 +1008,12 @@ const id: Translations = {
   matchRelaxedSearchTitle: "🔍 *Menampilkan profil di luar preferensimu*",
   matchRelaxedSearchBody:
     "Kami memperluas pencarianmu sedikit untuk membantu menemukan lebih banyak orang di dekatmu.",
+  matchInviteFriendsButton: "🎁 Undang Teman",
+  matchUpdateSettingsButton: "⚙️ Ubah Pengaturan",
+  matchDismissButton: "❌ Abaikan",
+  dmGetPremiumButton: "👑 Dapatkan Premium",
+  payWithStarsButton: "⭐ Bayar {stars} Bintang",
+  planFree: "Gratis",
   matchCouldNotIdentify: "Tidak bisa mengenali kamu. Coba lagi.",
   matchOwnProfile: "❌ Kamu tidak bisa berinteraksi dengan profilmu sendiri.",
   matchProcessing: "Memproses... mohon tunggu.",
@@ -996,6 +1025,7 @@ const id: Translations = {
   profileGenderLabel: "Gender: {value}",
   profileBioLabel: "Bio: {value}",
   profileLocationLabel: "Lokasi: {value}",
+  profileLocationShared: "📍 Dibagikan",
   profileInterestsLabel: "Minat: {value}",
   profileMediaLabel: "Media: {value}",
   profileInterestsNotSet: "Belum diatur",
@@ -1020,8 +1050,8 @@ const id: Translations = {
   premiumFeatureDMs: "• DM langsung tanpa batas",
   premiumFeatureVerified: "• Badge terverifikasi",
   premiumFeatureAdvancedFilters: "• Filter lanjutan",
-  premiumBuyPremium: "⭐ Beli Premium ({stars} Stars)",
-  premiumBuyPremiumPlus: "💎 Beli Premium+ ({stars} Stars)",
+  premiumBuyPremium: "⭐ Beli Premium ({stars} Bintang)",
+  premiumBuyPremiumPlus: "💎 Beli Premium+ ({stars} Bintang)",
   premiumShareForBonus: "🎁 Bagikan untuk Bonus Gratis",
   premiumClose: "❌ Tutup",
   premiumInvoiceTitlePremium: "MeetMatch Premium",

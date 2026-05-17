@@ -13,6 +13,7 @@ import {
   handleGiftPayment,
   handleGiftPremiumPayment,
   startLikeMessageConversation,
+  fetchUserLang,
 } from "./handlers/match.js";
 import { matchesCommand, matchesCallbacks } from "./handlers/matches.js";
 import { buildMediaKey, buildMediaPublicUrl } from "@meetsmatch/cf-shared";
@@ -59,6 +60,7 @@ import {
   recordActionJourney,
   replyWithError,
   isBotBlockedError,
+  isPermanentDeliveryError,
 } from "./lib/error-feedback.js";
 import { sendAggregatedAlerts } from "./lib/admin-alerts.js";
 
@@ -151,12 +153,25 @@ function createBot(env: Env): Bot<MyContext> {
     const hasMutual = notifications.some((n) => n.type === "mutual_match");
 
     if (hasMutual || hasLikes) {
+      // Resolve language for notification text
+      let lang: Language = "en";
+      try {
+        const client = new ApiServiceClient(env.API_SERVICE);
+        const userRes = await client.getUser({ userId });
+        lang = (userRes.user?.language as Language) ?? "en";
+      } catch {
+        /* fallback */
+      }
       const parts: string[] = [];
-      if (hasMutual) parts.push(t("notificationsNewMutual"));
-      if (hasLikes) parts.push(t("notificationsNewLikes"));
-      const keyboard = new InlineKeyboard().text("View now", "matches").row();
+      if (hasMutual) parts.push(t("notificationsNewMutual", lang));
+      if (hasLikes) parts.push(t("notificationsNewLikes", lang));
+      const keyboard = new InlineKeyboard()
+        .text(t("notificationMutualMatchView", lang), "matches")
+        .row();
       await ctx.reply(
-        t("notificationsCheckMatches", "en", { items: parts.join(" and ") }),
+        t("notificationsCheckMatches", lang, {
+          items: parts.join(", "),
+        }),
         { reply_markup: keyboard },
       );
       await clearNotifications(env, userId);
@@ -203,7 +218,9 @@ function createBot(env: Env): Bot<MyContext> {
   bot.command("referral", (ctx) => referralCommand(ctx, env));
   bot.command("feedback", (ctx) => startFeedbackConversation(ctx, env));
   bot.command("report", async (ctx) => {
-    await ctx.reply(t("reportCommandHint", "en"), {
+    if (!ctx.from) return;
+    const lang = await fetchUserLang(env, String(ctx.from.id));
+    await ctx.reply(t("reportCommandHint", lang), {
       reply_markup: getMainMenuKeyboard(),
     });
   });
@@ -313,7 +330,10 @@ function createBot(env: Env): Bot<MyContext> {
 
       if (data === "menu:main") {
         await ctx.deleteMessage().catch(() => {});
-        await ctx.reply(t("mainMenuPrompt", "en"), {
+        const lang = ctx.from
+          ? await fetchUserLang(env, String(ctx.from.id))
+          : "en";
+        await ctx.reply(t("mainMenuPrompt", lang), {
           reply_markup: getMainMenuKeyboard(),
         });
         await ctx.answerCallbackQuery().catch(() => {});
@@ -432,8 +452,9 @@ function createBot(env: Env): Bot<MyContext> {
       try {
         const client = new ApiServiceClient(env.API_SERVICE);
         const result = await client.purchaseDMCredits(userId, amount);
+        const lang = await fetchUserLang(env, userId);
         await ctx.reply(
-          t("dmPurchased", "en", {
+          t("dmPurchased", lang, {
             count: String(amount),
             total: String(result.dmCredits),
           }),
@@ -470,8 +491,9 @@ function createBot(env: Env): Bot<MyContext> {
             subscriptionExpiresAt: expiresAt.toISOString(),
           },
         });
+        const lang = await fetchUserLang(env, userId);
         await ctx.reply(
-          t("premiumPurchased", "en", {
+          t("premiumPurchased", lang, {
             tier: tier === "premium_plus" ? "Premium+ 💎" : "Premium 👑",
           }),
           { reply_markup: getMainMenuKeyboard() },
@@ -484,6 +506,18 @@ function createBot(env: Env): Bot<MyContext> {
   });
 
   bot.on("message:text", async (ctx) => {
+    // Resolve user language early so it's available in catch blocks too
+    let lang: Language = "en";
+    try {
+      const client = new ApiServiceClient(env.API_SERVICE);
+      const userRes = await client.getUser({
+        userId: String(ctx.from?.id ?? ""),
+      });
+      lang = (userRes.user?.language as Language) ?? "en";
+    } catch {
+      /* fallback to en */
+    }
+
     try {
       const text = ctx.message?.text;
 
@@ -511,14 +545,14 @@ function createBot(env: Env): Bot<MyContext> {
         "↩️": "undo",
         "⚠️": "report",
         "💌": "like-message",
-        "🎁 Send a gift": "gift",
-        "🏠 Main menu": "menu",
+        [t("matchSendGift", lang)]: "gift",
+        [t("matchMainMenu", lang)]: "menu",
       };
 
       if (text && actionMap[text]) {
         const action = actionMap[text];
         if (action === "menu") {
-          await ctx.reply(t("mainMenuPrompt", "en"), {
+          await ctx.reply(t("mainMenuPrompt", lang), {
             reply_markup: getMainMenuKeyboard(),
           });
           return;
@@ -530,14 +564,14 @@ function createBot(env: Env): Bot<MyContext> {
       const handled = await handleConversationMessage(ctx, env);
       if (handled) return;
 
-      // Graceful fallback: if user sends ⏭ Skip without an active like-message
+      // Graceful fallback: if user sends Skip without an active like-message
       // conversation but has a match queue, treat it as a regular Like
-      if (text === "⏭ Skip") {
+      if (text === t("likeMessageSkipButton", lang)) {
         const queueHandled = await handleMatchReplyAction(ctx, env, "like");
         if (queueHandled) return;
       }
 
-      await ctx.reply(t("fallbackMessage", "en"), {
+      await ctx.reply(t("fallbackMessage", lang), {
         reply_markup: getMainMenuKeyboard(),
       });
     } catch (error) {
@@ -549,7 +583,7 @@ function createBot(env: Env): Bot<MyContext> {
       const action = text?.startsWith("/")
         ? `command:${text.split(" ")[0].slice(1)}`
         : "text_message";
-      await replyWithError(ctx, env, "en", { action });
+      await replyWithError(ctx, env, lang, { action });
     }
   });
 
@@ -815,6 +849,20 @@ export default {
         });
       } catch (error) {
         console.error("Send notification error:", error);
+        if (isPermanentDeliveryError(error)) {
+          return new Response(
+            JSON.stringify({
+              error:
+                error instanceof Error
+                  ? error.message
+                  : "Permanent delivery failure",
+            }),
+            {
+              status: 410,
+              headers: { "Content-Type": "application/json" },
+            },
+          );
+        }
         return new Response(
           JSON.stringify({ error: "Internal Server Error" }),
           {

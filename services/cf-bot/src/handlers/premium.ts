@@ -10,8 +10,6 @@ import { t, type Language } from "../lib/i18n.js";
 
 const log = createLogger("cf-bot");
 
-const PREMIUM_PRICE = "500 ⭐ Stars";
-const PREMIUM_PLUS_PRICE = "1000 ⭐ Stars";
 const PREMIUM_STARS = 500;
 const PREMIUM_PLUS_STARS = 1000;
 
@@ -153,7 +151,7 @@ export const premiumCommand = async (
       t("premiumCurrentPlan", lang, {
         plan:
           tier === "free"
-            ? "Free"
+            ? t("planFree", lang)
             : tier === "premium"
               ? "Premium 👑"
               : "Premium+ 💎",
@@ -166,13 +164,13 @@ export const premiumCommand = async (
       t("premiumFeatureLikes", lang, { likes: "15", dislikes: "35" }),
       t("premiumFeatureNoSkip", lang),
       "",
-      `*Premium 👑 — ${PREMIUM_PRICE}*`,
+      `*Premium 👑 — ${PREMIUM_STARS} ⭐*`,
       t("premiumFeatureUnlimited", lang),
       t("premiumFeatureSkip", lang),
       t("premiumFeaturePriority", lang),
       t("premiumFeatureSeeLikes", lang),
       "",
-      `*Premium+ 💎 — ${PREMIUM_PLUS_PRICE}*`,
+      `*Premium+ 💎 — ${PREMIUM_PLUS_STARS} ⭐*`,
       t("premiumFeatureDMs", lang),
       t("premiumFeatureVerified", lang),
       t("premiumFeatureAdvancedFilters", lang),

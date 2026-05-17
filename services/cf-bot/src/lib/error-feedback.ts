@@ -30,6 +30,24 @@ export function isBotBlockedError(error: unknown): boolean {
   return false;
 }
 
+/**
+ * Detects permanent Telegram delivery failures that should never be retried.
+ * These happen when the user deleted their account, blocked the bot,
+ * or never started a chat with the bot.
+ */
+export function isPermanentDeliveryError(error: unknown): boolean {
+  if (error instanceof Error) {
+    const msg = error.message.toLowerCase();
+    return (
+      msg.includes("chat not found") ||
+      msg.includes("bot was blocked by the user") ||
+      msg.includes("user is deactivated") ||
+      msg.includes("forbidden: bot was blocked")
+    );
+  }
+  return false;
+}
+
 export interface ErrorContext {
   command?: string;
   action?: string;
