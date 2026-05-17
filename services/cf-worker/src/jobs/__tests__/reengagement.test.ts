@@ -137,7 +137,9 @@ describe("runReengagementJob", () => {
         withSession: vi.fn(),
         dump: vi.fn(),
       } as unknown as import("@cloudflare/workers-types").D1Database,
-      API_SERVICE: { fetch: vi.fn() } as unknown as import("@cloudflare/workers-types").Fetcher,
+      API_SERVICE: {
+        fetch: vi.fn(),
+      } as unknown as import("@cloudflare/workers-types").Fetcher,
       KV: {} as unknown as import("@cloudflare/workers-types").KVNamespace,
       BOT_SERVICE: {
         fetch: vi.fn(async () => new Response()),

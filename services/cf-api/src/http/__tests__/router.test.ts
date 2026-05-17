@@ -87,7 +87,10 @@ describe("ApiRouter", () => {
     it("returns health status", async () => {
       const response = await router.route(new Request("http://api/health"));
       expect(response.status).toBe(200);
-      const body = (await response.json()) as { status: string; service: string };
+      const body = (await response.json()) as {
+        status: string;
+        service: string;
+      };
       expect(body.status).toBe("ok");
       expect(body.service).toBe("cf-api");
     });

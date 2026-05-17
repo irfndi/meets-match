@@ -36,8 +36,6 @@ function errorResponse(status: number): MockResponseInit {
   return { ok: false, status, data: null };
 }
 
-
-
 describe("ApiServiceClient", () => {
   // ---- getUser -------------------------------------------------------------
   describe("getUser", () => {
@@ -75,9 +73,7 @@ describe("ApiServiceClient", () => {
   // ---- getReengagementCandidates -------------------------------------------
   describe("getReengagementCandidates", () => {
     it("returns parsed userIds on success", async () => {
-      const mock = createMockFetcher(
-        okResponse({ userIds: ["a", "b", "c"] }),
-      );
+      const mock = createMockFetcher(okResponse({ userIds: ["a", "b", "c"] }));
       const client = new ApiServiceClient(mock);
 
       const result = await client.getReengagementCandidates({
@@ -143,9 +139,7 @@ describe("ApiServiceClient", () => {
       await client.getReengagementCandidates({ minInactiveDays: 14 });
 
       const req = getRequest(mock.fetch);
-      expect(req.url).toBe(
-        "http://api/users/reengagement?minInactiveDays=14",
-      );
+      expect(req.url).toBe("http://api/users/reengagement?minInactiveDays=14");
     });
 
     it("sends only maxInactiveDays when it is the sole param", async () => {
@@ -155,9 +149,7 @@ describe("ApiServiceClient", () => {
       await client.getReengagementCandidates({ maxInactiveDays: 60 });
 
       const req = getRequest(mock.fetch);
-      expect(req.url).toBe(
-        "http://api/users/reengagement?maxInactiveDays=60",
-      );
+      expect(req.url).toBe("http://api/users/reengagement?maxInactiveDays=60");
     });
 
     it("sends minInactiveDays and maxInactiveDays without limit", async () => {
@@ -193,9 +185,9 @@ describe("ApiServiceClient", () => {
       const mock = createMockFetcher(errorResponse(400));
       const client = new ApiServiceClient(mock);
 
-      await expect(
-        client.createUser({ user: userPayload }),
-      ).rejects.toThrow("API error: 400");
+      await expect(client.createUser({ user: userPayload })).rejects.toThrow(
+        "API error: 400",
+      );
     });
 
     it("sends a POST request to /users with JSON body and Content-Type header", async () => {
@@ -290,9 +282,9 @@ describe("ApiServiceClient", () => {
       const mock = createMockFetcher(errorResponse(500));
       const client = new ApiServiceClient(mock);
 
-      await expect(
-        client.updateLastActive({ userId: "u5" }),
-      ).rejects.toThrow("API error: 500");
+      await expect(client.updateLastActive({ userId: "u5" })).rejects.toThrow(
+        "API error: 500",
+      );
     });
 
     it("sends a POST request to /users/:userId/last-active with no body", async () => {

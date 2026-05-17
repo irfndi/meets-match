@@ -46,9 +46,9 @@ function mockCtx(overrides: Partial<Record<string, unknown>> = {}): MyContext {
 /**
  * Create an ApiService mock that maps URL patterns to Response factories.
  */
-function createMockApiService(
-  responseMap: Record<string, () => Response>,
-): { fetch: ReturnType<typeof vi.fn> } {
+function createMockApiService(responseMap: Record<string, () => Response>): {
+  fetch: ReturnType<typeof vi.fn>;
+} {
   return {
     fetch: vi.fn().mockImplementation((req: Request) => {
       const url =
@@ -153,8 +153,7 @@ describe("handleProfileCallback", () => {
 
   it("defaults language to 'en' when the API request fails", async () => {
     env.API_SERVICE = createMockApiService({
-      "/users/123": () =>
-        new Response(null, { status: 500 }),
+      "/users/123": () => new Response(null, { status: 500 }),
     });
 
     const result = await handleProfileCallback(ctx, env, "profile:bio");
@@ -229,9 +228,9 @@ describe("handleProfileCallback", () => {
 
     // The keyboard should include the "Use my Telegram name" button
     const replyOpts = (ctx.reply as any).mock.calls[0][1];
-    const buttons = replyOpts.reply_markup.keyboard.flat().map(
-      (b: any) => b.text,
-    );
+    const buttons = replyOpts.reply_markup.keyboard
+      .flat()
+      .map((b: any) => b.text);
     expect(buttons).toContain("👤 Use my Telegram name");
     expect(buttons).toContain("Cancel");
 
@@ -249,9 +248,9 @@ describe("handleProfileCallback", () => {
 
     expect(ctx.reply).toHaveBeenCalled();
     const replyOpts = (ctx.reply as any).mock.calls[0][1];
-    const buttons = replyOpts.reply_markup.keyboard.flat().map(
-      (b: any) => b.text,
-    );
+    const buttons = replyOpts.reply_markup.keyboard
+      .flat()
+      .map((b: any) => b.text);
     expect(buttons).toContain("Male");
     expect(buttons).toContain("Female");
     expect(buttons).toContain("Cancel");
@@ -286,9 +285,9 @@ describe("handleProfileCallback", () => {
 
     expect(ctx.reply).toHaveBeenCalled();
     const replyOpts = (ctx.reply as any).mock.calls[0][1];
-    const buttons = replyOpts.reply_markup.keyboard.flat().map(
-      (b: any) => b.text,
-    );
+    const buttons = replyOpts.reply_markup.keyboard
+      .flat()
+      .map((b: any) => b.text);
     expect(buttons).toContain("📍 Share my location");
     expect(buttons).toContain("⌨️ Type city & country");
     expect(buttons).toContain("Cancel");
@@ -435,8 +434,16 @@ describe("handleMediaCallback", () => {
               user: {
                 language: "en",
                 mediaUrls: [
-                  { url: "https://a.jpg", type: "image", uploadedAt: "2025-01-01" },
-                  { url: "https://b.mp4", type: "video", uploadedAt: "2025-01-02" },
+                  {
+                    url: "https://a.jpg",
+                    type: "image",
+                    uploadedAt: "2025-01-01",
+                  },
+                  {
+                    url: "https://b.mp4",
+                    type: "video",
+                    uploadedAt: "2025-01-02",
+                  },
                 ],
               },
             }),
@@ -445,9 +452,7 @@ describe("handleMediaCallback", () => {
         "/users/123/media": () =>
           new Response(
             JSON.stringify({
-              mediaUrls: [
-                { url: "https://b.mp4", type: "video" },
-              ],
+              mediaUrls: [{ url: "https://b.mp4", type: "video" }],
             }),
             { status: 200 },
           ),
@@ -533,7 +538,11 @@ describe("handleMediaCallback", () => {
                   user: {
                     language: "en",
                     mediaUrls: [
-                      { url: "https://a.jpg", type: "image", uploadedAt: "2025-01-01" },
+                      {
+                        url: "https://a.jpg",
+                        type: "image",
+                        uploadedAt: "2025-01-01",
+                      },
                     ],
                   },
                 }),
@@ -605,7 +614,11 @@ describe("handleMediaCallback", () => {
             user: {
               language: "en",
               mediaUrls: [
-                { url: "https://a.jpg", type: "image", uploadedAt: "2025-01-01" },
+                {
+                  url: "https://a.jpg",
+                  type: "image",
+                  uploadedAt: "2025-01-01",
+                },
               ],
             },
           }),

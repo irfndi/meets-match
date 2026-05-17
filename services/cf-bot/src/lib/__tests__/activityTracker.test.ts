@@ -16,9 +16,7 @@ function createMockApiFetch() {
         new Response(JSON.stringify({ ok: true }), { status: 200 }),
       );
     }
-    return Promise.resolve(
-      new Response(JSON.stringify({}), { status: 200 }),
-    );
+    return Promise.resolve(new Response(JSON.stringify({}), { status: 200 }));
   });
 }
 
@@ -145,7 +143,9 @@ describe("activityTrackerMiddleware", () => {
   it("calls next() even when API fetch throws an error", async () => {
     const next = createNext();
     const ctx = createMockCtx();
-    env.API_SERVICE.fetch = vi.fn().mockRejectedValue(new Error("Network failure"));
+    env.API_SERVICE.fetch = vi
+      .fn()
+      .mockRejectedValue(new Error("Network failure"));
     const middleware = activityTrackerMiddleware(env);
 
     await middleware(ctx, next);
@@ -185,7 +185,9 @@ describe("activityTrackerMiddleware", () => {
 
   it("uses userId derived from ctx.from.id (number)", async () => {
     const next = createNext();
-    const ctx = createMockCtx({ from: { id: 7890, first_name: "Alice", is_bot: false } });
+    const ctx = createMockCtx({
+      from: { id: 7890, first_name: "Alice", is_bot: false },
+    });
     const middleware = activityTrackerMiddleware(env);
 
     await middleware(ctx, next);
@@ -195,7 +197,9 @@ describe("activityTrackerMiddleware", () => {
 
   it("calls API with correct userId as string", async () => {
     const next = createNext();
-    const ctx = createMockCtx({ from: { id: 4242, first_name: "Bob", is_bot: false } });
+    const ctx = createMockCtx({
+      from: { id: 4242, first_name: "Bob", is_bot: false },
+    });
     const middleware = activityTrackerMiddleware(env);
 
     await middleware(ctx, next);
@@ -349,7 +353,9 @@ describe("activityTrackerMiddleware", () => {
 
       const next = createNext();
       // Use a new userId not in the cache so it triggers the update path
-      const ctx = createMockCtx({ from: { id: 99999, first_name: "Full", is_bot: false } });
+      const ctx = createMockCtx({
+        from: { id: 99999, first_name: "Full", is_bot: false },
+      });
       const middleware = activityTrackerMiddleware(env);
 
       await middleware(ctx, next);
@@ -379,7 +385,9 @@ describe("activityTrackerMiddleware", () => {
       expect(lastActiveCache.size).toBe(9999);
 
       const next = createNext();
-      const ctx = createMockCtx({ from: { id: 99999, first_name: "Under", is_bot: false } });
+      const ctx = createMockCtx({
+        from: { id: 99999, first_name: "Under", is_bot: false },
+      });
       const middleware = activityTrackerMiddleware(env);
 
       await middleware(ctx, next);
@@ -400,7 +408,9 @@ describe("activityTrackerMiddleware", () => {
   it("handles API fetch throwing an error gracefully (does not throw)", async () => {
     const next = createNext();
     const ctx = createMockCtx();
-    env.API_SERVICE.fetch = vi.fn().mockRejectedValue(new Error("Network down"));
+    env.API_SERVICE.fetch = vi
+      .fn()
+      .mockRejectedValue(new Error("Network down"));
 
     const middleware = activityTrackerMiddleware(env);
 
@@ -414,9 +424,13 @@ describe("activityTrackerMiddleware", () => {
     const ctx = createMockCtx();
 
     // ApiServiceClient.updateLastActive checks response.ok and throws if not ok
-    env.API_SERVICE.fetch = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ error: "Internal Server Error" }), { status: 500 }),
-    );
+    env.API_SERVICE.fetch = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ error: "Internal Server Error" }), {
+          status: 500,
+        }),
+      );
 
     const middleware = activityTrackerMiddleware(env);
 
@@ -429,9 +443,9 @@ describe("activityTrackerMiddleware", () => {
     const next = createNext();
     const ctx = createMockCtx();
 
-    env.API_SERVICE.fetch = vi.fn().mockResolvedValue(
-      new Response(null, { status: 404 }),
-    );
+    env.API_SERVICE.fetch = vi
+      .fn()
+      .mockResolvedValue(new Response(null, { status: 404 }));
 
     const middleware = activityTrackerMiddleware(env);
 
@@ -447,7 +461,9 @@ describe("activityTrackerMiddleware", () => {
       const next = createNext();
       const ctx = createMockCtx();
 
-      env.API_SERVICE.fetch = vi.fn().mockRejectedValue(new Error("Network failure"));
+      env.API_SERVICE.fetch = vi
+        .fn()
+        .mockRejectedValue(new Error("Network failure"));
 
       const middleware = activityTrackerMiddleware(env);
 
@@ -466,9 +482,9 @@ describe("activityTrackerMiddleware", () => {
     const ctx = createMockCtx();
 
     // response.json() will reject if body is not valid JSON
-    env.API_SERVICE.fetch = vi.fn().mockResolvedValue(
-      new Response("not valid json", { status: 200 }),
-    );
+    env.API_SERVICE.fetch = vi
+      .fn()
+      .mockResolvedValue(new Response("not valid json", { status: 200 }));
 
     const middleware = activityTrackerMiddleware(env);
 
@@ -506,8 +522,12 @@ describe("activityTrackerMiddleware", () => {
       const next1 = createNext();
       const next2 = createNext();
 
-      const ctx1 = createMockCtx({ from: { id: 111, first_name: "User1", is_bot: false } });
-      const ctx2 = createMockCtx({ from: { id: 222, first_name: "User2", is_bot: false } });
+      const ctx1 = createMockCtx({
+        from: { id: 111, first_name: "User1", is_bot: false },
+      });
+      const ctx2 = createMockCtx({
+        from: { id: 222, first_name: "User2", is_bot: false },
+      });
 
       const middleware = activityTrackerMiddleware(env);
 
@@ -551,7 +571,9 @@ describe("activityTrackerMiddleware", () => {
   it("converts numeric userId to string correctly", async () => {
     const next = createNext();
     // Use id: 5 to verify String() conversion (id: 0 is falsy so it'd be skipped)
-    const ctx = createMockCtx({ from: { id: 5, first_name: "Five", is_bot: false } });
+    const ctx = createMockCtx({
+      from: { id: 5, first_name: "Five", is_bot: false },
+    });
     const middleware = activityTrackerMiddleware(env);
 
     await middleware(ctx, next);
@@ -563,7 +585,9 @@ describe("activityTrackerMiddleware", () => {
   it("converts large numeric userId to string correctly", async () => {
     const next = createNext();
     const largeId = 9876543210;
-    const ctx = createMockCtx({ from: { id: largeId, first_name: "Large", is_bot: false } });
+    const ctx = createMockCtx({
+      from: { id: largeId, first_name: "Large", is_bot: false },
+    });
     const middleware = activityTrackerMiddleware(env);
 
     await middleware(ctx, next);

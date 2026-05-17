@@ -61,7 +61,9 @@ function createEnvWithUser(
         if (url.includes("/geocode")) {
           return Promise.resolve(
             new Response(
-              JSON.stringify({ result: { city: "TestCity", country: "TestCountry" } }),
+              JSON.stringify({
+                result: { city: "TestCity", country: "TestCountry" },
+              }),
               { status: 200 },
             ),
           );
@@ -191,10 +193,7 @@ describe("continueOnboarding", () => {
   });
 
   it("returns false when all steps are complete", async () => {
-    await kv.put(
-      "onboarding:seen:123",
-      JSON.stringify(["name", "interests"]),
-    );
+    await kv.put("onboarding:seen:123", JSON.stringify(["name", "interests"]));
     const env = createEnvWithUser(kv, {
       id: "123",
       displayName: "TestUser",
@@ -373,9 +372,7 @@ describe("checkMandatoryUpdates", () => {
       DB: {} as D1Database,
       KV: kv as unknown as KVNamespace,
       API_SERVICE: {
-        fetch: vi.fn().mockResolvedValue(
-          new Response(null, { status: 500 }),
-        ),
+        fetch: vi.fn().mockResolvedValue(new Response(null, { status: 500 })),
       } as unknown as Fetcher,
       BOT_TOKEN: "test-token",
     };
@@ -390,9 +387,9 @@ describe("checkMandatoryUpdates", () => {
       DB: {} as D1Database,
       KV: kv as unknown as KVNamespace,
       API_SERVICE: {
-        fetch: vi.fn().mockResolvedValue(
-          new Response(JSON.stringify({}), { status: 200 }),
-        ),
+        fetch: vi
+          .fn()
+          .mockResolvedValue(new Response(JSON.stringify({}), { status: 200 })),
       } as unknown as Fetcher,
       BOT_TOKEN: "test-token",
     };
@@ -514,7 +511,14 @@ describe("handleConversationMessage", () => {
   // --- Core routing tests ---
 
   it("returns false when no conversation is active", async () => {
-    const ctx = createMockCtx({ message: { text: "hello", message_id: 1, date: 1, chat: { id: 123, type: "private" } } } as any);
+    const ctx = createMockCtx({
+      message: {
+        text: "hello",
+        message_id: 1,
+        date: 1,
+        chat: { id: 123, type: "private" },
+      },
+    } as any);
     const env = createEnvWithUser(kv, { id: "123", language: "en" });
 
     const result = await handleConversationMessage(ctx, env);
@@ -532,7 +536,12 @@ describe("handleConversationMessage", () => {
   it("returns false when message has no text", async () => {
     await startConversation(kv as any, "123", "bio");
     const ctx = createMockCtx({
-      message: { text: undefined, message_id: 1, date: 1, chat: { id: 123, type: "private" } },
+      message: {
+        text: undefined,
+        message_id: 1,
+        date: 1,
+        chat: { id: 123, type: "private" },
+      },
     } as any);
     const env = createEnvWithUser(kv, { id: "123", language: "en" });
 
@@ -545,7 +554,12 @@ describe("handleConversationMessage", () => {
   it("handles Cancel command", async () => {
     await startConversation(kv as any, "123", "bio");
     const ctx = createMockCtx({
-      message: { text: "Cancel", message_id: 1, date: 1, chat: { id: 123, type: "private" } },
+      message: {
+        text: "Cancel",
+        message_id: 1,
+        date: 1,
+        chat: { id: 123, type: "private" },
+      },
     } as any);
     const env = createEnvWithUser(kv, { id: "123", language: "en" });
 
@@ -562,7 +576,12 @@ describe("handleConversationMessage", () => {
   it("handles bio too long", async () => {
     await startConversation(kv as any, "123", "bio");
     const ctx = createMockCtx({
-      message: { text: "A".repeat(301), message_id: 1, date: 1, chat: { id: 123, type: "private" } },
+      message: {
+        text: "A".repeat(301),
+        message_id: 1,
+        date: 1,
+        chat: { id: 123, type: "private" },
+      },
     } as any);
     const env = createEnvWithUser(kv, { id: "123", language: "en" });
 
@@ -587,7 +606,12 @@ describe("handleConversationMessage", () => {
       language: "en",
     });
     const ctx = createMockCtx({
-      message: { text: "I love hiking and coding", message_id: 1, date: 1, chat: { id: 123, type: "private" } },
+      message: {
+        text: "I love hiking and coding",
+        message_id: 1,
+        date: 1,
+        chat: { id: 123, type: "private" },
+      },
     } as any);
 
     const result = await handleConversationMessage(ctx, env);
@@ -603,7 +627,12 @@ describe("handleConversationMessage", () => {
   it("rejects invalid birthdate", async () => {
     await startConversation(kv as any, "123", "birthdate");
     const ctx = createMockCtx({
-      message: { text: "not-a-date", message_id: 1, date: 1, chat: { id: 123, type: "private" } },
+      message: {
+        text: "not-a-date",
+        message_id: 1,
+        date: 1,
+        chat: { id: 123, type: "private" },
+      },
     } as any);
     const env = createEnvWithUser(kv, { id: "123", language: "en" });
 
@@ -629,7 +658,12 @@ describe("handleConversationMessage", () => {
       language: "en",
     });
     const ctx = createMockCtx({
-      message: { text: "15.03.1995", message_id: 1, date: 1, chat: { id: 123, type: "private" } },
+      message: {
+        text: "15.03.1995",
+        message_id: 1,
+        date: 1,
+        chat: { id: 123, type: "private" },
+      },
     } as any);
 
     const result = await handleConversationMessage(ctx, env);
@@ -656,7 +690,12 @@ describe("handleConversationMessage", () => {
       language: "en",
     });
     const ctx = createMockCtx({
-      message: { text: "👤 Use my Telegram name", message_id: 1, date: 1, chat: { id: 123, type: "private" } },
+      message: {
+        text: "👤 Use my Telegram name",
+        message_id: 1,
+        date: 1,
+        chat: { id: 123, type: "private" },
+      },
     } as any);
 
     const result = await handleConversationMessage(ctx, env);
@@ -670,15 +709,18 @@ describe("handleConversationMessage", () => {
   it("rejects invalid name (too short)", async () => {
     await startConversation(kv as any, "123", "name");
     const ctx = createMockCtx({
-      message: { text: " " , message_id: 1, date: 1, chat: { id: 123, type: "private" } },
+      message: {
+        text: " ",
+        message_id: 1,
+        date: 1,
+        chat: { id: 123, type: "private" },
+      },
     } as any);
     const env = createEnvWithUser(kv, { id: "123", language: "en" });
 
     const result = await handleConversationMessage(ctx, env);
     expect(result).toBe(true);
-    expect(ctx.reply).toHaveBeenCalledWith(
-      expect.stringContaining("1–50"),
-    );
+    expect(ctx.reply).toHaveBeenCalledWith(expect.stringContaining("1–50"));
   });
 
   it("accepts valid name", async () => {
@@ -696,7 +738,12 @@ describe("handleConversationMessage", () => {
       language: "en",
     });
     const ctx = createMockCtx({
-      message: { text: "John", message_id: 1, date: 1, chat: { id: 123, type: "private" } },
+      message: {
+        text: "John",
+        message_id: 1,
+        date: 1,
+        chat: { id: 123, type: "private" },
+      },
     } as any);
 
     const result = await handleConversationMessage(ctx, env);
@@ -711,7 +758,12 @@ describe("handleConversationMessage", () => {
   it("rejects invalid gender", async () => {
     await startConversation(kv as any, "123", "gender");
     const ctx = createMockCtx({
-      message: { text: "unknown", message_id: 1, date: 1, chat: { id: 123, type: "private" } },
+      message: {
+        text: "unknown",
+        message_id: 1,
+        date: 1,
+        chat: { id: 123, type: "private" },
+      },
     } as any);
     const env = createEnvWithUser(kv, { id: "123", language: "en" });
 
@@ -735,7 +787,12 @@ describe("handleConversationMessage", () => {
       language: "en",
     });
     const ctx = createMockCtx({
-      message: { text: "Male", message_id: 1, date: 1, chat: { id: 123, type: "private" } },
+      message: {
+        text: "Male",
+        message_id: 1,
+        date: 1,
+        chat: { id: 123, type: "private" },
+      },
     } as any);
 
     const result = await handleConversationMessage(ctx, env);
@@ -750,25 +807,39 @@ describe("handleConversationMessage", () => {
   it("rejects empty interests", async () => {
     await startConversation(kv as any, "123", "interests");
     const ctx = createMockCtx({
-      message: { text: "," , message_id: 1, date: 1, chat: { id: 123, type: "private" } },
+      message: {
+        text: ",",
+        message_id: 1,
+        date: 1,
+        chat: { id: 123, type: "private" },
+      },
     } as any);
     const env = createEnvWithUser(kv, { id: "123", language: "en" });
 
     const result = await handleConversationMessage(ctx, env);
     expect(result).toBe(true);
-    expect(ctx.reply).toHaveBeenCalledWith(expect.stringContaining("enter at least"));
+    expect(ctx.reply).toHaveBeenCalledWith(
+      expect.stringContaining("enter at least"),
+    );
   });
 
   it("rejects too many interests (>10)", async () => {
     await startConversation(kv as any, "123", "interests");
     const ctx = createMockCtx({
-      message: { text: "a,b,c,d,e,f,g,h,i,j,k", message_id: 1, date: 1, chat: { id: 123, type: "private" } },
+      message: {
+        text: "a,b,c,d,e,f,g,h,i,j,k",
+        message_id: 1,
+        date: 1,
+        chat: { id: 123, type: "private" },
+      },
     } as any);
     const env = createEnvWithUser(kv, { id: "123", language: "en" });
 
     const result = await handleConversationMessage(ctx, env);
     expect(result).toBe(true);
-    expect(ctx.reply).toHaveBeenCalledWith(expect.stringContaining("enter at least"));
+    expect(ctx.reply).toHaveBeenCalledWith(
+      expect.stringContaining("enter at least"),
+    );
   });
 
   it("accepts valid interests", async () => {
@@ -786,7 +857,12 @@ describe("handleConversationMessage", () => {
       language: "en",
     });
     const ctx = createMockCtx({
-      message: { text: "hiking, coding", message_id: 1, date: 1, chat: { id: 123, type: "private" } },
+      message: {
+        text: "hiking, coding",
+        message_id: 1,
+        date: 1,
+        chat: { id: 123, type: "private" },
+      },
     } as any);
 
     const result = await handleConversationMessage(ctx, env);
@@ -812,7 +888,12 @@ describe("handleConversationMessage", () => {
       language: "en",
     });
     const ctx = createMockCtx({
-      message: { text: "⏭️ Skip", message_id: 1, date: 1, chat: { id: 123, type: "private" } },
+      message: {
+        text: "⏭️ Skip",
+        message_id: 1,
+        date: 1,
+        chat: { id: 123, type: "private" },
+      },
     } as any);
 
     const result = await handleConversationMessage(ctx, env);
@@ -839,7 +920,12 @@ describe("handleConversationMessage", () => {
       isProfileComplete: false,
     });
     const ctx = createMockCtx({
-      message: { text: "✅ Done", message_id: 1, date: 1, chat: { id: 123, type: "private" } },
+      message: {
+        text: "✅ Done",
+        message_id: 1,
+        date: 1,
+        chat: { id: 123, type: "private" },
+      },
     } as any);
 
     const result = await handleConversationMessage(ctx, env);
@@ -851,7 +937,12 @@ describe("handleConversationMessage", () => {
   it("rejects location without comma (invalid format)", async () => {
     await startConversation(kv as any, "123", "location");
     const ctx = createMockCtx({
-      message: { text: "Jakarta", message_id: 1, date: 1, chat: { id: 123, type: "private" } },
+      message: {
+        text: "Jakarta",
+        message_id: 1,
+        date: 1,
+        chat: { id: 123, type: "private" },
+      },
     } as any);
     const env = createEnvWithUser(kv, { id: "123", language: "en" });
 
@@ -888,13 +979,20 @@ describe("handleConversationMessage", () => {
         gender: "male",
         bio: "Hello",
         location: { city: "Jakarta", country: "Indonesia" },
-        mediaUrls: [{ url: "test.jpg", type: "image", uploadedAt: "2024-01-01" }],
+        mediaUrls: [
+          { url: "test.jpg", type: "image", uploadedAt: "2024-01-01" },
+        ],
         interests: ["Hiking"],
         phoneNumber: "+1234567890",
         language: "en",
       });
       const ctx = createMockCtx({
-        message: { text: "Jakarta, Indonesia", message_id: 1, date: 1, chat: { id: 123, type: "private" } },
+        message: {
+          text: "Jakarta, Indonesia",
+          message_id: 1,
+          date: 1,
+          chat: { id: 123, type: "private" },
+        },
       } as any);
 
       const result = await handleConversationMessage(ctx, env);
@@ -910,7 +1008,9 @@ describe("handleConversationMessage", () => {
   it("handles location text with geocoding failure (falls back gracefully)", async () => {
     // Mock global fetch to fail for geocoding
     const originalFetch = (globalThis as any).fetch;
-    (globalThis as any).fetch = vi.fn().mockRejectedValue(new Error("Network error")) as any;
+    (globalThis as any).fetch = vi
+      .fn()
+      .mockRejectedValue(new Error("Network error")) as any;
 
     try {
       await startConversation(kv as any, "123", "location");
@@ -921,13 +1021,20 @@ describe("handleConversationMessage", () => {
         gender: "male",
         bio: "Hello",
         location: { city: "Bogor", country: "Indonesia" },
-        mediaUrls: [{ url: "test.jpg", type: "image", uploadedAt: "2024-01-01" }],
+        mediaUrls: [
+          { url: "test.jpg", type: "image", uploadedAt: "2024-01-01" },
+        ],
         interests: ["Hiking"],
         phoneNumber: "+1234567890",
         language: "en",
       });
       const ctx = createMockCtx({
-        message: { text: "Bogor, Indonesia", message_id: 1, date: 1, chat: { id: 123, type: "private" } },
+        message: {
+          text: "Bogor, Indonesia",
+          message_id: 1,
+          date: 1,
+          chat: { id: 123, type: "private" },
+        },
       } as any);
 
       const result = await handleConversationMessage(ctx, env);
@@ -947,7 +1054,12 @@ describe("handleConversationMessage", () => {
     await startConversation(kv as any, "123", "age-range");
     const env = createEnvWithUser(kv, { id: "123", language: "en" });
     const ctx = createMockCtx({
-      message: { text: "18-25", message_id: 1, date: 1, chat: { id: 123, type: "private" } },
+      message: {
+        text: "18-25",
+        message_id: 1,
+        date: 1,
+        chat: { id: 123, type: "private" },
+      },
     } as any);
 
     const result = await handleConversationMessage(ctx, env);
@@ -961,7 +1073,12 @@ describe("handleConversationMessage", () => {
     await startConversation(kv as any, "123", "age-range");
     const env = createEnvWithUser(kv, { id: "123", language: "en" });
     const ctx = createMockCtx({
-      message: { text: "50-20", message_id: 1, date: 1, chat: { id: 123, type: "private" } },
+      message: {
+        text: "50-20",
+        message_id: 1,
+        date: 1,
+        chat: { id: 123, type: "private" },
+      },
     } as any);
 
     const result = await handleConversationMessage(ctx, env);
@@ -973,7 +1090,12 @@ describe("handleConversationMessage", () => {
     await startConversation(kv as any, "123", "age-range");
     const env = createEnvWithUser(kv, { id: "123", language: "en" });
     const ctx = createMockCtx({
-      message: { text: "18", message_id: 1, date: 1, chat: { id: 123, type: "private" } },
+      message: {
+        text: "18",
+        message_id: 1,
+        date: 1,
+        chat: { id: 123, type: "private" },
+      },
     } as any);
 
     const result = await handleConversationMessage(ctx, env);
@@ -997,7 +1119,12 @@ describe("handleConversationMessage", () => {
     });
     const env = createEnvWithUser(kv, { id: "123", language: "en" });
     const ctx = createMockCtx({
-      message: { text: "25", message_id: 1, date: 1, chat: { id: 123, type: "private" } },
+      message: {
+        text: "25",
+        message_id: 1,
+        date: 1,
+        chat: { id: 123, type: "private" },
+      },
     } as any);
 
     const result = await handleConversationMessage(ctx, env);
@@ -1013,7 +1140,12 @@ describe("handleConversationMessage", () => {
     await startConversation(kv as any, "123", "distance");
     const env = createEnvWithUser(kv, { id: "123", language: "en" });
     const ctx = createMockCtx({
-      message: { text: "abc", message_id: 1, date: 1, chat: { id: 123, type: "private" } },
+      message: {
+        text: "abc",
+        message_id: 1,
+        date: 1,
+        chat: { id: 123, type: "private" },
+      },
     } as any);
 
     const result = await handleConversationMessage(ctx, env);
@@ -1025,7 +1157,12 @@ describe("handleConversationMessage", () => {
     await startConversation(kv as any, "123", "distance");
     const env = createEnvWithUser(kv, { id: "123", language: "en" });
     const ctx = createMockCtx({
-      message: { text: "25", message_id: 1, date: 1, chat: { id: 123, type: "private" } },
+      message: {
+        text: "25",
+        message_id: 1,
+        date: 1,
+        chat: { id: 123, type: "private" },
+      },
     } as any);
 
     const result = await handleConversationMessage(ctx, env);
@@ -1041,19 +1178,31 @@ describe("handleConversationMessage", () => {
     await startConversation(kv as any, "123", "gender-pref");
     const env = createEnvWithUser(kv, { id: "123", language: "en" });
     const ctx = createMockCtx({
-      message: { text: "alien", message_id: 1, date: 1, chat: { id: 123, type: "private" } },
+      message: {
+        text: "alien",
+        message_id: 1,
+        date: 1,
+        chat: { id: 123, type: "private" },
+      },
     } as any);
 
     const result = await handleConversationMessage(ctx, env);
     expect(result).toBe(true);
-    expect(ctx.reply).toHaveBeenCalledWith(expect.stringContaining("valid genders"));
+    expect(ctx.reply).toHaveBeenCalledWith(
+      expect.stringContaining("valid genders"),
+    );
   });
 
   it("accepts valid gender preference", async () => {
     await startConversation(kv as any, "123", "gender-pref");
     const env = createEnvWithUser(kv, { id: "123", language: "en" });
     const ctx = createMockCtx({
-      message: { text: "female", message_id: 1, date: 1, chat: { id: 123, type: "private" } },
+      message: {
+        text: "female",
+        message_id: 1,
+        date: 1,
+        chat: { id: 123, type: "private" },
+      },
     } as any);
 
     const result = await handleConversationMessage(ctx, env);
@@ -1067,7 +1216,12 @@ describe("handleConversationMessage", () => {
     await startConversation(kv as any, "123", "gender-pref");
     const env = createEnvWithUser(kv, { id: "123", language: "en" });
     const ctx = createMockCtx({
-      message: { text: "male, female", message_id: 1, date: 1, chat: { id: 123, type: "private" } },
+      message: {
+        text: "male, female",
+        message_id: 1,
+        date: 1,
+        chat: { id: 123, type: "private" },
+      },
     } as any);
 
     const result = await handleConversationMessage(ctx, env);
@@ -1087,7 +1241,12 @@ describe("handleConversationMessage", () => {
     });
     const env = createEnvWithUser(kv, { id: "123", language: "en" });
     const ctx = createMockCtx({
-      message: { text: "anything", message_id: 1, date: 1, chat: { id: 123, type: "private" } },
+      message: {
+        text: "anything",
+        message_id: 1,
+        date: 1,
+        chat: { id: 123, type: "private" },
+      },
     } as any);
 
     const result = await handleConversationMessage(ctx, env);
@@ -1120,7 +1279,12 @@ describe("handleContactMessage", () => {
   it("returns false when no contact in message", async () => {
     const env = createEnvWithUser(kv, { id: "123", language: "en" });
     const ctx = createMockCtx({
-      message: { text: "hello", message_id: 1, date: 1, chat: { id: 123, type: "private" } },
+      message: {
+        text: "hello",
+        message_id: 1,
+        date: 1,
+        chat: { id: 123, type: "private" },
+      },
     } as any);
 
     const result = await handleContactMessage(ctx, env);
@@ -1131,7 +1295,11 @@ describe("handleContactMessage", () => {
     const env = createEnvWithUser(kv, { id: "123", language: "en" });
     const ctx = createMockCtx({
       message: {
-        contact: { user_id: 999, phone_number: "+1234567890", first_name: "Other" },
+        contact: {
+          user_id: 999,
+          phone_number: "+1234567890",
+          first_name: "Other",
+        },
         message_id: 1,
         date: 1,
         chat: { id: 123, type: "private" },
@@ -1173,7 +1341,11 @@ describe("handleContactMessage", () => {
 
     const ctx = createMockCtx({
       message: {
-        contact: { user_id: 123, phone_number: "+1234567890", first_name: "Test" },
+        contact: {
+          user_id: 123,
+          phone_number: "+1234567890",
+          first_name: "Test",
+        },
         message_id: 1,
         date: 1,
         chat: { id: 123, type: "private" },
@@ -1205,13 +1377,18 @@ describe("handleContactMessage", () => {
           const url = String(req.url);
           if (url.includes("/users/") && req.method === "GET") {
             return Promise.resolve(
-              new Response(JSON.stringify({ user: { id: "123", language: "en" } }), { status: 200 }),
+              new Response(
+                JSON.stringify({ user: { id: "123", language: "en" } }),
+                { status: 200 },
+              ),
             );
           }
           if (url.includes("/users/") && req.method === "PUT") {
             return Promise.resolve(new Response(null, { status: 500 }));
           }
-          return Promise.resolve(new Response(JSON.stringify({}), { status: 200 }));
+          return Promise.resolve(
+            new Response(JSON.stringify({}), { status: 200 }),
+          );
         }),
       } as unknown as Fetcher,
       BOT_TOKEN: "test-token",
@@ -1219,7 +1396,11 @@ describe("handleContactMessage", () => {
 
     const ctx = createMockCtx({
       message: {
-        contact: { user_id: 123, phone_number: "+1234567890", first_name: "Test" },
+        contact: {
+          user_id: 123,
+          phone_number: "+1234567890",
+          first_name: "Test",
+        },
         message_id: 1,
         date: 1,
         chat: { id: 123, type: "private" },
@@ -1257,7 +1438,12 @@ describe("handleLocationMessage", () => {
   it("returns false when no location in message", async () => {
     const env = createEnvWithUser(kv, { id: "123", language: "en" });
     const ctx = createMockCtx({
-      message: { text: "hello", message_id: 1, date: 1, chat: { id: 123, type: "private" } },
+      message: {
+        text: "hello",
+        message_id: 1,
+        date: 1,
+        chat: { id: 123, type: "private" },
+      },
     } as any);
 
     const result = await handleLocationMessage(ctx, env);
@@ -1349,13 +1535,20 @@ describe("handleLocationMessage", () => {
           }
           if (url.includes("/users/") && req.method === "GET") {
             return Promise.resolve(
-              new Response(JSON.stringify({ user: { id: "123", language: "en" } }), { status: 200 }),
+              new Response(
+                JSON.stringify({ user: { id: "123", language: "en" } }),
+                { status: 200 },
+              ),
             );
           }
           if (url.includes("/users/") && req.method === "PUT") {
-            return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+            return Promise.resolve(
+              new Response(JSON.stringify({ ok: true }), { status: 200 }),
+            );
           }
-          return Promise.resolve(new Response(JSON.stringify({}), { status: 200 }));
+          return Promise.resolve(
+            new Response(JSON.stringify({}), { status: 200 }),
+          );
         }),
       } as unknown as Fetcher,
       BOT_TOKEN: "test-token",
@@ -1448,9 +1641,7 @@ describe("checkAndUpdateProfileComplete", () => {
       DB: {} as D1Database,
       KV: kv as unknown as KVNamespace,
       API_SERVICE: {
-        fetch: vi.fn().mockResolvedValue(
-          new Response(null, { status: 404 }),
-        ),
+        fetch: vi.fn().mockResolvedValue(new Response(null, { status: 404 })),
       } as unknown as Fetcher,
       BOT_TOKEN: "test-token",
     };

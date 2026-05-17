@@ -71,9 +71,7 @@ function createClient(response: Response): {
   return { client, fetcher };
 }
 
-async function getLastRequest(
-  fetcher: MockFetcher,
-): Promise<CapturedRequest> {
+async function getLastRequest(fetcher: MockFetcher): Promise<CapturedRequest> {
   expect(fetcher.fetch).toHaveBeenCalledTimes(1);
   const call = fetcher.fetch.mock.calls[0];
   if (!call) throw new Error("fetch was not called");
@@ -174,9 +172,9 @@ describe("updateLastActive", () => {
 
   it("throws Error with status code on failure", async () => {
     const { client } = createClient(err(500));
-    await expect(
-      client.updateLastActive({ userId: "u1" }),
-    ).rejects.toThrow("API error: 500");
+    await expect(client.updateLastActive({ userId: "u1" })).rejects.toThrow(
+      "API error: 500",
+    );
   });
 });
 
@@ -199,9 +197,9 @@ describe("updateLastRemindedAt", () => {
 
   it("throws Error with status code on failure", async () => {
     const { client } = createClient(err(500));
-    await expect(
-      client.updateLastRemindedAt({ userId: "u1" }),
-    ).rejects.toThrow("API error: 500");
+    await expect(client.updateLastRemindedAt({ userId: "u1" })).rejects.toThrow(
+      "API error: 500",
+    );
   });
 });
 
@@ -218,25 +216,21 @@ describe("getPotentialMatches", () => {
     expect(result).toEqual(response);
     const req = await getLastRequest(fetcher);
     expect(req.method).toBe("GET");
-    expect(req.url).toBe(
-      "http://api/users/u1/potential-matches?limit=10",
-    );
+    expect(req.url).toBe("http://api/users/u1/potential-matches?limit=10");
   });
 
   it("sends GET with custom limit in URL", async () => {
     const { client, fetcher } = createClient(ok(response));
     await client.getPotentialMatches({ userId: "u1", limit: 5 });
     const req = await getLastRequest(fetcher);
-    expect(req.url).toBe(
-      "http://api/users/u1/potential-matches?limit=5",
-    );
+    expect(req.url).toBe("http://api/users/u1/potential-matches?limit=5");
   });
 
   it("throws Error with status code on failure", async () => {
     const { client } = createClient(err(500));
-    await expect(
-      client.getPotentialMatches({ userId: "u1" }),
-    ).rejects.toThrow("API error: 500");
+    await expect(client.getPotentialMatches({ userId: "u1" })).rejects.toThrow(
+      "API error: 500",
+    );
   });
 });
 
@@ -309,9 +303,9 @@ describe("getMatchList", () => {
 
   it("throws Error with status code on failure", async () => {
     const { client } = createClient(err(500));
-    await expect(
-      client.getMatchList({ userId: "u1" }),
-    ).rejects.toThrow("API error: 500");
+    await expect(client.getMatchList({ userId: "u1" })).rejects.toThrow(
+      "API error: 500",
+    );
   });
 });
 
@@ -453,9 +447,7 @@ describe("recordDislike", () => {
 
   it("throws Error with status code on failure", async () => {
     const { client } = createClient(err(429));
-    await expect(client.recordDislike("u1")).rejects.toThrow(
-      "API error: 429",
-    );
+    await expect(client.recordDislike("u1")).rejects.toThrow("API error: 429");
   });
 });
 
@@ -651,9 +643,9 @@ describe("reportUser", () => {
 
   it("throws Error with status code on failure", async () => {
     const { client } = createClient(err(400));
-    await expect(
-      client.reportUser("bad-user", "reporter1"),
-    ).rejects.toThrow("API error: 400");
+    await expect(client.reportUser("bad-user", "reporter1")).rejects.toThrow(
+      "API error: 400",
+    );
   });
 });
 
@@ -676,9 +668,7 @@ describe("restoreProfile", () => {
 
   it("throws Error with status code on failure", async () => {
     const { client } = createClient(err(500));
-    await expect(client.restoreProfile("u1")).rejects.toThrow(
-      "API error: 500",
-    );
+    await expect(client.restoreProfile("u1")).rejects.toThrow("API error: 500");
   });
 });
 
@@ -749,9 +739,9 @@ describe("blockUser", () => {
 
   it("throws Error with status code on failure", async () => {
     const { client } = createClient(err(409));
-    await expect(
-      client.blockUser("blocker1", "blocked1"),
-    ).rejects.toThrow("API error: 409");
+    await expect(client.blockUser("blocker1", "blocked1")).rejects.toThrow(
+      "API error: 409",
+    );
   });
 });
 
@@ -775,9 +765,9 @@ describe("unblockUser", () => {
 
   it("throws Error with status code on failure", async () => {
     const { client } = createClient(err(404));
-    await expect(
-      client.unblockUser("blocker1", "blocked1"),
-    ).rejects.toThrow("API error: 404");
+    await expect(client.unblockUser("blocker1", "blocked1")).rejects.toThrow(
+      "API error: 404",
+    );
   });
 });
 

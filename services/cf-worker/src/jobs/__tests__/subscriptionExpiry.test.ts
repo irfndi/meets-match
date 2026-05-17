@@ -2,7 +2,11 @@ import { describe, it, expect, vi } from "vitest";
 import { runSubscriptionExpiryJob } from "../subscriptionExpiry.js";
 
 describe("runSubscriptionExpiryJob", () => {
-  const createEnv = (apiResponse?: { ok: boolean; status?: number; json?: unknown }) => ({
+  const createEnv = (apiResponse?: {
+    ok: boolean;
+    status?: number;
+    json?: unknown;
+  }) => ({
     API_SERVICE: {
       fetch: vi.fn(async () => ({
         ok: apiResponse?.ok ?? true,

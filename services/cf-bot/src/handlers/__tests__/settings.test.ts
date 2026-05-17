@@ -51,9 +51,7 @@ function mockCtx(overrides: Record<string, unknown> = {}): MyContext {
  *   "/users/123"         – matches any method where URL includes this
  *   "PUT:/users/123"     – matches only PUT requests where URL includes "/users/123"
  */
-function createMockApiService(
-  responseMap: Record<string, () => Response>,
-) {
+function createMockApiService(responseMap: Record<string, () => Response>) {
   return {
     fetch: vi.fn().mockImplementation((req: Request) => {
       const url =
@@ -95,7 +93,12 @@ function makeUserResponse(overrides: Record<string, unknown> = {}): Response {
         gender: "female",
         language: "en",
         bio: "Hello",
-        location: { city: "NYC", country: "USA", latitude: 40.7, longitude: -74 },
+        location: {
+          city: "NYC",
+          country: "USA",
+          latitude: 40.7,
+          longitude: -74,
+        },
         interests: ["music"],
         mediaUrls: [{ url: "https://example.com/photo.jpg", type: "image" }],
         phoneNumber: "+1234567890",
@@ -279,9 +282,7 @@ describe("Settings Handlers", () => {
   // settingsCallbacks
   // =========================================================================
   describe("settingsCallbacks", () => {
-    function makeEnvForCallback(
-      userOverrides: Record<string, unknown> = {},
-    ) {
+    function makeEnvForCallback(userOverrides: Record<string, unknown> = {}) {
       return {
         KV: kv as unknown as KVNamespace,
         API_SERVICE: createMockApiService({
@@ -488,11 +489,7 @@ describe("Settings Handlers", () => {
 
     it("returns false when ctx.from is missing", async () => {
       (ctx as any).from = undefined;
-      const result = await handleAgeRangeCallback(
-        ctx,
-        env,
-        "agerange:min:25",
-      );
+      const result = await handleAgeRangeCallback(ctx, env, "agerange:min:25");
       expect(result).toBe(false);
     });
 
@@ -571,7 +568,10 @@ describe("Settings Handlers", () => {
 
         expect(ctx.editMessageText).toHaveBeenCalledWith(
           expect.stringContaining("Select *maximum* age"),
-          expect.objectContaining({ parse_mode: "Markdown", reply_markup: expect.anything() }),
+          expect.objectContaining({
+            parse_mode: "Markdown",
+            reply_markup: expect.anything(),
+          }),
         );
         expect(ctx.answerCallbackQuery).toHaveBeenCalled();
       });
@@ -822,7 +822,11 @@ describe("Settings Handlers", () => {
 
     describe("distance:manual", () => {
       it("starts conversation and prompts for manual entry", async () => {
-        const result = await handleDistanceCallback(ctx, env, "distance:manual");
+        const result = await handleDistanceCallback(
+          ctx,
+          env,
+          "distance:manual",
+        );
         expect(result).toBe(true);
         expect(ctx.reply).toHaveBeenCalledWith(
           expect.stringContaining("Enter max distance"),
@@ -1150,9 +1154,7 @@ describe("Settings Handlers", () => {
     });
 
     it("handles editMessageText error gracefully", async () => {
-      (ctx.editMessageText as any).mockRejectedValue(
-        new Error("edit failed"),
-      );
+      (ctx.editMessageText as any).mockRejectedValue(new Error("edit failed"));
       const result = await handleGenderPrefCallback(
         ctx,
         env,
@@ -1185,11 +1187,7 @@ describe("Settings Handlers", () => {
 
     it("uses correct language and escaped text in success message", async () => {
       env = makeEnvForGender({ language: "en" }, makePutOkResponse());
-      const result = await handleGenderPrefCallback(
-        ctx,
-        env,
-        "genderpref:all",
-      );
+      const result = await handleGenderPrefCallback(ctx, env, "genderpref:all");
       expect(result).toBe(true);
       // escapeMd escapes underscores: prefer_not_to_say → prefer\_not\_to\_say
       expect(ctx.editMessageText).toHaveBeenCalledWith(
@@ -1213,7 +1211,11 @@ describe("Settings Handlers", () => {
       const stateAfterOpen = await kv.get("conversation:123");
       expect(JSON.parse(stateAfterOpen!).field).toBe("age-range");
 
-      const resultMin = await handleAgeRangeCallback(ctx, env, "agerange:min:20");
+      const resultMin = await handleAgeRangeCallback(
+        ctx,
+        env,
+        "agerange:min:20",
+      );
       expect(resultMin).toBe(true);
       const stateAfterMin = await kv.get("conversation:123");
       const parsedMin = JSON.parse(stateAfterMin!);
@@ -1227,7 +1229,11 @@ describe("Settings Handlers", () => {
           "PUT:/users/123": () => makePutOkResponse(),
         }),
       };
-      const resultMax = await handleAgeRangeCallback(ctx, env, "agerange:max:35");
+      const resultMax = await handleAgeRangeCallback(
+        ctx,
+        env,
+        "agerange:max:35",
+      );
       expect(resultMax).toBe(true);
 
       const stateAfterMax = await kv.get("conversation:123");

@@ -1,5 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
-import { premiumCommand, referralCommand, premiumCallbacks } from "../premium.js";
+import {
+  premiumCommand,
+  referralCommand,
+  premiumCallbacks,
+} from "../premium.js";
 import type { MyContext } from "../../types.js";
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -50,7 +54,10 @@ function mockCtx(overrides: CtxOverrides = {}): MyContext {
   const merged = { ...defaults, ...overrides };
   // Deep-merge api so partial overrides don't wipe createInvoiceLink/getMe
   if (overrides.api) {
-    merged.api = { ...(defaults.api as Record<string, unknown>), ...overrides.api };
+    merged.api = {
+      ...(defaults.api as Record<string, unknown>),
+      ...overrides.api,
+    };
   }
   return merged as unknown as MyContext;
 }
@@ -59,9 +66,7 @@ function mockCtx(overrides: CtxOverrides = {}): MyContext {
 // API service mock factory (matches existing patterns)
 // ────────────────────────────────────────────────────────────────────────────
 
-function createMockApiService(
-  responseMap: Record<string, () => Response>,
-) {
+function createMockApiService(responseMap: Record<string, () => Response>) {
   return {
     fetch: vi.fn().mockImplementation((req: Request) => {
       const url =
@@ -184,9 +189,7 @@ describe("premiumCommand", () => {
 
       await premiumCommand(ctx, env);
 
-      expect(ctx.reply).toHaveBeenCalledWith(
-        expect.stringContaining("Sorry"),
-      );
+      expect(ctx.reply).toHaveBeenCalledWith(expect.stringContaining("Sorry"));
     });
   });
 
@@ -280,8 +283,12 @@ describe("premiumCommand", () => {
 
       const buttons = flatButtons(ctx.reply);
       const cbButtons = buttons.filter((b: any) => b.callback_data);
-      expect(cbButtons.some((b: any) => b.callback_data === "referral:show")).toBe(true);
-      expect(cbButtons.some((b: any) => b.callback_data === "premium:close")).toBe(true);
+      expect(
+        cbButtons.some((b: any) => b.callback_data === "referral:show"),
+      ).toBe(true);
+      expect(
+        cbButtons.some((b: any) => b.callback_data === "premium:close"),
+      ).toBe(true);
     });
   });
 
@@ -385,8 +392,12 @@ describe("premiumCommand", () => {
 
       // Still has referral and close text buttons
       const textButtons = buttons.filter((b: any) => b.callback_data);
-      expect(textButtons.some((b: any) => b.callback_data === "referral:show")).toBe(true);
-      expect(textButtons.some((b: any) => b.callback_data === "premium:close")).toBe(true);
+      expect(
+        textButtons.some((b: any) => b.callback_data === "referral:show"),
+      ).toBe(true);
+      expect(
+        textButtons.some((b: any) => b.callback_data === "premium:close"),
+      ).toBe(true);
     });
   });
 
@@ -493,8 +504,12 @@ describe("premiumCommand", () => {
       expect(urlButtons).toHaveLength(0);
 
       const cbButtons = buttons.filter((b: any) => b.callback_data);
-      expect(cbButtons.some((b: any) => b.callback_data === "referral:show")).toBe(true);
-      expect(cbButtons.some((b: any) => b.callback_data === "premium:close")).toBe(true);
+      expect(
+        cbButtons.some((b: any) => b.callback_data === "referral:show"),
+      ).toBe(true);
+      expect(
+        cbButtons.some((b: any) => b.callback_data === "premium:close"),
+      ).toBe(true);
     });
 
     it("catches unhandled errors and replies with generic message", async () => {
@@ -550,9 +565,7 @@ describe("referralCommand", () => {
 
       await referralCommand(ctx, env);
 
-      expect(ctx.reply).toHaveBeenCalledWith(
-        expect.stringContaining("Sorry"),
-      );
+      expect(ctx.reply).toHaveBeenCalledWith(expect.stringContaining("Sorry"));
     });
   });
 
@@ -590,17 +603,17 @@ describe("referralCommand", () => {
 
       const buttons = flatButtons(ctx.reply);
       // Share-on-Telegram URL button
-      expect(buttons.some(
-        (b: any) => b.url && b.text.includes("Share on Telegram"),
-      )).toBe(true);
+      expect(
+        buttons.some((b: any) => b.url && b.text.includes("Share on Telegram")),
+      ).toBe(true);
       // Copy-link button
-      expect(buttons.some(
-        (b: any) => b.copy_text && b.text.includes("Copy Link"),
-      )).toBe(true);
+      expect(
+        buttons.some((b: any) => b.copy_text && b.text.includes("Copy Link")),
+      ).toBe(true);
       // Close button
-      expect(buttons.some(
-        (b: any) => b.callback_data === "referral:close",
-      )).toBe(true);
+      expect(
+        buttons.some((b: any) => b.callback_data === "referral:close"),
+      ).toBe(true);
     });
 
     it("falls back to getMe() when ctx.me is missing", async () => {
@@ -636,7 +649,9 @@ describe("referralCommand", () => {
       const buttons = flatButtons(ctx.reply);
       expect(buttons.some((b: any) => b.url)).toBe(false);
       expect(buttons.some((b: any) => b.copy_text)).toBe(false);
-      expect(buttons.some((b: any) => b.callback_data === "referral:close")).toBe(true);
+      expect(
+        buttons.some((b: any) => b.callback_data === "referral:close"),
+      ).toBe(true);
     });
 
     it("handles getMe rejection — falls back, no link generated", async () => {

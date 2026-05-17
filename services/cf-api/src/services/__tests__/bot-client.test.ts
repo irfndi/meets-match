@@ -71,9 +71,7 @@ function createClient(response: Response): {
   return { client, fetcher };
 }
 
-async function getLastRequest(
-  fetcher: MockFetcher,
-): Promise<CapturedRequest> {
+async function getLastRequest(fetcher: MockFetcher): Promise<CapturedRequest> {
   expect(fetcher.fetch).toHaveBeenCalledTimes(1);
   const call = fetcher.fetch.mock.calls[0];
   if (!call) throw new Error("fetch was not called");
@@ -154,9 +152,9 @@ describe("enqueueNotification", () => {
   it("throws Error with 'Not implemented' message", async () => {
     const fetcher = { fetch: vi.fn() };
     const client = new BotServiceClient(fetcher as any);
-    await expect(
-      client.enqueueNotification({} as any),
-    ).rejects.toThrow("Not implemented");
+    await expect(client.enqueueNotification({} as any)).rejects.toThrow(
+      "Not implemented",
+    );
   });
 });
 
@@ -168,9 +166,9 @@ describe("getNotification", () => {
   it("throws Error with 'Not implemented' message", async () => {
     const fetcher = { fetch: vi.fn() };
     const client = new BotServiceClient(fetcher as any);
-    await expect(
-      client.getNotification({} as any),
-    ).rejects.toThrow("Not implemented");
+    await expect(client.getNotification({} as any)).rejects.toThrow(
+      "Not implemented",
+    );
   });
 });
 
@@ -182,9 +180,9 @@ describe("getDLQStats", () => {
   it("throws Error with 'Not implemented' message", async () => {
     const fetcher = { fetch: vi.fn() };
     const client = new BotServiceClient(fetcher as any);
-    await expect(
-      client.getDLQStats({} as any),
-    ).rejects.toThrow("Not implemented");
+    await expect(client.getDLQStats({} as any)).rejects.toThrow(
+      "Not implemented",
+    );
   });
 });
 
@@ -196,9 +194,9 @@ describe("replayDLQ", () => {
   it("throws Error with 'Not implemented' message", async () => {
     const fetcher = { fetch: vi.fn() };
     const client = new BotServiceClient(fetcher as any);
-    await expect(
-      client.replayDLQ({} as any),
-    ).rejects.toThrow("Not implemented");
+    await expect(client.replayDLQ({} as any)).rejects.toThrow(
+      "Not implemented",
+    );
   });
 });
 
@@ -210,9 +208,9 @@ describe("getQueueStats", () => {
   it("throws Error with 'Not implemented' message", async () => {
     const fetcher = { fetch: vi.fn() };
     const client = new BotServiceClient(fetcher as any);
-    await expect(
-      client.getQueueStats({} as any),
-    ).rejects.toThrow("Not implemented");
+    await expect(client.getQueueStats({} as any)).rejects.toThrow(
+      "Not implemented",
+    );
   });
 });
 
@@ -224,9 +222,9 @@ describe("getReengagementCandidates", () => {
   it("throws Error with 'Not implemented' message", async () => {
     const fetcher = { fetch: vi.fn() };
     const client = new BotServiceClient(fetcher as any);
-    await expect(
-      client.getReengagementCandidates({} as any),
-    ).rejects.toThrow("Not implemented");
+    await expect(client.getReengagementCandidates({} as any)).rejects.toThrow(
+      "Not implemented",
+    );
   });
 });
 
@@ -238,9 +236,9 @@ describe("logNotificationResult", () => {
   it("throws Error with 'Not implemented' message", async () => {
     const fetcher = { fetch: vi.fn() };
     const client = new BotServiceClient(fetcher as any);
-    await expect(
-      client.logNotificationResult({} as any),
-    ).rejects.toThrow("Not implemented");
+    await expect(client.logNotificationResult({} as any)).rejects.toThrow(
+      "Not implemented",
+    );
   });
 });
 

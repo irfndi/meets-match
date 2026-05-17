@@ -5,7 +5,10 @@ import {
 } from "../../notifications/queue.js";
 
 function createMockD1(
-  handler: (sql: string, values: unknown[]) => { results?: Array<Record<string, unknown>> } = () => ({ results: [] }),
+  handler: (
+    sql: string,
+    values: unknown[],
+  ) => { results?: Array<Record<string, unknown>> } = () => ({ results: [] }),
 ) {
   return {
     prepare: vi.fn((sql: string) => {
@@ -81,8 +84,8 @@ describe("NotificationQueueConsumer", () => {
     });
 
     const bot = {
-      fetch: vi.fn(async () =>
-        new Response(JSON.stringify(botResponse), { status: 200 }),
+      fetch: vi.fn(
+        async () => new Response(JSON.stringify(botResponse), { status: 200 }),
       ),
       connect: vi.fn(),
     } as unknown as import("@cloudflare/workers-types").Fetcher;
