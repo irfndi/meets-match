@@ -787,7 +787,7 @@ describe("unblockUser", () => {
 
 describe("ApiServiceClient constructor", () => {
   it("accepts a Fetcher binding", () => {
-    const fetcher = { fetch: vi.fn() };
+    const fetcher = { fetch: vi.fn(), connect: vi.fn() } as unknown as Fetcher;
     const client = new ApiServiceClient(fetcher);
     expect(client).toBeInstanceOf(ApiServiceClient);
   });

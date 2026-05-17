@@ -2,18 +2,12 @@ import { describe, it, expect, vi } from "vitest";
 import type { Fetcher } from "@cloudflare/workers-types";
 import { ApiServiceClient } from "../api-client.js";
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/** Shape of the mock fetch response we control per-test. */
 interface MockResponseInit {
   ok: boolean;
   status: number;
   data: unknown;
 }
 
-/** Create a realistic Fetcher mock whose `fetch` returns `{ ok, status, json }`. */
 function createMockFetcher(response: MockResponseInit) {
   return {
     fetch: vi.fn(async () => ({
@@ -24,18 +18,10 @@ function createMockFetcher(response: MockResponseInit) {
   } as unknown as Fetcher;
 }
 
-/**
- * Extract the first Request argument from a vi.fn() mock for inspection.
- * Pattern mirrors existing tests: mock.calls[0][0] as Request
- */
-function getRequest(mock: ReturnType<typeof vi.fn>, callIndex = 0): Request {
+function getRequest(mock: any, callIndex = 0): Request {
   return mock.mock.calls[callIndex][0] as unknown as Request;
 }
 
-/**
- * Read the JSON body of a Request (body is a ReadableStream, so we use
- * Response.clone-like behaviour).
- */
 async function requestBodyAsJson(req: Request): Promise<unknown> {
   return req.clone().json();
 }
@@ -50,9 +36,7 @@ function errorResponse(status: number): MockResponseInit {
   return { ok: false, status, data: null };
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
+
 
 describe("ApiServiceClient", () => {
   // ---- getUser -------------------------------------------------------------

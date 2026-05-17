@@ -152,7 +152,7 @@ function withUser(
 // ────────────────────────────────────────────────────────────────────────────
 
 /** Flatten all inline keyboard rows into a single array of buttons. */
-function flatButtons(replyCall: ReturnType<typeof vi.fn>): any[] {
+function flatButtons(replyCall: any): any[] {
   const opts = replyCall.mock.calls[0]?.[1];
   const kb = opts?.reply_markup as any;
   return (kb?.inline_keyboard ?? []).flat();
@@ -205,7 +205,7 @@ describe("premiumCommand", () => {
 
       await premiumCommand(ctx, env);
 
-      const msg: string = ctx.reply.mock.calls[0][0];
+      const msg: string = (ctx.reply as any).mock.calls[0][0];
       expect(msg).toContain("*Current plan:* Free");
       expect(msg).toContain("5/15 likes");
       expect(msg).toContain("10/35 dislikes");
@@ -301,7 +301,7 @@ describe("premiumCommand", () => {
       // Fallback user data has no subscriptionExpiresAt → no expiry line.
       await premiumCommand(ctx, env);
 
-      const msg: string = ctx.reply.mock.calls[0][0];
+      const msg: string = (ctx.reply as any).mock.calls[0][0];
       expect(msg).toContain("*Current plan:* Premium 👑");
     });
 
@@ -318,7 +318,7 @@ describe("premiumCommand", () => {
 
       await premiumCommand(ctx, env);
 
-      const msg: string = ctx.reply.mock.calls[0][0];
+      const msg: string = (ctx.reply as any).mock.calls[0][0];
       expect(msg).toContain("📅 Expires:");
       // 2026-06-15 noon UTC → toLocaleDateString("en-GB") → "15/06/2026"
       expect(msg).toContain("15/06/2026");
@@ -371,7 +371,7 @@ describe("premiumCommand", () => {
 
       await premiumCommand(ctx, env);
 
-      const msg: string = ctx.reply.mock.calls[0][0];
+      const msg: string = (ctx.reply as any).mock.calls[0][0];
       expect(msg).toContain("*Current plan:* Premium+ 💎");
       expect(msg).toContain("📅 Expires:");
 
@@ -405,7 +405,7 @@ describe("premiumCommand", () => {
 
       await premiumCommand(ctx, env);
 
-      const msg: string = ctx.reply.mock.calls[0][0];
+      const msg: string = (ctx.reply as any).mock.calls[0][0];
       expect(msg).toContain("*Current plan:* Free");
       expect(msg).not.toContain("/15 likes");
       expect(msg).not.toContain("/35 dislikes");
@@ -567,7 +567,7 @@ describe("referralCommand", () => {
 
       await referralCommand(ctx, env);
 
-      const msg: string = ctx.reply.mock.calls[0][0];
+      const msg: string = (ctx.reply as any).mock.calls[0][0];
       expect(msg).toContain("ABC123");
       expect(msg).toContain("7");
       expect(msg).toContain("+35");
@@ -585,7 +585,7 @@ describe("referralCommand", () => {
 
       await referralCommand(ctx, env);
 
-      const msg: string = ctx.reply.mock.calls[0][0];
+      const msg: string = (ctx.reply as any).mock.calls[0][0];
       expect(msg).toContain("https://t.me/testbot?start=ref_ABC123");
 
       const buttons = flatButtons(ctx.reply);
@@ -615,7 +615,7 @@ describe("referralCommand", () => {
       await referralCommand(ctx, env);
 
       expect(ctx.api.getMe).toHaveBeenCalled();
-      const msg: string = ctx.reply.mock.calls[0][0];
+      const msg: string = (ctx.reply as any).mock.calls[0][0];
       expect(msg).toContain("https://t.me/fallbackbot");
     });
 
@@ -630,7 +630,7 @@ describe("referralCommand", () => {
 
       await referralCommand(ctx, env);
 
-      const msg: string = ctx.reply.mock.calls[0][0];
+      const msg: string = (ctx.reply as any).mock.calls[0][0];
       expect(msg).not.toContain("https://t.me/");
 
       const buttons = flatButtons(ctx.reply);
@@ -650,7 +650,7 @@ describe("referralCommand", () => {
 
       await referralCommand(ctx, env);
 
-      const msg: string = ctx.reply.mock.calls[0][0];
+      const msg: string = (ctx.reply as any).mock.calls[0][0];
       expect(msg).not.toContain("https://t.me/");
 
       const buttons = flatButtons(ctx.reply);
@@ -675,7 +675,7 @@ describe("referralCommand", () => {
 
       await referralCommand(ctx, env);
 
-      const msg: string = ctx.reply.mock.calls[0][0];
+      const msg: string = (ctx.reply as any).mock.calls[0][0];
       expect(msg).toContain("N/A");
       expect(msg).not.toContain("https://t.me/");
 
@@ -706,7 +706,7 @@ describe("referralCommand", () => {
 
       await referralCommand(ctx, env);
 
-      const msg: string = ctx.reply.mock.calls[0][0];
+      const msg: string = (ctx.reply as any).mock.calls[0][0];
       expect(msg).toContain("N/A");
       // With count=0, bonus=0 the stats lines are still rendered
       expect(msg).toContain("*Friends invited:* 0");
@@ -793,7 +793,7 @@ describe("premiumCallbacks", () => {
       await premiumCallbacks(ctx, env);
 
       expect(ctx.reply).toHaveBeenCalled();
-      const msg: string = ctx.reply.mock.calls[0][0];
+      const msg: string = (ctx.reply as any).mock.calls[0][0];
       expect(msg).toContain("*Current plan:* Free");
       expect(ctx.answerCallbackQuery).toHaveBeenCalled();
     });
@@ -860,7 +860,7 @@ describe("premiumCallbacks", () => {
       await premiumCallbacks(ctx, env);
 
       expect(ctx.reply).toHaveBeenCalled();
-      const msg: string = ctx.reply.mock.calls[0][0];
+      const msg: string = (ctx.reply as any).mock.calls[0][0];
       expect(msg).toContain("ABC123");
       expect(ctx.answerCallbackQuery).toHaveBeenCalled();
     });

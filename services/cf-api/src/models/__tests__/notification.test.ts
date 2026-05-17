@@ -42,10 +42,10 @@ describe("NotificationRepository", () => {
     it("creates a notification", async () => {
       const { repo } = createRepo();
       const result = await runEffect(
-        repo.create({ userId: "u1", type: "LIKE", payload: { msg: "hi" } }),
+        repo.create({ userId: "u1", type: "NEW_LIKE", payload: "hi" }),
       );
       expect(result.userId).toBe("u1");
-      expect(result.type).toBe("LIKE");
+      expect(result.type).toBe("NEW_LIKE");
       expect(result.status).toBe("PENDING");
       expect(result.retryCount).toBe(0);
       expect(result.maxRetries).toBe(5);
@@ -54,7 +54,7 @@ describe("NotificationRepository", () => {
     it("returns notification without explicit channel", async () => {
       const { repo } = createRepo();
       const result = await runEffect(
-        repo.create({ userId: "u1", type: "LIKE" }),
+        repo.create({ userId: "u1", type: "NEW_LIKE" }),
       );
       expect(result.userId).toBe("u1");
       expect(result.status).toBe("PENDING");

@@ -864,8 +864,8 @@ describe("handleConversationMessage", () => {
 
   it("handles location text with geocoding success", async () => {
     // Mock global fetch for Nominatim geocoding
-    const originalFetch = global.fetch;
-    global.fetch = vi.fn().mockResolvedValue(
+    const originalFetch = (globalThis as any).fetch;
+    (globalThis as any).fetch = vi.fn().mockResolvedValue(
       new Response(
         JSON.stringify([
           {
@@ -903,14 +903,14 @@ describe("handleConversationMessage", () => {
         expect.objectContaining({ method: "PUT" }),
       );
     } finally {
-      global.fetch = originalFetch;
+      (globalThis as any).fetch = originalFetch;
     }
   });
 
   it("handles location text with geocoding failure (falls back gracefully)", async () => {
     // Mock global fetch to fail for geocoding
-    const originalFetch = global.fetch;
-    global.fetch = vi.fn().mockRejectedValue(new Error("Network error")) as any;
+    const originalFetch = (globalThis as any).fetch;
+    (globalThis as any).fetch = vi.fn().mockRejectedValue(new Error("Network error")) as any;
 
     try {
       await startConversation(kv as any, "123", "location");
@@ -937,7 +937,7 @@ describe("handleConversationMessage", () => {
         expect.objectContaining({ method: "PUT" }),
       );
     } finally {
-      global.fetch = originalFetch;
+      (globalThis as any).fetch = originalFetch;
     }
   });
 

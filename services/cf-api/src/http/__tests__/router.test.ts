@@ -80,14 +80,14 @@ describe("ApiRouter", () => {
     it("returns 404 for unknown routes", async () => {
       const response = await router.route(new Request("http://api/unknown"));
       expect(response.status).toBe(404);
-      const body = await response.json();
+      const body = (await response.json()) as { error: string };
       expect(body.error).toBe("Not Found");
     });
 
     it("returns health status", async () => {
       const response = await router.route(new Request("http://api/health"));
       expect(response.status).toBe(200);
-      const body = await response.json();
+      const body = (await response.json()) as { status: string; service: string };
       expect(body.status).toBe("ok");
       expect(body.service).toBe("cf-api");
     });
@@ -95,7 +95,7 @@ describe("ApiRouter", () => {
     it("routes GET /users/:id", async () => {
       const response = await router.route(new Request("http://api/users/123"));
       expect(response.status).toBe(200);
-      const body = await response.json();
+      const body = (await response.json()) as { user: unknown };
       expect(body.user).toBeDefined();
     });
 
@@ -116,7 +116,7 @@ describe("ApiRouter", () => {
         new Request("http://api/users/123/potential-matches?limit=5"),
       );
       expect(response.status).toBe(200);
-      const body = await response.json();
+      const body = (await response.json()) as { potentialMatches: unknown[] };
       expect(Array.isArray(body.potentialMatches)).toBe(true);
     });
 
@@ -132,7 +132,7 @@ describe("ApiRouter", () => {
         new Request("http://api/matches?userId=123"),
       );
       expect(response.status).toBe(200);
-      const body = await response.json();
+      const body = (await response.json()) as { matches: unknown[] };
       expect(Array.isArray(body.matches)).toBe(true);
     });
 
@@ -191,7 +191,7 @@ describe("ApiRouter", () => {
         }),
       );
       expect(response.status).toBe(200);
-      const body = await response.json();
+      const body = (await response.json()) as { success: boolean };
       expect(body.success).toBe(true);
     });
 

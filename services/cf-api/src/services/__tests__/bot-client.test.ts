@@ -250,7 +250,7 @@ describe("logNotificationResult", () => {
 
 describe("BotServiceClient constructor", () => {
   it("accepts a Fetcher binding", () => {
-    const fetcher = { fetch: vi.fn() };
+    const fetcher = { fetch: vi.fn(), connect: vi.fn() } as unknown as Fetcher;
     const client = new BotServiceClient(fetcher);
     expect(client).toBeInstanceOf(BotServiceClient);
   });

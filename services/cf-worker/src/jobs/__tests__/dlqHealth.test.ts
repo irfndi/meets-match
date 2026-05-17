@@ -16,6 +16,13 @@ describe("runDLQHealthCheck", () => {
         };
       }),
     } as unknown as import("@cloudflare/workers-types").D1Database,
+    KV: {} as unknown as import("@cloudflare/workers-types").KVNamespace,
+    API_SERVICE: {
+      fetch: vi.fn(async () => new Response()),
+    } as unknown as import("@cloudflare/workers-types").Fetcher,
+    BOT_SERVICE: {
+      fetch: vi.fn(async () => new Response()),
+    } as unknown as import("@cloudflare/workers-types").Fetcher,
   });
 
   it("logs DLQ count when below threshold", async () => {
@@ -44,9 +51,19 @@ describe("runDLQHealthCheck", () => {
         prepare: vi.fn(() => {
           throw new Error("DB down");
         }),
-      },
-    } as unknown as import("@cloudflare/workers-types").D1Database &
-      import("../index.js").Env;
+        batch: vi.fn(),
+        exec: vi.fn(),
+        withSession: vi.fn(),
+        dump: vi.fn(),
+      } as unknown as import("@cloudflare/workers-types").D1Database,
+      KV: {} as unknown as import("@cloudflare/workers-types").KVNamespace,
+      API_SERVICE: {
+        fetch: vi.fn(async () => new Response()),
+      } as unknown as import("@cloudflare/workers-types").Fetcher,
+      BOT_SERVICE: {
+        fetch: vi.fn(async () => new Response()),
+      } as unknown as import("@cloudflare/workers-types").Fetcher,
+    };
 
     await expect(runDLQHealthCheck(env)).resolves.not.toThrow();
   });

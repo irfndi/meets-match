@@ -35,6 +35,10 @@ describe("runBirthdayJob", () => {
           json: async () => overrides.apiResponse?.json ?? {},
         })),
       } as unknown as import("@cloudflare/workers-types").Fetcher,
+      KV: {} as unknown as import("@cloudflare/workers-types").KVNamespace,
+      BOT_SERVICE: {
+        fetch: vi.fn(async () => new Response()),
+      } as unknown as import("@cloudflare/workers-types").Fetcher,
     };
   };
 
@@ -83,9 +87,17 @@ describe("runBirthdayJob", () => {
         prepare: vi.fn(() => {
           throw new Error("DB down");
         }),
-      },
-      API_SERVICE: { fetch: vi.fn() },
-    } as unknown as import("../index.js").Env;
+        batch: vi.fn(),
+        exec: vi.fn(),
+        withSession: vi.fn(),
+        dump: vi.fn(),
+      } as unknown as import("@cloudflare/workers-types").D1Database,
+      API_SERVICE: { fetch: vi.fn() } as unknown as import("@cloudflare/workers-types").Fetcher,
+      KV: {} as unknown as import("@cloudflare/workers-types").KVNamespace,
+      BOT_SERVICE: {
+        fetch: vi.fn(async () => new Response()),
+      } as unknown as import("@cloudflare/workers-types").Fetcher,
+    };
 
     await expect(runBirthdayJob(env)).resolves.not.toThrow();
   });
