@@ -84,6 +84,11 @@ export interface Translations {
   genderPrefSelect: string;
   genderPrefInvalid: string;
   genderPrefUpdated: string;
+  genderPrefMaleButton: string;
+  genderPrefFemaleButton: string;
+  genderPrefOtherButton: string;
+  genderPrefPreferNotButton: string;
+  genderPrefAllButton: string;
   phoneVerifyPrompt: string;
   phoneVerifyButton: string;
   phoneVerified: string;
@@ -426,6 +431,11 @@ const en: Translations = {
   genderPrefInvalid:
     "Enter valid genders separated by commas (*male, female, other, prefer_not_to_say*). Try again or type *Cancel*.",
   genderPrefUpdated: "✅ Gender preference set to: *{preferences}*!",
+  genderPrefMaleButton: "♂️ Male",
+  genderPrefFemaleButton: "♀️ Female",
+  genderPrefOtherButton: "⚧ Other",
+  genderPrefPreferNotButton: "🤫 Prefer not to say",
+  genderPrefAllButton: "✅ All genders",
   phoneVerifyPrompt:
     "📱 *One more step* — verify your phone number to build trust with your matches.\n\n" +
     "Tap the button below to share your contact. Your number is only visible to mutual matches.",
@@ -805,6 +815,11 @@ const id: Translations = {
   genderPrefInvalid:
     "Jenis kelamin tidak valid. Pilih *laki-laki, perempuan, lainnya*. Coba lagi atau ketik *Batal*.",
   genderPrefUpdated: "✅ Preferensi jenis kelamin diperbarui!",
+  genderPrefMaleButton: "♂️ Laki-laki",
+  genderPrefFemaleButton: "♀️ Perempuan",
+  genderPrefOtherButton: "⚧ Lainnya",
+  genderPrefPreferNotButton: "🤫 Lebih baik tidak disebutkan",
+  genderPrefAllButton: "✅ Semua jenis kelamin",
   phoneVerifyPrompt:
     "📱 *Satu langkah lagi* — verifikasi nomor teleponmu untuk membangun kepercayaan dengan match-mu.\n\n" +
     "Ketuk tombol di bawah untuk membagikan kontakmu. Nomormu hanya terlihat oleh match yang saling suka.",

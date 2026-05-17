@@ -66,15 +66,15 @@ function buildDistanceKeyboard(): InlineKeyboard {
   return keyboard;
 }
 
-function buildGenderPrefKeyboard(): InlineKeyboard {
+function buildGenderPrefKeyboard(lang: Language): InlineKeyboard {
   return new InlineKeyboard()
-    .text("♂️ Male", "genderpref:male")
-    .text("♀️ Female", "genderpref:female")
+    .text(t("genderPrefMaleButton", lang), "genderpref:male")
+    .text(t("genderPrefFemaleButton", lang), "genderpref:female")
     .row()
-    .text("⚧ Other", "genderpref:other")
-    .text("🤫 Prefer not to say", "genderpref:prefer_not_to_say")
+    .text(t("genderPrefOtherButton", lang), "genderpref:other")
+    .text(t("genderPrefPreferNotButton", lang), "genderpref:prefer_not_to_say")
     .row()
-    .text("✅ All genders", "genderpref:all")
+    .text(t("genderPrefAllButton", lang), "genderpref:all")
     .row()
     .text("← Back", "settings:back");
 }
@@ -211,7 +211,7 @@ export const settingsCallbacks = async (
       }
       case "settings:gender-pref": {
         await ctx.reply(t("genderPrefSelect", lang), {
-          reply_markup: buildGenderPrefKeyboard(),
+          reply_markup: buildGenderPrefKeyboard(lang),
         });
         await ctx.answerCallbackQuery().catch(() => {});
         break;
