@@ -5,6 +5,7 @@ import {
   MatchStatus,
   MatchAction,
   User,
+  type Preferences,
   type CreateMatchRequest,
   type GetMatchRequest,
   type GetMatchListRequest,
@@ -17,33 +18,10 @@ import {
   NotFoundError,
   DatabaseError,
   ValidationError,
+  computeDefaultPreferences,
 } from "@meetsmatch/cf-shared";
 import { UserRepository } from "./user.js";
 import { BlockRepository } from "./block.js";
-
-export function computeDefaultPreferences(
-  currentUser: typeof User.Type,
-): Record<string, unknown> {
-  const defaults: Record<string, unknown> = {};
-
-  if (currentUser.gender) {
-    const gender = currentUser.gender;
-    defaults.genderPreference =
-      gender === "male"
-        ? ["female"]
-        : gender === "female"
-          ? ["male"]
-          : ["male", "female", "other", "prefer_not_to_say"];
-  }
-
-  if (currentUser.age != null) {
-    defaults.minAge = Math.max(12, currentUser.age - 7);
-    defaults.maxAge = Math.min(80, currentUser.age + 7);
-  }
-
-  defaults.maxDistance = 25;
-  return defaults;
-}
 
 export class MatchRepository {
   constructor(
@@ -381,7 +359,7 @@ export class MatchRepository {
           return [];
         }
 
-        let prefs = currentUser.preferences ?? {};
+        let prefs: Preferences = currentUser.preferences ?? {};
 
         // Compute default preferences for new users who haven't set any.
         // This ensures gender filtering is always applied even if the bot-side
@@ -390,8 +368,25 @@ export class MatchRepository {
           Array.isArray(prefs.genderPreference) &&
           prefs.genderPreference.length > 0;
         if (!hasGenderPref && currentUser.gender) {
-          const defaults = computeDefaultPreferences(currentUser);
-          prefs = { ...defaults, ...prefs };
+          const defaults = computeDefaultPreferences({
+            age: currentUser.age ?? undefined,
+            birthDate: currentUser.birthDate ?? undefined,
+            gender: currentUser.gender,
+          });
+          // Apply defaults field-by-field to preserve type safety and avoid
+          // overwriting existing non-empty preference values.
+          if (defaults.genderPreference != null) {
+            prefs = { ...prefs, genderPreference: defaults.genderPreference };
+          }
+          if (prefs.minAge == null && defaults.minAge != null) {
+            prefs = { ...prefs, minAge: defaults.minAge };
+          }
+          if (prefs.maxAge == null && defaults.maxAge != null) {
+            prefs = { ...prefs, maxAge: defaults.maxAge };
+          }
+          if (prefs.maxDistance == null && defaults.maxDistance != null) {
+            prefs = { ...prefs, maxDistance: defaults.maxDistance };
+          }
         }
 
         // 2. Build query for candidates including interacted profiles for cooldown/re-engagement

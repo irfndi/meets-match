@@ -1152,13 +1152,12 @@ async function handleLocationTextConversation(
   const normalizedCity =
     geo.address?.city ?? geo.address?.town ?? geo.address?.village ?? city;
   const normalizedCountry = geo.address?.country ?? country;
-  const lat = parseFloat(geo.lat);
-  const lon = parseFloat(geo.lon);
 
   const success = await updateUser(env, state.userId, {
     location: {
       city: normalizedCity,
       country: normalizedCountry,
+      source: "geocoded" as const,
     },
   });
   await clearConversationState(env.KV, state.userId);

@@ -1,7 +1,8 @@
 import type { MyContext } from "../types.js";
 import type { Env } from "../index.js";
 import { ApiServiceClient, ApiError } from "../services/api-client.js";
-import { createLogger } from "@meetsmatch/cf-shared";
+import { createLogger, computeDefaultPreferences } from "@meetsmatch/cf-shared";
+import type { DefaultPreferenceInput } from "@meetsmatch/cf-shared";
 
 const log = createLogger("cf-bot");
 
@@ -46,21 +47,12 @@ export function isPhoneVerified(user: UserProfile): boolean {
 export function getDefaultPreferences(
   user: Record<string, unknown>,
 ): Record<string, unknown> {
-  const age =
-    (user.age as number | undefined) ??
-    (user.birthDate
-      ? computeAgeFromBirthDate(String(user.birthDate))
-      : undefined);
-  const gender = user.gender as string | undefined;
-  if (!age || !gender) return {};
-  const minAge = Math.max(12, age - 7);
-  const maxAge = Math.min(80, age + 7);
-  const maxDistance = 25;
-  let genderPreference: string[];
-  if (gender === "male") genderPreference = ["female"];
-  else if (gender === "female") genderPreference = ["male"];
-  else genderPreference = ["male", "female", "other", "prefer_not_to_say"];
-  return { minAge, maxAge, maxDistance, genderPreference };
+  const input: DefaultPreferenceInput = {
+    age: user.age as number | undefined,
+    birthDate: user.birthDate as string | undefined,
+    gender: user.gender as string | undefined,
+  };
+  return computeDefaultPreferences(input);
 }
 
 export function getProfileCompleteness(user: UserProfile): {
@@ -104,8 +96,11 @@ export function getMissingFieldsDisplay(missing: string[]): string {
   return missing.map((f) => labels[f] || f).join(", ");
 }
 
-// --- Birthdate helpers ---
+// Re-export birthdate helpers from shared package for backwards compatibility
+export { computeAgeFromBirthDate } from "@meetsmatch/cf-shared";
 
+// parseBirthDate is kept locally because it returns an iso field not present
+// in the shared computeAgeFromBirthDate helper.
 const BIRTHDATE_REGEX = /^(0[1-9]|[12]\d|3[01])\.(0[1-9]|1[0-2])\.(\d{4})$/;
 
 export function parseBirthDate(
@@ -142,34 +137,6 @@ export function parseBirthDate(
     year,
     iso: `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
   };
-}
-
-export function computeAgeFromBirthDate(birthDate: string): number | undefined {
-  // Try parsing as ISO format YYYY-MM-DD first (database storage format)
-  const isoMatch = birthDate.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (isoMatch) {
-    const year = parseInt(isoMatch[1], 10);
-    const month = parseInt(isoMatch[2], 10);
-    const day = parseInt(isoMatch[3], 10);
-    const now = new Date();
-    let age = now.getFullYear() - year;
-    const m = now.getMonth() - (month - 1);
-    if (m < 0 || (m === 0 && now.getDate() < day)) {
-      age--;
-    }
-    if (age >= 12 && age <= 80) return age;
-  }
-
-  // Fallback to DD.MM.YYYY format (user input format)
-  const parsed = parseBirthDate(birthDate);
-  if (!parsed) return undefined;
-  const now = new Date();
-  let age = now.getFullYear() - parsed.year;
-  const m = now.getMonth() - (parsed.month - 1);
-  if (m < 0 || (m === 0 && now.getDate() < parsed.day)) {
-    age--;
-  }
-  return age;
 }
 
 export function isBirthdayToday(birthDate: string | undefined): boolean {
