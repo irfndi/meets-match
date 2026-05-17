@@ -349,6 +349,93 @@ describe("ApiRouter", () => {
       );
       expect(response.status).toBe(200);
     });
+
+    it("routes POST /matches/:id/dislike", async () => {
+      const response = await router.route(
+        new Request("http://api/matches/m1/dislike", {
+          method: "POST",
+          body: JSON.stringify({ userId: "u1" }),
+        }),
+      );
+      expect(response.status).toBe(200);
+    });
+
+    it("routes POST /matches/:id/skip", async () => {
+      const response = await router.route(
+        new Request("http://api/matches/m1/skip", {
+          method: "POST",
+          body: JSON.stringify({ userId: "u1" }),
+        }),
+      );
+      expect(response.status).toBe(200);
+    });
+
+    it("routes POST /matches/:id/undo", async () => {
+      const response = await router.route(
+        new Request("http://api/matches/m1/undo", {
+          method: "POST",
+          body: JSON.stringify({ userId: "u1" }),
+        }),
+      );
+      expect(response.status).toBe(200);
+    });
+
+    it("rejects error-reports with invalid JSON", async () => {
+      const response = await router.route(
+        new Request("http://api/error-reports", {
+          method: "POST",
+          body: "not-json",
+        }),
+      );
+      expect(response.status).toBe(400);
+    });
+
+    it("routes GET /geocode with query", async () => {
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = vi.fn(async () =>
+        new Response(
+          JSON.stringify([
+            {
+              lat: "-6.2",
+              lon: "106.8",
+              address: { city: "Jakarta", country: "Indonesia" },
+            },
+          ]),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      ) as unknown as typeof fetch;
+      const response = await router.route(
+        new Request("http://api/geocode?q=jakarta&limit=5"),
+      );
+      globalThis.fetch = originalFetch;
+      expect(response.status).toBe(200);
+    });
+
+    it("routes GET /geocode with lat/lon", async () => {
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            lat: "-6.2",
+            lon: "106.8",
+            address: { city: "Jakarta", country: "Indonesia" },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      ) as unknown as typeof fetch;
+      const response = await router.route(
+        new Request("http://api/geocode?lat=-6.2&lon=106.8"),
+      );
+      globalThis.fetch = originalFetch;
+      expect(response.status).toBe(200);
+    });
+
+    it("routes GET /users/:id/pending-likes", async () => {
+      const response = await router.route(
+        new Request("http://api/users/u1/pending-likes"),
+      );
+      expect(response.status).toBe(200);
+    });
   });
 
   describe("error handling", () => {
@@ -366,6 +453,54 @@ describe("ApiRouter", () => {
         new Request("http://api/users/123"),
       );
       expect(response.status).toBe(500);
+    });
+
+    it("returns 404 when user not found", async () => {
+      const db = createMockD1((sql) => {
+        if (sql.includes("FROM users WHERE id")) {
+          return { results: [] };
+        }
+        return { results: [] };
+      });
+      const router = new ApiRouter({
+        DB: db,
+        KV: createMockKV(),
+        NOTIFICATION_QUEUE: createMockQueue(),
+        MEDIA_BUCKET: createMockR2(),
+      });
+      const response = await router.route(
+        new Request("http://api/users/999"),
+      );
+      expect(response.status).toBe(404);
+    });
+
+    it("returns 404 when match not found", async () => {
+      const db = createMockD1((sql) => {
+        if (sql.includes("FROM matches WHERE id")) {
+          return { results: [] };
+        }
+        return { results: [] };
+      });
+      const router = new ApiRouter({
+        DB: db,
+        KV: createMockKV(),
+        NOTIFICATION_QUEUE: createMockQueue(),
+        MEDIA_BUCKET: createMockR2(),
+      });
+      const response = await router.route(
+        new Request("http://api/matches/m999"),
+      );
+      expect(response.status).toBe(404);
+    });
+
+    it("returns 400 for invalid match action", async () => {
+      const response = await router.route(
+        new Request("http://api/matches/m1/invalid", {
+          method: "POST",
+          body: JSON.stringify({ userId: "u1" }),
+        }),
+      );
+      expect(response.status).toBe(400);
     });
   });
 });

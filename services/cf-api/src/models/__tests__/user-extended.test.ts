@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { UserRepository } from "../user.js";
 import { createMockD1, runEffect } from "@meetsmatch/cf-shared/testing";
 import { NotFoundError } from "@meetsmatch/cf-shared";
@@ -96,8 +96,10 @@ describe("UserRepository extended", () => {
     });
 
     it("computes age from birthDate when age is missing", async () => {
-      const { repo } = createRepo([]);
-      const user = await runEffect(
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2024-01-01"));
+      const { repo, db } = createRepo([]);
+      await runEffect(
         repo.create({
           user: {
             id: "u3",
@@ -106,7 +108,11 @@ describe("UserRepository extended", () => {
           } as any,
         }),
       );
-      expect(user.id).toBe("u3");
+      const insert = db._captured.findLast((c) =>
+        c.sql.includes("INSERT INTO users"),
+      );
+      expect(insert?.values[5]).toBe(23);
+      vi.useRealTimers();
     });
   });
 });

@@ -209,7 +209,11 @@ describe("NotificationQueueConsumer idempotency", () => {
 
     // Start Worker A — pauses at SELECT
     const p1 = consumer.processBatch({ messages: [msg] } as any);
-    await new Promise((r) => setTimeout(r, 10));
+    // Wait until Worker A is actually paused at the UPDATE.
+    for (let i = 0; i < 100 && updateCount === 0; i++) {
+      await Promise.resolve();
+    }
+    expect(updateCount).toBe(1);
 
     // Worker B processes same message — reads "pending" because A hasn't updated yet
     const msg2 = createMessage({

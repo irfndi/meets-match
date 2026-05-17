@@ -55,7 +55,7 @@ describe("runDLQHealthCheck", () => {
         exec: vi.fn(),
         withSession: vi.fn(),
         dump: vi.fn(),
-      } as unknown as import("@cloudflare/workers-types").D1Database,
+      },
       KV: {} as unknown as import("@cloudflare/workers-types").KVNamespace,
       API_SERVICE: {
         fetch: vi.fn(async () => new Response()),
@@ -65,6 +65,6 @@ describe("runDLQHealthCheck", () => {
       } as unknown as import("@cloudflare/workers-types").Fetcher,
     };
 
-    await expect(runDLQHealthCheck(env)).resolves.not.toThrow();
+    await expect(runDLQHealthCheck(env)).resolves.toBeUndefined();
   });
 });

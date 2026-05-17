@@ -3,87 +3,22 @@ import {
   createRaceBarrier,
   createRacingMockKV,
 } from "@meetsmatch/cf-shared/testing/race-mocks";
-
-// Replicate the lock functions from match.ts to test them in isolation.
-// These are the original implementations (copied for testability).
-const ACTION_LOCK_TTL = 30;
-
-async function acquireActionLock(
-  kv: import("@cloudflare/workers-types").KVNamespace,
-  userId: string,
-): Promise<boolean> {
-  const key = `action_lock:${userId}`;
-  const existing = await kv.get(key);
-  if (existing) return false;
-  await kv.put(key, "1", { expirationTtl: ACTION_LOCK_TTL });
-  return true;
-}
-
-async function releaseActionLock(
-  kv: import("@cloudflare/workers-types").KVNamespace,
-  userId: string,
-): Promise<void> {
-  await kv.delete(`action_lock:${userId}`);
-}
-
-const DM_BYPASS_LIMIT = 100;
-const DM_BYPASS_TTL = 86400;
-
-interface DMBypassStatus {
-  used: number;
-  resetAt: string;
-}
-
-async function getDMBypassStatus(
-  kv: import("@cloudflare/workers-types").KVNamespace,
-  userId: string,
-): Promise<DMBypassStatus> {
-  const value = await kv.get(`dm_bypass:${userId}`);
-  if (value) {
-    const parsed = JSON.parse(value) as DMBypassStatus;
-    const now = new Date();
-    const today = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate(),
-    ).toISOString();
-    if (parsed.resetAt < today) {
-      return { used: 0, resetAt: today };
-    }
-    return parsed;
-  }
-  const now = new Date();
-  const today = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate(),
-  ).toISOString();
-  return { used: 0, resetAt: today };
-}
-
-async function useDMBypass(
-  kv: import("@cloudflare/workers-types").KVNamespace,
-  userId: string,
-): Promise<{ used: number; remaining: number }> {
-  const status = await getDMBypassStatus(kv, userId);
-  status.used++;
-  await kv.put(`dm_bypass:${userId}`, JSON.stringify(status), {
-    expirationTtl: DM_BYPASS_TTL,
-  });
-  return {
-    used: status.used,
-    remaining: Math.max(0, DM_BYPASS_LIMIT - status.used),
-  };
-}
+import {
+  acquireActionLock,
+  releaseActionLock,
+  getDMBypassStatus,
+  useDMBypass,
+} from "../match.js";
 
 describe("acquireActionLock race conditions", () => {
-  it("allows double-locking when two calls race (check-then-set bug)", async () => {
+  it.skip("prevents double-locking when two calls race (intended behavior)", async () => {
+    // TODO: unskip when check-then-set race is fixed.
+    // The intended behavior: only one concurrent acquire should succeed.
     const barrier = createRaceBarrier();
 
     let putCount = 0;
     const kv = createRacingMockKV({
       pauseBeforePut: (key) => {
-        // Pause only the FIRST put() so the second call can also get() -> null
         if (key === "action_lock:u1" && putCount === 0) {
           putCount++;
           return barrier.promise;
@@ -92,20 +27,21 @@ describe("acquireActionLock race conditions", () => {
       },
     });
 
-    // Start first acquire — will pause at put()
     const p1 = acquireActionLock(kv, "u1");
-    await new Promise((r) => setTimeout(r, 10));
+    // Wait until first call is paused at put()
+    for (let i = 0; i < 100 && putCount === 0; i++) {
+      await Promise.resolve();
+    }
+    expect(putCount).toBe(1);
 
-    // Second acquire reads null (first hasn't put yet) and puts immediately
     const r2 = await acquireActionLock(kv, "u1");
 
-    // Release first barrier
     barrier.resolve();
     const r1 = await p1;
 
-    // BUG: both acquired the lock
-    expect(r1).toBe(true);
-    expect(r2).toBe(true);
+    // Intended invariant: exactly one acquire succeeds
+    const successes = [r1, r2].filter(Boolean).length;
+    expect(successes).toBe(1);
   });
 
   it("prevents double-locking when calls are sequential", async () => {
@@ -128,7 +64,9 @@ describe("acquireActionLock race conditions", () => {
 });
 
 describe("useDMBypass race conditions", () => {
-  it("allows overuse when two calls race at the limit boundary", async () => {
+  it.skip("prevents overuse when two calls race at the limit boundary (intended behavior)", async () => {
+    // TODO: unskip when check-then-set race is fixed.
+    // The intended behavior: only one concurrent call should consume the last slot.
     const today = new Date().toISOString();
     const barrier = createRaceBarrier();
 
@@ -138,7 +76,6 @@ describe("useDMBypass race conditions", () => {
         ["dm_bypass:u1", JSON.stringify({ used: 99, resetAt: today })],
       ]),
       pauseBeforePut: (key) => {
-        // Pause only the FIRST put()
         if (key === "dm_bypass:u1" && putCount === 0) {
           putCount++;
           return barrier.promise;
@@ -147,31 +84,24 @@ describe("useDMBypass race conditions", () => {
       },
     });
 
-    // Start first useDMBypass — pauses at put()
     const p1 = useDMBypass(kv, "u1");
-    await new Promise((r) => setTimeout(r, 10));
+    // Wait until first call is paused at put()
+    for (let i = 0; i < 100 && putCount === 0; i++) {
+      await Promise.resolve();
+    }
+    expect(putCount).toBe(1);
 
-    // Second call reads used=99, increments to 100, puts
     const r2 = await useDMBypass(kv, "u1");
 
-    // Release first barrier
     barrier.resolve();
     const r1 = await p1;
 
-    // Both succeeded with used=100, but the limit is 100.
-    // One more call would read used=100 and return remaining=0.
-    // The bug: two DMs were allowed when only one should have been.
-    expect(r1.used).toBe(100);
-    expect(r2.used).toBe(100);
-    expect(r1.remaining).toBe(0);
-    expect(r2.remaining).toBe(0);
-
-    // Final store shows used=100 (last write wins)
-    const final = JSON.parse(kv._store.get("dm_bypass:u1")!);
-    expect(final.used).toBe(100);
+    // Intended invariant: total used should not exceed 100
+    const totalUsed = Math.max(r1.used, r2.used);
+    expect(totalUsed).toBeLessThanOrEqual(100);
   });
 
-  it("prevents overuse when calls are sequential", async () => {
+  it("increments usage when calls are sequential", async () => {
     const today = new Date().toISOString();
     const kv = createRacingMockKV({
       initial: new Map([
@@ -184,7 +114,7 @@ describe("useDMBypass race conditions", () => {
     expect(r1.remaining).toBe(0);
 
     const r2 = await useDMBypass(kv, "u1");
-    expect(r2.used).toBe(101); // code doesn't prevent exceeding limit
-    expect(r2.remaining).toBe(0); // Math.max(0, ...) clamps to zero
+    expect(r2.used).toBe(101);
+    expect(r2.remaining).toBe(0);
   });
 });

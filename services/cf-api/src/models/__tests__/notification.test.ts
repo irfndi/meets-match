@@ -33,7 +33,7 @@ describe("NotificationRepository", () => {
     return {
       id: "n1",
       user_id: "u1",
-      type: "LIKE",
+      type: "NEW_LIKE",
       channel: "TELEGRAM",
       payload: '{"msg":"hello"}',
       status: "pending",

@@ -74,7 +74,7 @@ describe("runReengagementJob", () => {
       ],
       apiOk: false,
     });
-    await expect(runReengagementJob(env)).resolves.not.toThrow();
+    await expect(runReengagementJob(env)).resolves.toBeUndefined();
   });
 
   it("counts all users for unknown gender", async () => {
@@ -146,7 +146,7 @@ describe("runReengagementJob", () => {
       } as unknown as import("@cloudflare/workers-types").Fetcher,
     };
 
-    await expect(runReengagementJob(env)).resolves.not.toThrow();
+    await expect(runReengagementJob(env)).resolves.toBeUndefined();
   });
 
   it("uses fallback message when nearby count is 0", async () => {

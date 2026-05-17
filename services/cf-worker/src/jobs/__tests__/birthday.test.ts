@@ -78,7 +78,7 @@ describe("runBirthdayJob", () => {
       apiResponse: { ok: false, status: 500 },
     });
 
-    await expect(runBirthdayJob(env)).resolves.not.toThrow();
+    await expect(runBirthdayJob(env)).resolves.toBeUndefined();
   });
 
   it("handles DB failure gracefully", async () => {
@@ -101,7 +101,7 @@ describe("runBirthdayJob", () => {
       } as unknown as import("@cloudflare/workers-types").Fetcher,
     };
 
-    await expect(runBirthdayJob(env)).resolves.not.toThrow();
+    await expect(runBirthdayJob(env)).resolves.toBeUndefined();
   });
 
   it("escapes special characters in names", async () => {

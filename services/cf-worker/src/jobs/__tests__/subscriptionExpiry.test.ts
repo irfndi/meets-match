@@ -35,7 +35,7 @@ describe("runSubscriptionExpiryJob", () => {
 
   it("handles API error gracefully", async () => {
     const env = createEnv({ ok: false, status: 500 });
-    await expect(runSubscriptionExpiryJob(env)).resolves.not.toThrow();
+    await expect(runSubscriptionExpiryJob(env)).resolves.toBeUndefined();
   });
 
   it("handles fetch exception gracefully", async () => {
@@ -51,6 +51,6 @@ describe("runSubscriptionExpiryJob", () => {
       } as unknown as import("@cloudflare/workers-types").Fetcher,
       DB: {} as unknown as import("@cloudflare/workers-types").D1Database,
     };
-    await expect(runSubscriptionExpiryJob(env)).resolves.not.toThrow();
+    await expect(runSubscriptionExpiryJob(env)).resolves.toBeUndefined();
   });
 });

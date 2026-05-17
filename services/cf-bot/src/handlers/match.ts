@@ -286,7 +286,7 @@ async function clearLastAction(kv: KVNamespace, userId: string): Promise<void> {
   await kv.delete(`last_action:${userId}`);
 }
 
-async function acquireActionLock(
+export async function acquireActionLock(
   kv: KVNamespace,
   userId: string,
 ): Promise<boolean> {
@@ -297,7 +297,7 @@ async function acquireActionLock(
   return true;
 }
 
-async function releaseActionLock(
+export async function releaseActionLock(
   kv: KVNamespace,
   userId: string,
 ): Promise<void> {
@@ -306,12 +306,12 @@ async function releaseActionLock(
 
 // --- Premium+ DM Bypass tracking ---
 
-interface DMBypassStatus {
+export interface DMBypassStatus {
   used: number;
   resetAt: string;
 }
 
-async function getDMBypassStatus(
+export async function getDMBypassStatus(
   kv: KVNamespace,
   userId: string,
 ): Promise<DMBypassStatus> {
@@ -336,7 +336,7 @@ async function getDMBypassStatus(
   return { used: 0, resetAt: today };
 }
 
-async function useDMBypass(
+export async function useDMBypass(
   kv: KVNamespace,
   userId: string,
 ): Promise<{ used: number; remaining: number }> {

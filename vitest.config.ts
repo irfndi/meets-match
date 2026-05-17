@@ -9,10 +9,10 @@ export default defineConfig({
       provider: "v8",
       reporter: ["text", "json", "html"],
       thresholds: {
-        statements: 45,
-        branches: 40,
-        functions: 45,
-        lines: 45,
+        statements: 60,
+        branches: 60,
+        functions: 60,
+        lines: 60,
       },
       include: ["packages/**/src/**/*.ts", "services/**/src/**/*.ts"],
       exclude: [
@@ -24,6 +24,8 @@ export default defineConfig({
         "**/dist/**",
         "**/index.ts",
         "**/lib/version.ts",
+        "**/testing/**",
+        "**/types.ts",
       ],
     },
   },

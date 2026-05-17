@@ -6,16 +6,16 @@ function mockD1(
 ) {
   return {
     prepare() {
-      return {
+      const stmt = {
+        first: async () =>
+          typeof countValue === "number" ? { c: countValue } : null,
+        all: async () => ({ results }),
+        run: async () => ({ success: true }),
         bind() {
-          return {
-            first: async () =>
-              typeof countValue === "number" ? { c: countValue } : null,
-            all: async () => ({ results }),
-            run: async () => ({ success: true }),
-          };
+          return stmt;
         },
       };
+      return stmt;
     },
   } as unknown as D1Database;
 }
@@ -48,7 +48,7 @@ describe("Cron Jobs", () => {
   it("runReengagementJob processes candidates without error", async () => {
     const { runReengagementJob } = await import("../jobs/reengagement.js");
     const env = mockEnv();
-    await expect(runReengagementJob(env as any)).resolves.not.toThrow();
+    await expect(runReengagementJob(env as any)).resolves.toBeUndefined();
   });
 
   it("runReengagementJob sends variant messages with nearby counts", async () => {
@@ -78,12 +78,30 @@ describe("Cron Jobs", () => {
   it("runDLQHealthCheck handles empty DLQ", async () => {
     const { runDLQHealthCheck } = await import("../jobs/dlqHealth.js");
     const env = mockEnv(0);
-    await expect(runDLQHealthCheck(env as any)).resolves.not.toThrow();
+    await expect(runDLQHealthCheck(env as any)).resolves.toBeUndefined();
   });
 
   it("runDLQHealthCheck handles populated DLQ", async () => {
     const { runDLQHealthCheck } = await import("../jobs/dlqHealth.js");
     const env = mockEnv(150);
-    await expect(runDLQHealthCheck(env as any)).resolves.not.toThrow();
+    await expect(runDLQHealthCheck(env as any)).resolves.toBeUndefined();
+  });
+
+  it("runDLQHealthCheck handles errors gracefully", async () => {
+    const { runDLQHealthCheck } = await import("../jobs/dlqHealth.js");
+    const env = {
+      DB: {
+        prepare() {
+          return {
+            first: async () => {
+              throw new Error("DB failure");
+            },
+          };
+        },
+      },
+      KV: {},
+      API_SERVICE: {},
+    };
+    await expect(runDLQHealthCheck(env as any)).resolves.toBeUndefined();
   });
 });
