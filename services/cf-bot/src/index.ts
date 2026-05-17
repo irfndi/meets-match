@@ -55,6 +55,7 @@ import { t, type Language } from "./lib/i18n.js";
 import {
   handleErrorReportCallback,
   recordCommandJourney,
+  recordActionJourney,
   replyWithError,
   isBotBlockedError,
 } from "./lib/error-feedback.js";
@@ -153,11 +154,24 @@ function createBot(env: Env): Bot<MyContext> {
     return next();
   });
 
-  // Record journey for commands — must be BEFORE command handlers
+  // Record journey for commands and menu buttons — must be BEFORE handlers
   bot.use(async (ctx, next) => {
-    if (ctx.message?.text?.startsWith("/")) {
-      const cmd = ctx.message.text.split(" ")[0].slice(1);
+    const text = ctx.message?.text;
+    if (text?.startsWith("/")) {
+      const cmd = text.split(" ")[0].slice(1);
       await recordCommandJourney(ctx, env, cmd);
+    } else if (text === MENU_FIND_MATCH) {
+      await recordActionJourney(ctx, env, "menu/find_match");
+    } else if (text === MENU_MY_MATCHES) {
+      await recordActionJourney(ctx, env, "menu/my_matches");
+    } else if (text === MENU_PROFILE) {
+      await recordActionJourney(ctx, env, "menu/profile");
+    } else if (text === MENU_SETTINGS) {
+      await recordActionJourney(ctx, env, "menu/settings");
+    } else if (text === MENU_PREMIUM) {
+      await recordActionJourney(ctx, env, "menu/premium");
+    } else if (text === MENU_REFERRAL) {
+      await recordActionJourney(ctx, env, "menu/referral");
     }
     return next();
   });
