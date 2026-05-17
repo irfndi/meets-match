@@ -339,6 +339,155 @@ describe("Match Handlers", () => {
     });
   });
 
+  describe("matchCommand edge cases", () => {
+    it("returns early when ctx.from is missing", async () => {
+      (ctx as any).from = undefined;
+      await matchCommand(ctx, env);
+      expect(ctx.reply).toHaveBeenCalledWith(
+        expect.stringContaining("Could not identify you"),
+      );
+    });
+
+    it("shows incomplete profile message for incomplete user", async () => {
+      env.API_SERVICE = createMockApiService({
+        "/users/123": () =>
+          new Response(JSON.stringify({ user: incompleteUser }), {
+            status: 200,
+          }),
+      });
+      await matchCommand(ctx, env);
+      expect(ctx.reply).toHaveBeenCalledWith(
+        expect.stringContaining("Complete your profile"),
+      );
+    });
+  });
+
+  describe("matchCallbacks mutual like", () => {
+    it("shows 'It is a Match!' when like is mutual", async () => {
+      ctx.callbackQuery!.data = "match:like:456";
+      (ctx as any).editMessageReplyMarkup = vi
+        .fn()
+        .mockResolvedValue(undefined);
+      await env.KV.put(
+        "match_queue:123",
+        JSON.stringify({
+          matches: [{ id: "456", displayName: "Alice", age: 24 }],
+          index: 0,
+        }),
+      );
+      env.API_SERVICE = createMockApiService({
+        "/users/123": () =>
+          new Response(JSON.stringify({ user: completeUser }), { status: 200 }),
+        "/users/123/interaction-status": () =>
+          new Response(
+            JSON.stringify({
+              likesRemaining: 10,
+              dislikesRemaining: 10,
+              tier: "free",
+            }),
+            { status: 200 },
+          ),
+        "/matches": () =>
+          new Response(
+            JSON.stringify({
+              match: {
+                id: "m1",
+                user1Id: "123",
+                user2Id: "456",
+                status: "PENDING",
+              },
+            }),
+            { status: 201 },
+          ),
+        "/matches/m1/like": () =>
+          new Response(
+            JSON.stringify({ isMutual: true, match: { id: "m1" } }),
+            { status: 200 },
+          ),
+        "/users/456": () =>
+          new Response(
+            JSON.stringify({
+              user: { id: "456", displayName: "Alice", mediaUrls: [] },
+            }),
+            { status: 200 },
+          ),
+      });
+      await matchCallbacks(ctx, env);
+      const replies = (ctx.reply as any).mock.calls;
+      const matchMsg = replies.find((call: any[]) =>
+        String(call[0]).toLowerCase().includes("match"),
+      );
+      expect(matchMsg).toBeDefined();
+    });
+  });
+
+  describe("matchCallbacks free tier limits", () => {
+    it("shows limit reached for likes when likesRemaining is 0", async () => {
+      ctx.callbackQuery!.data = "match:like:456";
+      await env.KV.put(
+        "match_queue:123",
+        JSON.stringify({
+          matches: [{ id: "456", displayName: "Alice", age: 24 }],
+          index: 0,
+        }),
+      );
+      env.API_SERVICE = createMockApiService({
+        "/users/123": () =>
+          new Response(JSON.stringify({ user: completeUser }), { status: 200 }),
+        "/users/123/interaction-status": () =>
+          new Response(
+            JSON.stringify({
+              likesRemaining: 0,
+              likesTotal: 15,
+              dislikesRemaining: 10,
+              tier: "free",
+            }),
+            { status: 200 },
+          ),
+      });
+      await matchCallbacks(ctx, env);
+      expect(ctx.answerCallbackQuery).toHaveBeenCalled();
+    });
+
+    it("shows limit reached for dislikes when dislikesRemaining is 0", async () => {
+      ctx.callbackQuery!.data = "match:dislike:456";
+      await env.KV.put(
+        "match_queue:123",
+        JSON.stringify({
+          matches: [{ id: "456", displayName: "Alice", age: 24 }],
+          index: 0,
+        }),
+      );
+      env.API_SERVICE = createMockApiService({
+        "/users/123": () =>
+          new Response(JSON.stringify({ user: completeUser }), { status: 200 }),
+        "/users/123/interaction-status": () =>
+          new Response(
+            JSON.stringify({
+              likesRemaining: 10,
+              dislikesRemaining: 0,
+              dislikesTotal: 35,
+              tier: "free",
+            }),
+            { status: 200 },
+          ),
+      });
+      await matchCallbacks(ctx, env);
+      expect(ctx.answerCallbackQuery).toHaveBeenCalled();
+    });
+  });
+
+  describe("matchCallbacks action lock", () => {
+    it("returns 'Processing...' when action lock is already held", async () => {
+      ctx.callbackQuery!.data = "match:like:456";
+      await env.KV.put("action_lock:123", "1");
+      await matchCallbacks(ctx, env);
+      expect(ctx.answerCallbackQuery).toHaveBeenCalledWith(
+        expect.stringContaining("Processing"),
+      );
+    });
+  });
+
   describe("matchCommand error paths", () => {
     it("should show error with trace ID when an unexpected error occurs", async () => {
       env.API_SERVICE = createMockApiService({

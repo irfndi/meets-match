@@ -20,6 +20,8 @@
     "format": "prettier --write \"**/*.{ts,tsx,json,md}\""
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "^4.1.6",
+    "fast-check": "^4.8.0",
     "prettier": "^3.8.3",
     "tsx": "^4.22.0",
     "typescript": "^6.0.3",

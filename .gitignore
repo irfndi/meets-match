@@ -36,3 +36,4 @@ node_modules/
 
 # Auto-generated version files
 services/*/src/lib/version.ts
+coverage/
