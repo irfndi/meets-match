@@ -392,17 +392,18 @@ describe("ApiRouter", () => {
 
     it("routes GET /geocode with query", async () => {
       const originalFetch = globalThis.fetch;
-      globalThis.fetch = vi.fn(async () =>
-        new Response(
-          JSON.stringify([
-            {
-              lat: "-6.2",
-              lon: "106.8",
-              address: { city: "Jakarta", country: "Indonesia" },
-            },
-          ]),
-          { status: 200, headers: { "Content-Type": "application/json" } },
-        ),
+      globalThis.fetch = vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify([
+              {
+                lat: "-6.2",
+                lon: "106.8",
+                address: { city: "Jakarta", country: "Indonesia" },
+              },
+            ]),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          ),
       ) as unknown as typeof fetch;
       const response = await router.route(
         new Request("http://api/geocode?q=jakarta&limit=5"),
@@ -413,15 +414,16 @@ describe("ApiRouter", () => {
 
     it("routes GET /geocode with lat/lon", async () => {
       const originalFetch = globalThis.fetch;
-      globalThis.fetch = vi.fn(async () =>
-        new Response(
-          JSON.stringify({
-            lat: "-6.2",
-            lon: "106.8",
-            address: { city: "Jakarta", country: "Indonesia" },
-          }),
-          { status: 200, headers: { "Content-Type": "application/json" } },
-        ),
+      globalThis.fetch = vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              lat: "-6.2",
+              lon: "106.8",
+              address: { city: "Jakarta", country: "Indonesia" },
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          ),
       ) as unknown as typeof fetch;
       const response = await router.route(
         new Request("http://api/geocode?lat=-6.2&lon=106.8"),
@@ -468,9 +470,7 @@ describe("ApiRouter", () => {
         NOTIFICATION_QUEUE: createMockQueue(),
         MEDIA_BUCKET: createMockR2(),
       });
-      const response = await router.route(
-        new Request("http://api/users/999"),
-      );
+      const response = await router.route(new Request("http://api/users/999"));
       expect(response.status).toBe(404);
     });
 

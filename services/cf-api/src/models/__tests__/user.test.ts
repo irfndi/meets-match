@@ -142,7 +142,6 @@ describe("UserRepository", () => {
   });
 });
 
-
 describe("UserRepository quota methods", () => {
   const today = "2025-06-01T00:00:00.000Z";
 

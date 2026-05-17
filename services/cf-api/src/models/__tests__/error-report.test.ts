@@ -63,7 +63,9 @@ describe("ErrorReportRepository", () => {
   it("marks alerts sent", async () => {
     const { repo, db } = createRepo();
     await runEffect(repo.markAlertsSent(["id1", "id2"]));
-    expect(db._captured.some((q) => q.sql.includes("UPDATE error_reports"))).toBe(true);
+    expect(
+      db._captured.some((q) => q.sql.includes("UPDATE error_reports")),
+    ).toBe(true);
   });
 
   it("skips markAlertsSent when ids empty", async () => {
@@ -96,6 +98,8 @@ describe("ErrorReportRepository", () => {
     const { repo } = createRepo(() => {
       throw new Error("DB down");
     });
-    await expect(runEffect(repo.create({ reporterId: "u1" }))).rejects.toThrow();
+    await expect(
+      runEffect(repo.create({ reporterId: "u1" })),
+    ).rejects.toThrow();
   });
 });

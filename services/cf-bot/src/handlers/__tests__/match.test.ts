@@ -351,7 +351,9 @@ describe("Match Handlers", () => {
     it("shows incomplete profile message for incomplete user", async () => {
       env.API_SERVICE = createMockApiService({
         "/users/123": () =>
-          new Response(JSON.stringify({ user: incompleteUser }), { status: 200 }),
+          new Response(JSON.stringify({ user: incompleteUser }), {
+            status: 200,
+          }),
       });
       await matchCommand(ctx, env);
       expect(ctx.reply).toHaveBeenCalledWith(
