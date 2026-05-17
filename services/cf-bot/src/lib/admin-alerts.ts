@@ -208,6 +208,10 @@ async function sendTelegramMessage(
   chatId: string,
   text: string,
 ): Promise<void> {
+  if (!env.BOT_TOKEN) {
+    log.warn("sendTelegramMessage", "BOT_TOKEN not configured, skipping alert");
+    return;
+  }
   const url = `https://api.telegram.org/bot${env.BOT_TOKEN}/sendMessage`;
   const res = await fetch(url, {
     method: "POST",
