@@ -6,8 +6,8 @@ This document describes the deployment sequence for migrating MeetMatch from Go+
 
 ## Pre-Deployment Checklist
 
-- [ ] All integration tests pass (`npm test` in each service)
-- [ ] TypeScript compiles cleanly (`npx tsc --noEmit` in each service)
+- [ ] All integration tests pass (`pnpm test` in each service)
+- [ ] TypeScript compiles cleanly (`pnpm exec tsc --noEmit` in each service)
 - [ ] D1 database migrated with all 5 migrations applied
 - [ ] KV namespaces created for all services
 - [ ] Queue `notification-queue` and DLQ configured
@@ -24,7 +24,7 @@ This document describes the deployment sequence for migrating MeetMatch from Go+
 
    ```bash
    cd services/cf-api
-   npx tsc --noEmit
+   pnpm exec tsc --noEmit
    ```
 
 2. Deploy:
@@ -47,7 +47,7 @@ This document describes the deployment sequence for migrating MeetMatch from Go+
 
    ```bash
    cd services/cf-worker
-   npx tsc --noEmit
+   pnpm exec tsc --noEmit
    ```
 
 2. Deploy:
@@ -67,7 +67,7 @@ This document describes the deployment sequence for migrating MeetMatch from Go+
 
    ```bash
    cd services/cf-bot
-   npx tsc --noEmit
+   pnpm exec tsc --noEmit
    ```
 
 2. Deploy:

@@ -61,6 +61,8 @@ export async function recordJourneyEvent(
   event: Omit<JourneyEvent, "ts">,
 ): Promise<void> {
   try {
+    // Note: KV is eventually consistent; concurrent events may race.
+    // Journey data is best-effort telemetry, not critical state.
     const journey = await getJourney(kv, userId);
     journey.events.push({ ts: new Date().toISOString(), ...event });
     if (journey.events.length > JOURNEY_MAX_EVENTS) {
@@ -85,6 +87,7 @@ export async function recordJourneyError(
   traceId: string,
 ): Promise<void> {
   try {
+    // Note: KV read-modify-write race possible. Best-effort telemetry.
     const journey = await getJourney(kv, userId);
     journey.lastErrorAt = new Date().toISOString();
     journey.lastErrorTrace = traceId;
@@ -116,6 +119,5 @@ export function formatJourneyForReport(journey: UserJourney): string {
 }
 
 export function generateTraceId(): string {
-  const hex = () => Math.floor(Math.random() * 16).toString(16);
-  return Array.from({ length: 8 }, hex).join("").toUpperCase();
+  return crypto.randomUUID().slice(0, 8).toUpperCase();
 }

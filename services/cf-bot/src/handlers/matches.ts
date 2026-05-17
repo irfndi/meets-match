@@ -290,9 +290,9 @@ export const matchesCallbacks = async (
     if (data === "likes:dismiss") {
       const notifications = await getNotifications(env, userId);
       // Remove from end to beginning to preserve indices
-      for (let i = notifications.length - 1; i >= 0; i--) {
-        if (notifications[i].type === "like") {
-          await removeNotification(env, userId, i);
+      for (const n of notifications) {
+        if (n.type === "like") {
+          await removeNotification(env, userId, n.id);
         }
       }
       await ctx
@@ -355,10 +355,11 @@ export const matchesCallbacks = async (
 
         // Remove this like notification
         const notifications = await getNotifications(env, userId);
-        const idx = notifications.findIndex(
+        const notification = notifications.find(
           (n) => n.type === "like" && n.fromUserId === targetUserId,
         );
-        if (idx >= 0) await removeNotification(env, userId, idx);
+        if (notification)
+          await removeNotification(env, userId, notification.id);
       } catch {
         await ctx.reply(t("matchesCouldNotLoad", lang));
       }

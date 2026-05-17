@@ -238,7 +238,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
   **Acceptance Criteria**:
   - [ ] All wrangler.toml files exist for API, Bot, Worker
   - [ ] Root package.json has workspace config
-  - [ ] `npx tsc --noEmit` passes with zero errors
+  - [ ] `pnpm exec tsc --noEmit` passes with zero errors
   - [ ] `effect` and `effectful-cloudflare` in dependencies
 
   **QA Scenarios:**
@@ -255,7 +255,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
   Scenario: TypeScript compiles without errors
     Tool: Bash
     Steps:
-      1. npx tsc --noEmit
+      1. pnpm exec tsc --noEmit
     Expected Result: Zero type errors
     Evidence: .sisyphus/evidence/task-1-tsc-compile.txt
   ```

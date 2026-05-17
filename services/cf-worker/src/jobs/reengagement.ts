@@ -173,5 +173,6 @@ export async function runReengagementJob(env: Env): Promise<void> {
     console.log("[reengagement] Job complete");
   } catch (error) {
     console.error("[reengagement] Job failed:", error);
+    throw error;
   }
 }

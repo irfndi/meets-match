@@ -37,5 +37,6 @@ export async function runDLQHealthCheck(env: Env): Promise<void> {
     console.log("[dlq-health] Check complete");
   } catch (error) {
     console.error("[dlq-health] Check failed:", error);
+    throw error;
   }
 }

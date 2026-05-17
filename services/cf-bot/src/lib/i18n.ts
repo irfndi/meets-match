@@ -351,7 +351,7 @@ const en: Translations = {
   matchSkipGated:
     "🔒 *Skip is a Premium feature*\n\nFree users can only Like or Dislike.\n\nUpgrade to Premium to skip profiles and browse faster!",
   matchReferralPrompt:
-    "👋 You're on a roll! Share MeetMatch with friends to earn bonus likes and dislikes! 🎁",
+    "👋 You're on a roll! Share MeetMatch with friends to earn bonus likes and dislikes! 🎁\n\nYour referral code: `{code}`",
   referralSuccess:
     "🎉 *Referral successful!*\n\nYou earned *+{bonus}* bonus swipes!",
   referralInvalid: "❌ Invalid or expired referral code.",

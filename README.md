@@ -29,7 +29,7 @@ All three Workers share logic through an internal package (`cf-shared`) and comm
 
 - Node 20+
 - pnpm
-- Wrangler CLI (`npm install -g wrangler`)
+- Wrangler CLI (`pnpm add -g wrangler`)
 
 ### Setup
 
@@ -41,7 +41,7 @@ cp .dev.vars.example services/cf-bot/.dev.vars
 cp .dev.vars.example services/cf-worker/.dev.vars
 
 # Apply D1 migrations locally
-cd services/cf-api && npx wrangler d1 migrations apply meetsmatch-db --local
+cd services/cf-api && pnpm exec wrangler d1 migrations apply meetsmatch-db --local
 ```
 
 Minimal required env var: `BOT_TOKEN`.
