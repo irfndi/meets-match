@@ -2,6 +2,7 @@ import { InlineKeyboard } from "grammy";
 import type { MyContext } from "../types.js";
 import type { Env } from "../index.js";
 import { createLogger } from "@meetsmatch/cf-shared";
+import { escapeMarkdownV2 } from "./i18n.js";
 import type { ErrorContext } from "./error-feedback.js";
 
 const log = createLogger("cf-bot");
@@ -150,7 +151,7 @@ export async function sendAggregatedAlerts(env: Env): Promise<void> {
     }
 
     const sourceLines = summary.sources
-      .map((s) => `  • ${s.source ?? "unknown"}: ${s.count}`)
+      .map((s) => `  • ${escapeMarkdownV2(s.source ?? "unknown")}: ${s.count}`)
       .join("\n");
 
     const text = [
@@ -162,7 +163,7 @@ export async function sendAggregatedAlerts(env: Env): Promise<void> {
       "*Breakdown by source:*",
       sourceLines,
       "",
-      `*Latest:* ${new Date(summary.latestAt).toLocaleString("en-US", { timeZone: "Asia/Jakarta" })}`,
+      `*Latest:* ${escapeMarkdownV2(new Date(summary.latestAt).toLocaleString("en-US", { timeZone: "Asia/Jakarta" }))}`,
     ].join("\n");
 
     await sendTelegramMessage(env, adminChatId, text);
@@ -193,12 +194,12 @@ function buildAlertMessage(payload: AlertPayload): string {
   return [
     `${severityEmoji} *${payload.severity.toUpperCase()} Severity Alert*`,
     "",
-    `*Source:* ${payload.source}`,
-    `*User:* ${payload.userId}`,
-    `*Trace ID:* \`${payload.traceId}\``,
-    `*Time:* ${new Date().toISOString()}`,
+    `*Source:* ${escapeMarkdownV2(payload.source)}`,
+    `*User:* ${escapeMarkdownV2(payload.userId)}`,
+    `*Trace ID:* \`${escapeMarkdownV2(payload.traceId)}\``,
+    `*Time:* ${escapeMarkdownV2(new Date().toISOString())}`,
     "",
-    payload.message.slice(0, 400),
+    escapeMarkdownV2(payload.message.slice(0, 400)),
   ].join("\n");
 }
 
