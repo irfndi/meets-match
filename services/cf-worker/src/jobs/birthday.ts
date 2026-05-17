@@ -61,7 +61,9 @@ export async function runBirthdayJob(env: Env): Promise<void> {
         !isLeapYear(today.getFullYear());
       if (
         m < 0 ||
-        (m === 0 && today.getDate() < birthDay && !(isLeapDayBirth && isFeb28NonLeap))
+        (m === 0 &&
+          today.getDate() < birthDay &&
+          !(isLeapDayBirth && isFeb28NonLeap))
       ) {
         age--;
       }
