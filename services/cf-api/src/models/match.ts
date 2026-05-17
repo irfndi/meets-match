@@ -840,12 +840,21 @@ export function calculateMatchScore(
     user2.interests &&
     user2.interests.length > 0
   ) {
+    // Use two Sets for O(1) lookups instead of multiple allocations and array spreads.
     const set1 = new Set(user1.interests);
     const set2 = new Set(user2.interests);
-    const intersection = new Set([...set1].filter((x) => set2.has(x)));
-    const union = new Set([...set1, ...set2]);
-    if (union.size > 0) {
-      score.interests = intersection.size / union.size;
+    let intersectionSize = 0;
+    // Iterate over the smaller set to minimize lookups.
+    const [smaller, larger] =
+      set1.size < set2.size ? [set1, set2] : [set2, set1];
+    for (const item of smaller) {
+      if (larger.has(item)) {
+        intersectionSize++;
+      }
+    }
+    const unionSize = set1.size + set2.size - intersectionSize;
+    if (unionSize > 0) {
+      score.interests = intersectionSize / unionSize;
     }
   }
 
@@ -881,10 +890,17 @@ export function calculateMatchScore(
     user2.preferences.relationshipType.length > 0
   ) {
     prefChecks++;
-    const set1 = new Set(prefs.relationshipType);
-    const overlap = user2.preferences.relationshipType.some((rt) =>
-      set1.has(rt),
-    );
+    // Use direct iteration for small arrays to avoid Set allocation overhead;
+    // fall back to a Set for larger inputs to keep complexity O(n + m).
+    const rt1 = prefs.relationshipType;
+    const rt2 = user2.preferences.relationshipType;
+    let overlap: boolean;
+    if (rt1.length <= 5 && rt2.length <= 5) {
+      overlap = rt2.some((rt) => rt1.includes(rt));
+    } else {
+      const rtSet = new Set(rt1);
+      overlap = rt2.some((rt) => rtSet.has(rt));
+    }
     if (overlap) prefMatches++;
   }
 
