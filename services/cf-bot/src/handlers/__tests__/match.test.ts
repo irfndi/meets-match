@@ -32,11 +32,13 @@ function mockCtx(): MyContext {
 }
 
 function createMockApiService(responseMap: Record<string, () => Response>) {
+  const requests: Array<{ url: string; method: string }> = [];
   return {
     fetch: vi.fn().mockImplementation((req: Request) => {
       const url =
         typeof req === "string" ? req : (req as any).url || String(req);
       const method = (req as any).method || "GET";
+      requests.push({ url, method });
       const sortedPatterns = Object.entries(responseMap).sort(
         (a, b) => b[0].length - a[0].length,
       );
@@ -55,6 +57,7 @@ function createMockApiService(responseMap: Record<string, () => Response>) {
       }
       return Promise.resolve(new Response(JSON.stringify({}), { status: 404 }));
     }),
+    _requests: requests,
   };
 }
 

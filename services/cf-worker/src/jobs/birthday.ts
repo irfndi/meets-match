@@ -22,6 +22,29 @@ export async function runBirthdayJob(env: Env): Promise<void> {
     const birthdayUsers = results ?? [];
     console.log(`[birthday] Found ${birthdayUsers.length} birthday(s) today`);
 
+    // Update age column for birthday users so cached ages stay current
+    for (const user of birthdayUsers) {
+      const birthdayUserId = String((user as Record<string, unknown>).id);
+      const birthDate = String((user as Record<string, unknown>).birth_date);
+      const birthYear = parseInt(birthDate.slice(0, 4), 10);
+      const birthMonth = parseInt(birthDate.slice(5, 7), 10);
+      const birthDay = parseInt(birthDate.slice(8, 10), 10);
+      const today = new Date();
+      let age = today.getFullYear() - birthYear;
+      const m = today.getMonth() + 1 - birthMonth;
+      if (m < 0 || (m === 0 && today.getDate() < birthDay)) {
+        age--;
+      }
+      try {
+        await env.DB.prepare("UPDATE users SET age = ? WHERE id = ?")
+          .bind(age, birthdayUserId)
+          .run();
+        console.log(`[birthday] Updated age to ${age} for ${birthdayUserId}`);
+      } catch (error) {
+        console.error(`[birthday] Failed to update age for ${birthdayUserId}:`, error);
+      }
+    }
+
     for (const user of birthdayUsers) {
       const birthdayUserId = String((user as Record<string, unknown>).id);
       const firstName = String(

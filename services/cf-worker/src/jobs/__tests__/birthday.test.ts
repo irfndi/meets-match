@@ -69,6 +69,24 @@ describe("runBirthdayJob", () => {
     expect(calls[0][0].url).toBe("http://api/notifications");
   });
 
+  it("updates age column for birthday users", async () => {
+    const env = createEnv({
+      dbResults: [
+        { id: "user_1", first_name: "Alice", birth_date: "1990-05-17" },
+      ],
+      matchResults: [],
+      apiResponse: { ok: true },
+    });
+
+    await runBirthdayJob(env);
+
+    const prepareCalls = (env.DB.prepare as any).mock.calls;
+    const ageUpdateCall = prepareCalls.find((call: any[]) =>
+      call[0].includes("UPDATE users SET age"),
+    );
+    expect(ageUpdateCall).toBeDefined();
+  });
+
   it("handles API failure gracefully", async () => {
     const env = createEnv({
       dbResults: [
