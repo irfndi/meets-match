@@ -1121,7 +1121,7 @@ async function handleLocationTextConversation(
     // Geocoding failed twice — accept what user typed, store without lat/lon
     // Distance matching will skip distance filter for this user until geocoded
     const success = await updateUser(env, state.userId, {
-      location: { city, country },
+      location: { city, country, source: "geocoded" as const },
     });
     await clearConversationState(env.KV, state.userId);
     if (success) {
