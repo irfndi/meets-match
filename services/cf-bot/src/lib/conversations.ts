@@ -654,7 +654,13 @@ export async function handleLocationMessage(
   // Reverse geocode to get city/country
   const geo = await reverseGeocodeLocation(env, latitude, longitude);
   const location = geo?.city
-    ? { latitude, longitude, city: geo.city, country: geo.country, source: "gps" }
+    ? {
+        latitude,
+        longitude,
+        city: geo.city,
+        country: geo.country,
+        source: "gps",
+      }
     : { latitude, longitude, source: "gps" };
 
   // Only handle if we're in a location conversation or a general location share
