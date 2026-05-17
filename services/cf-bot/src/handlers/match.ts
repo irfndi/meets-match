@@ -316,12 +316,7 @@ export async function getDMBypassStatus(
   userId: string,
 ): Promise<DMBypassStatus> {
   const value = await kv.get(`dm_bypass:${userId}`);
-  const now = new Date();
-  const today = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate(),
-  ).toISOString();
+  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD in UTC
   if (value) {
     try {
       const parsed = JSON.parse(value) as DMBypassStatus;
@@ -340,7 +335,13 @@ export async function useDMBypass(
   kv: KVNamespace,
   userId: string,
 ): Promise<{ used: number; remaining: number }> {
+  // Note: KV is eventually consistent; this read-modify-write can race.
+  // We mitigate by capping at the limit and relying on idempotency keys
+  // in the downstream API for critical operations.
   const status = await getDMBypassStatus(kv, userId);
+  if (status.used >= DM_BYPASS_LIMIT) {
+    return { used: status.used, remaining: 0 };
+  }
   status.used++;
   await kv.put(`dm_bypass:${userId}`, JSON.stringify(status), {
     expirationTtl: DM_BYPASS_TTL,
@@ -1205,38 +1206,50 @@ async function handleRollback(ctx: MyContext, env: Env): Promise<void> {
       return;
     }
 
-    const lastAction = await getLastAction(env.KV, userId);
-    if (!lastAction) {
-      await ctx.reply(t("rollbackNoAction", lang), {
+    const locked = await acquireActionLock(env.KV, userId);
+    if (!locked) {
+      await ctx.reply(t("matchError", lang), {
         reply_markup: getMatchActionKeyboard(tier, lang),
       });
       return;
     }
 
-    // Call undo API
-    const undoRes = await client.undoMatch(lastAction.matchId, userId);
-    if (!undoRes.restored) {
-      await ctx.reply(t("rollbackNoAction", lang), {
+    try {
+      const lastAction = await getLastAction(env.KV, userId);
+      if (!lastAction) {
+        await ctx.reply(t("rollbackNoAction", lang), {
+          reply_markup: getMatchActionKeyboard(tier, lang),
+        });
+        return;
+      }
+
+      // Call undo API
+      const undoRes = await client.undoMatch(lastAction.matchId, userId);
+      if (!undoRes.restored) {
+        await ctx.reply(t("rollbackNoAction", lang), {
+          reply_markup: getMatchActionKeyboard(tier, lang),
+        });
+        return;
+      }
+
+      // Restore previous match to front of queue
+      const queue = await getMatchQueue(env.KV, userId);
+      if (queue && queue.index > 0) {
+        queue.index--;
+        await setMatchQueue(env.KV, userId, queue);
+      }
+
+      await clearLastAction(env.KV, userId);
+      await ctx.reply(t("rollbackSuccess", lang), {
         reply_markup: getMatchActionKeyboard(tier, lang),
       });
-      return;
-    }
 
-    // Restore previous match to front of queue
-    const queue = await getMatchQueue(env.KV, userId);
-    if (queue && queue.index > 0) {
-      queue.index--;
-      await setMatchQueue(env.KV, userId, queue);
-    }
-
-    await clearLastAction(env.KV, userId);
-    await ctx.reply(t("rollbackSuccess", lang), {
-      reply_markup: getMatchActionKeyboard(tier, lang),
-    });
-
-    // Show the restored profile
-    if (queue) {
-      await showNextMatch(ctx, env, userId, lang);
+      // Show the restored profile
+      if (queue) {
+        await showNextMatch(ctx, env, userId, lang);
+      }
+    } finally {
+      await releaseActionLock(env.KV, userId);
     }
   } catch (error) {
     console.error("Rollback error:", error);
@@ -1313,6 +1326,14 @@ export async function handleLikeMessageConversation(
 
   const targetUserId = String(state.data.targetUserId);
   const myName = ctx.from.first_name ?? "Someone";
+
+  const locked = await acquireActionLock(env.KV, userId);
+  if (!locked) {
+    await ctx.reply(t("matchError", lang), {
+      reply_markup: getMainMenuKeyboard(),
+    });
+    return false;
+  }
 
   try {
     const client = new ApiServiceClient(env.API_SERVICE);
@@ -1416,6 +1437,8 @@ export async function handleLikeMessageConversation(
       action: "like_message_conversation",
       targetUserId,
     });
+  } finally {
+    await releaseActionLock(env.KV, userId);
   }
 
   await clearConversationState(env.KV, userId);
@@ -1437,6 +1460,14 @@ export async function handleLikeMessageMedia(
   const targetUserId = String(state.data.targetUserId);
   const myName = ctx.from.first_name ?? "Someone";
   const lang = await fetchUserLang(env, userId);
+
+  const locked = await acquireActionLock(env.KV, userId);
+  if (!locked) {
+    await ctx.reply(t("matchError", lang), {
+      reply_markup: getMainMenuKeyboard(),
+    });
+    return false;
+  }
 
   try {
     const client = new ApiServiceClient(env.API_SERVICE);
@@ -1534,6 +1565,8 @@ export async function handleLikeMessageMedia(
       action: "like_message_media",
       targetUserId,
     });
+  } finally {
+    await releaseActionLock(env.KV, userId);
   }
 
   await clearConversationState(env.KV, userId);
@@ -2081,43 +2114,55 @@ async function handleBlock(
   const userId = String(ctx.from.id);
   const lang = await fetchUserLang(env, userId);
 
-  // Step 1: Call API first. If this fails, nothing else should happen.
-  try {
-    const client = new ApiServiceClient(env.API_SERVICE);
-    await client.blockUser(userId, targetUserId);
-  } catch (error) {
-    log.error(
-      "handleBlock",
-      "API block call failed",
-      { userId, targetUserId },
-      error instanceof Error ? error : new Error(String(error)),
-    );
-    await replyWithError(ctx, env, lang, { action: "block", targetUserId });
+  const locked = await acquireActionLock(env.KV, userId);
+  if (!locked) {
+    await ctx
+      .answerCallbackQuery("Action in progress. Please wait.")
+      .catch(() => {});
     return;
   }
 
-  // Step 2: Clean up UI — each step is independent, failures are non-fatal
-  await clearMatchQueue(env.KV, userId).catch(() => {});
-  await ctx.deleteMessage().catch(() => {});
-
-  await ctx.reply(
-    mdv2`🚫 Blocked\\. This user will no longer appear in your matches\\.`,
-    { parse_mode: "MarkdownV2" },
-  );
-
-  // Step 3: Show next match or main menu
   try {
-    const lang = await fetchUserLang(env, userId);
-    const queue = await getMatchQueue(env.KV, userId);
-    if (queue && queue.index < queue.matches.length) {
-      await showNextMatch(ctx, env, userId, lang);
-    } else {
-      await ctx.reply(t("matchNoMatches", lang), {
-        parse_mode: "Markdown",
-        reply_markup: getMainMenuKeyboard(),
-      });
+    // Step 1: Call API first. If this fails, nothing else should happen.
+    try {
+      const client = new ApiServiceClient(env.API_SERVICE);
+      await client.blockUser(userId, targetUserId);
+    } catch (error) {
+      log.error(
+        "handleBlock",
+        "API block call failed",
+        { userId, targetUserId },
+        error instanceof Error ? error : new Error(String(error)),
+      );
+      await replyWithError(ctx, env, lang, { action: "block", targetUserId });
+      return;
     }
-  } catch {
-    // Non-fatal: user sees the block confirmation already
+
+    // Step 2: Clean up UI — each step is independent, failures are non-fatal
+    await clearMatchQueue(env.KV, userId).catch(() => {});
+    await ctx.deleteMessage().catch(() => {});
+
+    await ctx.reply(
+      mdv2`🚫 Blocked\\. This user will no longer appear in your matches\\.`,
+      { parse_mode: "MarkdownV2" },
+    );
+
+    // Step 3: Show next match or main menu
+    try {
+      const lang = await fetchUserLang(env, userId);
+      const queue = await getMatchQueue(env.KV, userId);
+      if (queue && queue.index < queue.matches.length) {
+        await showNextMatch(ctx, env, userId, lang);
+      } else {
+        await ctx.reply(t("matchNoMatches", lang), {
+          parse_mode: "Markdown",
+          reply_markup: getMainMenuKeyboard(),
+        });
+      }
+    } catch {
+      // Non-fatal: user sees the block confirmation already
+    }
+  } finally {
+    await releaseActionLock(env.KV, userId);
   }
 }

@@ -35,7 +35,6 @@ export const REQUIRED_FIELDS = [
   "gender",
   "bio",
   "location",
-  "interests",
   "mediaUrls",
 ] as const;
 

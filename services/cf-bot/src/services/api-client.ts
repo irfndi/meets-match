@@ -19,131 +19,137 @@ import {
   type GetMatchListRequest,
   type GetMatchListResponse,
   UserService as IUserService,
-  MatchService as IMatchService,
 } from "@meetsmatch/cf-shared";
+
+export class ApiError extends Error {
+  constructor(
+    public readonly status: number,
+    public readonly body: unknown,
+    public readonly endpoint: string,
+  ) {
+    super(`API ${status} on ${endpoint}`);
+    this.name = "ApiError";
+  }
+}
+
+function generateIdempotencyKey(): string {
+  return crypto.randomUUID();
+}
 
 export class ApiServiceClient implements IUserService {
   constructor(private readonly binding: Fetcher) {}
 
-  async getUser(req: GetUserRequest): Promise<GetUserResponse> {
+  private async request<T>(
+    endpoint: string,
+    init: RequestInit & { idempotent?: boolean } = {},
+  ): Promise<T> {
+    const headers = new Headers(init.headers);
+    if (init.idempotent) {
+      headers.set("Idempotency-Key", generateIdempotencyKey());
+    }
+
     const response = await this.binding.fetch(
-      new Request(`http://api/users/${req.userId}`, { method: "GET" }),
+      new Request(`http://api${endpoint}`, { ...init, headers }),
     );
-    if (!response.ok) throw new Error(`API error: ${response.status}`);
-    return (await response.json()) as GetUserResponse;
+
+    if (!response.ok) {
+      let body: unknown;
+      try {
+        body = await response.json();
+      } catch {
+        body = await response.text().catch(() => null);
+      }
+      throw new ApiError(response.status, body, endpoint);
+    }
+
+    return (await response.json()) as T;
+  }
+
+  async getUser(req: GetUserRequest): Promise<GetUserResponse> {
+    return this.request<GetUserResponse>(`/users/${req.userId}`, {
+      method: "GET",
+    });
   }
 
   async createUser(req: CreateUserRequest): Promise<CreateUserResponse> {
-    const response = await this.binding.fetch(
-      new Request("http://api/users", {
-        method: "POST",
-        body: JSON.stringify(req),
-        headers: { "Content-Type": "application/json" },
-      }),
-    );
-    if (!response.ok) throw new Error(`API error: ${response.status}`);
-    return (await response.json()) as CreateUserResponse;
+    return this.request<CreateUserResponse>("/users", {
+      method: "POST",
+      body: JSON.stringify(req),
+      headers: { "Content-Type": "application/json" },
+      idempotent: true,
+    });
   }
 
   async updateUser(req: UpdateUserRequest): Promise<UpdateUserResponse> {
-    const response = await this.binding.fetch(
-      new Request(`http://api/users/${req.userId}`, {
-        method: "PUT",
-        body: JSON.stringify(req),
-        headers: { "Content-Type": "application/json" },
-      }),
-    );
-    if (!response.ok) throw new Error(`API error: ${response.status}`);
-    return (await response.json()) as UpdateUserResponse;
+    return this.request<UpdateUserResponse>(`/users/${req.userId}`, {
+      method: "PUT",
+      body: JSON.stringify(req),
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
   async updateLastActive(
     req: UpdateLastActiveRequest,
   ): Promise<UpdateLastActiveResponse> {
-    const response = await this.binding.fetch(
-      new Request(`http://api/users/${req.userId}/last-active`, {
-        method: "POST",
-      }),
+    return this.request<UpdateLastActiveResponse>(
+      `/users/${req.userId}/last-active`,
+      { method: "POST" },
     );
-    if (!response.ok) throw new Error(`API error: ${response.status}`);
-    return (await response.json()) as UpdateLastActiveResponse;
   }
 
   async updateLastRemindedAt(
     req: UpdateLastRemindedAtRequest,
   ): Promise<UpdateLastRemindedAtResponse> {
-    const response = await this.binding.fetch(
-      new Request(`http://api/users/${req.userId}/last-reminded-at`, {
-        method: "POST",
-      }),
+    return this.request<UpdateLastRemindedAtResponse>(
+      `/users/${req.userId}/last-reminded-at`,
+      { method: "POST" },
     );
-    if (!response.ok) throw new Error(`API error: ${response.status}`);
-    return (await response.json()) as UpdateLastRemindedAtResponse;
   }
 
   async getPotentialMatches(
     req: GetPotentialMatchesRequest,
   ): Promise<GetPotentialMatchesResponse> {
-    const response = await this.binding.fetch(
-      new Request(
-        `http://api/users/${req.userId}/potential-matches?limit=${req.limit ?? 10}`,
-        { method: "GET" },
-      ),
-    );
-    if (!response.ok) throw new Error(`API error: ${response.status}`);
-    return (await response.json()) as GetPotentialMatchesResponse;
+    const url = `/users/${req.userId}/potential-matches?limit=${req.limit ?? 10}`;
+    return this.request<GetPotentialMatchesResponse>(url, { method: "GET" });
   }
 
   async getPendingLikes(
     userId: string,
   ): Promise<{ pendingLikes: Array<Record<string, unknown>> }> {
-    const response = await this.binding.fetch(
-      new Request(`http://api/users/${userId}/pending-likes`, {
-        method: "GET",
-      }),
+    return this.request<{ pendingLikes: Array<Record<string, unknown>> }>(
+      `/users/${userId}/pending-likes`,
+      { method: "GET" },
     );
-    if (!response.ok) throw new Error(`API error: ${response.status}`);
-    return (await response.json()) as {
-      pendingLikes: Array<Record<string, unknown>>;
-    };
   }
 
   async getMatchList(req: GetMatchListRequest): Promise<GetMatchListResponse> {
-    const url = new URL("http://api/matches");
-    url.searchParams.set("userId", req.userId);
-    if (req.status) url.searchParams.set("status", req.status);
-    if (req.limit) url.searchParams.set("limit", String(req.limit));
-    const response = await this.binding.fetch(
-      new Request(url.toString(), { method: "GET" }),
-    );
-    if (!response.ok) throw new Error(`API error: ${response.status}`);
-    return (await response.json()) as GetMatchListResponse;
+    const query = new URLSearchParams();
+    query.set("userId", req.userId);
+    if (req.status) query.set("status", req.status);
+    if (req.limit) query.set("limit", String(req.limit));
+    return this.request<GetMatchListResponse>(`/matches?${query.toString()}`, {
+      method: "GET",
+    });
   }
 
   async createMatch(req: CreateMatchRequest): Promise<CreateMatchResponse> {
-    const response = await this.binding.fetch(
-      new Request("http://api/matches", {
-        method: "POST",
-        body: JSON.stringify(req),
-        headers: { "Content-Type": "application/json" },
-      }),
-    );
-    if (!response.ok) throw new Error(`API error: ${response.status}`);
-    return (await response.json()) as CreateMatchResponse;
+    return this.request<CreateMatchResponse>("/matches", {
+      method: "POST",
+      body: JSON.stringify(req),
+      headers: { "Content-Type": "application/json" },
+      idempotent: true,
+    });
   }
 
   async likeMatch(
     req: LikeMatchRequest & { message?: { text?: string; mediaUrl?: string } },
   ): Promise<LikeMatchResponse> {
-    const response = await this.binding.fetch(
-      new Request(`http://api/matches/${req.matchId}/like`, {
-        method: "POST",
-        body: JSON.stringify({ userId: req.userId, message: req.message }),
-        headers: { "Content-Type": "application/json" },
-      }),
-    );
-    if (!response.ok) throw new Error(`API error: ${response.status}`);
-    return (await response.json()) as LikeMatchResponse;
+    return this.request<LikeMatchResponse>(`/matches/${req.matchId}/like`, {
+      method: "POST",
+      body: JSON.stringify({ userId: req.userId, message: req.message }),
+      headers: { "Content-Type": "application/json" },
+      idempotent: true,
+    });
   }
 
   async getInteractionStatus(userId: string): Promise<{
@@ -154,81 +160,66 @@ export class ApiServiceClient implements IUserService {
     tier: string;
     resetAt: string;
   }> {
-    const response = await this.binding.fetch(
-      new Request(`http://api/users/${userId}/interaction-status`, {
-        method: "GET",
-      }),
-    );
-    if (!response.ok) throw new Error(`API error: ${response.status}`);
-    return (await response.json()) as {
+    return this.request<{
       likesRemaining: number;
       likesTotal: number;
       dislikesRemaining: number;
       dislikesTotal: number;
       tier: string;
       resetAt: string;
-    };
+    }>(`/users/${userId}/interaction-status`, { method: "GET" });
   }
 
   async recordLike(
     userId: string,
   ): Promise<{ remaining: number; total: number }> {
-    const response = await this.binding.fetch(
-      new Request(`http://api/users/${userId}/record-like`, { method: "POST" }),
+    return this.request<{ remaining: number; total: number }>(
+      `/users/${userId}/record-like`,
+      { method: "POST", idempotent: true },
     );
-    if (!response.ok) throw new Error(`API error: ${response.status}`);
-    return (await response.json()) as { remaining: number; total: number };
   }
 
   async recordDislike(
     userId: string,
   ): Promise<{ remaining: number; total: number }> {
-    const response = await this.binding.fetch(
-      new Request(`http://api/users/${userId}/record-dislike`, {
-        method: "POST",
-      }),
+    return this.request<{ remaining: number; total: number }>(
+      `/users/${userId}/record-dislike`,
+      { method: "POST", idempotent: true },
     );
-    if (!response.ok) throw new Error(`API error: ${response.status}`);
-    return (await response.json()) as { remaining: number; total: number };
   }
 
   async getDMStatus(
     userId: string,
   ): Promise<{ canSendDM: boolean; tier: string; dmCredits: number }> {
-    const response = await this.binding.fetch(
-      new Request(`http://api/users/${userId}/dm-status`, { method: "GET" }),
-    );
-    if (!response.ok) throw new Error(`API error: ${response.status}`);
-    return (await response.json()) as {
+    return this.request<{
       canSendDM: boolean;
       tier: string;
       dmCredits: number;
-    };
+    }>(`/users/${userId}/dm-status`, { method: "GET" });
   }
 
   async sendDM(
     userId: string,
   ): Promise<{ success: boolean; dmCredits: number }> {
-    const response = await this.binding.fetch(
-      new Request(`http://api/users/${userId}/send-dm`, { method: "POST" }),
+    return this.request<{ success: boolean; dmCredits: number }>(
+      `/users/${userId}/send-dm`,
+      { method: "POST", idempotent: true },
     );
-    if (!response.ok) throw new Error(`API error: ${response.status}`);
-    return (await response.json()) as { success: boolean; dmCredits: number };
   }
 
   async purchaseDMCredits(
     userId: string,
     amount: number,
   ): Promise<{ dmCredits: number }> {
-    const response = await this.binding.fetch(
-      new Request(`http://api/users/${userId}/purchase-dm-credits`, {
+    return this.request<{ dmCredits: number }>(
+      `/users/${userId}/purchase-dm-credits`,
+      {
         method: "POST",
         body: JSON.stringify({ amount }),
         headers: { "Content-Type": "application/json" },
-      }),
+        idempotent: true,
+      },
     );
-    if (!response.ok) throw new Error(`API error: ${response.status}`);
-    return (await response.json()) as { dmCredits: number };
   }
 
   async uploadMedia(
@@ -239,17 +230,14 @@ export class ApiServiceClient implements IUserService {
   ): Promise<{
     mediaUrls: Array<{ url: string; type: string; uploadedAt: string }>;
   }> {
-    const response = await this.binding.fetch(
-      new Request(`http://api/users/${userId}/media`, {
-        method: "POST",
-        body: JSON.stringify({ fileData, fileType, fileName }),
-        headers: { "Content-Type": "application/json" },
-      }),
-    );
-    if (!response.ok) throw new Error(`API error: ${response.status}`);
-    return (await response.json()) as {
+    return this.request<{
       mediaUrls: Array<{ url: string; type: string; uploadedAt: string }>;
-    };
+    }>(`/users/${userId}/media`, {
+      method: "POST",
+      body: JSON.stringify({ fileData, fileType, fileName }),
+      headers: { "Content-Type": "application/json" },
+      idempotent: true,
+    });
   }
 
   async deleteMedia(
@@ -258,35 +246,28 @@ export class ApiServiceClient implements IUserService {
   ): Promise<{
     mediaUrls: Array<{ url: string; type: string; uploadedAt: string }>;
   }> {
-    const response = await this.binding.fetch(
-      new Request(`http://api/users/${userId}/media`, {
-        method: "DELETE",
-        body: JSON.stringify({ url }),
-        headers: { "Content-Type": "application/json" },
-      }),
-    );
-    if (!response.ok) throw new Error(`API error: ${response.status}`);
-    return (await response.json()) as {
+    return this.request<{
       mediaUrls: Array<{ url: string; type: string; uploadedAt: string }>;
-    };
+    }>(`/users/${userId}/media`, {
+      method: "DELETE",
+      body: JSON.stringify({ url }),
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
   async undoMatch(
     matchId: string,
     userId: string,
   ): Promise<{ restored: boolean; match: Record<string, unknown> }> {
-    const response = await this.binding.fetch(
-      new Request(`http://api/matches/${matchId}/undo`, {
+    return this.request<{ restored: boolean; match: Record<string, unknown> }>(
+      `/matches/${matchId}/undo`,
+      {
         method: "POST",
         body: JSON.stringify({ userId }),
         headers: { "Content-Type": "application/json" },
-      }),
+        idempotent: true,
+      },
     );
-    if (!response.ok) throw new Error(`API error: ${response.status}`);
-    return (await response.json()) as {
-      restored: boolean;
-      match: Record<string, unknown>;
-    };
   }
 
   async reportUser(
@@ -294,70 +275,64 @@ export class ApiServiceClient implements IUserService {
     reporterId: string,
     reason?: string,
   ): Promise<{ success: boolean; reportId: string }> {
-    const response = await this.binding.fetch(
-      new Request(`http://api/users/${reportedId}/report`, {
+    return this.request<{ success: boolean; reportId: string }>(
+      `/users/${reportedId}/report`,
+      {
         method: "POST",
         body: JSON.stringify({ reporterId, reason }),
         headers: { "Content-Type": "application/json" },
-      }),
+        idempotent: true,
+      },
     );
-    if (!response.ok) throw new Error(`API error: ${response.status}`);
-    return (await response.json()) as { success: boolean; reportId: string };
   }
 
   async restoreProfile(userId: string): Promise<{ success: boolean }> {
-    const response = await this.binding.fetch(
-      new Request(`http://api/users/${userId}/restore-profile`, {
-        method: "POST",
-      }),
+    return this.request<{ success: boolean }>(
+      `/users/${userId}/restore-profile`,
+      { method: "POST", idempotent: true },
     );
-    if (!response.ok) throw new Error(`API error: ${response.status}`);
-    return (await response.json()) as { success: boolean };
   }
 
   async interact(userId: string): Promise<{ success: boolean }> {
-    const response = await this.binding.fetch(
-      new Request(`http://api/users/${userId}/interact`, { method: "POST" }),
+    return this.request<{ success: boolean }>(
+      `/users/${userId}/interact`,
+      { method: "POST", idempotent: true },
     );
-    if (!response.ok) throw new Error(`API error: ${response.status}`);
-    return (await response.json()) as { success: boolean };
   }
 
   async getReferralCode(userId: string): Promise<{ code: string }> {
-    const response = await this.binding.fetch(
-      new Request(`http://api/users/${userId}/referral`, { method: "GET" }),
-    );
-    if (!response.ok) throw new Error(`API error: ${response.status}`);
-    return (await response.json()) as { code: string };
+    return this.request<{ code: string }>(`/users/${userId}/referral`, {
+      method: "GET",
+    });
   }
 
   async blockUser(
     blockerId: string,
     blockedId: string,
   ): Promise<{ success: boolean }> {
-    const response = await this.binding.fetch(
-      new Request(`http://api/users/${blockerId}/block`, {
+    return this.request<{ success: boolean }>(
+      `/users/${blockerId}/block`,
+      {
         method: "POST",
         body: JSON.stringify({ blockedId }),
         headers: { "Content-Type": "application/json" },
-      }),
+        idempotent: true,
+      },
     );
-    if (!response.ok) throw new Error(`API error: ${response.status}`);
-    return (await response.json()) as { success: boolean };
   }
 
   async unblockUser(
     blockerId: string,
     blockedId: string,
   ): Promise<{ success: boolean }> {
-    const response = await this.binding.fetch(
-      new Request(`http://api/users/${blockerId}/unblock`, {
+    return this.request<{ success: boolean }>(
+      `/users/${blockerId}/unblock`,
+      {
         method: "POST",
         body: JSON.stringify({ blockedId }),
         headers: { "Content-Type": "application/json" },
-      }),
+        idempotent: true,
+      },
     );
-    if (!response.ok) throw new Error(`API error: ${response.status}`);
-    return (await response.json()) as { success: boolean };
   }
 }

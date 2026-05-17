@@ -189,4 +189,11 @@ export async function runCleanupJob(env: Env): Promise<void> {
   console.log(
     `[cleanup] Removed ${viewCleanup.meta?.changes ?? 0} old profile view records`,
   );
+
+  // Re-throw if any media deletions failed so Cloudflare can retry
+  if (deletedCount < rows.length) {
+    throw new Error(
+      `[cleanup] Only deleted media for ${deletedCount}/${rows.length} users. Some R2 deletions failed.`,
+    );
+  }
 }

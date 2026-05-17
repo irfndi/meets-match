@@ -45,47 +45,81 @@ export type Notification =
   | GiftNotification
   | GiftPremiumNotification;
 
+function notificationKey(userId: string, notificationId: string): string {
+  return `notifications:${userId}:${notificationId}`;
+}
+
+function listKey(userId: string): string {
+  return `notifications:list:${userId}`;
+}
+
+function generateNotificationId(): string {
+  return `${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
+}
+
 export async function addNotification(
   env: Env,
   userId: string,
   notification: Notification,
 ): Promise<void> {
-  const key = `notifications:${userId}`;
-  const existing = await env.KV.get(key);
-  let list: Notification[] = [];
-  if (existing) {
-    try {
-      list = JSON.parse(existing);
-    } catch (error) {
-      console.error("Failed to parse notifications, resetting:", error);
-    }
+  const id = generateNotificationId();
+  const key = notificationKey(userId, id);
+  const list = listKey(userId);
+
+  // Write notification body and append id to list concurrently
+  await Promise.all([
+    env.KV.put(key, JSON.stringify(notification), {
+      expirationTtl: NOTIFICATION_TTL_SECONDS,
+    }),
+    env.KV.put(list, JSON.stringify([...(await getNotificationIds(env, userId)), id]), {
+      expirationTtl: NOTIFICATION_TTL_SECONDS,
+    }),
+  ]);
+}
+
+async function getNotificationIds(env: Env, userId: string): Promise<string[]> {
+  const value = await env.KV.get(listKey(userId));
+  if (!value) return [];
+  try {
+    return JSON.parse(value) as string[];
+  } catch (error) {
+    console.error("Failed to parse notification list:", error);
+    return [];
   }
-  list.push(notification);
-  await env.KV.put(key, JSON.stringify(list), {
-    expirationTtl: NOTIFICATION_TTL_SECONDS,
-  });
 }
 
 export async function getNotifications(
   env: Env,
   userId: string,
 ): Promise<Notification[]> {
-  const key = `notifications:${userId}`;
-  const value = await env.KV.get(key);
-  if (!value) return [];
-  try {
-    return JSON.parse(value) as Notification[];
-  } catch (error) {
-    console.error("Failed to parse notifications:", error);
-    return [];
-  }
+  const ids = await getNotificationIds(env, userId);
+  if (ids.length === 0) return [];
+
+  const results = await Promise.all(
+    ids.map(async (id) => {
+      const value = await env.KV.get(notificationKey(userId, id));
+      if (!value) return null;
+      try {
+        return JSON.parse(value) as Notification;
+      } catch (error) {
+        console.error("Failed to parse notification:", error);
+        return null;
+      }
+    }),
+  );
+
+  return results.filter((n): n is Notification => n !== null);
 }
 
 export async function clearNotifications(
   env: Env,
   userId: string,
 ): Promise<void> {
-  await env.KV.delete(`notifications:${userId}`);
+  const ids = await getNotificationIds(env, userId);
+  await Promise.all([
+    ...ids.map((id) => env.KV.delete(notificationKey(userId, id))),
+    env.KV.delete(listKey(userId)),
+  ]);
 }
 
 export async function removeNotification(
@@ -93,22 +127,16 @@ export async function removeNotification(
   userId: string,
   index: number,
 ): Promise<void> {
-  const key = `notifications:${userId}`;
-  const value = await env.KV.get(key);
-  if (!value) return;
-  let list: Notification[] = [];
-  try {
-    list = JSON.parse(value) as Notification[];
-  } catch (error) {
-    console.error("Failed to parse notifications:", error);
-    return;
-  }
-  list.splice(index, 1);
-  if (list.length === 0) {
-    await env.KV.delete(key);
-  } else {
-    await env.KV.put(key, JSON.stringify(list), {
+  const ids = await getNotificationIds(env, userId);
+  if (index < 0 || index >= ids.length) return;
+
+  const removedId = ids[index];
+  const newIds = ids.filter((_, i) => i !== index);
+
+  await Promise.all([
+    env.KV.delete(notificationKey(userId, removedId)),
+    env.KV.put(listKey(userId), JSON.stringify(newIds), {
       expirationTtl: NOTIFICATION_TTL_SECONDS,
-    });
-  }
+    }),
+  ]);
 }

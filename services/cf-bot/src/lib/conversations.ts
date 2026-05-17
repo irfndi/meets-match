@@ -604,8 +604,11 @@ export async function handleContactMessage(
   // Update user with phone number
   const success = await updateUser(env, userId, { phoneNumber });
   if (success) {
-    // Clear any active phone-verification conversation
-    await clearConversationState(env.KV, userId);
+    // Only clear conversation state if this was a phone verification flow
+    const state = await getConversationState(env.KV, userId);
+    if (!state || state.field === "phone") {
+      await clearConversationState(env.KV, userId);
+    }
   }
   await ctx.reply(
     success ? t("phoneVerified", lang) : t("genericError", lang),

@@ -24,5 +24,6 @@ export async function runSubscriptionExpiryJob(env: Env): Promise<void> {
     }
   } catch (error) {
     console.error("[subscription-expiry] Job failed:", error);
+    throw error;
   }
 }
