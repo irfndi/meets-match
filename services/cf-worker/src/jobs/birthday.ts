@@ -41,7 +41,10 @@ export async function runBirthdayJob(env: Env): Promise<void> {
           .run();
         console.log(`[birthday] Updated age to ${age} for ${birthdayUserId}`);
       } catch (error) {
-        console.error(`[birthday] Failed to update age for ${birthdayUserId}:`, error);
+        console.error(
+          `[birthday] Failed to update age for ${birthdayUserId}:`,
+          error,
+        );
       }
     }
 
