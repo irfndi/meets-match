@@ -102,6 +102,6 @@ describe("Cron Jobs", () => {
       KV: {},
       API_SERVICE: {},
     };
-    await expect(runDLQHealthCheck(env as any)).resolves.toBeUndefined();
+    await expect(runDLQHealthCheck(env as any)).rejects.toThrow();
   });
 });

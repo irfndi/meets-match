@@ -91,6 +91,10 @@ export async function addNotification(
   userId: string,
   notification: Omit<Notification, "id">,
 ): Promise<void> {
+  // NOTE: KV does not support atomic compare-and-swap. Concurrent
+  // addNotification calls may race on the list key read-modify-write.
+  // In practice, notification volume per user is low and duplicates
+  // are harmless. For true atomicity, migrate to D1.
   const id = generateNotificationId();
   const key = notificationKey(userId, id);
   const list = listKey(userId);

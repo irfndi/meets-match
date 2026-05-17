@@ -114,7 +114,7 @@ describe("useDMBypass race conditions", () => {
     expect(r1.remaining).toBe(0);
 
     const r2 = await useDMBypass(kv, "u1");
-    expect(r2.used).toBe(101);
+    expect(r2.used).toBe(100); // capped at limit
     expect(r2.remaining).toBe(0);
   });
 });

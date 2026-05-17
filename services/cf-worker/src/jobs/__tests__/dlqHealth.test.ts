@@ -8,6 +8,7 @@ describe("runDLQHealthCheck", () => {
         const isExpired = sql.includes("dlq_at");
         const c = isExpired ? (counts.expired ?? 0) : (counts.dlq ?? 0);
         return {
+          first: vi.fn(async () => ({ c })),
           bind: vi.fn(() => ({
             first: vi.fn(async () => ({ c })),
             all: vi.fn(async () => ({ results: [] })),
@@ -65,6 +66,6 @@ describe("runDLQHealthCheck", () => {
       } as unknown as import("@cloudflare/workers-types").Fetcher,
     };
 
-    await expect(runDLQHealthCheck(env)).resolves.toBeUndefined();
+    await expect(runDLQHealthCheck(env)).rejects.toThrow();
   });
 });

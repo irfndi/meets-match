@@ -290,6 +290,10 @@ export async function acquireActionLock(
   kv: KVNamespace,
   userId: string,
 ): Promise<boolean> {
+  // NOTE: KV does not support atomic compare-and-swap. This check-then-set
+  // pattern has a TOCTOU race window. Concurrent requests may both read null
+  // and both acquire the lock. Mitigated by short TTL and idempotency keys
+  // in downstream API calls. For true serialization, use Durable Objects.
   const key = `action_lock:${userId}`;
   const existing = await kv.get(key);
   if (existing) return false;
