@@ -41,7 +41,6 @@ function mockEnv(
     REENGAGEMENT_SCHEDULE: "0 10 * * *",
     DLQ_PROCESSOR_SCHEDULE: "*/5 * * * *",
     WORKER_CONCURRENCY: "10",
-    ENABLE_SENTRY: "false",
   };
 }
 

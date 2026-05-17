@@ -479,50 +479,57 @@ export class MatchRepository {
             const viewedAt = row.viewed_at ? String(row.viewed_at) : null;
 
             // Determine current user's action in this match
-            const isUser1InMatch = row.user1_id === currentUser.id;
+            // Use String() to avoid type mismatch (D1 may return numbers for numeric IDs)
+            const isUser1InMatch =
+              String(row.user1_id ?? "") === currentUser.id;
             const myAction = isUser1InMatch ? user1Action : user2Action;
             const otherAction = isUser1InMatch ? user2Action : user1Action;
 
             // --- Bidirectional preference check ---
-            const candidatePrefs = candidate.preferences;
-            if (
-              candidatePrefs?.genderPreference &&
-              candidatePrefs.genderPreference.length > 0 &&
-              currentUser.gender
-            ) {
+            // In strict mode: hard-filter candidates whose preferences don't
+            // include the current user. In relaxed mode: skip these checks so
+            // small user bases still surface matches.
+            if (!relaxFilters) {
+              const candidatePrefs = candidate.preferences;
               if (
-                !candidatePrefs.genderPreference.includes(currentUser.gender)
+                candidatePrefs?.genderPreference &&
+                candidatePrefs.genderPreference.length > 0 &&
+                currentUser.gender
               ) {
-                return null;
+                if (
+                  !candidatePrefs.genderPreference.includes(currentUser.gender)
+                ) {
+                  return null;
+                }
               }
-            }
-            if (
-              candidatePrefs?.minAge != null &&
-              candidatePrefs?.maxAge != null &&
-              currentUser.age != null
-            ) {
               if (
-                currentUser.age < candidatePrefs.minAge ||
-                currentUser.age > candidatePrefs.maxAge
+                candidatePrefs?.minAge != null &&
+                candidatePrefs?.maxAge != null &&
+                currentUser.age != null
               ) {
-                return null;
+                if (
+                  currentUser.age < candidatePrefs.minAge ||
+                  currentUser.age > candidatePrefs.maxAge
+                ) {
+                  return null;
+                }
               }
-            }
-            // Distance from candidate's perspective
-            if (
-              candidate.location?.latitude != null &&
-              candidate.location?.longitude != null &&
-              currentUser.location?.latitude != null &&
-              currentUser.location?.longitude != null &&
-              candidatePrefs?.maxDistance
-            ) {
-              const dist = haversine(
-                candidate.location.latitude,
-                candidate.location.longitude,
-                currentUser.location.latitude,
-                currentUser.location.longitude,
-              );
-              if (dist > candidatePrefs.maxDistance) return null;
+              // Distance from candidate's perspective
+              if (
+                candidate.location?.latitude != null &&
+                candidate.location?.longitude != null &&
+                currentUser.location?.latitude != null &&
+                currentUser.location?.longitude != null &&
+                candidatePrefs?.maxDistance
+              ) {
+                const dist = haversine(
+                  candidate.location.latitude,
+                  candidate.location.longitude,
+                  currentUser.location.latitude,
+                  currentUser.location.longitude,
+                );
+                if (dist > candidatePrefs.maxDistance) return null;
+              }
             }
 
             // --- Current user's distance hard constraint ---

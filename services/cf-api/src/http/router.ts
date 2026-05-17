@@ -10,6 +10,7 @@ import { MatchRepository } from "../models/match.js";
 import { NotificationRepository } from "../models/notification.js";
 import { ReportRepository } from "../models/report.js";
 import { FeedbackRepository } from "../models/feedback.js";
+import { ErrorReportRepository } from "../models/error-report.js";
 import { BlockRepository } from "../models/block.js";
 import { GeocodingService } from "../models/geocoding.js";
 import {
@@ -51,6 +52,7 @@ export class ApiRouter {
   private readonly notificationRepo: NotificationRepository;
   private readonly reportRepo: ReportRepository;
   private readonly feedbackRepo: FeedbackRepository;
+  private readonly errorReportRepo: ErrorReportRepository;
   private readonly blockRepo: BlockRepository;
   private readonly geoService: GeocodingService;
 
@@ -61,6 +63,7 @@ export class ApiRouter {
     this.notificationRepo = new NotificationRepository(env.DB);
     this.reportRepo = new ReportRepository(env.DB);
     this.feedbackRepo = new FeedbackRepository(env.DB);
+    this.errorReportRepo = new ErrorReportRepository(env.DB);
     this.geoService = new GeocodingService(env.KV);
   }
 
@@ -183,6 +186,12 @@ export class ApiRouter {
           return this.handleQueueStats();
         case url.pathname === "/feedback" && method === "POST":
           return this.handleFeedback(request);
+        case url.pathname === "/error-reports" && method === "POST":
+          return this.handleErrorReport(request);
+        case url.pathname === "/error-reports/summary" && method === "GET":
+          return this.handleErrorReportSummary(url.searchParams);
+        case url.pathname === "/error-reports/mark-sent" && method === "POST":
+          return this.handleMarkAlertsSent();
         case url.pathname === "/cron/downgrade-expired-subscriptions" &&
           method === "POST":
           return this.handleDowngradeExpiredSubscriptions();
@@ -897,6 +906,109 @@ export class ApiRouter {
         error,
       );
       return jsonResponse({ error: "Failed to create feedback" }, 500);
+    }
+  }
+
+  private async handleErrorReport(request: Request): Promise<Response> {
+    let body: Record<string, unknown>;
+    try {
+      body = (await request.json()) as Record<string, unknown>;
+    } catch {
+      return jsonResponse({ error: "Invalid JSON body" }, 400);
+    }
+    try {
+      const reporterId = String(body.reporterId ?? "");
+      const traceId = body.traceId ? String(body.traceId) : undefined;
+      const message = body.message ? String(body.message) : undefined;
+      const journey = body.journey ? String(body.journey) : undefined;
+      const severity =
+        body.severity === "high" || body.severity === "low"
+          ? (body.severity as "high" | "low")
+          : undefined;
+      const source = body.source ? String(body.source) : undefined;
+      const botVersion = body.botVersion ? String(body.botVersion) : undefined;
+      const apiVersion = body.apiVersion ? String(body.apiVersion) : undefined;
+      const workerVersion = body.workerVersion
+        ? String(body.workerVersion)
+        : undefined;
+      const errorStack = body.errorStack ? String(body.errorStack) : undefined;
+      const userLanguage = body.userLanguage
+        ? String(body.userLanguage)
+        : undefined;
+      const userTier = body.userTier ? String(body.userTier) : undefined;
+      const triggerInput = body.triggerInput
+        ? String(body.triggerInput)
+        : undefined;
+      const kvSession = body.kvSession ? String(body.kvSession) : undefined;
+      const cfMetadata = body.cfMetadata ? String(body.cfMetadata) : undefined;
+
+      if (!reporterId) {
+        return jsonResponse({ error: "reporterId is required" }, 400);
+      }
+
+      const result = await runEffect(
+        this.errorReportRepo.create({
+          reporterId,
+          traceId,
+          message,
+          journey,
+          severity,
+          source,
+          botVersion,
+          apiVersion,
+          workerVersion,
+          errorStack,
+          userLanguage,
+          userTier,
+          triggerInput,
+          kvSession,
+          cfMetadata,
+        }),
+      );
+      return jsonResponse({ success: true, reportId: result.id });
+    } catch (error) {
+      log.error(
+        "createErrorReport",
+        "Failed to create error report",
+        undefined,
+        error,
+      );
+      return jsonResponse({ error: "Failed to create error report" }, 500);
+    }
+  }
+
+  private async handleErrorReportSummary(
+    searchParams: URLSearchParams,
+  ): Promise<Response> {
+    try {
+      const hoursRaw = searchParams.get("hours");
+      const hours = hoursRaw ? Number(hoursRaw) : 6;
+      const summary = await runEffect(
+        this.errorReportRepo.getAlertSummary(hours),
+      );
+      return jsonResponse(summary);
+    } catch (error) {
+      log.error(
+        "errorReportSummary",
+        "Failed to get summary",
+        undefined,
+        error,
+      );
+      return jsonResponse({ error: "Failed to get alert summary" }, 500);
+    }
+  }
+
+  private async handleMarkAlertsSent(): Promise<Response> {
+    try {
+      const unsent = await runEffect(
+        this.errorReportRepo.findUnsentLowSeverity(1000),
+      );
+      const ids = unsent.map((r) => r.id);
+      await runEffect(this.errorReportRepo.markAlertsSent(ids));
+      return jsonResponse({ marked: ids.length });
+    } catch (error) {
+      log.error("markAlertsSent", "Failed to mark alerts", undefined, error);
+      return jsonResponse({ error: "Failed to mark alerts as sent" }, 500);
     }
   }
 

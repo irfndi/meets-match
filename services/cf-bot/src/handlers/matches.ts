@@ -21,23 +21,30 @@ import { getMainMenuKeyboard } from "../lib/main-menu.js";
 import { t, escapeMd } from "../lib/i18n.js";
 import { type Language } from "../lib/i18n.js";
 import { ApiServiceClient } from "../services/api-client.js";
+import { replyWithError } from "../lib/error-feedback.js";
 
-function buildChatLink(otherUser: Record<string, unknown>): string {
+function buildChatLink(
+  otherUser: Record<string, unknown>,
+  lang: Language,
+): string {
   const username = otherUser.username as string | undefined;
   const displayName = (otherUser.displayName ??
     otherUser.first_name ??
     "Someone") as string;
   if (username) {
-    return `💬 [Chat with ${escapeMd(displayName)}](https://t.me/${username})`;
+    return t("matchesChatWith", lang, { name: escapeMd(displayName) });
   }
-  return `💬 ${escapeMd(displayName)} (no username set)`;
+  return t("matchesNoUsernameSet", lang, { name: escapeMd(displayName) });
 }
 
-function formatMatch(match: Record<string, unknown>): string {
+function formatMatch(match: Record<string, unknown>, lang: Language): string {
   const name = (match.displayName ?? match.first_name ?? "Unknown") as string;
   const age = match.age ?? "?";
   const bio = match.bio ? `\n📝 ${escapeMd(String(match.bio))}` : "";
-  return `💕 ${escapeMd(name)}, ${age}${bio}\nMatched at: ${match.matched_at ?? "recently"}`;
+  const matchedAt = match.matched_at
+    ? t("matchesMatchedAt", lang, { time: String(match.matched_at) })
+    : t("matchesMatchedAt", lang, { time: t("matchesMatchedRecently", lang) });
+  return `💕 ${escapeMd(name)}, ${age}${bio}\n${matchedAt}`;
 }
 
 async function fetchMutualMatches(env: Env, userId: string) {
@@ -89,14 +96,14 @@ export const matchesCommand = async (
   env: Env,
 ): Promise<void> => {
   if (!ctx.from) {
-    await ctx.reply("Could not identify you. Try again.");
+    await ctx.reply(t("matchCouldNotIdentify", "en"));
     return;
   }
 
   try {
     const result = await ensureUserExists(ctx, env);
     if (!result) {
-      await ctx.reply("❌ Sorry, there was an error. Please try /start first.");
+      await ctx.reply(t("genericError", "en"));
       return;
     }
 
@@ -130,15 +137,22 @@ export const matchesCommand = async (
 
     if (mutualNotifications.length > 0) {
       await ctx.reply(
-        `💕 You have ${mutualNotifications.length} new mutual match(es)!`,
+        t("matchesNewMutualMatches", lang, {
+          count: String(mutualNotifications.length),
+        }),
       );
       for (const notif of mutualNotifications) {
         const msg = [
-          `💕 It's a match with ${escapeMd(notif.otherDisplayName ?? "Someone")}!`,
-          buildChatLink({
-            displayName: notif.otherDisplayName,
-            username: notif.otherUsername,
+          t("mutualMatch", lang, {
+            name: escapeMd(notif.otherDisplayName ?? "Someone"),
           }),
+          buildChatLink(
+            {
+              displayName: notif.otherDisplayName,
+              username: notif.otherUsername,
+            },
+            lang,
+          ),
         ].join("\n");
         await ctx.reply(msg, { parse_mode: "Markdown" });
       }
@@ -152,9 +166,11 @@ export const matchesCommand = async (
           .text(`❤️ ${notif.fromDisplayName}`, `likes:view:${notif.fromUserId}`)
           .row();
       }
-      keyboard.text("⏭ Dismiss all", "likes:dismiss");
+      keyboard.text(t("matchesDismissAll", lang), "likes:dismiss");
       await ctx.reply(
-        `💕 ${likeNotifications.length} person(s) liked your profile! Want to check them out?`,
+        t("matchesNewLikes", lang, {
+          count: String(likeNotifications.length),
+        }),
         { reply_markup: keyboard },
       );
     }
@@ -181,7 +197,9 @@ export const matchesCommand = async (
     }
 
     if (totalMatches > 0) {
-      await ctx.reply(`💑 You have ${totalMatches} mutual match(es):`);
+      await ctx.reply(
+        t("matchesMutualMatchesCount", lang, { count: String(totalMatches) }),
+      );
       for (const match of mutualMatches) {
         // Fetch the other user's profile
         const otherUserId =
@@ -190,8 +208,8 @@ export const matchesCommand = async (
           const client = new ApiServiceClient(env.API_SERVICE);
           const userRes = await client.getUser({ userId: String(otherUserId) });
           const otherUser = userRes.user as Record<string, unknown>;
-          const msg = formatMatch(otherUser);
-          const chatLink = buildChatLink(otherUser);
+          const msg = formatMatch(otherUser, lang);
+          const chatLink = buildChatLink(otherUser, lang);
           const mediaUrls = (otherUser.mediaUrls ?? []) as Array<{
             url: string;
             type: string;
@@ -220,7 +238,7 @@ export const matchesCommand = async (
             await ctx.reply(text, { parse_mode: "Markdown" });
           }
         } catch {
-          await ctx.reply(formatMatch(match));
+          await ctx.reply(formatMatch(match, lang));
         }
       }
     }
@@ -238,12 +256,12 @@ export const matchesCommand = async (
       });
     }
 
-    await ctx.reply("Use the menu below to navigate:", {
+    await ctx.reply(t("matchesNavigatePrompt", lang), {
       reply_markup: getMainMenuKeyboard(),
     });
   } catch (error) {
     log.error("matchesCommand", "Unhandled error", undefined, error);
-    await ctx.reply(t("genericError"), { reply_markup: getMainMenuKeyboard() });
+    await replyWithError(ctx, env, "en", { command: "matches" });
   }
 };
 
@@ -258,6 +276,16 @@ export const matchesCallbacks = async (
   const userId = String(ctx.from.id);
   const data = ctx.callbackQuery.data;
 
+  // Resolve language
+  let lang: Language = "en";
+  try {
+    const client = new ApiServiceClient(env.API_SERVICE);
+    const userRes = await client.getUser({ userId });
+    lang = (userRes.user?.language as Language) ?? "en";
+  } catch {
+    /* fallback to en */
+  }
+
   try {
     if (data === "likes:dismiss") {
       const notifications = await getNotifications(env, userId);
@@ -267,16 +295,18 @@ export const matchesCallbacks = async (
           await removeNotification(env, userId, i);
         }
       }
-      await ctx.answerCallbackQuery("Dismissed.").catch(() => {});
       await ctx
-        .editMessageText("💕 You can see your likes anytime with /matches.")
+        .answerCallbackQuery(t("matchesDismissed", lang))
         .catch(() => {});
+      await ctx.editMessageText(t("matchesSeeAnytime", lang)).catch(() => {});
       return;
     }
 
     if (data.startsWith("likes:view:")) {
       const targetUserId = data.replace("likes:view:", "");
-      await ctx.answerCallbackQuery("Loading profile...").catch(() => {});
+      await ctx
+        .answerCallbackQuery(t("matchesLoadingProfile", lang))
+        .catch(() => {});
 
       try {
         const client = new ApiServiceClient(env.API_SERVICE);
@@ -300,8 +330,8 @@ export const matchesCallbacks = async (
         );
 
         const keyboard = new InlineKeyboard()
-          .text("❤️ Like back", `match:like:${targetUserId}`)
-          .text("👎 Pass", `match:dislike:${targetUserId}`)
+          .text(t("matchesLikeBack", lang), `match:like:${targetUserId}`)
+          .text(t("matchesPass", lang), `match:dislike:${targetUserId}`)
           .row();
 
         const text = `${name}, ${age}${bio}${interests}`;
@@ -330,14 +360,17 @@ export const matchesCallbacks = async (
         );
         if (idx >= 0) await removeNotification(env, userId, idx);
       } catch {
-        await ctx.reply("Could not load profile. Please try again.");
+        await ctx.reply(t("matchesCouldNotLoad", lang));
       }
       return;
     }
 
-    await ctx.answerCallbackQuery("Unknown action.").catch(() => {});
+    await ctx
+      .answerCallbackQuery(t("matchesUnknownAction", lang))
+      .catch(() => {});
   } catch (error) {
     log.error("matchesCallbacks", "Unhandled error", undefined, error);
-    await ctx.answerCallbackQuery("❌ Something went wrong.").catch(() => {});
+    await replyWithError(ctx, env, "en", { action: "matches_callback" });
+    await ctx.answerCallbackQuery().catch(() => {});
   }
 };

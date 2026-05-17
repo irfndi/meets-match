@@ -136,4 +136,25 @@ describe("Settings Handlers", () => {
       expect(ctx.reply).not.toHaveBeenCalled();
     });
   });
+
+  describe("settingsCommand error path", () => {
+    it("should show error with trace ID when an unexpected error occurs", async () => {
+      env.API_SERVICE = createMockApiService({
+        "/users/123": () =>
+          new Response(
+            JSON.stringify({ user: { id: "123", displayName: "Test" } }),
+            { status: 200 },
+          ),
+      });
+      ctx.reply = vi
+        .fn()
+        .mockRejectedValueOnce(new Error("Telegram API error"))
+        .mockResolvedValue(undefined);
+      await settingsCommand(ctx, env);
+      expect(ctx.reply).toHaveBeenCalledWith(
+        expect.stringContaining("Trace ID:"),
+        expect.anything(),
+      );
+    });
+  });
 });

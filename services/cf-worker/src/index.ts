@@ -3,6 +3,7 @@ import { runDLQHealthCheck } from "./jobs/dlqHealth.js";
 import { runBirthdayJob } from "./jobs/birthday.js";
 import { runCleanupJob } from "./jobs/cleanup.js";
 import { runSubscriptionExpiryJob } from "./jobs/subscriptionExpiry.js";
+import { getVersionInfo } from "./lib/version.js";
 
 export interface Env {
   DB: D1Database;
@@ -23,7 +24,11 @@ export default {
     ctx: ExecutionContext,
   ): Promise<Response> {
     return new Response(
-      JSON.stringify({ status: "ok", service: "cf-worker" }),
+      JSON.stringify({
+        status: "ok",
+        service: "cf-worker",
+        version: getVersionInfo(),
+      }),
       {
         status: 200,
         headers: { "Content-Type": "application/json" },
@@ -36,7 +41,7 @@ export default {
     env: Env,
     ctx: ExecutionContext,
   ): Promise<void> {
-    const isDLQ = batch.queue.endsWith("-dlq");
+    const isDLQ = batch.queue.startsWith("dlq");
 
     for (const message of batch.messages) {
       try {
@@ -149,6 +154,21 @@ async function processNotificationMessage(
         .bind(notificationId, durationMs)
         .run();
       console.log(`[queue] Delivered ${notificationId} in ${durationMs}ms`);
+      message.ack();
+    } else if (response.status === 410) {
+      const errorText = await response.text();
+      await env.DB.prepare(
+        "UPDATE notifications SET status = 'failed', last_error = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+      )
+        .bind(errorText, notificationId)
+        .run();
+      await env.DB.prepare(
+        `INSERT INTO notification_delivery_attempts (notification_id, status, error_message, duration_ms)
+         VALUES (?, 'permanent_failure', ?, ?)`,
+      )
+        .bind(notificationId, errorText, durationMs)
+        .run();
+      console.warn(`[queue] Permanent failure ${notificationId}: ${errorText}`);
       message.ack();
     } else {
       const errorText = await response.text();
