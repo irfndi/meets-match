@@ -3,7 +3,10 @@ import {
   NotificationQueueProducer,
   NotificationQueueConsumer,
 } from "../../notifications/queue.js";
-import { createMockD1, runEffect } from "../../../../../packages/cf-shared/src/__tests__/__helpers__/test-utils.js";
+import {
+  createMockD1,
+  runEffect,
+} from "../../../../../packages/cf-shared/src/__tests__/__helpers__/test-utils.js";
 
 describe("NotificationQueueProducer", () => {
   it("enqueues a message", async () => {
@@ -23,7 +26,9 @@ describe("NotificationQueueProducer", () => {
     } as unknown as Queue;
     const producer = new NotificationQueueProducer(queue);
     await expect(
-      runEffect(producer.enqueue({ notificationId: "n1", userId: "u1", type: "LIKE" })),
+      runEffect(
+        producer.enqueue({ notificationId: "n1", userId: "u1", type: "LIKE" }),
+      ),
     ).rejects.toThrow("queue full");
   });
 });
@@ -47,7 +52,11 @@ describe("NotificationQueueConsumer", () => {
       })),
     } as unknown as Fetcher;
 
-    return { consumer: new NotificationQueueConsumer(db, botService), db, botService };
+    return {
+      consumer: new NotificationQueueConsumer(db, botService),
+      db,
+      botService,
+    };
   }
 
   function createMessage(body: Record<string, unknown>) {
@@ -60,25 +69,39 @@ describe("NotificationQueueConsumer", () => {
 
   it("processes and acks a delivered message", async () => {
     const { consumer } = createConsumer([{ id: "n1", status: "pending" }]);
-    const msg = createMessage({ notificationId: "n1", userId: "u1", type: "LIKE" });
+    const msg = createMessage({
+      notificationId: "n1",
+      userId: "u1",
+      type: "LIKE",
+    });
     await consumer.processBatch({ messages: [msg] } as any);
     expect(msg.ack).toHaveBeenCalled();
   });
 
   it("skips already delivered notifications", async () => {
-    const { consumer, botService } = createConsumer([{ id: "n1", status: "delivered" }]);
-    const msg = createMessage({ notificationId: "n1", userId: "u1", type: "LIKE" });
+    const { consumer, botService } = createConsumer([
+      { id: "n1", status: "delivered" },
+    ]);
+    const msg = createMessage({
+      notificationId: "n1",
+      userId: "u1",
+      type: "LIKE",
+    });
     await consumer.processBatch({ messages: [msg] } as any);
     expect(botService.fetch).not.toHaveBeenCalled();
     expect(msg.ack).toHaveBeenCalled();
   });
 
   it("marks failed when bot service returns error", async () => {
-    const { consumer } = createConsumer(
-      [{ id: "n1", status: "pending" }],
-      { ok: false, text: "bot error" },
-    );
-    const msg = createMessage({ notificationId: "n1", userId: "u1", type: "LIKE" });
+    const { consumer } = createConsumer([{ id: "n1", status: "pending" }], {
+      ok: false,
+      text: "bot error",
+    });
+    const msg = createMessage({
+      notificationId: "n1",
+      userId: "u1",
+      type: "LIKE",
+    });
     await consumer.processBatch({ messages: [msg] } as any);
     expect(msg.ack).toHaveBeenCalled();
   });
@@ -87,8 +110,14 @@ describe("NotificationQueueConsumer", () => {
     const db = createMockD1(() => {
       throw new Error("DB down");
     });
-    const consumer = new NotificationQueueConsumer(db, { fetch: vi.fn() } as any);
-    const msg = createMessage({ notificationId: "n1", userId: "u1", type: "LIKE" });
+    const consumer = new NotificationQueueConsumer(db, {
+      fetch: vi.fn(),
+    } as any);
+    const msg = createMessage({
+      notificationId: "n1",
+      userId: "u1",
+      type: "LIKE",
+    });
     await consumer.processBatch({ messages: [msg] } as any);
     expect(msg.retry).toHaveBeenCalled();
   });

@@ -1,13 +1,17 @@
 import { describe, it, expect } from "vitest";
 import { BlockRepository } from "../block.js";
-import { createMockD1, runEffect } from "../../../../../packages/cf-shared/src/__tests__/__helpers__/test-utils.js";
+import {
+  createMockD1,
+  runEffect,
+} from "../../../../../packages/cf-shared/src/__tests__/__helpers__/test-utils.js";
 import { ValidationError } from "@meetsmatch/cf-shared";
 
 describe("BlockRepository", () => {
   function createRepo(rows: Array<Record<string, unknown>> = []) {
     const db = createMockD1((sql) => {
       if (sql.includes("SELECT blocked_id")) return { results: rows };
-      if (sql.includes("SELECT 1 FROM blocks")) return { results: rows.length > 0 ? [{ c: 1 }] : [] };
+      if (sql.includes("SELECT 1 FROM blocks"))
+        return { results: rows.length > 0 ? [{ c: 1 }] : [] };
       if (sql.includes("COUNT(*)")) return { results: [{ c: rows.length }] };
       return { results: rows };
     });
@@ -17,7 +21,9 @@ describe("BlockRepository", () => {
   describe("block", () => {
     it("blocks a user successfully", async () => {
       const { repo } = createRepo();
-      const result = await runEffect(repo.block({ blockerId: "u1", blockedId: "u2" }));
+      const result = await runEffect(
+        repo.block({ blockerId: "u1", blockedId: "u2" }),
+      );
       expect(result.success).toBe(true);
     });
 
@@ -42,7 +48,9 @@ describe("BlockRepository", () => {
   describe("unblock", () => {
     it("unblocks a user successfully", async () => {
       const { repo } = createRepo();
-      const result = await runEffect(repo.unblock({ blockerId: "u1", blockedId: "u2" }));
+      const result = await runEffect(
+        repo.unblock({ blockerId: "u1", blockedId: "u2" }),
+      );
       expect(result.success).toBe(true);
     });
 
@@ -71,13 +79,17 @@ describe("BlockRepository", () => {
   describe("isBlocked", () => {
     it("returns true when users have blocked each other", async () => {
       const { repo } = createRepo([{ c: 1 }]);
-      const result = await runEffect(repo.isBlocked({ userId: "u1", otherUserId: "u2" }));
+      const result = await runEffect(
+        repo.isBlocked({ userId: "u1", otherUserId: "u2" }),
+      );
       expect(result).toBe(true);
     });
 
     it("returns false when no block exists", async () => {
       const { repo } = createRepo([]);
-      const result = await runEffect(repo.isBlocked({ userId: "u1", otherUserId: "u2" }));
+      const result = await runEffect(
+        repo.isBlocked({ userId: "u1", otherUserId: "u2" }),
+      );
       expect(result).toBe(false);
     });
   });

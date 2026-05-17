@@ -49,7 +49,9 @@ describe("media utilities", () => {
     });
 
     it("returns null for non-CDN URLs", () => {
-      expect(extractMediaKeyFromUrl("https://example.com/image.jpg")).toBeNull();
+      expect(
+        extractMediaKeyFromUrl("https://example.com/image.jpg"),
+      ).toBeNull();
       expect(extractMediaKeyFromUrl("random-string")).toBeNull();
     });
 

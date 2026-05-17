@@ -2,16 +2,21 @@ import { describe, it, expect, vi } from "vitest";
 import { runSubscriptionExpiryJob } from "../subscriptionExpiry.js";
 
 describe("runSubscriptionExpiryJob", () => {
-  const createEnv = (apiResponse?: { ok: boolean; status?: number; json?: unknown }) => ({
-    API_SERVICE: {
-      fetch: vi.fn(async () => ({
-        ok: apiResponse?.ok ?? true,
-        status: apiResponse?.status ?? 200,
-        text: async () => "ok",
-        json: async () => apiResponse?.json ?? {},
-      })),
-    },
-  } as unknown as import("../index.js").Env);
+  const createEnv = (apiResponse?: {
+    ok: boolean;
+    status?: number;
+    json?: unknown;
+  }) =>
+    ({
+      API_SERVICE: {
+        fetch: vi.fn(async () => ({
+          ok: apiResponse?.ok ?? true,
+          status: apiResponse?.status ?? 200,
+          text: async () => "ok",
+          json: async () => apiResponse?.json ?? {},
+        })),
+      },
+    }) as unknown as import("../index.js").Env;
 
   it("calls the downgrade endpoint", async () => {
     const env = createEnv({ ok: true, json: { downgraded: 3 } });

@@ -1,6 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
 import { FeedbackRepository } from "../feedback.js";
-import { createMockD1, runEffect } from "../../../../../packages/cf-shared/src/__tests__/__helpers__/test-utils.js";
+import {
+  createMockD1,
+  runEffect,
+} from "../../../../../packages/cf-shared/src/__tests__/__helpers__/test-utils.js";
 
 describe("FeedbackRepository", () => {
   function createRepo() {

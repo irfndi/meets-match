@@ -25,7 +25,12 @@ describe("profile handler", () => {
               age: 25,
               gender: "female",
               bio: "Hello",
-              location: { city: "NYC", country: "USA", latitude: 40.7, longitude: -74 },
+              location: {
+                city: "NYC",
+                country: "USA",
+                latitude: 40.7,
+                longitude: -74,
+              },
               interests: ["music", "travel"],
               mediaUrls: [],
               isProfileComplete: true,
@@ -97,14 +102,20 @@ describe("profile handler", () => {
     const env = createEnv();
 
     await profileCommand(ctx, env);
-    expect(ctx.reply).toHaveBeenCalledWith(expect.stringContaining("Could not identify"));
+    expect(ctx.reply).toHaveBeenCalledWith(
+      expect.stringContaining("Could not identify"),
+    );
   });
 
   it("handles API failure gracefully", async () => {
     const ctx = createCtx();
     const env = {
       API_SERVICE: {
-        fetch: vi.fn(async () => ({ ok: false, status: 500, text: async () => "error" })),
+        fetch: vi.fn(async () => ({
+          ok: false,
+          status: 500,
+          text: async () => "error",
+        })),
       },
       KV: {
         get: vi.fn(async () => null),
