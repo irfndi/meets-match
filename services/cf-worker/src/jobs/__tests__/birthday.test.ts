@@ -6,11 +6,13 @@ describe("runBirthdayJob", () => {
     overrides: {
       dbResults?: Array<Record<string, unknown>>;
       matchResults?: Array<Record<string, unknown>>;
+      leapResults?: Array<Record<string, unknown>>;
       apiResponse?: { ok: boolean; status?: number; json?: unknown };
     } = {},
   ) => {
     const dbResults = overrides.dbResults ?? [];
     const matchResults = overrides.matchResults ?? [];
+    const leapResults = overrides.leapResults ?? [];
     const apiOk = overrides.apiResponse?.ok ?? true;
 
     return {
@@ -19,8 +21,11 @@ describe("runBirthdayJob", () => {
           const isMatchQuery = sql.includes("FROM matches m");
           const results = isMatchQuery ? matchResults : dbResults;
           return {
-            bind: vi.fn(() => ({
-              all: vi.fn(async () => ({ results })),
+            bind: vi.fn((param: string) => ({
+              all: vi.fn(async () => {
+                if (param === "02-29") return { results: leapResults };
+                return { results };
+              }),
               first: vi.fn(async () => ({ c: results.length })),
               run: vi.fn(async () => ({ success: true })),
             })),
@@ -136,5 +141,33 @@ describe("runBirthdayJob", () => {
     const body = JSON.parse(await new Response(req.body).text());
     const payload = JSON.parse(body.payload);
     expect(payload.message).toContain("Alice\\*Bob");
+  });
+
+  it("refreshes leap-day user ages on Feb 28 of non-leap years", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2023-02-28T09:00:00Z"));
+
+    const env = createEnv({
+      dbResults: [],
+      matchResults: [],
+      leapResults: [
+        { id: "leap_1", first_name: "Leap", birth_date: "2000-02-29" },
+      ],
+    });
+
+    await runBirthdayJob(env);
+
+    // Should query for regular birthdays, leap-day users, and age update
+    expect(env.DB.prepare).toHaveBeenCalledTimes(3);
+
+    // Should update age but NOT send notifications (no regular birthday user)
+    const runCalls = (env.DB.prepare as any).mock.calls;
+    const ageUpdateCall = runCalls.find((call: any[]) =>
+      call[0].includes("UPDATE users SET age"),
+    );
+    expect(ageUpdateCall).toBeDefined();
+    expect(env.API_SERVICE.fetch).not.toHaveBeenCalled();
+
+    vi.useRealTimers();
   });
 });
