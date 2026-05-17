@@ -31,6 +31,24 @@ function getLanguageLabel(lang: Language): string {
   return found ? `${found.label} ${found.flag}` : lang;
 }
 
+function formatGenderPreference(prefs: string[], lang: Language): string {
+  if (prefs.length === 0) return t("settingsNotSet", lang);
+  const allOptions = ["male", "female", "other", "prefer_not_to_say"];
+  if (
+    prefs.length === allOptions.length &&
+    allOptions.every((o) => prefs.includes(o))
+  ) {
+    return t("genderPrefAllButton", lang);
+  }
+  const map: Record<string, string> = {
+    male: t("genderDisplayMale", lang),
+    female: t("genderDisplayFemale", lang),
+    other: t("genderDisplayOther", lang),
+    prefer_not_to_say: t("genderDisplayPreferNot", lang),
+  };
+  return prefs.map((p) => map[p] ?? p).join(", ");
+}
+
 function buildLanguageKeyboard(): InlineKeyboard {
   const keyboard = new InlineKeyboard();
   for (const lang of SUPPORTED_LANGUAGES) {
@@ -124,6 +142,7 @@ export const settingsCommand = async (
     }
 
     const userId = String(ctx.from.id);
+    const lang = (result.user.language as Language) ?? DEFAULT_LANGUAGE;
     const rawPrefs = await fetchUserPreferences(env, userId);
     const defaults = getDefaultPreferences(
       result.user as unknown as Record<string, unknown>,
@@ -135,17 +154,17 @@ export const settingsCommand = async (
     const ageRange =
       prefs?.minAge !== undefined && prefs?.maxAge !== undefined
         ? `${prefs.minAge}–${prefs.maxAge}`
-        : "Not set";
+        : t("settingsNotSet", lang);
     const distance =
-      prefs?.maxDistance !== undefined ? `${prefs.maxDistance} km` : "Not set";
+      prefs?.maxDistance !== undefined
+        ? `${prefs.maxDistance} km`
+        : t("settingsNotSet", lang);
     const genderPref =
       prefs?.genderPreference !== undefined &&
       Array.isArray(prefs.genderPreference) &&
       prefs.genderPreference.length > 0
-        ? (prefs.genderPreference as string[]).join(", ")
-        : "Not set";
-
-    const lang = (result.user.language as Language) ?? DEFAULT_LANGUAGE;
+        ? formatGenderPreference(prefs.genderPreference as string[], lang)
+        : t("settingsNotSet", lang);
     const lines = [
       t("settingsTitle", lang),
       "",

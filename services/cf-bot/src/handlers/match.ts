@@ -752,11 +752,11 @@ export const matchCommand = async (ctx: MyContext, env: Env): Promise<void> => {
     // Show gentle notice if soft relaxed filters were used
     if (relaxed) {
       const adjustKeyboard = new InlineKeyboard()
-        .text("⚙️ Update Settings", "settings:show")
+        .text(t("matchUpdateSettingsButton", lang), "settings:show")
         .row()
-        .text("❌ Dismiss", "referral:dismiss");
+        .text(t("matchDismissButton", lang), "referral:dismiss");
       await ctx.reply(
-        mdv2`🔍 *Showing profiles slightly outside your preferences*\n\nWe expanded your search a little to help you discover more people near you\\.`,
+        mdv2`🔍 *${t("matchRelaxedSearchTitle", lang)}*\n\n${t("matchRelaxedSearchBody", lang)}`,
         { parse_mode: "MarkdownV2", reply_markup: adjustKeyboard },
       );
     }

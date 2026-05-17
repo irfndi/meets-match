@@ -59,6 +59,7 @@ export interface Translations {
   genderDisplayMale: string;
   genderDisplayFemale: string;
   genderDisplayOther: string;
+  genderDisplayPreferNot: string;
   genderInvalid: string;
   genderUpdated: string;
   interestsPrompt: string;
@@ -186,6 +187,7 @@ export interface Translations {
   settingsMaxDistanceLabel: string;
   settingsGenderPrefLabel: string;
   settingsLanguageLabel: string;
+  settingsNotSet: string;
   settingsTapToChange: string;
   settingsLanguageSelect: string;
   settingsClose: string;
@@ -396,6 +398,7 @@ const en: Translations = {
   genderDisplayMale: "Male",
   genderDisplayFemale: "Female",
   genderDisplayOther: "Other",
+  genderDisplayPreferNot: "Prefer not to say",
   genderInvalid:
     "Invalid selection. Please choose *Male* or *Female*, or type *Cancel*.",
   genderUpdated: "✅ Gender updated!",
@@ -582,6 +585,7 @@ const en: Translations = {
   settingsMaxDistanceLabel: "📍 Max Distance: {value}",
   settingsGenderPrefLabel: "⚧ Gender Preference: {value}",
   settingsLanguageLabel: "🌐 Language: {value}",
+  settingsNotSet: "Not set",
   settingsTapToChange: "Tap a field below to change it:",
   settingsLanguageSelect: "🌐 *Select Language*\n\nCurrent: {value}",
   settingsClose: "Settings closed.",
@@ -617,8 +621,7 @@ const en: Translations = {
   matchNoMatchesFoundTitle: "🔍 *No potential matches found right now*",
   matchNoMatchesFoundBody:
     "Your community is still growing. Invite friends to discover more people and earn bonus likes!\n\nOr broaden your search in *⚙️ Settings*",
-  matchRelaxedSearchTitle:
-    "🔍 *Showing profiles slightly outside your preferences*",
+  matchRelaxedSearchTitle: "Showing profiles slightly outside your preferences",
   matchRelaxedSearchBody:
     "We expanded your search a little to help you discover more people near you.",
   matchInviteFriendsButton: "🎁 Invite Friends",
@@ -784,6 +787,7 @@ const id: Translations = {
   genderDisplayMale: "Laki-laki",
   genderDisplayFemale: "Perempuan",
   genderDisplayOther: "Lainnya",
+  genderDisplayPreferNot: "Lebih baik tidak disebutkan",
   genderInvalid:
     "Pilihan tidak valid. Pilih *Laki-laki* atau *Perempuan*, atau ketik *Batal*.",
   genderUpdated: "✅ Jenis kelamin diperbarui!",
@@ -986,6 +990,7 @@ const id: Translations = {
   settingsMaxDistanceLabel: "📍 Jarak Maksimal: {value}",
   settingsGenderPrefLabel: "⚧ Preferensi Gender: {value}",
   settingsLanguageLabel: "🌐 Bahasa: {value}",
+  settingsNotSet: "Belum diatur",
   settingsTapToChange: "Ketuk bidang di bawah untuk mengubahnya:",
   settingsLanguageSelect: "🌐 *Pilih Bahasa*\n\nSaat ini: {value}",
   settingsClose: "Pengaturan ditutup.",
@@ -1020,7 +1025,7 @@ const id: Translations = {
   matchNoMatchesFoundTitle: "🔍 *Belum ada match saat ini*",
   matchNoMatchesFoundBody:
     "Komunitas kami masih berkembang. Undang teman untuk menemukan lebih banyak orang dan dapatkan bonus like!\n\nAtau perluas pencarianmu di *⚙️ Pengaturan*",
-  matchRelaxedSearchTitle: "🔍 *Menampilkan profil di luar preferensimu*",
+  matchRelaxedSearchTitle: "Menampilkan profil di luar preferensimu",
   matchRelaxedSearchBody:
     "Kami memperluas pencarianmu sedikit untuk membantu menemukan lebih banyak orang di dekatmu.",
   matchInviteFriendsButton: "🎁 Undang Teman",
