@@ -1,8 +1,10 @@
 import type { Env } from "../index.js";
 
 const NOTIFICATION_TTL_SECONDS = 3 * 24 * 60 * 60; // 3 days
+const LEGACY_NOTIFICATION_KEY_PREFIX = "notifications";
 
 export interface LikeNotification {
+  id: string;
   type: "like";
   fromUserId: string;
   fromDisplayName: string;
@@ -13,6 +15,7 @@ export interface LikeNotification {
 }
 
 export interface GiftNotification {
+  id: string;
   type: "gift";
   fromUserId: string;
   fromDisplayName: string;
@@ -22,6 +25,7 @@ export interface GiftNotification {
 }
 
 export interface GiftPremiumNotification {
+  id: string;
   type: "gift_premium";
   fromUserId: string;
   fromDisplayName: string;
@@ -30,6 +34,7 @@ export interface GiftPremiumNotification {
 }
 
 export interface MutualMatchNotification {
+  id: string;
   type: "mutual_match";
   matchId: string;
   otherUserId: string;
@@ -53,14 +58,38 @@ function listKey(userId: string): string {
   return `notifications:list:${userId}`;
 }
 
+function legacyKey(userId: string): string {
+  return `${LEGACY_NOTIFICATION_KEY_PREFIX}:${userId}`;
+}
+
 function generateNotificationId(): string {
   return `${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
 }
 
+export function addNotification(
+  env: Env,
+  userId: string,
+  notification: Omit<LikeNotification, "id">,
+): Promise<void>;
+export function addNotification(
+  env: Env,
+  userId: string,
+  notification: Omit<MutualMatchNotification, "id">,
+): Promise<void>;
+export function addNotification(
+  env: Env,
+  userId: string,
+  notification: Omit<GiftNotification, "id">,
+): Promise<void>;
+export function addNotification(
+  env: Env,
+  userId: string,
+  notification: Omit<GiftPremiumNotification, "id">,
+): Promise<void>;
 export async function addNotification(
   env: Env,
   userId: string,
-  notification: Notification,
+  notification: Omit<Notification, "id">,
 ): Promise<void> {
   const id = generateNotificationId();
   const key = notificationKey(userId, id);
@@ -68,7 +97,7 @@ export async function addNotification(
 
   // Write notification body and append id to list concurrently
   await Promise.all([
-    env.KV.put(key, JSON.stringify(notification), {
+    env.KV.put(key, JSON.stringify({ ...notification, id }), {
       expirationTtl: NOTIFICATION_TTL_SECONDS,
     }),
     env.KV.put(
@@ -82,12 +111,49 @@ export async function addNotification(
 }
 
 async function getNotificationIds(env: Env, userId: string): Promise<string[]> {
-  const value = await env.KV.get(listKey(userId));
-  if (!value) return [];
+  const list = listKey(userId);
+  const value = await env.KV.get(list);
+  if (value) {
+    try {
+      return JSON.parse(value) as string[];
+    } catch (error) {
+      console.error("Failed to parse notification list:", error);
+      return [];
+    }
+  }
+
+  // Backward compatibility: migrate from legacy single-key storage
+  const legacyValue = await env.KV.get(legacyKey(userId));
+  if (!legacyValue) return [];
+
   try {
-    return JSON.parse(value) as string[];
+    const parsed = JSON.parse(legacyValue) as unknown;
+    if (!Array.isArray(parsed)) return [];
+
+    const ids: string[] = [];
+    const writes: Promise<unknown>[] = [];
+
+    for (const item of parsed) {
+      const id = generateNotificationId();
+      ids.push(id);
+      writes.push(
+        env.KV.put(notificationKey(userId, id), JSON.stringify({ ...item, id }), {
+          expirationTtl: NOTIFICATION_TTL_SECONDS,
+        }),
+      );
+    }
+
+    writes.push(
+      env.KV.put(list, JSON.stringify(ids), {
+        expirationTtl: NOTIFICATION_TTL_SECONDS,
+      }),
+    );
+    writes.push(env.KV.delete(legacyKey(userId)));
+
+    await Promise.all(writes);
+    return ids;
   } catch (error) {
-    console.error("Failed to parse notification list:", error);
+    console.error("Failed to migrate legacy notifications:", error);
     return [];
   }
 }
@@ -129,16 +195,15 @@ export async function clearNotifications(
 export async function removeNotification(
   env: Env,
   userId: string,
-  index: number,
+  notificationId: string,
 ): Promise<void> {
   const ids = await getNotificationIds(env, userId);
-  if (index < 0 || index >= ids.length) return;
+  if (!ids.includes(notificationId)) return;
 
-  const removedId = ids[index];
-  const newIds = ids.filter((_, i) => i !== index);
+  const newIds = ids.filter((id) => id !== notificationId);
 
   await Promise.all([
-    env.KV.delete(notificationKey(userId, removedId)),
+    env.KV.delete(notificationKey(userId, notificationId)),
     env.KV.put(listKey(userId), JSON.stringify(newIds), {
       expirationTtl: NOTIFICATION_TTL_SECONDS,
     }),
