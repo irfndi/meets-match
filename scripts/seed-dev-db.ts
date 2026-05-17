@@ -9,6 +9,7 @@ import { execFileSync } from "child_process";
 import { writeFileSync, mkdtempSync, rmSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
+import { randomInt } from "crypto";
 
 const GENDERS = [
   "male",
@@ -217,16 +218,20 @@ interface SeedUser {
 }
 
 function rand<T>(arr: T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)];
+  return arr[randomInt(arr.length)];
 }
 
 function randInt(min: number, max: number): number {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
+  return randomInt(min, max + 1);
 }
 
 function pickN<T>(arr: T[], n: number): T[] {
-  const shuffled = [...arr].sort(() => 0.5 - Math.random());
-  return shuffled.slice(0, n);
+  const copy = [...arr];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = randomInt(i + 1);
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy.slice(0, n);
 }
 
 function generateBirthDate(age: number): string {
@@ -237,10 +242,14 @@ function generateBirthDate(age: number): string {
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
+function randomFloat(): number {
+  return randomInt(0, 2 ** 32) / 2 ** 32;
+}
+
 function generateLocation(baseLat: number, baseLng: number, radiusKm: number) {
   const r = radiusKm / 111;
-  const u = Math.random();
-  const v = Math.random();
+  const u = randomFloat();
+  const v = randomFloat();
   const w = r * Math.sqrt(u);
   const t = 2 * Math.PI * v;
   const lat = baseLat + w * Math.cos(t);
@@ -262,8 +271,8 @@ function generateUser(
   const age = randInt(20, 45);
 
   const genderPrefMap: Record<string, string[]> = {
-    male: Math.random() > 0.1 ? ["female"] : ["female", "non-binary"],
-    female: Math.random() > 0.1 ? ["male"] : ["male", "non-binary"],
+    male: randomFloat() > 0.1 ? ["female"] : ["female", "non-binary"],
+    female: randomFloat() > 0.1 ? ["male"] : ["male", "non-binary"],
     "non-binary": ["male", "female", "non-binary"],
     other: ["male", "female", "non-binary", "other"],
     prefer_not_to_say: ["male", "female"],
