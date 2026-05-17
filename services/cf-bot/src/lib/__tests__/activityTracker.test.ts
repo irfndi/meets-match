@@ -424,13 +424,11 @@ describe("activityTrackerMiddleware", () => {
     const ctx = createMockCtx();
 
     // ApiServiceClient.updateLastActive checks response.ok and throws if not ok
-    env.API_SERVICE.fetch = vi
-      .fn()
-      .mockResolvedValue(
-        new Response(JSON.stringify({ error: "Internal Server Error" }), {
-          status: 500,
-        }),
-      );
+    env.API_SERVICE.fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ error: "Internal Server Error" }), {
+        status: 500,
+      }),
+    );
 
     const middleware = activityTrackerMiddleware(env);
 
