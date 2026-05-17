@@ -27,6 +27,7 @@ export interface UserProfile {
   hiddenFromMatches?: boolean;
   mediaDeletedAt?: string;
   lastInteractionAt?: string;
+  referralCode?: string;
 }
 
 export const REQUIRED_FIELDS = [

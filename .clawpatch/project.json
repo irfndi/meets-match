@@ -5,9 +5,7 @@
   "rootPath": ".",
   "git": {
     "remoteUrl": "https://github.com/irfndi/match-bot.git",
-    "defaultBranch": "main",
-    "currentBranch": "chore/remove-deepsec-migrate-clawpatch",
-    "headSha": "90cede6c52ff66ba40173d9e0aff3bfa8f235b19"
+    "defaultBranch": "main"
   },
   "detected": {
     "languages": [

@@ -201,6 +201,7 @@ interface MatchQueue {
   tier: string;
   relaxed: boolean;
   myLocation?: { latitude: number; longitude: number };
+  referralCode?: string;
 }
 
 interface LastAction {
@@ -637,9 +638,12 @@ async function showNextMatch(
         .text("🎁 Share & Earn", "referral:show")
         .row()
         .text("❌ Dismiss", "referral:dismiss");
-      await ctx.reply(t("matchReferralPrompt", lang), {
-        reply_markup: referralKeyboard,
-      });
+      await ctx.reply(
+        t("matchReferralPrompt", lang, {
+          code: queue.referralCode ?? "N/A",
+        }),
+        { reply_markup: referralKeyboard },
+      );
     }
 
     // Random premium ad for free users (not too often)
@@ -786,6 +790,7 @@ export const matchCommand = async (ctx: MyContext, env: Env): Promise<void> => {
       tier,
       relaxed,
       myLocation,
+      referralCode: (user.referralCode as string | undefined) ?? undefined,
     });
     await showNextMatch(ctx, env, userId, lang);
   } catch (error) {
