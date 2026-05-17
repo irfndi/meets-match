@@ -5,8 +5,11 @@ export function createMockD1(handler = () => ({ results: [] })) {
         captured.push({ sql, values });
         return {
             run: vi.fn(async () => {
-                await handler(sql, values);
-                return { success: true };
+                const result = await handler(sql, values);
+                return {
+                    success: result.success ?? true,
+                    meta: result.meta ?? {},
+                };
             }),
             first: vi.fn(async () => {
                 const result = await handler(sql, values);
@@ -36,7 +39,9 @@ export function createMockKV(initial = {}) {
         get: vi.fn(async (key) => store.get(key) ?? null),
         put: vi.fn(async (key, value) => store.set(key, value)),
         delete: vi.fn(async (key) => store.delete(key)),
-        list: vi.fn(async () => ({ keys: [] })),
+        list: vi.fn(async () => ({
+            keys: Array.from(store.keys()).map((name) => ({ name })),
+        })),
         _store: store,
     };
 }
@@ -44,8 +49,9 @@ export function createMockR2() {
     const objects = new Map();
     return {
         put: vi.fn(async (key, value, opts) => {
+            const body = value instanceof ReadableStream ? value : new Blob([value]).stream();
             objects.set(key, {
-                body: value,
+                body,
                 httpMetadata: opts?.httpMetadata,
             });
         }),

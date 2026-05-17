@@ -1,9 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { BlockRepository } from "../block.js";
-import {
-  createMockD1,
-  runEffect,
-} from "../../../../../packages/cf-shared/src/__tests__/__helpers__/test-utils.js";
+import { createMockD1, runEffect } from "@meetsmatch/cf-shared/testing";
 import { ValidationError } from "@meetsmatch/cf-shared";
 
 describe("BlockRepository", () => {

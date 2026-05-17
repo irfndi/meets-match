@@ -13,6 +13,14 @@
     "./contracts": {
       "import": "./dist/contracts/index.js",
       "types": "./dist/contracts/index.d.ts"
+    },
+    "./testing": {
+      "import": "./dist/testing/test-utils.js",
+      "types": "./dist/testing/test-utils.d.ts"
+    },
+    "./testing/race-mocks": {
+      "import": "./dist/testing/race-mocks.js",
+      "types": "./dist/testing/race-mocks.d.ts"
     }
   },
   "scripts": {

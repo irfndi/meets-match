@@ -1,22 +1,28 @@
 import { describe, it, expect, vi } from "vitest";
 import { NotificationRepository } from "../notification.js";
-import {
-  createMockD1,
-  runEffect,
-} from "../../../../../packages/cf-shared/src/__tests__/__helpers__/test-utils.js";
+import { createMockD1, runEffect } from "@meetsmatch/cf-shared/testing";
 import { NotFoundError } from "@meetsmatch/cf-shared";
 
 describe("NotificationRepository", () => {
   function createRepo(rows: Array<Record<string, unknown>> = []) {
-    const db = createMockD1((sql) => {
+    const db = createMockD1((sql, values) => {
       if (sql.includes("SELECT * FROM notifications WHERE id")) {
         return { results: rows };
       }
       if (sql.includes("COUNT(*)")) {
-        return { results: [{ c: rows.length }] };
+        const statusMatch = sql.match(/status = '(\w+)'/);
+        const status = statusMatch ? statusMatch[1] : null;
+        const count = status
+          ? rows.filter(
+              (r) => String(r.status).toLowerCase() === status.toLowerCase(),
+            ).length
+          : rows.length;
+        return { results: [{ c: count }] };
       }
       if (sql.includes("SELECT id FROM notifications WHERE status = 'dlq'")) {
-        return { results: rows.filter((r) => r.status === "dlq") };
+        const dlqRows = rows.filter((r) => r.status === "dlq");
+        const limit = values[0] ? Number(values[0]) : dlqRows.length;
+        return { results: dlqRows.slice(0, limit) };
       }
       return { results: rows };
     });
@@ -111,11 +117,11 @@ describe("NotificationRepository", () => {
         makeRow({ status: "dlq" }),
       ]);
       const result = await runEffect(repo.getQueueStats());
-      expect(result.pendingCount).toBe(5);
-      expect(result.processingCount).toBe(5);
-      expect(result.deliveredCount).toBe(5);
-      expect(result.failedCount).toBe(5);
-      expect(result.dlqCount).toBe(5);
+      expect(result.pendingCount).toBe(2);
+      expect(result.processingCount).toBe(0);
+      expect(result.deliveredCount).toBe(1);
+      expect(result.failedCount).toBe(1);
+      expect(result.dlqCount).toBe(1);
     });
   });
 
@@ -138,7 +144,7 @@ describe("NotificationRepository", () => {
         makeRow({ status: "dlq", id: "d3" }),
       ]);
       const result = await runEffect(repo.replayDLQ({ limit: 2 }));
-      expect(result).toBe(3); // mock returns all rows
+      expect(result).toBe(2);
     });
   });
 

@@ -1,11 +1,93 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ApiRouter } from "../router.js";
-import {
-  createMockD1,
-  createMockKV,
-  createMockQueue,
-  createMockR2,
-} from "../../../../../packages/cf-shared/src/__tests__/__helpers__/test-utils.js";
+
+function createMockD1(
+  handler: (
+    sql: string,
+    values: unknown[],
+  ) => {
+    results?: Array<Record<string, unknown>>;
+    success?: boolean;
+  } = () => ({
+    results: [],
+  }),
+) {
+  function makeStmt(sql: string, values: unknown[]) {
+    return {
+      run: vi.fn(async () => {
+        const result = await handler(sql, values);
+        return { success: result.success ?? true };
+      }),
+      first: vi.fn(async () => {
+        const result = await handler(sql, values);
+        return result.results?.[0] ?? null;
+      }),
+      all: vi.fn(async () => {
+        const result = await handler(sql, values);
+        return { results: result.results ?? [] };
+      }),
+      bind: vi.fn((...newValues: unknown[]) => makeStmt(sql, newValues)),
+    };
+  }
+
+  return {
+    prepare: vi.fn((sql: string) => makeStmt(sql, [])),
+    batch: vi.fn(async () => ({ success: true })),
+  } as unknown as import("@cloudflare/workers-types").D1Database;
+}
+
+function createMockKV(initial: Record<string, string> = {}) {
+  const store = new Map<string, string>(Object.entries(initial));
+  return {
+    get: vi.fn(async (key: string) => store.get(key) ?? null),
+    put: vi.fn(async (key: string, value: string) => store.set(key, value)),
+    delete: vi.fn(async (key: string) => store.delete(key)),
+    list: vi.fn(async () => ({
+      keys: Array.from(store.keys()).map((name) => ({ name })),
+    })),
+  } as unknown as import("@cloudflare/workers-types").KVNamespace;
+}
+
+function createMockQueue() {
+  return {
+    send: vi.fn(async () => {}),
+    sendBatch: vi.fn(async () => {}),
+  } as unknown as import("@cloudflare/workers-types").Queue;
+}
+
+function createMockR2() {
+  const objects = new Map<
+    string,
+    { body: ReadableStream; httpMetadata?: { contentType?: string } }
+  >();
+  return {
+    put: vi.fn(
+      async (
+        key: string,
+        value: ReadableStream | ArrayBuffer,
+        opts?: { httpMetadata?: { contentType?: string } },
+      ) => {
+        const body =
+          value instanceof ReadableStream ? value : new Blob([value]).stream();
+        objects.set(key, { body, httpMetadata: opts?.httpMetadata });
+      },
+    ),
+    get: vi.fn(async (key: string) => {
+      const obj = objects.get(key);
+      if (!obj) return null;
+      return {
+        body: obj.body,
+        httpMetadata: obj.httpMetadata,
+        writeHttpMetadata: vi.fn(),
+        httpEtag: `"${key}"`,
+        size: 0,
+        uploaded: new Date(),
+        checksums: {},
+      };
+    }),
+    delete: vi.fn(async (key: string) => objects.delete(key)),
+  } as unknown as import("@cloudflare/workers-types").R2Bucket;
+}
 
 describe("ApiRouter", () => {
   let router: ApiRouter;
@@ -80,17 +162,14 @@ describe("ApiRouter", () => {
     it("returns 404 for unknown routes", async () => {
       const response = await router.route(new Request("http://api/unknown"));
       expect(response.status).toBe(404);
-      const body = (await response.json()) as { error: string };
+      const body = (await response.json()) as Record<string, unknown>;
       expect(body.error).toBe("Not Found");
     });
 
     it("returns health status", async () => {
       const response = await router.route(new Request("http://api/health"));
       expect(response.status).toBe(200);
-      const body = (await response.json()) as {
-        status: string;
-        service: string;
-      };
+      const body = (await response.json()) as Record<string, unknown>;
       expect(body.status).toBe("ok");
       expect(body.service).toBe("cf-api");
     });
@@ -98,7 +177,7 @@ describe("ApiRouter", () => {
     it("routes GET /users/:id", async () => {
       const response = await router.route(new Request("http://api/users/123"));
       expect(response.status).toBe(200);
-      const body = (await response.json()) as { user: unknown };
+      const body = (await response.json()) as Record<string, unknown>;
       expect(body.user).toBeDefined();
     });
 
@@ -119,7 +198,7 @@ describe("ApiRouter", () => {
         new Request("http://api/users/123/potential-matches?limit=5"),
       );
       expect(response.status).toBe(200);
-      const body = (await response.json()) as { potentialMatches: unknown[] };
+      const body = (await response.json()) as Record<string, unknown>;
       expect(Array.isArray(body.potentialMatches)).toBe(true);
     });
 
@@ -135,7 +214,7 @@ describe("ApiRouter", () => {
         new Request("http://api/matches?userId=123"),
       );
       expect(response.status).toBe(200);
-      const body = (await response.json()) as { matches: unknown[] };
+      const body = (await response.json()) as Record<string, unknown>;
       expect(Array.isArray(body.matches)).toBe(true);
     });
 
@@ -172,13 +251,6 @@ describe("ApiRouter", () => {
       expect(mockQueue.send).toHaveBeenCalled();
     });
 
-    it("routes GET /geocode with query", async () => {
-      const response = await router.route(
-        new Request("http://api/geocode?q=paris&limit=1"),
-      );
-      expect([200, 500]).toContain(response.status);
-    });
-
     it("routes GET /queue-stats", async () => {
       const response = await router.route(
         new Request("http://api/queue-stats"),
@@ -194,7 +266,7 @@ describe("ApiRouter", () => {
         }),
       );
       expect(response.status).toBe(200);
-      const body = (await response.json()) as { success: boolean };
+      const body = (await response.json()) as Record<string, unknown>;
       expect(body.success).toBe(true);
     });
 

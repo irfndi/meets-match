@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
+import type { Queue, Fetcher, Message } from "@cloudflare/workers-types";
 import {
   NotificationQueueProducer,
   NotificationQueueConsumer,
@@ -26,7 +27,7 @@ function createMockD1(
         })),
       };
     }),
-  } as unknown as D1Database;
+  } as unknown as import("@cloudflare/workers-types").D1Database;
 }
 
 async function runEffect<A, E>(
@@ -77,66 +78,92 @@ describe("NotificationQueueConsumer", () => {
       if (sql.includes("UPDATE notifications SET status")) {
         return { results: [] };
       }
-      if (sql.includes("INSERT INTO notification_logs")) {
-        return { results: [] };
-      }
       return { results: [] };
     });
 
     const bot = {
-      fetch: vi.fn(
-        async () => new Response(JSON.stringify(botResponse), { status: 200 }),
-      ),
-      connect: vi.fn(),
-    } as unknown as import("@cloudflare/workers-types").Fetcher;
+      fetch: vi.fn(async () => ({
+        ok: botResponse.ok,
+        text: async () => botResponse.text ?? "ok",
+      })),
+    } as unknown as Fetcher;
 
-    return { db, bot };
+    return { consumer: new NotificationQueueConsumer(db, bot), db, bot };
   }
 
-  it("processes a notification successfully", async () => {
-    const { db, bot } = createConsumer([
-      {
-        id: "n1",
-        user_id: "u1",
-        type: "LIKE",
-        status: "pending",
-        payload: "{}",
-      },
-    ]);
-    const consumer = new NotificationQueueConsumer(db, bot);
-    await runEffect(
-      consumer.process({ notificationId: "n1", userId: "u1", type: "LIKE" }),
-    );
+  function createMessage(body: Record<string, unknown>): Message {
+    return {
+      body: JSON.stringify(body),
+      ack: vi.fn(),
+      retry: vi.fn(),
+    } as unknown as Message;
+  }
+
+  it("processes and acks a pending message", async () => {
+    const { consumer, bot } = createConsumer([{ id: "n1", status: "pending" }]);
+    const msg = createMessage({
+      notificationId: "n1",
+      userId: "u1",
+      type: "LIKE",
+    });
+    await consumer.processBatch({ messages: [msg] } as any);
     expect(bot.fetch).toHaveBeenCalledTimes(1);
+    expect(msg.ack).toHaveBeenCalled();
   });
 
-  it("skips missing notifications", async () => {
-    const { db, bot } = createConsumer([]);
-    const consumer = new NotificationQueueConsumer(db, bot);
-    await runEffect(
-      consumer.process({ notificationId: "n1", userId: "u1", type: "LIKE" }),
-    );
+  it("skips already delivered notifications", async () => {
+    const { consumer, bot } = createConsumer([
+      { id: "n1", status: "delivered" },
+    ]);
+    const msg = createMessage({
+      notificationId: "n1",
+      userId: "u1",
+      type: "LIKE",
+    });
+    await consumer.processBatch({ messages: [msg] } as any);
     expect(bot.fetch).not.toHaveBeenCalled();
+    expect(msg.ack).toHaveBeenCalled();
   });
 
-  it("retries on bot failure", async () => {
-    const { db, bot } = createConsumer(
-      [
-        {
-          id: "n1",
-          user_id: "u1",
-          type: "LIKE",
-          status: "pending",
-          payload: "{}",
-        },
-      ],
-      { ok: false, text: "timeout" },
+  it("marks failed when bot service returns error", async () => {
+    const { consumer, bot } = createConsumer(
+      [{ id: "n1", status: "pending" }],
+      { ok: false, text: "bot error" },
     );
-    const consumer = new NotificationQueueConsumer(db, bot);
-    await expect(
-      runEffect(
-        consumer.process({ notificationId: "n1", userId: "u1", type: "LIKE" }),
-      ),
-    ).rejects.toThrow();
+    const msg = createMessage({
+      notificationId: "n1",
+      userId: "u1",
+      type: "LIKE",
+    });
+    await consumer.processBatch({ messages: [msg] } as any);
+    expect(bot.fetch).toHaveBeenCalledTimes(1);
+    expect(msg.ack).toHaveBeenCalled();
+  });
+
+  it("retries on unexpected error", async () => {
+    const db = createMockD1(() => {
+      throw new Error("DB down");
+    });
+    const consumer = new NotificationQueueConsumer(db, {
+      fetch: vi.fn(),
+    } as unknown as Fetcher);
+    const msg = createMessage({
+      notificationId: "n1",
+      userId: "u1",
+      type: "LIKE",
+    });
+    await consumer.processBatch({ messages: [msg] } as any);
+    expect(msg.retry).toHaveBeenCalled();
+  });
+
+  it("handles invalid JSON gracefully", async () => {
+    const { consumer } = createConsumer();
+    const msg = {
+      body: "not-json",
+      ack: vi.fn(),
+      retry: vi.fn(),
+    } as unknown as Message;
+    await consumer.processBatch({ messages: [msg] } as any);
+    expect(msg.retry).toHaveBeenCalled();
   });
 });

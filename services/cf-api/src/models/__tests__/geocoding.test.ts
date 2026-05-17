@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { GeocodingService } from "../geocoding.js";
-import { createMockKV } from "../../../../../packages/cf-shared/src/__tests__/__helpers__/test-utils.js";
-import { runEffect } from "../../../../../packages/cf-shared/src/__tests__/__helpers__/test-utils.js";
+import { createMockKV } from "@meetsmatch/cf-shared/testing";
+import { runEffect } from "@meetsmatch/cf-shared/testing";
 
 describe("GeocodingService", () => {
   let fetchMock: ReturnType<typeof vi.fn>;
