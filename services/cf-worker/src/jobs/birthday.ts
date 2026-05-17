@@ -53,7 +53,16 @@ export async function runBirthdayJob(env: Env): Promise<void> {
       const today = new Date();
       let age = today.getFullYear() - birthYear;
       const m = today.getMonth() + 1 - birthMonth;
-      if (m < 0 || (m === 0 && today.getDate() < birthDay)) {
+      // For leap-day (Feb 29) births, treat Feb 28 of non-leap years as the birthday
+      const isLeapDayBirth = birthMonth === 2 && birthDay === 29;
+      const isFeb28NonLeap =
+        today.getMonth() === 1 &&
+        today.getDate() === 28 &&
+        !isLeapYear(today.getFullYear());
+      if (
+        m < 0 ||
+        (m === 0 && today.getDate() < birthDay && !(isLeapDayBirth && isFeb28NonLeap))
+      ) {
         age--;
       }
       try {

@@ -137,14 +137,28 @@ describe("User Contracts", () => {
       expect(result.city).toBeUndefined();
     });
 
-    it("should decode location without latitude (city-only)", () => {
+    it("should decode location without coordinates (city-only)", () => {
       const result = Schema.decodeUnknownSync(Location)({
-        longitude: 0,
         city: "Jakarta",
         country: "Indonesia",
       });
       expect(result.latitude).toBeUndefined();
       expect(result.city).toBe("Jakarta");
+    });
+
+    it("should reject partial coordinates (only latitude or only longitude)", () => {
+      expect(() =>
+        Schema.decodeUnknownSync(Location)({
+          latitude: 0,
+          city: "Jakarta",
+        }),
+      ).toThrow();
+      expect(() =>
+        Schema.decodeUnknownSync(Location)({
+          longitude: 0,
+          city: "Jakarta",
+        }),
+      ).toThrow();
     });
   });
 
