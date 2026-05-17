@@ -21,6 +21,8 @@ const commands = [
   { command: "settings", description: "Adjust match preferences" },
   { command: "premium", description: "Upgrade to Premium" },
   { command: "referral", description: "Invite friends for bonus swipes" },
+  { command: "feedback", description: "Send us feedback" },
+  { command: "report", description: "Report a profile" },
   { command: "help", description: "How to use MeetMatch" },
   { command: "about", description: "About MeetMatch" },
 ];

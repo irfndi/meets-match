@@ -15,9 +15,50 @@ import {
 import { ApiServiceClient } from "../services/api-client.js";
 import { getMainMenuKeyboard } from "../lib/main-menu.js";
 import { createLogger } from "@meetsmatch/cf-shared";
+import { replyWithError } from "../lib/error-feedback.js";
 
 const log = createLogger("cf-bot");
-import { t, DEFAULT_LANGUAGE, type Language, escapeMd } from "../lib/i18n.js";
+import {
+  t,
+  DEFAULT_LANGUAGE,
+  SUPPORTED_LANGUAGES,
+  type Language,
+  escapeMd,
+} from "../lib/i18n.js";
+
+function getLanguageLabel(lang: Language): string {
+  const found = SUPPORTED_LANGUAGES.find((l) => l.code === lang);
+  return found ? `${found.label} ${found.flag}` : lang;
+}
+
+function formatGenderPreference(prefs: string[], lang: Language): string {
+  if (prefs.length === 0) return t("settingsNotSet", lang);
+  const allOptions = ["male", "female", "other", "prefer_not_to_say"];
+  if (
+    prefs.length === allOptions.length &&
+    allOptions.every((o) => prefs.includes(o))
+  ) {
+    return t("genderPrefAllButton", lang);
+  }
+  const map: Record<string, string> = {
+    male: t("genderDisplayMale", lang),
+    female: t("genderDisplayFemale", lang),
+    other: t("genderDisplayOther", lang),
+    prefer_not_to_say: t("genderDisplayPreferNot", lang),
+  };
+  return prefs.map((p) => map[p] ?? p).join(", ");
+}
+
+function buildLanguageKeyboard(): InlineKeyboard {
+  const keyboard = new InlineKeyboard();
+  for (const lang of SUPPORTED_LANGUAGES) {
+    keyboard
+      .text(`${lang.flag} ${lang.label}`, `settings-lang:${lang.code}`)
+      .row();
+  }
+  keyboard.text("← Back", "settings:back");
+  return keyboard;
+}
 
 function getSettingsKeyboard() {
   return new InlineKeyboard()
@@ -25,6 +66,7 @@ function getSettingsKeyboard() {
     .text("📍 Max Distance", "settings:distance")
     .row()
     .text("⚧ Gender Preference", "settings:gender-pref")
+    .text("🌐 Language", "settings:language")
     .row()
     .text("❌ Close", "settings:close");
 }
@@ -42,15 +84,15 @@ function buildDistanceKeyboard(): InlineKeyboard {
   return keyboard;
 }
 
-function buildGenderPrefKeyboard(): InlineKeyboard {
+function buildGenderPrefKeyboard(lang: Language): InlineKeyboard {
   return new InlineKeyboard()
-    .text("♂️ Male", "genderpref:male")
-    .text("♀️ Female", "genderpref:female")
+    .text(t("genderPrefMaleButton", lang), "genderpref:male")
+    .text(t("genderPrefFemaleButton", lang), "genderpref:female")
     .row()
-    .text("⚧ Other", "genderpref:other")
-    .text("🤫 Prefer not to say", "genderpref:prefer_not_to_say")
+    .text(t("genderPrefOtherButton", lang), "genderpref:other")
+    .text(t("genderPrefPreferNotButton", lang), "genderpref:prefer_not_to_say")
     .row()
-    .text("✅ All genders", "genderpref:all")
+    .text(t("genderPrefAllButton", lang), "genderpref:all")
     .row()
     .text("← Back", "settings:back");
 }
@@ -100,6 +142,7 @@ export const settingsCommand = async (
     }
 
     const userId = String(ctx.from.id);
+    const lang = (result.user.language as Language) ?? DEFAULT_LANGUAGE;
     const rawPrefs = await fetchUserPreferences(env, userId);
     const defaults = getDefaultPreferences(
       result.user as unknown as Record<string, unknown>,
@@ -111,26 +154,27 @@ export const settingsCommand = async (
     const ageRange =
       prefs?.minAge !== undefined && prefs?.maxAge !== undefined
         ? `${prefs.minAge}–${prefs.maxAge}`
-        : "Not set";
+        : t("settingsNotSet", lang);
     const distance =
-      prefs?.maxDistance !== undefined ? `${prefs.maxDistance} km` : "Not set";
+      prefs?.maxDistance !== undefined
+        ? `${prefs.maxDistance} km`
+        : t("settingsNotSet", lang);
     const genderPref =
       prefs?.genderPreference !== undefined &&
       Array.isArray(prefs.genderPreference) &&
       prefs.genderPreference.length > 0
-        ? (prefs.genderPreference as string[]).join(", ")
-        : "Not set";
-
-    const lang = (result.user.language as Language) ?? DEFAULT_LANGUAGE;
+        ? formatGenderPreference(prefs.genderPreference as string[], lang)
+        : t("settingsNotSet", lang);
     const lines = [
       t("settingsTitle", lang),
       "",
-      "*Current Preferences:*",
-      `🎯 Age Range: ${escapeMd(ageRange)}`,
-      `📍 Max Distance: ${escapeMd(distance)}`,
-      `⚧ Gender Preference: ${escapeMd(genderPref)}`,
+      t("settingsCurrentPreferences", lang),
+      t("settingsAgeRangeLabel", lang, { value: ageRange }),
+      t("settingsMaxDistanceLabel", lang, { value: distance }),
+      t("settingsGenderPrefLabel", lang, { value: genderPref }),
+      t("settingsLanguageLabel", lang, { value: getLanguageLabel(lang) }),
       "",
-      "Tap a field below to change it:",
+      t("settingsTapToChange", lang),
     ];
 
     await ctx.reply(lines.join("\n"), {
@@ -139,7 +183,7 @@ export const settingsCommand = async (
     });
   } catch (error) {
     log.error("settingsCommand", "Unhandled error", undefined, error);
-    await ctx.reply(t("genericError"));
+    await replyWithError(ctx, env, "en", { command: "settings" });
   }
 };
 
@@ -186,15 +230,28 @@ export const settingsCallbacks = async (
       }
       case "settings:gender-pref": {
         await ctx.reply(t("genderPrefSelect", lang), {
-          reply_markup: buildGenderPrefKeyboard(),
+          reply_markup: buildGenderPrefKeyboard(lang),
         });
         await ctx.answerCallbackQuery().catch(() => {});
         break;
       }
+      case "settings:language": {
+        await ctx.editMessageText(
+          t("settingsLanguageSelect", lang, {
+            value: getLanguageLabel(lang),
+          }),
+          {
+            parse_mode: "MarkdownV2",
+            reply_markup: buildLanguageKeyboard(),
+          },
+        );
+        await ctx.answerCallbackQuery().catch(() => {});
+        break;
+      }
       case "settings:close":
-        await ctx.answerCallbackQuery("Settings closed.").catch(() => {});
+        await ctx.answerCallbackQuery(t("settingsClose", lang)).catch(() => {});
         await ctx.deleteMessage().catch(() => {});
-        await ctx.reply("👇 Use the menu below to navigate:", {
+        await ctx.reply(t("profileNavigatePrompt", lang), {
           reply_markup: getMainMenuKeyboard(),
         });
         break;
@@ -203,7 +260,8 @@ export const settingsCallbacks = async (
     }
   } catch (error) {
     log.error("settingsCallbacks", "Unhandled error", undefined, error);
-    await ctx.answerCallbackQuery("❌ Something went wrong.").catch(() => {});
+    await replyWithError(ctx, env, "en", { action: "settings_callback" });
+    await ctx.answerCallbackQuery().catch(() => {});
   }
 };
 
@@ -312,7 +370,7 @@ export async function handleAgeRangeCallback(
             },
           )
           .catch(() => {});
-        await ctx.reply("👇 Use the menu below to navigate:", {
+        await ctx.reply(t("profileNavigatePrompt", lang), {
           reply_markup: getMainMenuKeyboard(),
         });
       } else {
@@ -329,7 +387,7 @@ export async function handleAgeRangeCallback(
     return false;
   } catch (error) {
     log.error("handleAgeRangeCallback", "Unhandled error", undefined, error);
-    await ctx.answerCallbackQuery("❌ Something went wrong.").catch(() => {});
+    await replyWithError(ctx, env, "en", { action: "age_range_callback" });
     return false;
   }
 }
@@ -383,7 +441,7 @@ export async function handleDistanceCallback(
             { parse_mode: "Markdown" },
           )
           .catch(() => {});
-        await ctx.reply("👇 Use the menu below to navigate:", {
+        await ctx.reply(t("profileNavigatePrompt", lang), {
           reply_markup: getMainMenuKeyboard(),
         });
       } else {
@@ -400,7 +458,7 @@ export async function handleDistanceCallback(
     return false;
   } catch (error) {
     log.error("handleDistanceCallback", "Unhandled error", undefined, error);
-    await ctx.answerCallbackQuery("❌ Something went wrong.").catch(() => {});
+    await replyWithError(ctx, env, "en", { action: "distance_callback" });
     return false;
   }
 }
@@ -473,8 +531,64 @@ export async function handleGenderPrefCallback(
     return true;
   } catch (error) {
     log.error("handleGenderPrefCallback", "Unhandled error", undefined, error);
-    await ctx.answerCallbackQuery("❌ Something went wrong.").catch(() => {});
+    await replyWithError(ctx, env, "en", { action: "gender_pref_callback" });
     return false;
+  }
+}
+
+export async function handleSettingsLanguageCallback(
+  ctx: MyContext,
+  env: Env,
+  data: string,
+): Promise<boolean> {
+  if (!ctx.from) return false;
+  if (!data.startsWith("settings-lang:")) return false;
+
+  const userId = String(ctx.from.id);
+  const langCode = data.replace("settings-lang:", "");
+  const validLangs = new Set(SUPPORTED_LANGUAGES.map((l) => l.code));
+  const selectedLang: Language = validLangs.has(langCode as Language)
+    ? (langCode as Language)
+    : DEFAULT_LANGUAGE;
+
+  try {
+    const res = await env.API_SERVICE.fetch(
+      new Request(`http://api/users/${userId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user: { language: selectedLang } }),
+      }),
+    );
+    if (!res.ok) {
+      log.error("handleSettingsLanguageCallback", "API returned error", {
+        userId,
+        language: selectedLang,
+        status: res.status,
+      });
+      await ctx
+        .answerCallbackQuery("❌ Failed to change language. Please try again.")
+        .catch(() => {});
+      return true;
+    }
+
+    await ctx
+      .answerCallbackQuery(`Language set to ${getLanguageLabel(selectedLang)}`)
+      .catch(() => {});
+
+    // Re-render settings in the new language
+    await settingsCommand(ctx, env);
+    return true;
+  } catch (error) {
+    log.error(
+      "handleSettingsLanguageCallback",
+      "Unhandled error",
+      undefined,
+      error,
+    );
+    await replyWithError(ctx, env, selectedLang, {
+      action: "settings_language_change",
+    });
+    return true;
   }
 }
 

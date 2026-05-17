@@ -8,8 +8,9 @@ import {
   computeAgeFromBirthDate,
 } from "../lib/user-utils.js";
 import { getMainMenuKeyboard } from "../lib/main-menu.js";
-import { mdv2 } from "../lib/i18n.js";
+import { mdv2, t, type Language } from "../lib/i18n.js";
 import { createLogger } from "@meetsmatch/cf-shared";
+import { replyWithError } from "../lib/error-feedback.js";
 
 const log = createLogger("cf-bot");
 
@@ -18,33 +19,42 @@ export const profileCommand = async (
   env: Env,
 ): Promise<void> => {
   if (!ctx.from) {
-    await ctx.reply("Could not identify you. Please try /start first.");
+    await ctx.reply(t("matchCouldNotIdentify", "en"));
     return;
   }
 
   try {
     const result = await ensureUserExists(ctx, env);
     if (!result) {
-      await ctx.reply(
-        "❌ Sorry, there was an error loading your profile. Please try again later.",
-      );
+      await ctx.reply(t("genericError", "en"));
       return;
     }
 
     const { user } = result;
-    const name = user.displayName || "Not set";
+    const lang: Language = (user.language as Language) ?? "en";
+    const name = user.displayName || t("profileInterestsNotSet", lang);
     const computedAge = user.birthDate
       ? computeAgeFromBirthDate(user.birthDate)
       : user.age;
     const ageDisplay =
-      computedAge !== undefined ? String(computedAge) : "Not set";
-    const gender =
+      computedAge !== undefined
+        ? String(computedAge)
+        : t("profileInterestsNotSet", lang);
+    const genderRaw =
       typeof user.gender === "string" && user.gender
-        ? user.gender.charAt(0).toUpperCase() + user.gender.slice(1)
-        : "Not set";
-    const bio = user.bio || "Not set";
+        ? user.gender.toLowerCase()
+        : null;
+    const gender =
+      genderRaw === "male"
+        ? t("genderDisplayMale", lang)
+        : genderRaw === "female"
+          ? t("genderDisplayFemale", lang)
+          : genderRaw
+            ? t("genderDisplayOther", lang)
+            : t("profileInterestsNotSet", lang);
+    const bio = user.bio || t("profileInterestsNotSet", lang);
     const loc = user.location;
-    let rawLocationText = "Not set";
+    let rawLocationText = t("profileInterestsNotSet", lang);
     const city = loc?.city as string | undefined;
     const country = loc?.country as string | undefined;
     if (city && country) {
@@ -52,7 +62,7 @@ export const profileCommand = async (
     } else if (city) {
       rawLocationText = city;
     } else if (loc?.latitude) {
-      rawLocationText = "📍 Shared";
+      rawLocationText = t("profileLocationShared", lang);
     }
     const locationText = rawLocationText;
     const interests =
@@ -60,30 +70,39 @@ export const profileCommand = async (
       Array.isArray(user.interests) &&
       user.interests.length > 0
         ? (user.interests as string[]).join(", ")
-        : "Not set";
+        : t("profileInterestsNotSet", lang);
     const mediaCount =
       (user.mediaUrls as Array<unknown> | undefined)?.length ?? 0;
-    const mediaText = mediaCount > 0 ? `${mediaCount}/3 uploaded` : "Not set";
+    const mediaText =
+      mediaCount > 0
+        ? t("profileMediaUploaded", lang, { count: String(mediaCount) })
+        : t("profileInterestsNotSet", lang);
 
     const { complete, missing } = getProfileCompleteness(user);
 
-    const text = mdv2`👤 *Your Profile*
+    const text = mdv2`${t("profileYourProfile", lang)}
 
-*Name:* ${name}
-*Age:* ${ageDisplay}
-*Gender:* ${gender}
-*Bio:* ${bio}
-*Location:* ${locationText}
-*Interests:* ${interests}
-*Media:* ${mediaText}`;
+${t("profileNameLabel", lang, { value: name })}
+${t("profileAgeLabel", lang, { value: ageDisplay })}
+${t("profileGenderLabel", lang, { value: gender })}
+${t("profileBioLabel", lang, { value: bio })}
+${t("profileLocationLabel", lang, { value: locationText })}
+${t("profileInterestsLabel", lang, { value: interests })}
+${t("profileMediaLabel", lang, { value: mediaText })}`;
 
     const fullText = complete
       ? text +
-        "\n\n✅ *Profile complete* Ready to match\n\nSelect a field to edit:"
+        "\n\n" +
+        t("profileCompleteReady", lang) +
+        "\n\n" +
+        t("profileSelectField", lang)
       : text +
-        "\n\n⚠️ *Profile Incomplete*\nTo start matching, please fill in:\n" +
-        getMissingFieldsDisplay(missing) +
-        "\n\nSelect a field to edit:";
+        "\n\n" +
+        t("profileIncompleteWarning", lang, {
+          missing: getMissingFieldsDisplay(missing),
+        }) +
+        "\n\n" +
+        t("profileSelectField", lang);
 
     const mediaUrls = (user.mediaUrls ?? []) as Array<{
       url: string;
@@ -131,6 +150,6 @@ export const profileCommand = async (
     }
   } catch (error) {
     log.error("profileCommand", "Unhandled error", undefined, error);
-    await ctx.reply("❌ Something went wrong. Please try again later.");
+    await replyWithError(ctx, env, "en", { command: "profile" });
   }
 };

@@ -1,4 +1,5 @@
 import { Bot, session } from "grammy";
+import { getVersionInfo } from "./lib/version.js";
 import type { MyContext } from "./types.js";
 import { startCommand, languageCallback } from "./handlers/start.js";
 import { helpCommand, aboutCommand } from "./handlers/help.js";
@@ -10,7 +11,9 @@ import {
   getMatchActionKeyboard,
   handleGiftCallback,
   handleGiftPayment,
+  handleGiftPremiumPayment,
   startLikeMessageConversation,
+  fetchUserLang,
 } from "./handlers/match.js";
 import { matchesCommand, matchesCallbacks } from "./handlers/matches.js";
 import { buildMediaKey, buildMediaPublicUrl } from "@meetsmatch/cf-shared";
@@ -20,6 +23,7 @@ import {
   handleAgeRangeCallback,
   handleDistanceCallback,
   handleGenderPrefCallback,
+  handleSettingsLanguageCallback,
 } from "./handlers/settings.js";
 import {
   premiumCommand,
@@ -35,6 +39,7 @@ import {
   handleMediaMessage,
   checkMandatoryUpdates,
   getConversationState,
+  startFeedbackConversation,
 } from "./lib/conversations.js";
 import { handleProfileCallback, handleMediaCallback } from "./menus/profile.js";
 import { getNotifications, clearNotifications } from "./lib/notifications.js";
@@ -45,9 +50,19 @@ import {
   MENU_PROFILE,
   MENU_SETTINGS,
   MENU_PREMIUM,
+  MENU_REFERRAL,
 } from "./lib/main-menu.js";
 import { InlineKeyboard } from "grammy";
 import { t, type Language } from "./lib/i18n.js";
+import {
+  handleErrorReportCallback,
+  recordCommandJourney,
+  recordActionJourney,
+  replyWithError,
+  isBotBlockedError,
+  isPermanentDeliveryError,
+} from "./lib/error-feedback.js";
+import { sendAggregatedAlerts } from "./lib/admin-alerts.js";
 
 export interface Env {
   DB: D1Database;
@@ -57,12 +72,17 @@ export interface Env {
   BOT_TOKEN: string;
   TELEGRAM_WEBHOOK_SECRET?: string;
   ENVIRONMENT?: string;
+  ADMIN_CHAT_ID?: string;
 }
 
 function createBot(env: Env): Bot<MyContext> {
   const bot = new Bot<MyContext>(env.BOT_TOKEN);
 
   bot.catch((err) => {
+    if (isBotBlockedError(err.error)) {
+      // Silently ignore when user blocks the bot
+      return;
+    }
     console.error("Bot error:", err);
   });
 
@@ -72,7 +92,20 @@ function createBot(env: Env): Bot<MyContext> {
       storage: {
         read: async (key) => {
           const value = await env.KV.get(`session:${key}`);
-          return value ? JSON.parse(value) : {};
+          if (!value) return {};
+          try {
+            const parsed = JSON.parse(value);
+            if (
+              parsed &&
+              typeof parsed === "object" &&
+              !Array.isArray(parsed)
+            ) {
+              return parsed as Record<string, unknown>;
+            }
+            return {};
+          } catch {
+            return {};
+          }
         },
         write: async (key, value) => {
           await env.KV.put(`session:${key}`, JSON.stringify(value));
@@ -120,12 +153,25 @@ function createBot(env: Env): Bot<MyContext> {
     const hasMutual = notifications.some((n) => n.type === "mutual_match");
 
     if (hasMutual || hasLikes) {
+      // Resolve language for notification text
+      let lang: Language = "en";
+      try {
+        const client = new ApiServiceClient(env.API_SERVICE);
+        const userRes = await client.getUser({ userId });
+        lang = (userRes.user?.language as Language) ?? "en";
+      } catch {
+        /* fallback */
+      }
       const parts: string[] = [];
-      if (hasMutual) parts.push(t("notificationsNewMutual"));
-      if (hasLikes) parts.push(t("notificationsNewLikes"));
-      const keyboard = new InlineKeyboard().text("View now", "matches").row();
+      if (hasMutual) parts.push(t("notificationsNewMutual", lang));
+      if (hasLikes) parts.push(t("notificationsNewLikes", lang));
+      const keyboard = new InlineKeyboard()
+        .text(t("notificationMutualMatchView", lang), "matches")
+        .row();
       await ctx.reply(
-        t("notificationsCheckMatches", "en", { items: parts.join(" and ") }),
+        t("notificationsCheckMatches", lang, {
+          items: parts.join(", "),
+        }),
         { reply_markup: keyboard },
       );
       await clearNotifications(env, userId);
@@ -133,18 +179,51 @@ function createBot(env: Env): Bot<MyContext> {
     return next();
   });
 
+  // Record journey for commands and menu buttons — must be BEFORE handlers
+  // Fire-and-forget: never block command/menu processing on KV/network.
+  bot.use((ctx, next) => {
+    const text = ctx.message?.text;
+    let promise: Promise<void> | undefined;
+    if (text?.startsWith("/")) {
+      const cmd = text.split(" ")[0].slice(1);
+      promise = recordCommandJourney(ctx, env, cmd);
+    } else if (text === MENU_FIND_MATCH) {
+      promise = recordActionJourney(ctx, env, "menu/find_match");
+    } else if (text === MENU_MY_MATCHES) {
+      promise = recordActionJourney(ctx, env, "menu/my_matches");
+    } else if (text === MENU_PROFILE) {
+      promise = recordActionJourney(ctx, env, "menu/profile");
+    } else if (text === MENU_SETTINGS) {
+      promise = recordActionJourney(ctx, env, "menu/settings");
+    } else if (text === MENU_PREMIUM) {
+      promise = recordActionJourney(ctx, env, "menu/premium");
+    } else if (text === MENU_REFERRAL) {
+      promise = recordActionJourney(ctx, env, "menu/referral");
+    }
+    promise?.catch((error) => console.warn("Journey tracking failed:", error));
+    return next();
+  });
+
   // Bot commands are registered once via scripts/setup-bot-commands.ts
   // to avoid rate-limiting and latency in the serverless handler.
 
   bot.command("start", (ctx) => startCommand(ctx, env));
-  bot.command("help", helpCommand);
-  bot.command("about", aboutCommand);
+  bot.command("help", (ctx) => helpCommand(ctx, env));
+  bot.command("about", (ctx) => aboutCommand(ctx, env));
   bot.command("profile", (ctx) => profileCommand(ctx, env));
   bot.command("match", (ctx) => matchCommand(ctx, env));
   bot.command("matches", (ctx) => matchesCommand(ctx, env));
   bot.command("settings", (ctx) => settingsCommand(ctx, env));
   bot.command("premium", (ctx) => premiumCommand(ctx, env));
   bot.command("referral", (ctx) => referralCommand(ctx, env));
+  bot.command("feedback", (ctx) => startFeedbackConversation(ctx, env));
+  bot.command("report", async (ctx) => {
+    if (!ctx.from) return;
+    const lang = await fetchUserLang(env, String(ctx.from.id));
+    await ctx.reply(t("reportCommandHint", lang), {
+      reply_markup: getMainMenuKeyboard(),
+    });
+  });
 
   bot.on("callback_query:data", async (ctx) => {
     try {
@@ -176,7 +255,8 @@ function createBot(env: Env): Bot<MyContext> {
         data === "next_match" ||
         data === "view_matches" ||
         data.startsWith("match:") ||
-        data.startsWith("dm:")
+        data.startsWith("dm:") ||
+        data.startsWith("gift_premium:")
       ) {
         return await matchCallbacks(ctx, env);
       }
@@ -210,6 +290,11 @@ function createBot(env: Env): Bot<MyContext> {
         return;
       }
 
+      if (data.startsWith("settings-lang:")) {
+        const handled = await handleSettingsLanguageCallback(ctx, env, data);
+        if (handled) return;
+      }
+
       if (data.startsWith("settings:")) {
         return await settingsCallbacks(ctx, env);
       }
@@ -235,6 +320,24 @@ function createBot(env: Env): Bot<MyContext> {
         data.startsWith("premium_ad:")
       ) {
         return await premiumCallbacks(ctx, env);
+      }
+
+      if (data.startsWith("report_error:")) {
+        const traceId = data.replace("report_error:", "");
+        await handleErrorReportCallback(ctx, env, traceId);
+        return;
+      }
+
+      if (data === "menu:main") {
+        await ctx.deleteMessage().catch(() => {});
+        const lang = ctx.from
+          ? await fetchUserLang(env, String(ctx.from.id))
+          : "en";
+        await ctx.reply(t("mainMenuPrompt", lang), {
+          reply_markup: getMainMenuKeyboard(),
+        });
+        await ctx.answerCallbackQuery().catch(() => {});
+        return;
       }
 
       if (data === "media:retry") {
@@ -264,10 +367,13 @@ function createBot(env: Env): Bot<MyContext> {
         return await matchCallbacks(ctx, env);
       }
     } catch (error) {
+      if (isBotBlockedError(error)) {
+        await ctx.answerCallbackQuery().catch(() => {});
+        return;
+      }
       console.error("Callback query error:", error);
-      await ctx
-        .answerCallbackQuery("❌ Something went wrong. Please try again.")
-        .catch(() => {});
+      await replyWithError(ctx, env, "en", { action: "callback_query" });
+      await ctx.answerCallbackQuery().catch(() => {});
     }
   });
 
@@ -277,7 +383,7 @@ function createBot(env: Env): Bot<MyContext> {
       if (handled) return;
     } catch (error) {
       console.error("Contact message error:", error);
-      await ctx.reply("❌ Something went wrong. Please try again.");
+      await replyWithError(ctx, env, "en", { action: "contact_message" });
     }
   });
 
@@ -287,7 +393,7 @@ function createBot(env: Env): Bot<MyContext> {
       if (handled) return;
     } catch (error) {
       console.error("Location message error:", error);
-      await ctx.reply("❌ Something went wrong. Please try again.");
+      await replyWithError(ctx, env, "en", { action: "location_message" });
     }
   });
 
@@ -305,7 +411,7 @@ function createBot(env: Env): Bot<MyContext> {
       if (handled) return;
     } catch (error) {
       console.error("Photo message error:", error);
-      await ctx.reply("❌ Something went wrong. Please try again.");
+      await replyWithError(ctx, env, "en", { action: "photo_message" });
     }
   });
 
@@ -323,7 +429,7 @@ function createBot(env: Env): Bot<MyContext> {
       if (handled) return;
     } catch (error) {
       console.error("Video message error:", error);
-      await ctx.reply("❌ Something went wrong. Please try again.");
+      await replyWithError(ctx, env, "en", { action: "video_message" });
     }
   });
 
@@ -346,8 +452,9 @@ function createBot(env: Env): Bot<MyContext> {
       try {
         const client = new ApiServiceClient(env.API_SERVICE);
         const result = await client.purchaseDMCredits(userId, amount);
+        const lang = await fetchUserLang(env, userId);
         await ctx.reply(
-          t("dmPurchased", "en", {
+          t("dmPurchased", lang, {
             count: String(amount),
             total: String(result.dmCredits),
           }),
@@ -355,13 +462,13 @@ function createBot(env: Env): Bot<MyContext> {
         );
       } catch (error) {
         console.error("DM credit purchase error:", error);
-        await ctx.reply(
-          "❌ Payment processed but we could not add DM credits. Please contact support.",
-        );
+        await replyWithError(ctx, env, "en", { action: "dm_credit_purchase" });
       }
     }
 
-    if (payload && payload.startsWith("gift_")) {
+    if (payload && payload.startsWith("gift_premium_")) {
+      await handleGiftPremiumPayment(ctx, env, payload);
+    } else if (payload && payload.startsWith("gift_")) {
       await handleGiftPayment(ctx, env, payload);
     }
 
@@ -384,22 +491,33 @@ function createBot(env: Env): Bot<MyContext> {
             subscriptionExpiresAt: expiresAt.toISOString(),
           },
         });
+        const lang = await fetchUserLang(env, userId);
         await ctx.reply(
-          t("premiumPurchased", "en", {
+          t("premiumPurchased", lang, {
             tier: tier === "premium_plus" ? "Premium+ 💎" : "Premium 👑",
           }),
           { reply_markup: getMainMenuKeyboard() },
         );
       } catch (error) {
         console.error("Premium purchase error:", error);
-        await ctx.reply(
-          "❌ Payment processed but we could not activate your subscription. Please contact support.",
-        );
+        await replyWithError(ctx, env, "en", { action: "premium_purchase" });
       }
     }
   });
 
   bot.on("message:text", async (ctx) => {
+    // Resolve user language early so it's available in catch blocks too
+    let lang: Language = "en";
+    try {
+      const client = new ApiServiceClient(env.API_SERVICE);
+      const userRes = await client.getUser({
+        userId: String(ctx.from?.id ?? ""),
+      });
+      lang = (userRes.user?.language as Language) ?? "en";
+    } catch {
+      /* fallback to en */
+    }
+
     try {
       const text = ctx.message?.text;
 
@@ -415,6 +533,8 @@ function createBot(env: Env): Bot<MyContext> {
           return await settingsCommand(ctx, env);
         case MENU_PREMIUM:
           return await premiumCommand(ctx, env);
+        case MENU_REFERRAL:
+          return await referralCommand(ctx, env);
       }
 
       // Match action reply keyboard — only if there's an active match queue
@@ -425,14 +545,14 @@ function createBot(env: Env): Bot<MyContext> {
         "↩️": "undo",
         "⚠️": "report",
         "💌": "like-message",
-        "🎁 Send a gift": "gift",
-        "🏠 Main menu": "menu",
+        [t("matchSendGift", lang)]: "gift",
+        [t("matchMainMenu", lang)]: "menu",
       };
 
       if (text && actionMap[text]) {
         const action = actionMap[text];
         if (action === "menu") {
-          await ctx.reply("Main menu:", {
+          await ctx.reply(t("mainMenuPrompt", lang), {
             reply_markup: getMainMenuKeyboard(),
           });
           return;
@@ -444,19 +564,26 @@ function createBot(env: Env): Bot<MyContext> {
       const handled = await handleConversationMessage(ctx, env);
       if (handled) return;
 
-      // Graceful fallback: if user sends ⏭ Skip without an active like-message
+      // Graceful fallback: if user sends Skip without an active like-message
       // conversation but has a match queue, treat it as a regular Like
-      if (text === "⏭ Skip") {
+      if (text === t("likeMessageSkipButton", lang)) {
         const queueHandled = await handleMatchReplyAction(ctx, env, "like");
         if (queueHandled) return;
       }
 
-      await ctx.reply(t("fallbackMessage", "en"), {
+      await ctx.reply(t("fallbackMessage", lang), {
         reply_markup: getMainMenuKeyboard(),
       });
     } catch (error) {
+      if (isBotBlockedError(error)) {
+        return;
+      }
       console.error("Text message error:", error);
-      await ctx.reply("❌ Something went wrong. Please try again.");
+      const text = ctx.message?.text;
+      const action = text?.startsWith("/")
+        ? `command:${text.split(" ")[0].slice(1)}`
+        : "text_message";
+      await replyWithError(ctx, env, lang, { action });
     }
   });
 
@@ -506,7 +633,7 @@ async function handleLikeMessagePhoto(ctx: MyContext, env: Env): Promise<void> {
     await handleLikeMessageMedia(ctx, env, publicUrl, "image");
   } catch (error) {
     console.error("Like message photo error:", error);
-    await ctx.reply("❌ Failed to upload. Please try again.");
+    await replyWithError(ctx, env, "en", { action: "like_message_photo" });
   }
 }
 
@@ -549,7 +676,7 @@ async function handleLikeMessageVideo(ctx: MyContext, env: Env): Promise<void> {
     await handleLikeMessageMedia(ctx, env, publicUrl, "video");
   } catch (error) {
     console.error("Like message video error:", error);
-    await ctx.reply("❌ Failed to upload. Please try again.");
+    await replyWithError(ctx, env, "en", { action: "like_message_video" });
   }
 }
 
@@ -562,10 +689,17 @@ export default {
     const url = new URL(request.url);
 
     if (url.pathname === "/health" || url.pathname === "/") {
-      return new Response(JSON.stringify({ status: "ok", service: "cf-bot" }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({
+          status: "ok",
+          service: "cf-bot",
+          version: getVersionInfo(),
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
     }
 
     if (url.pathname === "/webhook") {
@@ -594,6 +728,9 @@ export default {
         await bot.handleUpdate(update);
         return new Response("OK", { status: 200 });
       } catch (error) {
+        if (isBotBlockedError(error)) {
+          return new Response("OK", { status: 200 });
+        }
         console.error("Webhook error:", error);
         return new Response(
           JSON.stringify({ error: "Internal Server Error" }),
@@ -661,6 +798,13 @@ export default {
           const giftEmoji = payload.giftEmoji ?? "🎁";
           const giftName = escapeMd(payload.giftName ?? "gift");
           message = `🎁 *New Gift!*\n\n${fromName} sent you a ${giftEmoji} *${giftName}*! 💕`;
+        } else if (type === "gift_premium") {
+          const fromName = escapeMd(payload.fromDisplayName ?? "Someone");
+          const tier = escapeMd(payload.tier ?? "Premium");
+          message = `🎁 *Premium Gift!*\n\n${fromName} gifted you *${tier}*! 💕\n\nEnjoy your upgraded experience!`;
+          keyboard = new InlineKeyboard()
+            .text("👑 View Premium", "premium:show")
+            .row();
         } else if (type === "BIRTHDAY") {
           message =
             escapeMd(payload.message as string) ||
@@ -705,6 +849,20 @@ export default {
         });
       } catch (error) {
         console.error("Send notification error:", error);
+        if (isPermanentDeliveryError(error)) {
+          return new Response(
+            JSON.stringify({
+              error:
+                error instanceof Error
+                  ? error.message
+                  : "Permanent delivery failure",
+            }),
+            {
+              status: 410,
+              headers: { "Content-Type": "application/json" },
+            },
+          );
+        }
         return new Response(
           JSON.stringify({ error: "Internal Server Error" }),
           {
@@ -719,5 +877,15 @@ export default {
       status: 404,
       headers: { "Content-Type": "application/json" },
     });
+  },
+
+  async scheduled(
+    controller: ScheduledController,
+    env: Env,
+    _ctx: ExecutionContext,
+  ): Promise<void> {
+    if (controller.cron === "0 */6 * * *") {
+      await sendAggregatedAlerts(env);
+    }
   },
 };

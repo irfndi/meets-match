@@ -9,7 +9,7 @@ import {
 } from "./user-utils.js";
 import { getMainMenuKeyboard } from "./main-menu.js";
 import { t, type Language, type Translations, escapeMd } from "./i18n.js";
-import { InlineKeyboard } from "grammy";
+import { InlineKeyboard, Keyboard } from "grammy";
 import {
   createLogger,
   buildMediaKey,
@@ -293,7 +293,12 @@ export async function getConversationState(
   userId: string,
 ): Promise<ConversationState | null> {
   const value = await kv.get(`conversation:${userId}`);
-  return value ? JSON.parse(value) : null;
+  if (!value) return null;
+  try {
+    return JSON.parse(value) as ConversationState;
+  } catch {
+    return null;
+  }
 }
 
 export async function setConversationState(
@@ -339,20 +344,17 @@ export async function checkMandatoryUpdates(
     if (!user) return false;
 
     // Check if birthDate is missing for migrated age-only profiles
+    const lang: Language = (user.language as Language) ?? "en";
     if (!user.birthDate && user.age) {
       await startConversation(env.KV, userId, "birthdate");
-      await ctx.reply(
-        "📢 *Profile Update Required*\n\n" +
-          "We have updated how ages are stored. Please enter your birthdate to continue.\n\n" +
-          "Enter your birthdate in *DD.MM.YYYY* format (e.g. *15.03.1995*).",
-        { parse_mode: "Markdown" },
-      );
+      await ctx.reply(t("conversationBirthDateUpdateRequired", lang), {
+        parse_mode: "Markdown",
+      });
       return true;
     }
 
     // Check profile completeness and phone verification for all users
     const { complete } = getProfileCompleteness(user);
-    const lang: Language = (user.language as Language) ?? "en";
     if (!complete) {
       await continueOnboarding(ctx, env, userId, lang);
       return true;
@@ -559,6 +561,8 @@ export async function handleConversationMessage(
       return handleGenderPrefConversation(ctx, env, state, text, lang);
     case "report":
       return handleReportConversation(ctx, env, text, lang);
+    case "feedback":
+      return handleFeedbackConversation(ctx, env, text, lang);
     case "like-message":
       return handleLikeMessageConversation(ctx, env, text, lang);
     default:
@@ -1119,9 +1123,10 @@ async function handleLocationTextConversation(
       const continued = await continueOnboarding(ctx, env, state.userId, lang);
       if (!continued) {
         await ctx.reply(
-          `📍 *${escapeMd(city)}, ${escapeMd(country)}* saved!\n\n` +
-            `We could not verify the exact coordinates right now, but your city is recorded. ` +
-            `Distance matching will work once we verify it.`,
+          t("conversationLocationSaved", lang, {
+            city: escapeMd(city),
+            country: escapeMd(country),
+          }),
           { parse_mode: "Markdown", reply_markup: getMainMenuKeyboard() },
         );
         if (becameComplete) await promptPhoneVerification(ctx, env, lang);
@@ -1158,7 +1163,10 @@ async function handleLocationTextConversation(
     const continued = await continueOnboarding(ctx, env, state.userId, lang);
     if (!continued) {
       await ctx.reply(
-        `📍 Location verified: *${escapeMd(normalizedCity)}, ${escapeMd(normalizedCountry)}*`,
+        t("conversationLocationVerified", lang, {
+          city: escapeMd(normalizedCity),
+          country: escapeMd(normalizedCountry),
+        }),
         { parse_mode: "Markdown", reply_markup: getMainMenuKeyboard() },
       );
       if (becameComplete) await promptPhoneVerification(ctx, env, lang);
@@ -1320,5 +1328,87 @@ async function handleGenderPrefConversation(
       reply_markup: getMainMenuKeyboard(),
     });
   }
+  return true;
+}
+
+// --- Feedback conversation ---
+
+export async function startFeedbackConversation(
+  ctx: MyContext,
+  env: Env,
+): Promise<void> {
+  if (!ctx.from) return;
+  const userId = String(ctx.from.id);
+
+  try {
+    const user = await getUser(env, userId);
+    const lang: Language = (user?.language as Language) ?? "en";
+
+    await setConversationState(env.KV, {
+      userId,
+      field: "feedback",
+      step: 0,
+    });
+
+    const cancelKeyboard = new Keyboard()
+      .text(t("genericCancel", lang))
+      .resized();
+    await ctx.reply(t("feedbackPrompt", lang), {
+      parse_mode: "Markdown",
+      reply_markup: cancelKeyboard,
+    });
+  } catch (error) {
+    log.error("startFeedbackConversation", "Unhandled error", undefined, error);
+    await ctx.reply(t("genericError"), { reply_markup: getMainMenuKeyboard() });
+  }
+}
+
+export async function handleFeedbackConversation(
+  ctx: MyContext,
+  env: Env,
+  text: string,
+  lang: Language,
+): Promise<boolean> {
+  if (!ctx.from) return false;
+  const userId = String(ctx.from.id);
+  const state = await getConversationState(env.KV, userId);
+  if (!state || state.field !== "feedback") return false;
+
+  try {
+    const response = await env.API_SERVICE.fetch(
+      new Request("http://api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, message: text }),
+      }),
+    );
+    if (!response.ok) {
+      const body = await response.text().catch(() => "unknown");
+      log.error("handleFeedbackConversation", "Feedback API returned non-ok", {
+        userId,
+        status: response.status,
+        body,
+      });
+      await ctx.reply(t("feedbackError", lang), {
+        reply_markup: getMainMenuKeyboard(),
+      });
+    } else {
+      await ctx.reply(t("feedbackSubmitted", lang), {
+        reply_markup: getMainMenuKeyboard(),
+      });
+    }
+  } catch (error) {
+    log.error(
+      "handleFeedbackConversation",
+      "Failed to submit feedback",
+      { userId },
+      error,
+    );
+    await ctx.reply(t("feedbackError", lang), {
+      reply_markup: getMainMenuKeyboard(),
+    });
+  }
+
+  await clearConversationState(env.KV, userId);
   return true;
 }

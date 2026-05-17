@@ -149,6 +149,25 @@ describe("handleProfileCallback", () => {
     expect(result).toBe(false);
   });
 
+  it("shows error with trace ID when an unexpected error occurs", async () => {
+    env.API_SERVICE = createMockApiService({
+      "/users/123": () =>
+        new Response(JSON.stringify({ user: { language: "en" } }), {
+          status: 200,
+        }),
+    });
+    ctx.reply = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("Telegram API error"))
+      .mockResolvedValue(undefined);
+    const result = await handleProfileCallback(ctx, env, "profile:bio");
+    expect(result).toBe(true);
+    expect(ctx.reply).toHaveBeenCalledWith(
+      expect.stringContaining("Trace ID:"),
+      expect.anything(),
+    );
+  });
+
   // --- Language resolution -----------------------------------------------
 
   it("defaults language to 'en' when the API request fails", async () => {
