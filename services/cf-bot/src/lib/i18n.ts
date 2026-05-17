@@ -638,7 +638,7 @@ const en: Translations = {
   profileYourProfile: "👤 Your Profile",
   profileNameLabel: "Name: {value}",
   profileAgeLabel: "Age: {value}",
-  profileGenderLabel: "Jenis Kelamin: {value}",
+  profileGenderLabel: "Gender: {value}",
   profileBioLabel: "Bio: {value}",
   profileLocationLabel: "Location: {value}",
   profileLocationShared: "📍 Shared",
@@ -746,7 +746,8 @@ const id: Translations = {
   matchFinding: "🔍 Mencari match untukmu...",
   matchNoMatches:
     "😕 Belum ada match saat ini. Coba lagi nanti atau ubah preferensi match-mu di *⚙️ Pengaturan*.",
-  matchSkipGated: "Kamu sudah mencapai batas swipe harian. Coba lagi besok!",
+  matchSkipGated:
+    "🔒 *Skip adalah fitur Premium*\n\nPengguna gratis hanya bisa Like atau Dislike.\n\nUpgrade ke Premium untuk skip profil dan jelajahi lebih cepat!",
   matchReferralPrompt:
     "🎁 *Undang Teman*\n\n" +
     "Bagikan kode referalmu dan dapatkan bonus swipe!\n\n" +
@@ -795,7 +796,7 @@ const id: Translations = {
     "Apa minatmu? Masukkan minat yang dipisahkan koma (maks 10). Ketik *Batal* untuk membatalkan.",
   interestsInvalid:
     "Masukkan setidaknya satu minat, dipisahkan koma. Coba lagi atau ketik *Batal*.",
-  interestsUpdated: "✅ Minat diperbarui!",
+  interestsUpdated: "✅ Minat diperbarui: *{interests}*!",
   interestsSkipButton: "⏭️ Lewati",
   locationPrompt: "Bagaimana cara mengatur lokasimu?",
   locationShareButton: "📍 Bagikan lokasiku",
@@ -808,17 +809,17 @@ const id: Translations = {
     "Pilih rentang usia yang diinginkan. Ketuk usia atau ketik secara manual.",
   ageRangeInvalid:
     "Rentang usia tidak valid. Gunakan format *min-max* (contoh: *18-25*). Coba lagi atau ketik *Batal*.",
-  ageRangeUpdated: "✅ Rentang usia diperbarui!",
+  ageRangeUpdated: "✅ Rentang usia diperbarui ke *{min}–{max}*!",
   distancePrompt:
     "Masukkan jarak maksimal dalam km (1–500). Ketik *Batal* untuk membatalkan.",
   distanceInvalid:
     "Jarak tidak valid. Harus antara 5–500 km. Coba lagi atau ketik *Batal*.",
-  distanceUpdated: "✅ Jarak diperbarui!",
+  distanceUpdated: "✅ Jarak diperbarui ke *{distance} km*!",
   genderPrefPrompt:
     "Masukkan jenis kelamin yang diinginkan dipisahkan koma (*laki-laki, perempuan, lainnya, lebih_suka_tidak_menyebutkan*). Ketik *Batal* untuk membatalkan.",
   genderPrefInvalid:
     "Jenis kelamin tidak valid. Pilih *laki-laki, perempuan, lainnya*. Coba lagi atau ketik *Batal*.",
-  genderPrefUpdated: "✅ Preferensi jenis kelamin diperbarui!",
+  genderPrefUpdated: "✅ Preferensi jenis kelamin diperbarui: *{preferences}*!",
   genderPrefMaleButton: "♂️ Laki-laki",
   genderPrefFemaleButton: "♀️ Perempuan",
   genderPrefOtherButton: "⚧ Lainnya",
@@ -1014,7 +1015,7 @@ const id: Translations = {
   // --- Match card & actions ---
   matchCardMale: "L",
   matchCardFemale: "P",
-  matchCardOther: "L",
+  matchCardOther: "?",
   matchMainMenu: "🏠 Menu utama",
   matchSendGift: "🎁 Kirim hadiah",
   matchSendDM: "📩 Kirim DM",
@@ -1042,7 +1043,7 @@ const id: Translations = {
   profileYourProfile: "👤 Profilmu",
   profileNameLabel: "Nama: {value}",
   profileAgeLabel: "Umur: {value}",
-  profileGenderLabel: "Gender: {value}",
+  profileGenderLabel: "Jenis Kelamin: {value}",
   profileBioLabel: "Bio: {value}",
   profileLocationLabel: "Lokasi: {value}",
   profileLocationShared: "📍 Dibagikan",
