@@ -43,6 +43,17 @@ export function computeAgeFromBirthDate(birthDate: string): number | undefined {
     const year = parseInt(isoMatch[1], 10);
     const month = parseInt(isoMatch[2], 10);
     const day = parseInt(isoMatch[3], 10);
+
+    // Validate actual calendar date
+    const date = new Date(year, month - 1, day);
+    if (
+      date.getFullYear() !== year ||
+      date.getMonth() !== month - 1 ||
+      date.getDate() !== day
+    ) {
+      return undefined;
+    }
+
     const now = new Date();
     let age = now.getFullYear() - year;
     const m = now.getMonth() - (month - 1);
@@ -78,8 +89,9 @@ export function computeDefaultPreferences(
         : (["male", "female", "other", "prefer_not_to_say"] as const)
     : undefined;
 
-  const minAge = age != null ? Math.max(12, age - 7) : undefined;
-  const maxAge = age != null ? Math.min(80, age + 7) : undefined;
+  const normalizedAge = age != null ? Math.max(12, Math.min(80, age)) : undefined;
+  const minAge = normalizedAge != null ? Math.max(12, normalizedAge - 7) : undefined;
+  const maxAge = normalizedAge != null ? Math.min(80, normalizedAge + 7) : undefined;
   const maxDistance = 25;
 
   const defaults: Record<string, unknown> = {};

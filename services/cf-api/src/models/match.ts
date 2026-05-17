@@ -545,11 +545,14 @@ export class MatchRepository {
                 }
               }
               // Distance from candidate's perspective
+              // Skip when either user has geocoded (imprecise) coordinates.
               if (
                 candidate.location?.latitude != null &&
                 candidate.location?.longitude != null &&
                 currentUser.location?.latitude != null &&
                 currentUser.location?.longitude != null &&
+                candidate.location.source !== "geocoded" &&
+                currentUser.location.source !== "geocoded" &&
                 candidatePrefs?.maxDistance
               ) {
                 const dist = haversine(
@@ -563,11 +566,14 @@ export class MatchRepository {
             }
 
             // --- Current user's distance hard constraint ---
+            // Skip when either user has geocoded (imprecise) coordinates.
             if (
               currentUser.location?.latitude != null &&
               currentUser.location?.longitude != null &&
               candidate.location?.latitude != null &&
               candidate.location?.longitude != null &&
+              currentUser.location.source !== "geocoded" &&
+              candidate.location.source !== "geocoded" &&
               prefs?.maxDistance
             ) {
               const dist = haversine(

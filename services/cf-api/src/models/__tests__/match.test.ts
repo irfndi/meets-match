@@ -534,6 +534,40 @@ describe("MatchRepository.getPotentialMatches JS filtering", () => {
     expect(result[0].id).toBe("2");
   });
 
+  it("does not hard-filter geocoded users by distance", async () => {
+    const currentUser = createDbRow({
+      id: "1",
+      location: JSON.stringify({
+        latitude: 0,
+        longitude: 0,
+        source: "geocoded",
+      }),
+      preferences: JSON.stringify({ maxDistance: 10 }),
+    });
+    const candidates = [
+      createDbRow({
+        id: "2",
+        location: JSON.stringify({
+          latitude: 0,
+          longitude: 100,
+          source: "geocoded",
+        }),
+        first_name: "FarGeocoded",
+        preferences: "{}",
+      }),
+    ];
+
+    const mockD1 = createMockD1(candidates, currentUser);
+    const userRepo = new UserRepository(mockD1);
+    const matchRepo = new MatchRepository(mockD1, userRepo);
+
+    const result = await Effect.runPromise(
+      matchRepo.getPotentialMatches({ userId: "1", limit: 10 }),
+    );
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe("2");
+  });
+
   it("respects cooldown for disliked profiles", async () => {
     const now = new Date().toISOString();
     const currentUser = createDbRow({ id: "1", preferences: "{}" });
@@ -977,7 +1011,7 @@ describe("computeDefaultPreferences", () => {
 
   it("falls back to birthDate when age is missing", () => {
     const birthYear = new Date().getFullYear() - 25;
-    const birthDate = `${birthYear}-01-15`;
+    const birthDate = `${birthYear}-01-01`;
     const result = computeDefaultPreferences({
       gender: "male",
       birthDate,

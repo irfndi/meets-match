@@ -7,7 +7,7 @@ import {
 describe("computeAgeFromBirthDate", () => {
   it("computes age from ISO birthDate", () => {
     const birthYear = new Date().getFullYear() - 25;
-    const age = computeAgeFromBirthDate(`${birthYear}-01-15`);
+    const age = computeAgeFromBirthDate(`${birthYear}-01-01`);
     expect(age).toBe(25);
   });
 
@@ -80,7 +80,7 @@ describe("computeDefaultPreferences", () => {
     const birthYear = new Date().getFullYear() - 25;
     const result = computeDefaultPreferences({
       gender: "male",
-      birthDate: `${birthYear}-01-15`,
+      birthDate: `${birthYear}-01-01`,
     });
     expect(result.minAge).toBe(18);
     expect(result.maxAge).toBe(32);
