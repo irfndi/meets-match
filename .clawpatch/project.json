@@ -19,7 +19,7 @@
       "pnpm"
     ],
     "commands": {
-      "typecheck": null,
+      "typecheck": "pnpm typecheck:safe",
       "lint": "pnpm lint",
       "format": "pnpm format",
       "test": "pnpm test"
