@@ -5,6 +5,7 @@ import {
   premiumCallbacks,
 } from "../premium.js";
 import type { MyContext } from "../../types.js";
+import { mockKV } from "./test-helpers.js";
 
 // ────────────────────────────────────────────────────────────────────────────
 // Mock response helpers
@@ -171,7 +172,10 @@ describe("premiumCommand", () => {
   describe("guard clauses", () => {
     it("returns early if ctx.from is missing", async () => {
       const ctx = mockCtx({ from: undefined });
-      const env = { API_SERVICE: createMockApiService({}) } as any;
+      const env = {
+        KV: mockKV() as unknown as KVNamespace,
+        API_SERVICE: createMockApiService({}),
+      } as any;
 
       await premiumCommand(ctx, env);
 
@@ -199,6 +203,7 @@ describe("premiumCommand", () => {
     it("displays Free plan with interaction limits and no expiry", async () => {
       const ctx = mockCtx();
       const env = {
+        KV: mockKV() as unknown as KVNamespace,
         API_SERVICE: createMockApiService(
           withUser({
             "/users/123/interaction-status": () => ok(interactionFree),
@@ -522,6 +527,7 @@ describe("premiumCommand", () => {
         .mockResolvedValue(undefined);
 
       const env = {
+        KV: mockKV() as unknown as KVNamespace,
         API_SERVICE: createMockApiService(
           withUser({
             "/users/123/interaction-status": () => ok(interactionFree),
@@ -531,9 +537,10 @@ describe("premiumCommand", () => {
 
       await premiumCommand(ctx, env);
 
-      // The catch handler replies with generic error
+      // The catch handler calls replyWithError which replies with trace ID
       expect(ctx.reply).toHaveBeenCalledWith(
-        "❌ Something went wrong. Please try again later.",
+        expect.stringContaining("Trace ID:"),
+        expect.anything(),
       );
     });
   });
@@ -547,7 +554,10 @@ describe("referralCommand", () => {
   describe("guard clauses", () => {
     it("returns early if ctx.from is missing", async () => {
       const ctx = mockCtx({ from: undefined });
-      const env = { API_SERVICE: createMockApiService({}) } as any;
+      const env = {
+        KV: mockKV() as unknown as KVNamespace,
+        API_SERVICE: createMockApiService({}),
+      } as any;
 
       await referralCommand(ctx, env);
 
@@ -573,6 +583,7 @@ describe("referralCommand", () => {
     it("displays referral code, referral count, and bonus", async () => {
       const ctx = mockCtx();
       const env = {
+        KV: mockKV() as unknown as KVNamespace,
         API_SERVICE: createMockApiService({
           "/users/123": () => ok(referralUser),
         }),
@@ -599,7 +610,7 @@ describe("referralCommand", () => {
       await referralCommand(ctx, env);
 
       const msg: string = (ctx.reply as any).mock.calls[0][0];
-      expect(msg).toContain("https://t.me/testbot?start=ref_ABC123");
+      expect(msg).toContain("https://t.me/testbot?start=ref\\_ABC123");
 
       const buttons = flatButtons(ctx.reply);
       // Share-on-Telegram URL button
@@ -736,6 +747,7 @@ describe("referralCommand", () => {
         .mockResolvedValue(undefined);
 
       const env = {
+        KV: mockKV() as unknown as KVNamespace,
         API_SERVICE: createMockApiService({
           "/users/123": () => ok(referralUser),
         }),
@@ -744,7 +756,8 @@ describe("referralCommand", () => {
       await referralCommand(ctx, env);
 
       expect(ctx.reply).toHaveBeenCalledWith(
-        "❌ Something went wrong. Please try again later.",
+        expect.stringContaining("Trace ID:"),
+        expect.anything(),
       );
     });
   });
@@ -761,7 +774,10 @@ describe("premiumCallbacks", () => {
         from: undefined,
         callbackQuery: { id: "cb1", data: "premium:show" },
       });
-      const env = { API_SERVICE: createMockApiService({}) } as any;
+      const env = {
+        KV: mockKV() as unknown as KVNamespace,
+        API_SERVICE: createMockApiService({}),
+      } as any;
 
       await premiumCallbacks(ctx, env);
 
@@ -773,7 +789,10 @@ describe("premiumCallbacks", () => {
       const ctx = mockCtx({
         callbackQuery: { id: "cb1", data: "" },
       });
-      const env = { API_SERVICE: createMockApiService({}) } as any;
+      const env = {
+        KV: mockKV() as unknown as KVNamespace,
+        API_SERVICE: createMockApiService({}),
+      } as any;
 
       await premiumCallbacks(ctx, env);
 
@@ -783,7 +802,10 @@ describe("premiumCallbacks", () => {
 
     it("returns early when callbackQuery is undefined", async () => {
       const ctx = mockCtx({ callbackQuery: undefined });
-      const env = { API_SERVICE: createMockApiService({}) } as any;
+      const env = {
+        KV: mockKV() as unknown as KVNamespace,
+        API_SERVICE: createMockApiService({}),
+      } as any;
 
       await premiumCallbacks(ctx, env);
 
@@ -798,6 +820,7 @@ describe("premiumCallbacks", () => {
         callbackQuery: { id: "cb1", data: "premium:show" },
       });
       const env = {
+        KV: mockKV() as unknown as KVNamespace,
         API_SERVICE: createMockApiService(
           withUser({
             "/users/123/interaction-status": () => ok(interactionFree),
@@ -817,8 +840,12 @@ describe("premiumCallbacks", () => {
       const ctx = mockCtx({
         callbackQuery: { id: "cb1", data: "premium:show" },
       });
-      ctx.reply = vi.fn().mockRejectedValue(new Error("reply crash"));
+      ctx.reply = vi
+        .fn()
+        .mockRejectedValueOnce(new Error("reply crash"))
+        .mockResolvedValue(undefined);
       const env = {
+        KV: mockKV() as unknown as KVNamespace,
         API_SERVICE: createMockApiService(
           withUser({
             "/users/123/interaction-status": () => ok(interactionFree),
@@ -828,8 +855,10 @@ describe("premiumCallbacks", () => {
 
       await premiumCallbacks(ctx, env);
 
-      expect(ctx.answerCallbackQuery).toHaveBeenCalledWith(
-        "❌ Something went wrong.",
+      expect(ctx.answerCallbackQuery).toHaveBeenCalled();
+      expect(ctx.reply).toHaveBeenCalledWith(
+        expect.stringContaining("Trace ID:"),
+        expect.anything(),
       );
     });
   });
@@ -839,7 +868,10 @@ describe("premiumCallbacks", () => {
       const ctx = mockCtx({
         callbackQuery: { id: "cb1", data: "premium:close" },
       });
-      const env = { API_SERVICE: createMockApiService({}) } as any;
+      const env = {
+        KV: mockKV() as unknown as KVNamespace,
+        API_SERVICE: createMockApiService({}),
+      } as any;
 
       await premiumCallbacks(ctx, env);
 
@@ -853,7 +885,10 @@ describe("premiumCallbacks", () => {
         callbackQuery: { id: "cb1", data: "premium:close" },
       });
       ctx.deleteMessage = vi.fn().mockRejectedValue(new Error("delete err"));
-      const env = { API_SERVICE: createMockApiService({}) } as any;
+      const env = {
+        KV: mockKV() as unknown as KVNamespace,
+        API_SERVICE: createMockApiService({}),
+      } as any;
 
       await premiumCallbacks(ctx, env);
 
@@ -886,7 +921,10 @@ describe("premiumCallbacks", () => {
       const ctx = mockCtx({
         callbackQuery: { id: "cb1", data: "referral:close" },
       });
-      const env = { API_SERVICE: createMockApiService({}) } as any;
+      const env = {
+        KV: mockKV() as unknown as KVNamespace,
+        API_SERVICE: createMockApiService({}),
+      } as any;
 
       await premiumCallbacks(ctx, env);
 
@@ -901,7 +939,10 @@ describe("premiumCallbacks", () => {
       const ctx = mockCtx({
         callbackQuery: { id: "cb1", data: "referral:dismiss" },
       });
-      const env = { API_SERVICE: createMockApiService({}) } as any;
+      const env = {
+        KV: mockKV() as unknown as KVNamespace,
+        API_SERVICE: createMockApiService({}),
+      } as any;
 
       await premiumCallbacks(ctx, env);
 
@@ -916,7 +957,10 @@ describe("premiumCallbacks", () => {
       const ctx = mockCtx({
         callbackQuery: { id: "cb1", data: "premium_ad:dismiss" },
       });
-      const env = { API_SERVICE: createMockApiService({}) } as any;
+      const env = {
+        KV: mockKV() as unknown as KVNamespace,
+        API_SERVICE: createMockApiService({}),
+      } as any;
 
       await premiumCallbacks(ctx, env);
 
@@ -931,7 +975,10 @@ describe("premiumCallbacks", () => {
       const ctx = mockCtx({
         callbackQuery: { id: "cb1", data: "unknown:action" },
       });
-      const env = { API_SERVICE: createMockApiService({}) } as any;
+      const env = {
+        KV: mockKV() as unknown as KVNamespace,
+        API_SERVICE: createMockApiService({}),
+      } as any;
 
       await premiumCallbacks(ctx, env);
 

@@ -205,7 +205,7 @@ describe("Settings Handlers", () => {
       const callArg = (ctx.reply as any).mock.calls[0][0];
       expect(callArg).toContain("18–35");
       expect(callArg).toContain("25 km");
-      expect(callArg).toContain("male");
+      expect(callArg).toContain("Male");
     });
 
     it("handles partially set preferences", async () => {
@@ -228,7 +228,7 @@ describe("Settings Handlers", () => {
       expect(callArg).toContain("20");
       expect(callArg).toContain("34");
       expect(callArg).toContain("10 km");
-      expect(callArg).toContain("male");
+      expect(callArg).toContain("Male");
     });
 
     it("handles missing preferences gracefully (shows 'Not set')", async () => {
@@ -455,8 +455,10 @@ describe("Settings Handlers", () => {
       ctx.callbackQuery!.data = "settings:age-range";
       await settingsCallbacks(ctx, env);
 
-      expect(ctx.answerCallbackQuery).toHaveBeenCalledWith(
-        "❌ Something went wrong.",
+      expect(ctx.answerCallbackQuery).toHaveBeenCalled();
+      expect(ctx.reply).toHaveBeenCalledWith(
+        expect.stringContaining("Trace ID:"),
+        expect.anything(),
       );
     });
   });
@@ -758,11 +760,17 @@ describe("Settings Handlers", () => {
     });
 
     it("handles unhandled error in catch block", async () => {
-      kv.get = vi.fn().mockRejectedValue(new Error("KV failure"));
+      env = {
+        KV: kv as unknown as KVNamespace,
+        API_SERVICE: {
+          fetch: vi.fn().mockRejectedValue(new Error("Network failure")),
+        },
+      };
       const result = await handleAgeRangeCallback(ctx, env, "agerange:max:30");
       expect(result).toBe(false);
-      expect(ctx.answerCallbackQuery).toHaveBeenCalledWith(
-        "❌ Something went wrong.",
+      expect(ctx.reply).toHaveBeenCalledWith(
+        expect.stringContaining("Trace ID:"),
+        expect.anything(),
       );
     });
 
@@ -957,8 +965,9 @@ describe("Settings Handlers", () => {
       };
       const result = await handleDistanceCallback(ctx, env, "distance:10");
       expect(result).toBe(false);
-      expect(ctx.answerCallbackQuery).toHaveBeenCalledWith(
-        "❌ Something went wrong.",
+      expect(ctx.reply).toHaveBeenCalledWith(
+        expect.stringContaining("Trace ID:"),
+        expect.anything(),
       );
     });
   });
@@ -1180,8 +1189,9 @@ describe("Settings Handlers", () => {
         "genderpref:male",
       );
       expect(result).toBe(false);
-      expect(ctx.answerCallbackQuery).toHaveBeenCalledWith(
-        "❌ Something went wrong.",
+      expect(ctx.reply).toHaveBeenCalledWith(
+        expect.stringContaining("Trace ID:"),
+        expect.anything(),
       );
     });
 

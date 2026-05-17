@@ -125,7 +125,9 @@ describe("profile handler", () => {
     } as any;
 
     await profileCommand(ctx, env);
-    expect(ctx.reply).toHaveBeenCalledWith(expect.stringContaining("error"));
+    expect(ctx.reply).toHaveBeenCalledWith(
+      expect.stringContaining("Sorry, something went wrong"),
+    );
   });
 
   it("falls back to text reply on media send error", async () => {
