@@ -862,7 +862,18 @@ export function calculateMatchScore(
   };
 
   // 1. Location Score
-  if (user1.location && user2.location) {
+  // Skip scoring when either user has geocoded city-center coordinates,
+  // which are imprecise and would give misleading scores.
+  // Old data without a source field is treated as potentially GPS for
+  // backward compatibility.
+  if (
+    user1.location?.latitude != null &&
+    user1.location?.longitude != null &&
+    user2.location?.latitude != null &&
+    user2.location?.longitude != null &&
+    user1.location.source !== "geocoded" &&
+    user2.location.source !== "geocoded"
+  ) {
     const dist = haversine(
       user1.location.latitude,
       user1.location.longitude,

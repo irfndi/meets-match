@@ -205,6 +205,28 @@ describe("calculateMatchScore", () => {
     expect(score.preferences).toBe(0);
     expect(score.total).toBeCloseTo(0.5, 5);
   });
+
+  it("gives 0 location score when both users have geocoded coordinates", () => {
+    const user1 = createUser({
+      location: { latitude: -6.2, longitude: 106.8, source: "geocoded" },
+    });
+    const user2 = createUser({
+      location: { latitude: -6.2, longitude: 106.8, source: "geocoded" },
+    });
+    const score = calculateMatchScore(user1 as any, user2 as any);
+    expect(score.location).toBe(0);
+  });
+
+  it("gives 0 location score when one user has geocoded coordinates", () => {
+    const user1 = createUser({
+      location: { latitude: 0, longitude: 0, source: "gps" },
+    });
+    const user2 = createUser({
+      location: { latitude: -6.2, longitude: 106.8, source: "geocoded" },
+    });
+    const score = calculateMatchScore(user1 as any, user2 as any);
+    expect(score.location).toBe(0);
+  });
 });
 
 describe("MatchRepository.getPotentialMatches SQL", () => {

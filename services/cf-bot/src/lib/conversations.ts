@@ -654,8 +654,8 @@ export async function handleLocationMessage(
   // Reverse geocode to get city/country
   const geo = await reverseGeocodeLocation(env, latitude, longitude);
   const location = geo?.city
-    ? { latitude, longitude, city: geo.city, country: geo.country }
-    : { latitude, longitude };
+    ? { latitude, longitude, city: geo.city, country: geo.country, source: "gps" }
+    : { latitude, longitude, source: "gps" };
 
   // Only handle if we're in a location conversation or a general location share
   if (!state || state.field !== "location") {
@@ -1153,8 +1153,6 @@ async function handleLocationTextConversation(
     location: {
       city: normalizedCity,
       country: normalizedCountry,
-      latitude: lat,
-      longitude: lon,
     },
   });
   await clearConversationState(env.KV, state.userId);
