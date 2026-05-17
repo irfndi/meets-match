@@ -6,10 +6,10 @@
   "main": "./dist/index.js",
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "npx tsx ../../scripts/generate-version.ts cf-bot && wrangler deploy --env dev",
-    "build": "npx tsx ../../scripts/generate-version.ts cf-bot && tsc -p tsconfig.json",
+    "deploy": "tsx ../../scripts/generate-version.ts cf-bot && wrangler deploy --env dev",
+    "build": "tsx ../../scripts/generate-version.ts cf-bot && tsc -p tsconfig.json",
     "test": "vitest",
-    "lint": "npx tsx ../../scripts/generate-version.ts cf-bot && tsc --noEmit"
+    "lint": "tsx ../../scripts/generate-version.ts cf-bot && tsc --noEmit"
   },
   "dependencies": {
     "@effect/platform": "^0.96.1",
@@ -21,6 +21,7 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260515.1",
+    "@grammyjs/types": "^3.27.3",
     "typescript": "^6.0.3",
     "vitest": "^4.1.6",
     "wrangler": "^4.91.0"

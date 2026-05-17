@@ -1,4 +1,4 @@
-.PHONY: help dev test lint format deploy deploy-api deploy-bot deploy-worker db-studio clean
+.PHONY: help dev test lint format deploy deploy-api deploy-bot deploy-worker db-check clean
 
 # Default target
 help:
@@ -14,14 +14,14 @@ help:
 	@echo "  make deploy-api     Deploy cf-api Worker"
 	@echo "  make deploy-bot     Deploy cf-bot Worker"
 	@echo "  make deploy-worker  Deploy cf-worker Worker"
-	@echo "  make db-studio      Open D1 local studio"
+	@echo "  make db-check       Check D1 local connectivity"
 	@echo "  make clean          Remove build artifacts and dependencies"
 
 # --- Development ---
 
 dev:
 	@echo "Starting all Workers in parallel..."
-	@pnpm -w dev:api & pnpm -w dev:bot & pnpm -w dev:worker & wait
+	@pnpm -w dev:api & PID1=$$!; pnpm -w dev:bot & PID2=$$!; pnpm -w dev:worker & PID3=$$!; FAIL=0; wait $$PID1 || FAIL=1; wait $$PID2 || FAIL=1; wait $$PID3 || FAIL=1; exit $$FAIL
 
 dev-api:
 	@echo "Starting cf-api Worker..."
@@ -67,9 +67,9 @@ deploy-worker:
 
 # --- Database ---
 
-db-studio:
-	@echo "Opening D1 local studio..."
-	cd services/cf-api && npx wrangler d1 execute meetsmatch-db --local --command="SELECT 'D1 local DB ready';"
+db-check:
+	@echo "Checking D1 local connectivity..."
+	cd services/cf-api && pnpm exec wrangler d1 execute meetsmatch-db --local --command="SELECT 'D1 local DB ready';"
 
 # --- Cleanup ---
 

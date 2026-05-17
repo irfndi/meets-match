@@ -51,6 +51,6 @@ describe("runSubscriptionExpiryJob", () => {
       } as unknown as import("@cloudflare/workers-types").Fetcher,
       DB: {} as unknown as import("@cloudflare/workers-types").D1Database,
     };
-    await expect(runSubscriptionExpiryJob(env)).resolves.toBeUndefined();
+    await expect(runSubscriptionExpiryJob(env)).rejects.toThrow();
   });
 });

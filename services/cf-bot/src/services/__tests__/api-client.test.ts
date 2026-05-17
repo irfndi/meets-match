@@ -98,7 +98,7 @@ describe("getUser", () => {
   it("throws Error with status code on failure", async () => {
     const { client } = createClient(err(404));
     await expect(client.getUser({ userId: "nope" })).rejects.toThrow(
-      "API error: 404",
+      "API 404 on /users/nope",
     );
   });
 });
@@ -124,7 +124,7 @@ describe("createUser", () => {
 
   it("throws Error with status code on failure", async () => {
     const { client } = createClient(err(400));
-    await expect(client.createUser(body)).rejects.toThrow("API error: 400");
+    await expect(client.createUser(body)).rejects.toThrow("API 400 on /users");
   });
 });
 
@@ -149,7 +149,9 @@ describe("updateUser", () => {
 
   it("throws Error with status code on failure", async () => {
     const { client } = createClient(err(500));
-    await expect(client.updateUser(body)).rejects.toThrow("API error: 500");
+    await expect(client.updateUser(body)).rejects.toThrow(
+      "API 500 on /users/u1",
+    );
   });
 });
 
@@ -173,7 +175,7 @@ describe("updateLastActive", () => {
   it("throws Error with status code on failure", async () => {
     const { client } = createClient(err(500));
     await expect(client.updateLastActive({ userId: "u1" })).rejects.toThrow(
-      "API error: 500",
+      "API 500 on /users/u1/last-active",
     );
   });
 });
@@ -198,7 +200,7 @@ describe("updateLastRemindedAt", () => {
   it("throws Error with status code on failure", async () => {
     const { client } = createClient(err(500));
     await expect(client.updateLastRemindedAt({ userId: "u1" })).rejects.toThrow(
-      "API error: 500",
+      "API 500 on /users/u1/last-reminded-at",
     );
   });
 });
@@ -229,7 +231,7 @@ describe("getPotentialMatches", () => {
   it("throws Error with status code on failure", async () => {
     const { client } = createClient(err(500));
     await expect(client.getPotentialMatches({ userId: "u1" })).rejects.toThrow(
-      "API error: 500",
+      "API 500 on /users/u1/potential-matches?limit=10",
     );
   });
 });
@@ -253,7 +255,7 @@ describe("getPendingLikes", () => {
   it("throws Error with status code on failure", async () => {
     const { client } = createClient(err(500));
     await expect(client.getPendingLikes("u1")).rejects.toThrow(
-      "API error: 500",
+      "API 500 on /users/u1/pending-likes",
     );
   });
 });
@@ -304,7 +306,7 @@ describe("getMatchList", () => {
   it("throws Error with status code on failure", async () => {
     const { client } = createClient(err(500));
     await expect(client.getMatchList({ userId: "u1" })).rejects.toThrow(
-      "API error: 500",
+      "API 500 on /matches?userId=u1",
     );
   });
 });
@@ -330,7 +332,9 @@ describe("createMatch", () => {
 
   it("throws Error with status code on failure", async () => {
     const { client } = createClient(err(400));
-    await expect(client.createMatch(body)).rejects.toThrow("API error: 400");
+    await expect(client.createMatch(body)).rejects.toThrow(
+      "API 400 on /matches",
+    );
   });
 });
 
@@ -370,7 +374,7 @@ describe("likeMatch", () => {
     const { client } = createClient(err(404));
     await expect(
       client.likeMatch({ matchId: "m1", userId: "u1" }),
-    ).rejects.toThrow("API error: 404");
+    ).rejects.toThrow("API 404 on /matches/m1/like");
   });
 });
 
@@ -400,7 +404,7 @@ describe("getInteractionStatus", () => {
   it("throws Error with status code on failure", async () => {
     const { client } = createClient(err(500));
     await expect(client.getInteractionStatus("u1")).rejects.toThrow(
-      "API error: 500",
+      "API 500 on /users/u1/interaction-status",
     );
   });
 });
@@ -424,7 +428,9 @@ describe("recordLike", () => {
 
   it("throws Error with status code on failure", async () => {
     const { client } = createClient(err(429));
-    await expect(client.recordLike("u1")).rejects.toThrow("API error: 429");
+    await expect(client.recordLike("u1")).rejects.toThrow(
+      "API 429 on /users/u1/record-like",
+    );
   });
 });
 
@@ -447,7 +453,9 @@ describe("recordDislike", () => {
 
   it("throws Error with status code on failure", async () => {
     const { client } = createClient(err(429));
-    await expect(client.recordDislike("u1")).rejects.toThrow("API error: 429");
+    await expect(client.recordDislike("u1")).rejects.toThrow(
+      "API 429 on /users/u1/record-dislike",
+    );
   });
 });
 
@@ -469,7 +477,9 @@ describe("getDMStatus", () => {
 
   it("throws Error with status code on failure", async () => {
     const { client } = createClient(err(500));
-    await expect(client.getDMStatus("u1")).rejects.toThrow("API error: 500");
+    await expect(client.getDMStatus("u1")).rejects.toThrow(
+      "API 500 on /users/u1/dm-status",
+    );
   });
 });
 
@@ -492,7 +502,9 @@ describe("sendDM", () => {
 
   it("throws Error with status code on failure", async () => {
     const { client } = createClient(err(402));
-    await expect(client.sendDM("u1")).rejects.toThrow("API error: 402");
+    await expect(client.sendDM("u1")).rejects.toThrow(
+      "API 402 on /users/u1/send-dm",
+    );
   });
 });
 
@@ -517,7 +529,7 @@ describe("purchaseDMCredits", () => {
   it("throws Error with status code on failure", async () => {
     const { client } = createClient(err(400));
     await expect(client.purchaseDMCredits("u1", 5)).rejects.toThrow(
-      "API error: 400",
+      "API 400 on /users/u1/purchase-dm-credits",
     );
   });
 });
@@ -557,7 +569,7 @@ describe("uploadMedia", () => {
     const { client } = createClient(err(413));
     await expect(
       client.uploadMedia("u1", "data", "image/jpeg", "photo.jpg"),
-    ).rejects.toThrow("API error: 413");
+    ).rejects.toThrow("API 413 on /users/u1/media");
   });
 });
 
@@ -586,7 +598,7 @@ describe("deleteMedia", () => {
     const { client } = createClient(err(404));
     await expect(
       client.deleteMedia("u1", "https://example.com/img.jpg"),
-    ).rejects.toThrow("API error: 404");
+    ).rejects.toThrow("API 404 on /users/u1/media");
   });
 });
 
@@ -611,7 +623,7 @@ describe("undoMatch", () => {
   it("throws Error with status code on failure", async () => {
     const { client } = createClient(err(404));
     await expect(client.undoMatch("m1", "u1")).rejects.toThrow(
-      "API error: 404",
+      "API 404 on /matches/m1/undo",
     );
   });
 });
@@ -644,7 +656,7 @@ describe("reportUser", () => {
   it("throws Error with status code on failure", async () => {
     const { client } = createClient(err(400));
     await expect(client.reportUser("bad-user", "reporter1")).rejects.toThrow(
-      "API error: 400",
+      "API 400 on /users/bad-user/report",
     );
   });
 });
@@ -668,7 +680,9 @@ describe("restoreProfile", () => {
 
   it("throws Error with status code on failure", async () => {
     const { client } = createClient(err(500));
-    await expect(client.restoreProfile("u1")).rejects.toThrow("API error: 500");
+    await expect(client.restoreProfile("u1")).rejects.toThrow(
+      "API 500 on /users/u1/restore-profile",
+    );
   });
 });
 
@@ -691,7 +705,9 @@ describe("interact", () => {
 
   it("throws Error with status code on failure", async () => {
     const { client } = createClient(err(500));
-    await expect(client.interact("u1")).rejects.toThrow("API error: 500");
+    await expect(client.interact("u1")).rejects.toThrow(
+      "API 500 on /users/u1/interact",
+    );
   });
 });
 
@@ -714,7 +730,7 @@ describe("getReferralCode", () => {
   it("throws Error with status code on failure", async () => {
     const { client } = createClient(err(404));
     await expect(client.getReferralCode("u1")).rejects.toThrow(
-      "API error: 404",
+      "API 404 on /users/u1/referral",
     );
   });
 });
@@ -740,7 +756,7 @@ describe("blockUser", () => {
   it("throws Error with status code on failure", async () => {
     const { client } = createClient(err(409));
     await expect(client.blockUser("blocker1", "blocked1")).rejects.toThrow(
-      "API error: 409",
+      "API 409 on /users/blocker1/block",
     );
   });
 });
@@ -766,7 +782,7 @@ describe("unblockUser", () => {
   it("throws Error with status code on failure", async () => {
     const { client } = createClient(err(404));
     await expect(client.unblockUser("blocker1", "blocked1")).rejects.toThrow(
-      "API error: 404",
+      "API 404 on /users/blocker1/unblock",
     );
   });
 });

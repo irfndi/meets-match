@@ -1,2 +1,9 @@
+packages:
+  - "packages/*"
+  - "services/cf-*"
 allowBuilds:
   esbuild: true
+  msgpackr-extract: true
+  sharp: true
+  workerd: true
+strictDepBuilds: false

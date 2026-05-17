@@ -6,25 +6,37 @@
     "packages/*",
     "services/cf-*"
   ],
+  "packageManager": "pnpm@11.1.2",
   "scripts": {
-    "dev:api": "cd services/cf-api && npm run dev",
-    "dev:bot": "cd services/cf-bot && npm run dev",
-    "dev:worker": "cd services/cf-worker && npm run dev",
-    "deploy:api": "cd services/cf-api && npm run deploy",
-    "deploy:bot": "cd services/cf-bot && npm run deploy",
-    "deploy:worker": "cd services/cf-worker && npm run deploy",
-    "postinstall": "npx tsx scripts/generate-version.ts",
-    "pretest": "npx tsx scripts/generate-version.ts",
+    "dev:api": "cd services/cf-api && pnpm run dev",
+    "dev:bot": "cd services/cf-bot && pnpm run dev",
+    "dev:worker": "cd services/cf-worker && pnpm run dev",
+    "deploy:api": "cd services/cf-api && pnpm run deploy",
+    "deploy:bot": "cd services/cf-bot && pnpm run deploy",
+    "deploy:worker": "cd services/cf-worker && pnpm run deploy",
+    "postinstall": "tsx scripts/generate-version.ts",
+    "pretest": "tsx scripts/generate-version.ts",
     "test": "vitest",
     "lint": "tsc --build --force",
+    "typecheck:fast": "tsgo --noEmit",
+    "typecheck:safe": "tsc --build --force",
     "format": "prettier --write \"**/*.{ts,tsx,json,md}\""
   },
   "devDependencies": {
+    "@typescript/native-preview": "7.0.0-dev.20260516.1",
     "@vitest/coverage-v8": "^4.1.6",
     "fast-check": "^4.8.0",
     "prettier": "^3.8.3",
     "tsx": "^4.22.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.6"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "msgpackr-extract",
+      "sharp",
+      "workerd"
+    ]
   }
 }

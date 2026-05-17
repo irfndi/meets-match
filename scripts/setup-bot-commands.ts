@@ -3,7 +3,7 @@
  * Run this after deploying the bot or when commands change.
  *
  * Usage:
- *   BOT_TOKEN=<token> npx tsx scripts/setup-bot-commands.ts
+ *   BOT_TOKEN=<token> pnpm exec tsx scripts/setup-bot-commands.ts
  */
 
 const BOT_TOKEN = process.env.BOT_TOKEN;

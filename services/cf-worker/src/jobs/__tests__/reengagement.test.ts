@@ -146,7 +146,7 @@ describe("runReengagementJob", () => {
       } as unknown as import("@cloudflare/workers-types").Fetcher,
     };
 
-    await expect(runReengagementJob(env)).resolves.toBeUndefined();
+    await expect(runReengagementJob(env)).rejects.toThrow();
   });
 
   it("uses fallback message when nearby count is 0", async () => {

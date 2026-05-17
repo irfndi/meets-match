@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "projectId": "prj_https-github-com-irfndi-match-bo_6e2a730e6b",
+  "name": "@meetsmatch/monorepo",
+  "rootPath": ".",
+  "git": {
+    "remoteUrl": "https://github.com/irfndi/match-bot.git",
+    "defaultBranch": "main"
+  },
+  "detected": {
+    "languages": [
+      "typescript",
+      "javascript"
+    ],
+    "frameworks": [
+      "vitest"
+    ],
+    "packageManagers": [
+      "pnpm"
+    ],
+    "commands": {
+      "typecheck": "pnpm typecheck:safe",
+      "lint": "pnpm lint",
+      "format": "pnpm format",
+      "test": "pnpm test"
+    }
+  },
+  "createdAt": "2026-05-17T08:17:13.211Z",
+  "updatedAt": "2026-05-17T11:11:22.989Z"
+}
