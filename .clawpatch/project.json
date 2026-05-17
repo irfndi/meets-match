@@ -7,7 +7,7 @@
     "remoteUrl": "https://github.com/irfndi/match-bot.git",
     "defaultBranch": "main",
     "currentBranch": "chore/remove-deepsec-migrate-clawpatch",
-    "headSha": "f20e18ff5d2072bf08758c2e3f67d0fd314b8af2"
+    "headSha": "90cede6c52ff66ba40173d9e0aff3bfa8f235b19"
   },
   "detected": {
     "languages": [
@@ -18,8 +18,7 @@
       "vitest"
     ],
     "packageManagers": [
-      "pnpm",
-      "npm"
+      "pnpm"
     ],
     "commands": {
       "typecheck": null,
@@ -29,5 +28,5 @@
     }
   },
   "createdAt": "2026-05-17T08:17:13.211Z",
-  "updatedAt": "2026-05-17T08:17:13.211Z"
+  "updatedAt": "2026-05-17T11:11:22.989Z"
 }

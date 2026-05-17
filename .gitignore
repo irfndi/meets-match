@@ -32,12 +32,9 @@ node_modules/
 .dev.vars
 
 # Clawpatch
-.clawpatch/features/
-.clawpatch/findings/
-.clawpatch/patches/
-.clawpatch/reports/
-.clawpatch/runs/
-.clawpatch/locks/
+.clawpatch/*
+!.clawpatch/config.json
+!.clawpatch/project.json
 
 # Auto-generated version files
 services/*/src/lib/version.ts
