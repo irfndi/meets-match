@@ -29,8 +29,12 @@ jobs:
       - name: Generate version files
         run: pnpm exec tsx scripts/generate-version.ts
 
-      - name: Type Check
-        run: pnpm exec tsc -b packages/cf-shared services/cf-api services/cf-bot services/cf-worker
+      - name: Fast type check (tsgo)
+        run: pnpm typecheck:fast
+        continue-on-error: true
+
+      - name: Safe type check (tsc)
+        run: pnpm typecheck:safe
 
       - name: Test
         run: pnpm test

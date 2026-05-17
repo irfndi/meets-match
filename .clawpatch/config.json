@@ -12,7 +12,7 @@
     ".clawpatch/**"
   ],
   "provider": {
-    "name": "acpx",
+    "name": "opencode",
     "model": null
   },
   "commands": {
