@@ -63,7 +63,7 @@ describe("Premium Handlers", () => {
     it("should show premium plans for free user", async () => {
       await premiumCommand(ctx, env);
       expect(ctx.reply).toHaveBeenCalledWith(
-        expect.stringContaining("Premium Plans"),
+        expect.stringContaining("Premium"),
         expect.anything(),
       );
     });

@@ -348,7 +348,11 @@ async function useDMBypass(
   };
 }
 
-function buildMatchCardKeyboard(targetUserId: string, tier: string) {
+function buildMatchCardKeyboard(
+  targetUserId: string,
+  tier: string,
+  lang: Language,
+) {
   const isPremium = tier === "premium" || tier === "premium_plus";
   const keyboard = new InlineKeyboard();
   if (isPremium) {
@@ -358,15 +362,18 @@ function buildMatchCardKeyboard(targetUserId: string, tier: string) {
   keyboard.text("❤️", `match:like:${targetUserId}`);
   keyboard.row();
   keyboard.text("💌", `match:like-message:${targetUserId}`);
-  keyboard.text("📩 Send DM", `dm:send:${targetUserId}`);
+  keyboard.text(t("matchSendDM", lang), `dm:send:${targetUserId}`);
   keyboard.row();
-  keyboard.text("🎁 Gift Premium", `gift_premium:show:${targetUserId}`);
+  keyboard.text(
+    t("matchGiftPremium", lang),
+    `gift_premium:show:${targetUserId}`,
+  );
   keyboard.row();
-  keyboard.text("🚫 Block", `match:block:${targetUserId}`);
+  keyboard.text(t("matchBlock", lang), `match:block:${targetUserId}`);
   return keyboard;
 }
 
-export function getMatchActionKeyboard(tier: string): Keyboard {
+export function getMatchActionKeyboard(tier: string, lang: Language): Keyboard {
   const isPremium = tier === "premium" || tier === "premium_plus";
   const keyboard = new Keyboard();
 
@@ -382,9 +389,9 @@ export function getMatchActionKeyboard(tier: string): Keyboard {
     keyboard.row();
   }
 
-  keyboard.text("🏠 Main menu");
+  keyboard.text(t("matchMainMenu", lang));
   if (isPremium) {
-    keyboard.text("🎁 Send a gift");
+    keyboard.text(t("matchSendGift", lang));
   }
 
   return keyboard.resized();
@@ -400,14 +407,14 @@ function formatProfile(user: Record<string, unknown>, index: number): string {
   return `${index}. ${name}, ${age}${bio}${interests}`;
 }
 
-function getGenderPronoun(gender: string | undefined): string {
+function getGenderPronoun(gender: string | undefined, lang: Language): string {
   switch (gender) {
     case "male":
-      return "him";
+      return t("genderPronounHim", lang);
     case "female":
-      return "her";
+      return t("genderPronounHer", lang);
     default:
-      return "them";
+      return t("genderPronounThem", lang);
   }
 }
 
@@ -535,7 +542,7 @@ async function sendMatchCard(
   const firstRenderable = mediaUrls.find(
     (m) => m.type === "image" || m.type === "video",
   );
-  const inlineKeyboard = buildMatchCardKeyboard(String(match.id), tier);
+  const inlineKeyboard = buildMatchCardKeyboard(String(match.id), tier, lang);
 
   try {
     if (firstRenderable?.type === "image") {
@@ -577,7 +584,7 @@ async function sendMatchCard(
         { userId: String(ctx.from?.id ?? "unknown") },
         err2 instanceof Error ? err2 : new Error(String(err2)),
       );
-      await ctx.reply("❌ Failed to show profile. Please try /match again.");
+      await ctx.reply(t("matchFailedToShow", lang));
     }
   }
 }
@@ -588,69 +595,73 @@ async function showNextMatch(
   userId: string,
   lang: Language,
 ): Promise<void> {
-  const queue = await getMatchQueue(env.KV, userId);
-  if (!queue || queue.index >= queue.matches.length) {
-    await ctx.reply(t("matchNoMatches", lang), {
-      parse_mode: "Markdown",
-      reply_markup: getMainMenuKeyboard(),
-    });
-    await clearMatchQueue(env.KV, userId);
-    return;
-  }
-
-  const match = queue.matches[queue.index];
-
-  // Defensive: skip own profile if it somehow ended up in the queue
-  if (String(match.id) === userId) {
-    queue.index++;
-    await setMatchQueue(env.KV, userId, queue);
-    await showNextMatch(ctx, env, userId, lang);
-    return;
-  }
-
-  // Show referral prompt before the 3rd match (index 2)
-  if (queue.index === 2) {
-    const referralKeyboard = new InlineKeyboard()
-      .text("🎁 Share & Earn", "referral:show")
-      .row()
-      .text("❌ Dismiss", "referral:dismiss");
-    await ctx.reply(t("matchReferralPrompt", lang), {
-      reply_markup: referralKeyboard,
-    });
-  }
-
-  // Random premium ad for free users (not too often)
-  if (queue.tier === "free" && queue.index > 0) {
-    const adKey = `ad_last_shown:${userId}`;
-    const adLastShown = await env.KV.get(adKey);
-    const lastIndex = adLastShown ? Number(adLastShown) : -999;
-    const minGap = 4;
-    const maxGap = 7;
-    // Use a deterministic but seemingly random gap based on userId hash
-    const gap =
-      minGap +
-      (Array.from(userId).reduce((a, c) => a + c.charCodeAt(0), 0) %
-        (maxGap - minGap + 1));
-
-    if (queue.index - lastIndex >= gap) {
-      await env.KV.put(adKey, String(queue.index), { expirationTtl: 600 });
-      const adKeyboard = new InlineKeyboard()
-        .text("👑 Upgrade to Premium", "premium:show")
-        .row()
-        .text(t("premiumAdDismiss", lang), "premium_ad:dismiss");
-      await ctx.reply(t("premiumAdPrompt", lang), {
+  try {
+    const queue = await getMatchQueue(env.KV, userId);
+    if (!queue || queue.index >= queue.matches.length) {
+      await ctx.reply(t("matchNoMatches", lang), {
         parse_mode: "Markdown",
-        reply_markup: adKeyboard,
+        reply_markup: getMainMenuKeyboard(),
+      });
+      await clearMatchQueue(env.KV, userId);
+      return;
+    }
+
+    const match = queue.matches[queue.index];
+
+    // Defensive: skip own profile if it somehow ended up in the queue
+    if (String(match.id) === userId) {
+      queue.index++;
+      await setMatchQueue(env.KV, userId, queue);
+      await showNextMatch(ctx, env, userId, lang);
+      return;
+    }
+
+    // Show referral prompt before the 3rd match (index 2)
+    if (queue.index === 2) {
+      const referralKeyboard = new InlineKeyboard()
+        .text("🎁 Share & Earn", "referral:show")
+        .row()
+        .text("❌ Dismiss", "referral:dismiss");
+      await ctx.reply(t("matchReferralPrompt", lang), {
+        reply_markup: referralKeyboard,
       });
     }
-  }
 
-  await sendMatchCard(ctx, match, lang, queue.tier, queue.myLocation);
+    // Random premium ad for free users (not too often)
+    if (queue.tier === "free" && queue.index > 0) {
+      const adKey = `ad_last_shown:${userId}`;
+      const adLastShown = await env.KV.get(adKey);
+      const lastIndex = adLastShown ? Number(adLastShown) : -999;
+      const minGap = 4;
+      const maxGap = 7;
+      // Use a deterministic but seemingly random gap based on userId hash
+      const gap =
+        minGap +
+        (Array.from(userId).reduce((a, c) => a + c.charCodeAt(0), 0) %
+          (maxGap - minGap + 1));
+
+      if (queue.index - lastIndex >= gap) {
+        await env.KV.put(adKey, String(queue.index), { expirationTtl: 600 });
+        const adKeyboard = new InlineKeyboard()
+          .text("👑 Upgrade to Premium", "premium:show")
+          .row()
+          .text(t("premiumAdDismiss", lang), "premium_ad:dismiss");
+        await ctx.reply(t("premiumAdPrompt", lang), {
+          parse_mode: "Markdown",
+          reply_markup: adKeyboard,
+        });
+      }
+    }
+
+    await sendMatchCard(ctx, match, lang, queue.tier, queue.myLocation);
+  } catch (error) {
+    await replyWithError(ctx, env, lang, { action: "show_next_match" });
+  }
 }
 
 export const matchCommand = async (ctx: MyContext, env: Env): Promise<void> => {
   if (!ctx.from) {
-    await ctx.reply("Could not identify you. Try again.");
+    await ctx.reply(t("matchCouldNotIdentify", "en"));
     return;
   }
 
@@ -706,7 +717,7 @@ export const matchCommand = async (ctx: MyContext, env: Env): Promise<void> => {
 
     await ctx.reply(t("matchFinding", lang), {
       parse_mode: "Markdown",
-      reply_markup: getMatchActionKeyboard(tier),
+      reply_markup: getMatchActionKeyboard(tier, lang),
     });
 
     let { matches: users, relaxed } = await fetchPotentialMatches(
@@ -735,7 +746,7 @@ export const matchCommand = async (ctx: MyContext, env: Env): Promise<void> => {
         .row()
         .text("❌ Dismiss", "referral:dismiss");
       await ctx.reply(
-        mdv2`🔍 *Showing profiles slightly outside your preferences*\n\nWe expanded your search a little to help you discover more people near you.`,
+        mdv2`🔍 *Showing profiles slightly outside your preferences*\n\nWe expanded your search a little to help you discover more people near you\\.`,
         { parse_mode: "MarkdownV2", reply_markup: adjustKeyboard },
       );
     }
@@ -783,12 +794,15 @@ async function handleMatchAction(
   targetUserId: string,
 ) {
   if (!ctx.from) {
-    await ctx.answerCallbackQuery("Could not identify you.").catch(() => {});
+    await ctx
+      .answerCallbackQuery(t("matchCouldNotIdentify", "en"))
+      .catch(() => {});
     return;
   }
   const userId = String(ctx.from.id);
+  const lang = await fetchUserLang(env, userId);
   if (targetUserId === userId) {
-    await ctx.reply("❌ You can't interact with your own profile.");
+    await ctx.reply(t("matchOwnProfile", lang));
     await ctx.answerCallbackQuery().catch(() => {});
     return;
   }
@@ -796,12 +810,11 @@ async function handleMatchAction(
   // Acquire action lock to prevent double-processing from rapid taps
   const locked = await acquireActionLock(env.KV, userId);
   if (!locked) {
-    await ctx.answerCallbackQuery("Processing... please wait.").catch(() => {});
+    await ctx.answerCallbackQuery(t("matchProcessing", lang)).catch(() => {});
     return;
   }
 
   const myName = ctx.from.first_name ?? "Someone";
-  const lang = await fetchUserLang(env, userId);
 
   try {
     const client = new ApiServiceClient(env.API_SERVICE);
@@ -887,7 +900,7 @@ async function handleMatchAction(
           otherUser.first_name ??
           "Someone") as string;
         const username = otherUser.username as string | undefined;
-        const pronoun = getGenderPronoun(otherUser.gender as string);
+        const pronoun = getGenderPronoun(otherUser.gender as string, lang);
         const chatLink = buildChatLink(otherUser);
 
         await ctx.reply(t("matchItsAMatch", lang, { name }), {
@@ -952,17 +965,17 @@ async function handleMatchAction(
     if (action === "like") {
       await recordActionJourney(ctx, env, "like", targetUserId);
       await ctx.reply(t("matchLikeSuccess", lang), {
-        reply_markup: getMatchActionKeyboard(tier),
+        reply_markup: getMatchActionKeyboard(tier, lang),
       });
     } else if (action === "dislike") {
       await recordActionJourney(ctx, env, "dislike", targetUserId);
       await ctx.reply(t("matchDislikeSuccess", lang), {
-        reply_markup: getMatchActionKeyboard(tier),
+        reply_markup: getMatchActionKeyboard(tier, lang),
       });
     } else if (action === "skip") {
       await recordActionJourney(ctx, env, "skip", targetUserId);
       await ctx.reply(t("matchSkipSuccess", lang), {
-        reply_markup: getMatchActionKeyboard(tier),
+        reply_markup: getMatchActionKeyboard(tier, lang),
       });
     }
 
@@ -991,8 +1004,9 @@ async function handleMatchAction(
     }
   } catch (error) {
     console.error("Match action error:", error);
-    await ctx.reply(t("matchError", lang), {
-      reply_markup: getMainMenuKeyboard(),
+    await replyWithError(ctx, env, lang, {
+      action: "match_action",
+      targetUserId,
     });
   } finally {
     await releaseActionLock(env.KV, userId);
@@ -1087,9 +1101,7 @@ async function handleSendDM(ctx: MyContext, env: Env, targetUserId: string) {
     await ctx.answerCallbackQuery().catch(() => {});
   } catch (error) {
     console.error("Send DM error:", error);
-    await ctx.reply(t("dmError", lang), {
-      reply_markup: getMainMenuKeyboard(),
-    });
+    await replyWithError(ctx, env, lang, { action: "send_dm", targetUserId });
     await ctx.answerCallbackQuery().catch(() => {});
   }
 }
@@ -1103,10 +1115,9 @@ export async function startReportConversation(
 ): Promise<void> {
   if (!ctx.from) return;
   const userId = String(ctx.from.id);
+  const lang = await fetchUserLang(env, userId);
 
   try {
-    const lang = await fetchUserLang(env, userId);
-
     await setConversationState(env.KV, {
       userId,
       field: "report",
@@ -1121,7 +1132,10 @@ export async function startReportConversation(
     });
   } catch (error) {
     log.error("startReportConversation", "Unhandled error", undefined, error);
-    await ctx.reply(t("genericError"), { reply_markup: getMainMenuKeyboard() });
+    await replyWithError(ctx, env, lang, {
+      action: "start_report",
+      targetUserId,
+    });
   }
 }
 
@@ -1147,8 +1161,9 @@ export async function handleReportConversation(
     });
   } catch (error) {
     console.error("Report error:", error);
-    await ctx.reply(t("genericError", lang), {
-      reply_markup: getMainMenuKeyboard(),
+    await replyWithError(ctx, env, lang, {
+      action: "report_conversation",
+      targetUserId,
     });
   }
 
@@ -1184,7 +1199,7 @@ async function handleRollback(ctx: MyContext, env: Env): Promise<void> {
     const lastAction = await getLastAction(env.KV, userId);
     if (!lastAction) {
       await ctx.reply(t("rollbackNoAction", lang), {
-        reply_markup: getMatchActionKeyboard(tier),
+        reply_markup: getMatchActionKeyboard(tier, lang),
       });
       return;
     }
@@ -1193,7 +1208,7 @@ async function handleRollback(ctx: MyContext, env: Env): Promise<void> {
     const undoRes = await client.undoMatch(lastAction.matchId, userId);
     if (!undoRes.restored) {
       await ctx.reply(t("rollbackNoAction", lang), {
-        reply_markup: getMatchActionKeyboard(tier),
+        reply_markup: getMatchActionKeyboard(tier, lang),
       });
       return;
     }
@@ -1207,7 +1222,7 @@ async function handleRollback(ctx: MyContext, env: Env): Promise<void> {
 
     await clearLastAction(env.KV, userId);
     await ctx.reply(t("rollbackSuccess", lang), {
-      reply_markup: getMatchActionKeyboard(tier),
+      reply_markup: getMatchActionKeyboard(tier, lang),
     });
 
     // Show the restored profile
@@ -1216,9 +1231,7 @@ async function handleRollback(ctx: MyContext, env: Env): Promise<void> {
     }
   } catch (error) {
     console.error("Rollback error:", error);
-    await ctx.reply(t("genericError", lang), {
-      reply_markup: getMainMenuKeyboard(),
-    });
+    await replyWithError(ctx, env, lang, { action: "rollback" });
   }
 }
 
@@ -1231,10 +1244,9 @@ export async function startLikeMessageConversation(
 ): Promise<void> {
   if (!ctx.from) return;
   const userId = String(ctx.from.id);
+  const lang = await fetchUserLang(env, userId);
 
   try {
-    const lang = await fetchUserLang(env, userId);
-
     // Check interaction limits
     const status = await getInteractionStatus(env, userId);
     if ((status?.likesRemaining ?? 0) <= 0 && status?.tier === "free") {
@@ -1271,7 +1283,10 @@ export async function startLikeMessageConversation(
       undefined,
       error,
     );
-    await ctx.reply(t("genericError"), { reply_markup: getMainMenuKeyboard() });
+    await replyWithError(ctx, env, lang, {
+      action: "start_like_message",
+      targetUserId,
+    });
   }
 }
 
@@ -1325,7 +1340,7 @@ export async function handleLikeMessageConversation(
       const name = (otherUser.displayName ??
         otherUser.first_name ??
         "Someone") as string;
-      const pronoun = getGenderPronoun(otherUser.gender as string);
+      const pronoun = getGenderPronoun(otherUser.gender as string, lang);
       const chatLink = buildChatLink(otherUser);
 
       await ctx.reply(t("matchItsAMatch", lang, { name }), {
@@ -1356,6 +1371,7 @@ export async function handleLikeMessageConversation(
       await ctx.reply(t("likeMessageSent", lang), {
         reply_markup: getMatchActionKeyboard(
           (await getInteractionStatus(env, userId))?.tier ?? "free",
+          lang,
         ),
       });
 
@@ -1387,8 +1403,9 @@ export async function handleLikeMessageConversation(
     }
   } catch (error) {
     console.error("Like with message error:", error);
-    await ctx.reply(t("matchError", lang), {
-      reply_markup: getMainMenuKeyboard(),
+    await replyWithError(ctx, env, lang, {
+      action: "like_message_conversation",
+      targetUserId,
     });
   }
 
@@ -1445,7 +1462,7 @@ export async function handleLikeMessageMedia(
       const name = (otherUser.displayName ??
         otherUser.first_name ??
         "Someone") as string;
-      const pronoun = getGenderPronoun(otherUser.gender as string);
+      const pronoun = getGenderPronoun(otherUser.gender as string, lang);
       const chatLink = buildChatLink(otherUser);
 
       await ctx.reply(t("matchItsAMatch", lang, { name }), {
@@ -1477,6 +1494,7 @@ export async function handleLikeMessageMedia(
       await ctx.reply(t("likeMessageSent", lang), {
         reply_markup: getMatchActionKeyboard(
           (await getInteractionStatus(env, userId))?.tier ?? "free",
+          lang,
         ),
       });
 
@@ -1503,8 +1521,9 @@ export async function handleLikeMessageMedia(
     }
   } catch (error) {
     console.error("Like with media error:", error);
-    await ctx.reply(t("matchError", lang), {
-      reply_markup: getMainMenuKeyboard(),
+    await replyWithError(ctx, env, lang, {
+      action: "like_message_media",
+      targetUserId,
     });
   }
 
@@ -1528,10 +1547,9 @@ export async function startGiftSelection(
 ): Promise<void> {
   if (!ctx.from) return;
   const userId = String(ctx.from.id);
+  const lang = await fetchUserLang(env, userId);
 
   try {
-    const lang = await fetchUserLang(env, userId);
-
     // Store gift selection state
     await setConversationState(env.KV, {
       userId,
@@ -1557,7 +1575,10 @@ export async function startGiftSelection(
     });
   } catch (error) {
     log.error("startGiftSelection", "Unhandled error", undefined, error);
-    await ctx.reply(t("genericError"), { reply_markup: getMainMenuKeyboard() });
+    await replyWithError(ctx, env, lang, {
+      action: "start_gift",
+      targetUserId,
+    });
   }
 }
 
@@ -1614,14 +1635,8 @@ export async function handleGiftCallback(
       );
       await ctx.answerCallbackQuery().catch(() => {});
     } catch (error) {
-      if (isBotBlockedError(error)) {
-        await ctx.answerCallbackQuery().catch(() => {});
-        return true;
-      }
       console.error("Gift invoice error:", error);
-      await ctx
-        .reply("❌ Could not create payment. Please try again later.")
-        .catch(() => {});
+      await replyWithError(ctx, env, lang, { action: "gift_callback" });
       await ctx.answerCallbackQuery().catch(() => {});
     }
     return true;
@@ -1676,15 +1691,8 @@ export async function handleGiftPayment(
       giftName: gift.name,
     });
   } catch (error) {
-    if (isBotBlockedError(error)) {
-      return;
-    }
     console.error("Gift delivery error:", error);
-    await ctx
-      .reply(
-        "❌ Payment processed but we could not deliver the gift. Please contact support.",
-      )
-      .catch(() => {});
+    await replyWithError(ctx, env, lang, { action: "gift_payment" });
   }
 }
 
@@ -1697,11 +1705,9 @@ export async function startGiftPremiumSelection(
 ): Promise<void> {
   if (!ctx.from) return;
   const userId = String(ctx.from.id);
-  let lang: Language = "en";
+  const lang = await fetchUserLang(env, userId);
 
   try {
-    lang = await fetchUserLang(env, userId);
-
     const keyboard = new InlineKeyboard()
       .text("👑 Premium (500 ⭐)", `gift_premium:buy:premium:${targetUserId}`)
       .row()
@@ -1719,8 +1725,9 @@ export async function startGiftPremiumSelection(
     await ctx.answerCallbackQuery().catch(() => {});
   } catch (error) {
     log.error("startGiftPremiumSelection", "Unhandled error", undefined, error);
-    await ctx.reply(t("genericError", lang), {
-      reply_markup: getMainMenuKeyboard(),
+    await replyWithError(ctx, env, lang, {
+      action: "start_gift_premium",
+      targetUserId,
     });
     await ctx.answerCallbackQuery().catch(() => {});
   }
@@ -1790,9 +1797,7 @@ export async function handleGiftPremiumCallback(
       await ctx.answerCallbackQuery().catch(() => {});
     } catch (error) {
       console.error("Gift premium invoice error:", error);
-      await ctx.reply(t("giftPremiumError", lang), {
-        reply_markup: getMainMenuKeyboard(),
-      });
+      await replyWithError(ctx, env, lang, { action: "gift_premium_callback" });
       await ctx.answerCallbackQuery().catch(() => {});
     }
     return true;
@@ -1819,12 +1824,16 @@ export async function handleGiftPremiumPayment(
   const targetUserId = match[2];
   const tier = match[3];
 
-  if (
-    parsedBuyerId !== buyerId ||
-    !targetUserId ||
-    (tier !== "premium" && tier !== "premium_plus")
-  ) {
+  if (!targetUserId || (tier !== "premium" && tier !== "premium_plus")) {
     return;
+  }
+
+  if (parsedBuyerId !== buyerId) {
+    log.warn("handleGiftPremiumPayment", "Payer differs from payload buyer", {
+      buyerId,
+      parsedBuyerId,
+      targetUserId,
+    });
   }
 
   try {
@@ -1877,8 +1886,23 @@ export async function handleGiftPremiumPayment(
       t("giftPremiumSent", lang, { tier: tierLabel, name: targetName }),
       { reply_markup: getMainMenuKeyboard() },
     );
+  } catch (error) {
+    log.error(
+      "handleGiftPremiumPayment",
+      "Payment processing failed",
+      { buyerId, targetUserId, tier },
+      error,
+    );
+    await replyWithError(ctx, env, lang, { action: "gift_premium_payment" });
+    return;
+  }
 
-    // Notify target user
+  // Notify target user — isolated from activation so KV failures don't
+  // contradict the success message already sent to the buyer.
+  try {
+    const client = new ApiServiceClient(env.API_SERVICE);
+    const [buyerRes] = await Promise.all([client.getUser({ userId: buyerId })]);
+    const buyerName = (buyerRes.user?.displayName ?? "Someone") as string;
     await addNotification(env, targetUserId, {
       type: "gift_premium",
       fromUserId: buyerId,
@@ -1888,23 +1912,15 @@ export async function handleGiftPremiumPayment(
     });
     await enqueueNotification(env, targetUserId, "gift_premium", {
       fromDisplayName: buyerName,
-      tier: tierLabel,
+      tier: tier === "premium_plus" ? "Premium+ 💎" : "Premium 👑",
     });
-  } catch (error) {
-    if (isBotBlockedError(error)) {
-      return;
-    }
+  } catch (notifyError) {
     log.error(
       "handleGiftPremiumPayment",
-      "Payment processing failed",
+      "Notification side-effect failed",
       { buyerId, targetUserId, tier },
-      error,
+      notifyError,
     );
-    await ctx
-      .reply(
-        "❌ Payment processed but we could not activate the gift. Please contact support.",
-      )
-      .catch(() => {});
   }
 }
 
@@ -2049,6 +2065,7 @@ async function handleBlock(
     return;
   }
   const userId = String(ctx.from.id);
+  const lang = await fetchUserLang(env, userId);
 
   // Step 1: Call API first. If this fails, nothing else should happen.
   try {
@@ -2061,7 +2078,7 @@ async function handleBlock(
       { userId, targetUserId },
       error instanceof Error ? error : new Error(String(error)),
     );
-    await ctx.reply("❌ Failed to block user. Please try again later.");
+    await replyWithError(ctx, env, lang, { action: "block", targetUserId });
     return;
   }
 

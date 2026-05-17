@@ -132,4 +132,23 @@ describe("Profile Menu Callbacks", () => {
     const result = await handleProfileCallback(ctx, env, "profile:bio");
     expect(result).toBe(false);
   });
+
+  it("should show error with trace ID when an unexpected error occurs", async () => {
+    env.API_SERVICE = createMockApiService({
+      "/users/123": () =>
+        new Response(JSON.stringify({ user: { language: "en" } }), {
+          status: 200,
+        }),
+    });
+    ctx.reply = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("Telegram API error"))
+      .mockResolvedValue(undefined);
+    const result = await handleProfileCallback(ctx, env, "profile:bio");
+    expect(result).toBe(true);
+    expect(ctx.reply).toHaveBeenCalledWith(
+      expect.stringContaining("Trace ID:"),
+      expect.anything(),
+    );
+  });
 });

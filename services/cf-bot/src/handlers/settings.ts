@@ -18,7 +18,29 @@ import { createLogger } from "@meetsmatch/cf-shared";
 import { replyWithError } from "../lib/error-feedback.js";
 
 const log = createLogger("cf-bot");
-import { t, DEFAULT_LANGUAGE, type Language, escapeMd } from "../lib/i18n.js";
+import {
+  t,
+  DEFAULT_LANGUAGE,
+  SUPPORTED_LANGUAGES,
+  type Language,
+  escapeMd,
+} from "../lib/i18n.js";
+
+function getLanguageLabel(lang: Language): string {
+  const found = SUPPORTED_LANGUAGES.find((l) => l.code === lang);
+  return found ? `${found.label} ${found.flag}` : lang;
+}
+
+function buildLanguageKeyboard(): InlineKeyboard {
+  const keyboard = new InlineKeyboard();
+  for (const lang of SUPPORTED_LANGUAGES) {
+    keyboard
+      .text(`${lang.flag} ${lang.label}`, `settings-lang:${lang.code}`)
+      .row();
+  }
+  keyboard.text("← Back", "settings:back");
+  return keyboard;
+}
 
 function getSettingsKeyboard() {
   return new InlineKeyboard()
@@ -26,6 +48,7 @@ function getSettingsKeyboard() {
     .text("📍 Max Distance", "settings:distance")
     .row()
     .text("⚧ Gender Preference", "settings:gender-pref")
+    .text("🌐 Language", "settings:language")
     .row()
     .text("❌ Close", "settings:close");
 }
@@ -126,12 +149,13 @@ export const settingsCommand = async (
     const lines = [
       t("settingsTitle", lang),
       "",
-      "*Current Preferences:*",
-      `🎯 Age Range: ${escapeMd(ageRange)}`,
-      `📍 Max Distance: ${escapeMd(distance)}`,
-      `⚧ Gender Preference: ${escapeMd(genderPref)}`,
+      t("settingsCurrentPreferences", lang),
+      t("settingsAgeRangeLabel", lang, { value: ageRange }),
+      t("settingsMaxDistanceLabel", lang, { value: distance }),
+      t("settingsGenderPrefLabel", lang, { value: genderPref }),
+      t("settingsLanguageLabel", lang, { value: getLanguageLabel(lang) }),
       "",
-      "Tap a field below to change it:",
+      t("settingsTapToChange", lang),
     ];
 
     await ctx.reply(lines.join("\n"), {
@@ -192,10 +216,23 @@ export const settingsCallbacks = async (
         await ctx.answerCallbackQuery().catch(() => {});
         break;
       }
+      case "settings:language": {
+        await ctx.editMessageText(
+          t("settingsLanguageSelect", lang, {
+            value: getLanguageLabel(lang),
+          }),
+          {
+            parse_mode: "MarkdownV2",
+            reply_markup: buildLanguageKeyboard(),
+          },
+        );
+        await ctx.answerCallbackQuery().catch(() => {});
+        break;
+      }
       case "settings:close":
-        await ctx.answerCallbackQuery("Settings closed.").catch(() => {});
+        await ctx.answerCallbackQuery(t("settingsClose", lang)).catch(() => {});
         await ctx.deleteMessage().catch(() => {});
-        await ctx.reply("👇 Use the menu below to navigate:", {
+        await ctx.reply(t("profileNavigatePrompt", lang), {
           reply_markup: getMainMenuKeyboard(),
         });
         break;
@@ -314,7 +351,7 @@ export async function handleAgeRangeCallback(
             },
           )
           .catch(() => {});
-        await ctx.reply("👇 Use the menu below to navigate:", {
+        await ctx.reply(t("profileNavigatePrompt", lang), {
           reply_markup: getMainMenuKeyboard(),
         });
       } else {
@@ -331,7 +368,7 @@ export async function handleAgeRangeCallback(
     return false;
   } catch (error) {
     log.error("handleAgeRangeCallback", "Unhandled error", undefined, error);
-    await ctx.answerCallbackQuery("❌ Something went wrong.").catch(() => {});
+    await replyWithError(ctx, env, "en", { action: "age_range_callback" });
     return false;
   }
 }
@@ -385,7 +422,7 @@ export async function handleDistanceCallback(
             { parse_mode: "Markdown" },
           )
           .catch(() => {});
-        await ctx.reply("👇 Use the menu below to navigate:", {
+        await ctx.reply(t("profileNavigatePrompt", lang), {
           reply_markup: getMainMenuKeyboard(),
         });
       } else {
@@ -402,7 +439,7 @@ export async function handleDistanceCallback(
     return false;
   } catch (error) {
     log.error("handleDistanceCallback", "Unhandled error", undefined, error);
-    await ctx.answerCallbackQuery("❌ Something went wrong.").catch(() => {});
+    await replyWithError(ctx, env, "en", { action: "distance_callback" });
     return false;
   }
 }
@@ -475,8 +512,64 @@ export async function handleGenderPrefCallback(
     return true;
   } catch (error) {
     log.error("handleGenderPrefCallback", "Unhandled error", undefined, error);
-    await ctx.answerCallbackQuery("❌ Something went wrong.").catch(() => {});
+    await replyWithError(ctx, env, "en", { action: "gender_pref_callback" });
     return false;
+  }
+}
+
+export async function handleSettingsLanguageCallback(
+  ctx: MyContext,
+  env: Env,
+  data: string,
+): Promise<boolean> {
+  if (!ctx.from) return false;
+  if (!data.startsWith("settings-lang:")) return false;
+
+  const userId = String(ctx.from.id);
+  const langCode = data.replace("settings-lang:", "");
+  const validLangs = new Set(SUPPORTED_LANGUAGES.map((l) => l.code));
+  const selectedLang: Language = validLangs.has(langCode as Language)
+    ? (langCode as Language)
+    : DEFAULT_LANGUAGE;
+
+  try {
+    const res = await env.API_SERVICE.fetch(
+      new Request(`http://api/users/${userId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user: { language: selectedLang } }),
+      }),
+    );
+    if (!res.ok) {
+      log.error("handleSettingsLanguageCallback", "API returned error", {
+        userId,
+        language: selectedLang,
+        status: res.status,
+      });
+      await ctx
+        .answerCallbackQuery("❌ Failed to change language. Please try again.")
+        .catch(() => {});
+      return true;
+    }
+
+    await ctx
+      .answerCallbackQuery(`Language set to ${getLanguageLabel(selectedLang)}`)
+      .catch(() => {});
+
+    // Re-render settings in the new language
+    await settingsCommand(ctx, env);
+    return true;
+  } catch (error) {
+    log.error(
+      "handleSettingsLanguageCallback",
+      "Unhandled error",
+      undefined,
+      error,
+    );
+    await replyWithError(ctx, env, selectedLang, {
+      action: "settings_language_change",
+    });
+    return true;
   }
 }
 

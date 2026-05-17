@@ -344,20 +344,17 @@ export async function checkMandatoryUpdates(
     if (!user) return false;
 
     // Check if birthDate is missing for migrated age-only profiles
+    const lang: Language = (user.language as Language) ?? "en";
     if (!user.birthDate && user.age) {
       await startConversation(env.KV, userId, "birthdate");
-      await ctx.reply(
-        "📢 *Profile Update Required*\n\n" +
-          "We have updated how ages are stored. Please enter your birthdate to continue.\n\n" +
-          "Enter your birthdate in *DD.MM.YYYY* format (e.g. *15.03.1995*).",
-        { parse_mode: "Markdown" },
-      );
+      await ctx.reply(t("conversationBirthDateUpdateRequired", lang), {
+        parse_mode: "Markdown",
+      });
       return true;
     }
 
     // Check profile completeness and phone verification for all users
     const { complete } = getProfileCompleteness(user);
-    const lang: Language = (user.language as Language) ?? "en";
     if (!complete) {
       await continueOnboarding(ctx, env, userId, lang);
       return true;
@@ -1126,9 +1123,10 @@ async function handleLocationTextConversation(
       const continued = await continueOnboarding(ctx, env, state.userId, lang);
       if (!continued) {
         await ctx.reply(
-          `📍 *${escapeMd(city)}, ${escapeMd(country)}* saved!\n\n` +
-            `We could not verify the exact coordinates right now, but your city is recorded. ` +
-            `Distance matching will work once we verify it.`,
+          t("conversationLocationSaved", lang, {
+            city: escapeMd(city),
+            country: escapeMd(country),
+          }),
           { parse_mode: "Markdown", reply_markup: getMainMenuKeyboard() },
         );
         if (becameComplete) await promptPhoneVerification(ctx, env, lang);
@@ -1165,7 +1163,10 @@ async function handleLocationTextConversation(
     const continued = await continueOnboarding(ctx, env, state.userId, lang);
     if (!continued) {
       await ctx.reply(
-        `📍 Location verified: *${escapeMd(normalizedCity)}, ${escapeMd(normalizedCountry)}*`,
+        t("conversationLocationVerified", lang, {
+          city: escapeMd(normalizedCity),
+          country: escapeMd(normalizedCountry),
+        }),
         { parse_mode: "Markdown", reply_markup: getMainMenuKeyboard() },
       );
       if (becameComplete) await promptPhoneVerification(ctx, env, lang);

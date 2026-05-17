@@ -100,17 +100,18 @@ Set required environment variables in the Cloudflare dashboard or via `wrangler 
 
 ## Environment Variables
 
-| Variable             | Required | Description                                            |
-| -------------------- | -------- | ------------------------------------------------------ |
-| `BOT_TOKEN`          | Yes      | Telegram Bot API token from @BotFather                 |
-| `TELEGRAM_WEBHOOK_SECRET` | No  | Secret token for verifying Telegram webhook requests   |
-| `ADMIN_CHAT_ID`      | No       | Telegram chat ID for admin error reports               |
+| Variable                  | Required | Description                                          |
+| ------------------------- | -------- | ---------------------------------------------------- |
+| `BOT_TOKEN`               | Yes      | Telegram Bot API token from @BotFather               |
+| `TELEGRAM_WEBHOOK_SECRET` | No       | Secret token for verifying Telegram webhook requests |
+| `ADMIN_CHAT_ID`           | No       | Telegram chat ID for admin error reports             |
 
 ### Observability
 
 Error tracking and distributed tracing are handled natively via **Cloudflare Workers OpenTelemetry export**. No SDK bundling or env vars required.
 
 To connect to Sentry, Honeycomb, Datadog, or any OTLP backend:
+
 1. Go to **Cloudflare Dashboard → Workers & Pages → Observability**
 2. Add a destination (traces + logs) with your provider's OTLP endpoint
 3. Uncomment the `destinations` arrays in each service's `wrangler.toml`

@@ -280,5 +280,84 @@ describe("Match Handlers", () => {
       await matchCallbacks(ctx, env);
       expect(ctx.answerCallbackQuery).toHaveBeenCalledWith("Unknown action.");
     });
+
+    it("should show error with trace ID when an unexpected error occurs", async () => {
+      ctx.callbackQuery!.data = "match:like:456";
+      (ctx as any).editMessageReplyMarkup = vi
+        .fn()
+        .mockResolvedValue(undefined);
+      await env.KV.put(
+        "match_queue:123",
+        JSON.stringify({
+          matches: [{ id: "456", displayName: "Alice", age: 24 }],
+          index: 0,
+        }),
+      );
+      env.API_SERVICE = createMockApiService({
+        "/users/123": () =>
+          new Response(JSON.stringify({ user: completeUser }), { status: 200 }),
+        "/users/123/interaction-status": () =>
+          new Response(
+            JSON.stringify({
+              likesRemaining: 10,
+              dislikesRemaining: 10,
+              tier: "free",
+            }),
+            { status: 200 },
+          ),
+        "/matches": () =>
+          new Response(
+            JSON.stringify({
+              match: {
+                id: "m1",
+                user1Id: "123",
+                user2Id: "456",
+                status: "PENDING",
+              },
+            }),
+            { status: 201 },
+          ),
+        "/matches/m1/like": () =>
+          new Response(
+            JSON.stringify({ isMutual: false, match: { id: "m1" } }),
+            {
+              status: 200,
+            },
+          ),
+      });
+      // Simulate an unexpected error during the success reply
+      ctx.reply = vi
+        .fn()
+        .mockRejectedValueOnce(new Error("Telegram API error"))
+        .mockResolvedValue(undefined);
+      await matchCallbacks(ctx, env);
+      // replyWithError should be called after the unexpected error
+      expect(ctx.reply).toHaveBeenCalledWith(
+        expect.stringContaining("Trace ID:"),
+        expect.anything(),
+      );
+    });
+  });
+
+  describe("matchCommand error paths", () => {
+    it("should show error with trace ID when an unexpected error occurs", async () => {
+      env.API_SERVICE = createMockApiService({
+        "/users/123": () =>
+          new Response(JSON.stringify({ user: completeUser }), { status: 200 }),
+        "/potential-matches": () =>
+          new Response(JSON.stringify({ potentialMatches: [] }), {
+            status: 200,
+          }),
+      });
+      ctx.reply = vi
+        .fn()
+        .mockRejectedValueOnce(new Error("Telegram API error"))
+        .mockResolvedValue(undefined);
+      await matchCommand(ctx, env);
+      expect(ctx.reply).toHaveBeenCalledWith(
+        expect.stringContaining("Trace ID:"),
+        expect.anything(),
+      );
+    });
   });
 });

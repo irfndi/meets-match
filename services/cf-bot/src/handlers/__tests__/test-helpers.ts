@@ -38,7 +38,10 @@ export function mockCtx(overrides?: Partial<MyContext>): MyContext {
 
 export function createMockApiService(
   responseMap: Record<string, () => Response>,
-) {
+): {
+  fetch: (...args: unknown[]) => Promise<Response>;
+  _requests: Array<{ url: string; method: string; body: unknown }>;
+} {
   const requests: Array<{
     url: string;
     method: string;

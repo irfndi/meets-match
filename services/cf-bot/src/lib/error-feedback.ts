@@ -11,6 +11,12 @@ import {
 import { getMainMenuKeyboard } from "./main-menu.js";
 import { t, type Language } from "./i18n.js";
 import { createLogger } from "@meetsmatch/cf-shared";
+import {
+  classifySeverity,
+  buildErrorSource,
+  sendImmediateAlert,
+  queueAlert,
+} from "./admin-alerts.js";
 
 const log = createLogger("cf-bot");
 
@@ -39,27 +45,43 @@ export async function replyWithError(
 ): Promise<void> {
   const userId = ctx.from ? String(ctx.from.id) : "unknown";
   const traceId = generateTraceId();
+  const source = buildErrorSource(context);
+  const severity = classifySeverity(context);
 
   // Record error in journey
   await recordJourneyError(env.KV, userId, traceId);
 
+  // Admin alerting (skip for silent/expected errors like 403 bot blocked)
+  if (severity !== "silent") {
+    const alertPayload = {
+      traceId,
+      userId,
+      source,
+      severity,
+      message: `Error in ${source} for user ${userId}`,
+    };
+    if (severity === "high") {
+      await sendImmediateAlert(env, alertPayload);
+    } else {
+      await queueAlert(env, alertPayload);
+    }
+  }
+
   // Build contextual message
   const parts: string[] = [t("genericError", lang)];
   if (context?.command) {
-    parts.push(`\n📍 Command: /${context.command}`);
+    parts.push(t("errorCommandContext", lang, { command: context.command }));
   }
   if (context?.action) {
-    parts.push(`🎬 Action: ${context.action}`);
+    parts.push(t("errorActionContext", lang, { action: context.action }));
   }
-  parts.push(`\n🔍 Trace ID: \`${traceId}\``);
-  parts.push(
-    `\nIf this keeps happening, tap *Report* below and tell us what you were doing.`,
-  );
+  parts.push(t("errorTraceId", lang, { traceId }));
+  parts.push(t("errorReportPrompt", lang));
 
   const keyboard = new InlineKeyboard()
-    .text("🐛 Report Issue", `report_error:${traceId}`)
+    .text(t("errorReportButton", lang), `report_error:${traceId}`)
     .row()
-    .text("🏠 Main Menu", "menu:main");
+    .text(t("errorMainMenuButton", lang), "menu:main");
 
   try {
     await ctx.reply(parts.join("\n"), {
@@ -80,6 +102,7 @@ export async function handleErrorReportCallback(
   ctx: MyContext,
   env: Env,
   traceId: string,
+  lang: Language = "en",
 ): Promise<void> {
   if (!ctx.from) return;
   const userId = String(ctx.from.id);
@@ -89,15 +112,15 @@ export async function handleErrorReportCallback(
     const journeyText = formatJourneyForReport(journey);
 
     const reportText = [
-      `🐛 *Error Report*`,
-      ``,
-      `*User:* ${userId}`,
-      `*Trace ID:* \`${traceId}\``,
-      `*Time:* ${new Date().toISOString()}`,
-      ``,
-      `*Recent Journey:*`,
+      t("errorReportTitle", lang),
+      "",
+      t("errorReportUser", lang, { userId }),
+      t("errorReportTraceId", lang, { traceId }),
+      t("errorReportTime", lang, { time: new Date().toISOString() }),
+      "",
+      t("errorReportJourney", lang),
       "```",
-      journeyText,
+      journeyText || t("errorReportNoActivity", lang),
       "```",
     ].join("\n");
 
@@ -120,6 +143,13 @@ export async function handleErrorReportCallback(
         userId,
         status: apiResponse.status,
       });
+      await ctx
+        .answerCallbackQuery(t("errorReportFailed", lang))
+        .catch(() => {});
+      await ctx.reply(t("errorReportFailed", lang), {
+        reply_markup: getMainMenuKeyboard(),
+      });
+      return;
     }
 
     // Send to bot owner / admin channel if configured
@@ -135,15 +165,15 @@ export async function handleErrorReportCallback(
       journey: journey.events,
     });
 
-    await ctx.answerCallbackQuery("Report sent. Thank you!").catch(() => {});
-    await ctx.reply("✅ Report sent! We'll look into it.", {
+    await ctx
+      .answerCallbackQuery(t("errorReportThankYou", lang))
+      .catch(() => {});
+    await ctx.reply(t("errorReportSent", lang), {
       reply_markup: getMainMenuKeyboard(),
     });
   } catch (error) {
     log.error("handleErrorReport", "Failed to send report", { userId }, error);
-    await ctx
-      .answerCallbackQuery("❌ Could not send report. Please try again.")
-      .catch(() => {});
+    await ctx.answerCallbackQuery(t("errorReportFailed", lang)).catch(() => {});
   }
 }
 

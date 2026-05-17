@@ -6,6 +6,7 @@ import { getMainMenuKeyboard } from "../lib/main-menu.js";
 import { ApiServiceClient } from "../services/api-client.js";
 import { createLogger } from "@meetsmatch/cf-shared";
 import { replyWithError } from "../lib/error-feedback.js";
+import { t, type Language } from "../lib/i18n.js";
 
 const log = createLogger("cf-bot");
 
@@ -115,11 +116,12 @@ export const premiumCommand = async (
   try {
     const result = await ensureUserExists(ctx, env);
     if (!result) {
-      await ctx.reply("❌ Sorry, there was an error. Please try /start first.");
+      await ctx.reply(t("genericError", "en"));
       return;
     }
 
     const userId = String(ctx.from.id);
+    const lang: Language = (result.user.language as Language) ?? "en";
     const status = await getInteractionStatus(env, userId);
     const tier = status?.tier ?? "free";
 
@@ -132,7 +134,9 @@ export const premiumCommand = async (
         const expiresAt = userRes.user?.subscriptionExpiresAt;
         if (expiresAt) {
           const date = new Date(expiresAt);
-          expiryLine = `📅 Expires: ${date.toLocaleDateString("en-GB")}`;
+          expiryLine = t("premiumExpires", lang, {
+            date: date.toLocaleDateString("en-GB"),
+          });
         }
       } catch {
         // ignore
@@ -144,30 +148,34 @@ export const premiumCommand = async (
       : "";
 
     const msg = [
-      "👑 *Premium Plans*",
+      t("premiumTitle", lang),
       "",
-      `*Current plan:* ${tier === "free" ? "Free" : tier === "premium" ? "Premium 👑" : "Premium+ 💎"}`,
+      t("premiumCurrentPlan", lang, {
+        plan:
+          tier === "free"
+            ? "Free"
+            : tier === "premium"
+              ? "Premium 👑"
+              : "Premium+ 💎",
+      }),
       expiryLine,
       interactionLine,
       "",
-      "*Free Plan:*",
-      "• Browse unlimited profiles",
-      "• 15 likes + 35 dislikes per day",
-      "• No skip (Like or Dislike only)",
+      t("premiumFreePlan", lang),
+      t("premiumFeatureBrowse", lang),
+      t("premiumFeatureLikes", lang, { likes: "15", dislikes: "35" }),
+      t("premiumFeatureNoSkip", lang),
       "",
       `*Premium 👑 — ${PREMIUM_PRICE}*`,
-      "• Unlimited likes & dislikes",
-      "• ⏩ Skip profiles",
-      "• Priority matching",
-      "• See who liked you",
+      t("premiumFeatureUnlimited", lang),
+      t("premiumFeatureSkip", lang),
+      t("premiumFeaturePriority", lang),
+      t("premiumFeatureSeeLikes", lang),
       "",
       `*Premium+ 💎 — ${PREMIUM_PLUS_PRICE}*`,
-      "• Everything in Premium",
-      "• Unlimited direct DMs",
-      // TODO: Implement verified badge (isVerified field + badge rendering in cards/profile)
-      "• Verified badge",
-      // TODO: Implement advanced filters (relationshipType preference + UI in settings)
-      "• Advanced filters",
+      t("premiumFeatureDMs", lang),
+      t("premiumFeatureVerified", lang),
+      t("premiumFeatureAdvancedFilters", lang),
     ]
       .filter(Boolean)
       .join("\n");
@@ -178,15 +186,18 @@ export const premiumCommand = async (
     if (tier === "free") {
       try {
         const premiumLink = await ctx.api.createInvoiceLink(
-          "MeetMatch Premium",
-          "Upgrade to Premium — unlimited likes, skip, priority matching, and see who liked you.",
+          t("premiumInvoiceTitlePremium", lang),
+          t("premiumInvoiceDescPremium", lang),
           `premium_${userId}_premium`,
           "",
           "XTR",
           [{ label: "Premium", amount: PREMIUM_STARS }],
         );
         keyboard
-          .url(`⭐ Buy Premium (${PREMIUM_STARS} Stars)`, premiumLink)
+          .url(
+            t("premiumBuyPremium", lang, { stars: String(PREMIUM_STARS) }),
+            premiumLink,
+          )
           .row();
       } catch (error) {
         log.error(
@@ -201,15 +212,20 @@ export const premiumCommand = async (
     if (tier !== "premium_plus") {
       try {
         const plusLink = await ctx.api.createInvoiceLink(
-          "MeetMatch Premium+",
-          "Upgrade to Premium+ — everything in Premium plus unlimited DMs, verified badge, and advanced filters.",
+          t("premiumInvoiceTitlePlus", lang),
+          t("premiumInvoiceDescPlus", lang),
           `premium_${userId}_premium_plus`,
           "",
           "XTR",
           [{ label: "Premium+", amount: PREMIUM_PLUS_STARS }],
         );
         keyboard
-          .url(`💎 Buy Premium+ (${PREMIUM_PLUS_STARS} Stars)`, plusLink)
+          .url(
+            t("premiumBuyPremiumPlus", lang, {
+              stars: String(PREMIUM_PLUS_STARS),
+            }),
+            plusLink,
+          )
           .row();
       } catch (error) {
         log.error(
@@ -221,8 +237,8 @@ export const premiumCommand = async (
       }
     }
 
-    keyboard.text("🎁 Share for Free Bonus", "referral:show").row();
-    keyboard.text("❌ Close", "premium:close");
+    keyboard.text(t("premiumShareForBonus", lang), "referral:show").row();
+    keyboard.text(t("premiumClose", lang), "premium:close");
 
     await ctx.reply(msg, { parse_mode: "Markdown", reply_markup: keyboard });
   } catch (error) {
@@ -240,11 +256,12 @@ export const referralCommand = async (
   try {
     const result = await ensureUserExists(ctx, env);
     if (!result) {
-      await ctx.reply("❌ Sorry, there was an error. Please try /start first.");
+      await ctx.reply(t("genericError", "en"));
       return;
     }
 
     const userId = String(ctx.from.id);
+    const lang: Language = (result.user.language as Language) ?? "en";
     const info = await getReferralInfo(env, userId);
     const botUsername = await getBotUsername(ctx);
     const code = info?.code;
@@ -255,20 +272,20 @@ export const referralCommand = async (
 
     const statsLines = info
       ? [
-          `👥 *Friends invited:* ${info.count}`,
-          `⭐ *Bonus earned:* +${info.bonus} likes/dislikes`,
+          t("referralFriendsInvited", lang, { count: String(info.count) }),
+          t("referralBonusEarned", lang, { count: String(info.bonus) }),
         ]
       : [];
 
     const msg = [
-      "🎁 *Invite Friends, Earn Bonus*",
+      t("referralTitle", lang),
       "",
-      "Share your referral link with friends. When they join and complete their profile, *both of you get +5 bonus likes & dislikes!*",
+      t("referralBody", lang),
       "",
       ...statsLines,
       "",
-      `*Your referral code:* \`${code ?? "N/A"}\``,
-      link ? `\n*Your link:* ${link}` : "",
+      t("referralYourCode", lang, { code: code ?? "N/A" }),
+      link ? "\n" + t("referralYourLink", lang, { link }) : "",
     ]
       .filter(Boolean)
       .join("\n");
@@ -277,13 +294,13 @@ export const referralCommand = async (
     if (link) {
       keyboard
         .url(
-          "📤 Share on Telegram",
-          `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent("Join me on MeetMatch! 🎁")}`,
+          t("referralShareOnTelegram", lang),
+          `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(t("referralShareText", lang))}`,
         )
         .row();
-      keyboard.copyText("📋 Copy Link", link).row();
+      keyboard.copyText(t("referralCopyLink", lang), link).row();
     }
-    keyboard.text("❌ Close", "referral:close");
+    keyboard.text(t("referralClose", lang), "referral:close");
 
     await ctx.reply(msg, { parse_mode: "Markdown", reply_markup: keyboard });
   } catch (error) {

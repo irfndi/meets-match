@@ -22,6 +22,7 @@ import {
   handleAgeRangeCallback,
   handleDistanceCallback,
   handleGenderPrefCallback,
+  handleSettingsLanguageCallback,
 } from "./handlers/settings.js";
 import {
   premiumCommand,
@@ -59,6 +60,7 @@ import {
   replyWithError,
   isBotBlockedError,
 } from "./lib/error-feedback.js";
+import { sendAggregatedAlerts } from "./lib/admin-alerts.js";
 
 export interface Env {
   DB: D1Database;
@@ -90,7 +92,15 @@ function createBot(env: Env): Bot<MyContext> {
           const value = await env.KV.get(`session:${key}`);
           if (!value) return {};
           try {
-            return JSON.parse(value) as Record<string, unknown>;
+            const parsed = JSON.parse(value);
+            if (
+              parsed &&
+              typeof parsed === "object" &&
+              !Array.isArray(parsed)
+            ) {
+              return parsed as Record<string, unknown>;
+            }
+            return {};
           } catch {
             return {};
           }
@@ -155,24 +165,27 @@ function createBot(env: Env): Bot<MyContext> {
   });
 
   // Record journey for commands and menu buttons — must be BEFORE handlers
-  bot.use(async (ctx, next) => {
+  // Fire-and-forget: never block command/menu processing on KV/network.
+  bot.use((ctx, next) => {
     const text = ctx.message?.text;
+    let promise: Promise<void> | undefined;
     if (text?.startsWith("/")) {
       const cmd = text.split(" ")[0].slice(1);
-      await recordCommandJourney(ctx, env, cmd);
+      promise = recordCommandJourney(ctx, env, cmd);
     } else if (text === MENU_FIND_MATCH) {
-      await recordActionJourney(ctx, env, "menu/find_match");
+      promise = recordActionJourney(ctx, env, "menu/find_match");
     } else if (text === MENU_MY_MATCHES) {
-      await recordActionJourney(ctx, env, "menu/my_matches");
+      promise = recordActionJourney(ctx, env, "menu/my_matches");
     } else if (text === MENU_PROFILE) {
-      await recordActionJourney(ctx, env, "menu/profile");
+      promise = recordActionJourney(ctx, env, "menu/profile");
     } else if (text === MENU_SETTINGS) {
-      await recordActionJourney(ctx, env, "menu/settings");
+      promise = recordActionJourney(ctx, env, "menu/settings");
     } else if (text === MENU_PREMIUM) {
-      await recordActionJourney(ctx, env, "menu/premium");
+      promise = recordActionJourney(ctx, env, "menu/premium");
     } else if (text === MENU_REFERRAL) {
-      await recordActionJourney(ctx, env, "menu/referral");
+      promise = recordActionJourney(ctx, env, "menu/referral");
     }
+    promise?.catch((error) => console.warn("Journey tracking failed:", error));
     return next();
   });
 
@@ -180,8 +193,8 @@ function createBot(env: Env): Bot<MyContext> {
   // to avoid rate-limiting and latency in the serverless handler.
 
   bot.command("start", (ctx) => startCommand(ctx, env));
-  bot.command("help", helpCommand);
-  bot.command("about", aboutCommand);
+  bot.command("help", (ctx) => helpCommand(ctx, env));
+  bot.command("about", (ctx) => aboutCommand(ctx, env));
   bot.command("profile", (ctx) => profileCommand(ctx, env));
   bot.command("match", (ctx) => matchCommand(ctx, env));
   bot.command("matches", (ctx) => matchesCommand(ctx, env));
@@ -190,10 +203,9 @@ function createBot(env: Env): Bot<MyContext> {
   bot.command("referral", (ctx) => referralCommand(ctx, env));
   bot.command("feedback", (ctx) => startFeedbackConversation(ctx, env));
   bot.command("report", async (ctx) => {
-    await ctx.reply(
-      "⚠️ To report a profile, tap the ⚠️ button when viewing a match card.",
-      { reply_markup: getMainMenuKeyboard() },
-    );
+    await ctx.reply(t("reportCommandHint", "en"), {
+      reply_markup: getMainMenuKeyboard(),
+    });
   });
 
   bot.on("callback_query:data", async (ctx) => {
@@ -261,6 +273,11 @@ function createBot(env: Env): Bot<MyContext> {
         return;
       }
 
+      if (data.startsWith("settings-lang:")) {
+        const handled = await handleSettingsLanguageCallback(ctx, env, data);
+        if (handled) return;
+      }
+
       if (data.startsWith("settings:")) {
         return await settingsCallbacks(ctx, env);
       }
@@ -296,7 +313,7 @@ function createBot(env: Env): Bot<MyContext> {
 
       if (data === "menu:main") {
         await ctx.deleteMessage().catch(() => {});
-        await ctx.reply("Main menu:", {
+        await ctx.reply(t("mainMenuPrompt", "en"), {
           reply_markup: getMainMenuKeyboard(),
         });
         await ctx.answerCallbackQuery().catch(() => {});
@@ -346,7 +363,7 @@ function createBot(env: Env): Bot<MyContext> {
       if (handled) return;
     } catch (error) {
       console.error("Contact message error:", error);
-      await ctx.reply("❌ Something went wrong. Please try again.");
+      await replyWithError(ctx, env, "en", { action: "contact_message" });
     }
   });
 
@@ -356,7 +373,7 @@ function createBot(env: Env): Bot<MyContext> {
       if (handled) return;
     } catch (error) {
       console.error("Location message error:", error);
-      await ctx.reply("❌ Something went wrong. Please try again.");
+      await replyWithError(ctx, env, "en", { action: "location_message" });
     }
   });
 
@@ -374,7 +391,7 @@ function createBot(env: Env): Bot<MyContext> {
       if (handled) return;
     } catch (error) {
       console.error("Photo message error:", error);
-      await ctx.reply("❌ Something went wrong. Please try again.");
+      await replyWithError(ctx, env, "en", { action: "photo_message" });
     }
   });
 
@@ -392,7 +409,7 @@ function createBot(env: Env): Bot<MyContext> {
       if (handled) return;
     } catch (error) {
       console.error("Video message error:", error);
-      await ctx.reply("❌ Something went wrong. Please try again.");
+      await replyWithError(ctx, env, "en", { action: "video_message" });
     }
   });
 
@@ -424,9 +441,7 @@ function createBot(env: Env): Bot<MyContext> {
         );
       } catch (error) {
         console.error("DM credit purchase error:", error);
-        await ctx.reply(
-          "❌ Payment processed but we could not add DM credits. Please contact support.",
-        );
+        await replyWithError(ctx, env, "en", { action: "dm_credit_purchase" });
       }
     }
 
@@ -463,9 +478,7 @@ function createBot(env: Env): Bot<MyContext> {
         );
       } catch (error) {
         console.error("Premium purchase error:", error);
-        await ctx.reply(
-          "❌ Payment processed but we could not activate your subscription. Please contact support.",
-        );
+        await replyWithError(ctx, env, "en", { action: "premium_purchase" });
       }
     }
   });
@@ -505,7 +518,7 @@ function createBot(env: Env): Bot<MyContext> {
       if (text && actionMap[text]) {
         const action = actionMap[text];
         if (action === "menu") {
-          await ctx.reply("Main menu:", {
+          await ctx.reply(t("mainMenuPrompt", "en"), {
             reply_markup: getMainMenuKeyboard(),
           });
           return;
@@ -586,7 +599,7 @@ async function handleLikeMessagePhoto(ctx: MyContext, env: Env): Promise<void> {
     await handleLikeMessageMedia(ctx, env, publicUrl, "image");
   } catch (error) {
     console.error("Like message photo error:", error);
-    await ctx.reply("❌ Failed to upload. Please try again.");
+    await replyWithError(ctx, env, "en", { action: "like_message_photo" });
   }
 }
 
@@ -629,7 +642,7 @@ async function handleLikeMessageVideo(ctx: MyContext, env: Env): Promise<void> {
     await handleLikeMessageMedia(ctx, env, publicUrl, "video");
   } catch (error) {
     console.error("Like message video error:", error);
-    await ctx.reply("❌ Failed to upload. Please try again.");
+    await replyWithError(ctx, env, "en", { action: "like_message_video" });
   }
 }
 
@@ -816,5 +829,15 @@ export default {
       status: 404,
       headers: { "Content-Type": "application/json" },
     });
+  },
+
+  async scheduled(
+    controller: ScheduledController,
+    env: Env,
+    _ctx: ExecutionContext,
+  ): Promise<void> {
+    if (controller.cron === "0 */6 * * *") {
+      await sendAggregatedAlerts(env);
+    }
   },
 };

@@ -188,6 +188,10 @@ export class ApiRouter {
           return this.handleFeedback(request);
         case url.pathname === "/error-reports" && method === "POST":
           return this.handleErrorReport(request);
+        case url.pathname === "/error-reports/summary" && method === "GET":
+          return this.handleErrorReportSummary(url.searchParams);
+        case url.pathname === "/error-reports/mark-sent" && method === "POST":
+          return this.handleMarkAlertsSent();
         case url.pathname === "/cron/downgrade-expired-subscriptions" &&
           method === "POST":
           return this.handleDowngradeExpiredSubscriptions();
@@ -906,19 +910,36 @@ export class ApiRouter {
   }
 
   private async handleErrorReport(request: Request): Promise<Response> {
+    let body: Record<string, unknown>;
     try {
-      const body = (await request.json()) as Record<string, unknown>;
+      body = (await request.json()) as Record<string, unknown>;
+    } catch {
+      return jsonResponse({ error: "Invalid JSON body" }, 400);
+    }
+    try {
       const reporterId = String(body.reporterId ?? "");
       const traceId = body.traceId ? String(body.traceId) : undefined;
       const message = body.message ? String(body.message) : undefined;
       const journey = body.journey ? String(body.journey) : undefined;
+      const severity =
+        body.severity === "high" || body.severity === "low"
+          ? (body.severity as "high" | "low")
+          : undefined;
+      const source = body.source ? String(body.source) : undefined;
 
       if (!reporterId) {
         return jsonResponse({ error: "reporterId is required" }, 400);
       }
 
       const result = await runEffect(
-        this.errorReportRepo.create({ reporterId, traceId, message, journey }),
+        this.errorReportRepo.create({
+          reporterId,
+          traceId,
+          message,
+          journey,
+          severity,
+          source,
+        }),
       );
       return jsonResponse({ success: true, reportId: result.id });
     } catch (error) {
@@ -929,6 +950,41 @@ export class ApiRouter {
         error,
       );
       return jsonResponse({ error: "Failed to create error report" }, 500);
+    }
+  }
+
+  private async handleErrorReportSummary(
+    searchParams: URLSearchParams,
+  ): Promise<Response> {
+    try {
+      const hoursRaw = searchParams.get("hours");
+      const hours = hoursRaw ? Number(hoursRaw) : 6;
+      const summary = await runEffect(
+        this.errorReportRepo.getAlertSummary(hours),
+      );
+      return jsonResponse(summary);
+    } catch (error) {
+      log.error(
+        "errorReportSummary",
+        "Failed to get summary",
+        undefined,
+        error,
+      );
+      return jsonResponse({ error: "Failed to get alert summary" }, 500);
+    }
+  }
+
+  private async handleMarkAlertsSent(): Promise<Response> {
+    try {
+      const unsent = await runEffect(
+        this.errorReportRepo.findUnsentLowSeverity(1000),
+      );
+      const ids = unsent.map((r) => r.id);
+      await runEffect(this.errorReportRepo.markAlertsSent(ids));
+      return jsonResponse({ marked: ids.length });
+    } catch (error) {
+      log.error("markAlertsSent", "Failed to mark alerts", undefined, error);
+      return jsonResponse({ error: "Failed to mark alerts as sent" }, 500);
     }
   }
 

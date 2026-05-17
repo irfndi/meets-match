@@ -5,28 +5,170 @@
  * Example: npx tsx scripts/seed-dev-db.ts 100 meetsmatch-dev dev
  */
 
-import { execSync } from "child_process";
+import { execFileSync } from "child_process";
 import { writeFileSync, mkdtempSync, rmSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 
-const GENDERS = ["male", "female", "non-binary", "other", "prefer_not_to_say"] as const;
+const GENDERS = [
+  "male",
+  "female",
+  "non-binary",
+  "other",
+  "prefer_not_to_say",
+] as const;
 const INTERESTS_POOL = [
-  "hiking", "photography", "cooking", "gaming", "reading", "travel", "music",
-  "fitness", "yoga", "movies", "technology", "art", "dancing", "pets", "coffee",
-  "writing", "sports", "meditation", "fashion", "foodie", "board_games", "nature",
-  "coding", "startup", "investing", "crypto", "ai", "design", "marketing",
+  "hiking",
+  "photography",
+  "cooking",
+  "gaming",
+  "reading",
+  "travel",
+  "music",
+  "fitness",
+  "yoga",
+  "movies",
+  "technology",
+  "art",
+  "dancing",
+  "pets",
+  "coffee",
+  "writing",
+  "sports",
+  "meditation",
+  "fashion",
+  "foodie",
+  "board_games",
+  "nature",
+  "coding",
+  "startup",
+  "investing",
+  "crypto",
+  "ai",
+  "design",
+  "marketing",
 ];
 
 const FIRST_NAMES: Record<string, string[]> = {
-  male: ["Ahmad", "Budi", "Dedi", "Eko", "Fajar", "Hadi", "Irfan", "Joko", "Kevin", "Lukman", "Michael", "Niko", "Oscar", "Rizal", "Surya", "Teguh", "Umar", "Vino", "Wahyu", "Yusuf", "Zain", "Adi", "Benny", "Candra", "Dani", "Fahri", "Gilang", "Hendra", "Ivan", "Jefri"],
-  female: ["Alya", "Bella", "Citra", "Dewi", "Eva", "Fani", "Gita", "Hana", "Indah", "Jasmine", "Kartika", "Lestari", "Maya", "Nadia", "Olivia", "Putri", "Rina", "Sari", "Tina", "Ulfa", "Vania", "Wulan", "Yuni", "Zahra", "Anisa", "Dina", "Eka", "Fitri", "Intan", "Kirana"],
-  "non-binary": ["Alex", "Riley", "Jordan", "Casey", "Avery", "Quinn", "Skyler", "Dakota", "Reese", "Morgan", "Taylor", "Sage", "Rowan", "Emerson", "River", "Phoenix", "Eden", "Remi", "Frankie", "Kai"],
-  other: ["Sam", "Jamie", "Robin", "Charlie", "Pat", "Chris", "Drew", "Kris", "Leslie", "Terry"],
-  "prefer_not_to_say": ["User", "Person", "Human", "Someone", "Friend"],
+  male: [
+    "Ahmad",
+    "Budi",
+    "Dedi",
+    "Eko",
+    "Fajar",
+    "Hadi",
+    "Irfan",
+    "Joko",
+    "Kevin",
+    "Lukman",
+    "Michael",
+    "Niko",
+    "Oscar",
+    "Rizal",
+    "Surya",
+    "Teguh",
+    "Umar",
+    "Vino",
+    "Wahyu",
+    "Yusuf",
+    "Zain",
+    "Adi",
+    "Benny",
+    "Candra",
+    "Dani",
+    "Fahri",
+    "Gilang",
+    "Hendra",
+    "Ivan",
+    "Jefri",
+  ],
+  female: [
+    "Alya",
+    "Bella",
+    "Citra",
+    "Dewi",
+    "Eva",
+    "Fani",
+    "Gita",
+    "Hana",
+    "Indah",
+    "Jasmine",
+    "Kartika",
+    "Lestari",
+    "Maya",
+    "Nadia",
+    "Olivia",
+    "Putri",
+    "Rina",
+    "Sari",
+    "Tina",
+    "Ulfa",
+    "Vania",
+    "Wulan",
+    "Yuni",
+    "Zahra",
+    "Anisa",
+    "Dina",
+    "Eka",
+    "Fitri",
+    "Intan",
+    "Kirana",
+  ],
+  "non-binary": [
+    "Alex",
+    "Riley",
+    "Jordan",
+    "Casey",
+    "Avery",
+    "Quinn",
+    "Skyler",
+    "Dakota",
+    "Reese",
+    "Morgan",
+    "Taylor",
+    "Sage",
+    "Rowan",
+    "Emerson",
+    "River",
+    "Phoenix",
+    "Eden",
+    "Remi",
+    "Frankie",
+    "Kai",
+  ],
+  other: [
+    "Sam",
+    "Jamie",
+    "Robin",
+    "Charlie",
+    "Pat",
+    "Chris",
+    "Drew",
+    "Kris",
+    "Leslie",
+    "Terry",
+  ],
+  prefer_not_to_say: ["User", "Person", "Human", "Someone", "Friend"],
 };
 
-const LAST_NAMES = ["Santoso", "Wijaya", "Putra", "Dewi", "Kusuma", "Pratama", "Sari", "Hidayat", "Nugroho", "Lestari", "Ramadhan", "Setiawan", "Saputra", "Anggraini", "Purnama", ""];
+const LAST_NAMES = [
+  "Santoso",
+  "Wijaya",
+  "Putra",
+  "Dewi",
+  "Kusuma",
+  "Pratama",
+  "Sari",
+  "Hidayat",
+  "Nugroho",
+  "Lestari",
+  "Ramadhan",
+  "Setiawan",
+  "Saputra",
+  "Anggraini",
+  "Purnama",
+  "",
+];
 
 const BIOS = [
   "Coffee addict ☕ | Weekend hiker 🥾 | Dog lover 🐕",
@@ -102,11 +244,17 @@ function generateLocation(baseLat: number, baseLng: number, radiusKm: number) {
   const w = r * Math.sqrt(u);
   const t = 2 * Math.PI * v;
   const lat = baseLat + w * Math.cos(t);
-  const lng = baseLng + w * Math.sin(t) / Math.cos(baseLat * (Math.PI / 180));
-  return { latitude: parseFloat(lat.toFixed(6)), longitude: parseFloat(lng.toFixed(6)) };
+  const lng = baseLng + (w * Math.sin(t)) / Math.cos(baseLat * (Math.PI / 180));
+  return {
+    latitude: parseFloat(lat.toFixed(6)),
+    longitude: parseFloat(lng.toFixed(6)),
+  };
 }
 
-function generateUser(index: number, baseLocation: { lat: number; lng: number }): SeedUser {
+function generateUser(
+  index: number,
+  baseLocation: { lat: number; lng: number },
+): SeedUser {
   const gender = rand(GENDERS);
   const names = FIRST_NAMES[gender] ?? FIRST_NAMES.male;
   const firstName = rand(names);
@@ -118,7 +266,7 @@ function generateUser(index: number, baseLocation: { lat: number; lng: number })
     female: Math.random() > 0.1 ? ["male"] : ["male", "non-binary"],
     "non-binary": ["male", "female", "non-binary"],
     other: ["male", "female", "non-binary", "other"],
-    "prefer_not_to_say": ["male", "female"],
+    prefer_not_to_say: ["male", "female"],
   };
 
   const location = generateLocation(baseLocation.lat, baseLocation.lng, 30);
@@ -133,7 +281,9 @@ function generateUser(index: number, baseLocation: { lat: number; lng: number })
     birth_date: generateBirthDate(age),
     gender,
     interests: pickN(INTERESTS_POOL, randInt(3, 7)),
-    media_urls: [`https://meetsmatch-media.irfndi.workers.dev/avatar_${(index % 20) + 1}.jpg`],
+    media_urls: [
+      `https://meetsmatch-media.irfndi.workers.dev/avatar_${(index % 20) + 1}.jpg`,
+    ],
     location,
     preferences: {
       minAge: Math.max(18, age - randInt(3, 8)),
@@ -143,7 +293,14 @@ function generateUser(index: number, baseLocation: { lat: number; lng: number })
     },
     is_active: 1,
     is_profile_complete: 1,
-    subscription_tier: rand(["free", "free", "free", "free", "premium", "premium_plus"]),
+    subscription_tier: rand([
+      "free",
+      "free",
+      "free",
+      "free",
+      "premium",
+      "premium_plus",
+    ]),
   };
 }
 
@@ -173,10 +330,13 @@ function userToSql(u: SeedUser): string {
     "datetime('now')", // daily_swipes_reset_at
   ];
 
-  return `(${values.map((v) => (typeof v === "string" && v !== "NULL" && !v.startsWith("datetime")
-    ? `'${v}'`
-    : v,
-  )).join(", ")})`;
+  return `(${values
+    .map((v) =>
+      typeof v === "string" && v !== "NULL" && !v.startsWith("datetime")
+        ? `'${v}'`
+        : v,
+    )
+    .join(", ")})`;
 }
 
 function main() {
@@ -215,10 +375,28 @@ function main() {
   };
 
   const columns = [
-    "id", "username", "first_name", "last_name", "bio", "age", "birth_date",
-    "gender", "interests", "media_urls", "location", "preferences", "is_active",
-    "is_sleeping", "is_profile_complete", "phone_number", "language", "last_active",
-    "subscription_tier", "subscription_expires_at", "hidden_from_matches", "daily_swipes_reset_at",
+    "id",
+    "username",
+    "first_name",
+    "last_name",
+    "bio",
+    "age",
+    "birth_date",
+    "gender",
+    "interests",
+    "media_urls",
+    "location",
+    "preferences",
+    "is_active",
+    "is_sleeping",
+    "is_profile_complete",
+    "phone_number",
+    "language",
+    "last_active",
+    "subscription_tier",
+    "subscription_expires_at",
+    "hidden_from_matches",
+    "daily_swipes_reset_at",
   ];
 
   const tmpDir = mkdtempSync(join(tmpdir(), "seed-"));
@@ -234,14 +412,28 @@ function main() {
     writeFileSync(sqlFile, sql);
 
     try {
-      const out = execSync(
-        `cd services/cf-api && npx wrangler d1 execute ${dbName} --env ${env} --remote --file ${sqlFile}`,
-        { encoding: "utf-8", timeout: 120000 },
+      const out = execFileSync(
+        "npx",
+        [
+          "wrangler",
+          "d1",
+          "execute",
+          dbName,
+          "--env",
+          env,
+          "--remote",
+          "--file",
+          sqlFile,
+        ],
+        { cwd: "services/cf-api", encoding: "utf-8", timeout: 120000 },
       );
       console.log(out.trim());
       totalInserted += chunk.length;
     } catch (e: any) {
-      console.error(`Chunk ${i / CHUNK_SIZE + 1} failed:`, e.stderr ?? e.message);
+      console.error(
+        `Chunk ${i / CHUNK_SIZE + 1} failed:`,
+        e.stderr ?? e.message,
+      );
       rmSync(tmpDir, { recursive: true, force: true });
       process.exit(1);
     }

@@ -17,7 +17,6 @@ export interface Translations {
   welcomeBackIncomplete: string;
   profileTitle: string;
   profileIncompleteWarning: string;
-  profileSelectField: string;
   matchProfileIncomplete: string;
   matchFinding: string;
   matchNoMatches: string;
@@ -173,6 +172,139 @@ export interface Translations {
   giftPremiumSent: string;
   giftPremiumReceived: string;
   giftPremiumError: string;
+  // --- Settings labels ---
+  settingsCurrentPreferences: string;
+  settingsAgeRangeLabel: string;
+  settingsMaxDistanceLabel: string;
+  settingsGenderPrefLabel: string;
+  settingsLanguageLabel: string;
+  settingsTapToChange: string;
+  settingsLanguageSelect: string;
+  settingsClose: string;
+  // --- Matches ---
+  matchesMutualMatchesCount: string;
+  matchesNewMutualMatches: string;
+  matchesNewLikes: string;
+  matchesNavigatePrompt: string;
+  matchesChatWith: string;
+  matchesNoUsernameSet: string;
+  matchesMatchedAt: string;
+  matchesMatchedRecently: string;
+  matchesDismissAll: string;
+  matchesDismissed: string;
+  matchesSeeAnytime: string;
+  matchesLoadingProfile: string;
+  matchesLikeBack: string;
+  matchesPass: string;
+  matchesCouldNotLoad: string;
+  matchesUnknownAction: string;
+  // --- Match card & actions ---
+  matchCardMale: string;
+  matchCardFemale: string;
+  matchCardOther: string;
+  matchMainMenu: string;
+  matchSendGift: string;
+  matchSendDM: string;
+  matchGiftPremium: string;
+  matchBlock: string;
+  matchTapToPay: string;
+  matchGiftPremiumPaymentTitle: string;
+  matchNoMatchesFoundTitle: string;
+  matchNoMatchesFoundBody: string;
+  matchRelaxedSearchTitle: string;
+  matchRelaxedSearchBody: string;
+  matchCouldNotIdentify: string;
+  matchOwnProfile: string;
+  matchProcessing: string;
+  matchFailedToShow: string;
+  // --- Profile ---
+  profileYourProfile: string;
+  profileNameLabel: string;
+  profileAgeLabel: string;
+  profileGenderLabel: string;
+  profileBioLabel: string;
+  profileLocationLabel: string;
+  profileInterestsLabel: string;
+  profileMediaLabel: string;
+  profileInterestsNotSet: string;
+  profileCompleteReady: string;
+  profileSelectField: string;
+  profileUploadMedia: string;
+  profileBackToProfile: string;
+  profileUploadMore: string;
+  profileMediaUploaded: string;
+  profileNavigatePrompt: string;
+  // --- Premium ---
+  premiumCurrentPlan: string;
+  premiumExpires: string;
+  premiumFreePlan: string;
+  premiumFeatureBrowse: string;
+  premiumFeatureLikes: string;
+  premiumFeatureNoSkip: string;
+  premiumFeatureUnlimited: string;
+  premiumFeatureSkip: string;
+  premiumFeaturePriority: string;
+  premiumFeatureSeeLikes: string;
+  premiumFeatureDMs: string;
+  premiumFeatureVerified: string;
+  premiumFeatureAdvancedFilters: string;
+  premiumBuyPremium: string;
+  premiumBuyPremiumPlus: string;
+  premiumShareForBonus: string;
+  premiumClose: string;
+  premiumInvoiceTitlePremium: string;
+  premiumInvoiceDescPremium: string;
+  premiumInvoiceTitlePlus: string;
+  premiumInvoiceDescPlus: string;
+  // --- Referral ---
+  referralTitle: string;
+  referralBody: string;
+  referralFriendsInvited: string;
+  referralBonusEarned: string;
+  referralYourCode: string;
+  referralYourLink: string;
+  referralShareOnTelegram: string;
+  referralCopyLink: string;
+  referralClose: string;
+  referralShareText: string;
+  // --- Misc ---
+  mainMenuPrompt: string;
+  reportCommandHint: string;
+  closeSettings: string;
+  itemNotFound: string;
+  genderPronounHim: string;
+  genderPronounHer: string;
+  genderPronounThem: string;
+  unknownAction: string;
+  loading: string;
+  notificationLikeMedia: string;
+  notificationLikeCTA: string;
+  notificationMutualMatchChat: string;
+  notificationMutualMatchView: string;
+  notificationGiftPremiumView: string;
+  notificationBirthdayView: string;
+  notificationReengagementFindMatch: string;
+  notificationCleanupGoToProfile: string;
+  // --- Conversations ---
+  conversationBirthDateUpdateRequired: string;
+  conversationLocationSaved: string;
+  conversationLocationVerified: string;
+  // --- Error feedback ---
+  errorTraceId: string;
+  errorCommandContext: string;
+  errorActionContext: string;
+  errorReportPrompt: string;
+  errorReportTitle: string;
+  errorReportUser: string;
+  errorReportTraceId: string;
+  errorReportTime: string;
+  errorReportJourney: string;
+  errorReportNoActivity: string;
+  errorReportSent: string;
+  errorReportFailed: string;
+  errorReportThankYou: string;
+  errorReportButton: string;
+  errorMainMenuButton: string;
 }
 
 const en: Translations = {
@@ -187,7 +319,6 @@ const en: Translations = {
   profileTitle: "👤 Your Profile",
   profileIncompleteWarning:
     "⚠️ *Profile Incomplete*\n\nTo start matching, please fill in:\n{missing}",
-  profileSelectField: "Tap a field below to edit it:",
   matchProfileIncomplete:
     "⚠️ *Almost there!*\n\nComplete your profile before matching:\n\n{missing}\n\nTap *👤 Profile* to update your info.",
   matchFinding: "🔍 *Finding matches for you…*",
@@ -422,6 +553,151 @@ const en: Translations = {
     "🎁 *Surprise!*\n\n*{name}* gifted you *{tier}*! Enjoy your upgraded experience! 💕",
   giftPremiumError:
     "❌ Could not process the gift. Please contact support if you were charged.",
+  // --- Settings labels ---
+  settingsCurrentPreferences: "*Current Preferences:*",
+  settingsAgeRangeLabel: "🎯 Age Range: {value}",
+  settingsMaxDistanceLabel: "📍 Max Distance: {value}",
+  settingsGenderPrefLabel: "⚧ Gender Preference: {value}",
+  settingsLanguageLabel: "🌐 Language: {value}",
+  settingsTapToChange: "Tap a field below to change it:",
+  settingsLanguageSelect: "🌐 *Select Language*\n\nCurrent: {value}",
+  settingsClose: "Settings closed.",
+  // --- Matches ---
+  matchesMutualMatchesCount: "💑 You have {count} mutual match(es):",
+  matchesNewMutualMatches: "💕 You have {count} new mutual match(es)!",
+  matchesNewLikes:
+    "💕 {count} person(s) liked your profile! Want to check them out?",
+  matchesNavigatePrompt: "Use the menu below to navigate:",
+  matchesChatWith: "💬 Chat with {name}",
+  matchesNoUsernameSet: "💬 {name} (no username set)",
+  matchesMatchedAt: "Matched at: {time}",
+  matchesMatchedRecently: "recently",
+  matchesDismissAll: "⏭ Dismiss all",
+  matchesDismissed: "Dismissed.",
+  matchesSeeAnytime: "💕 You can see your likes anytime with /matches.",
+  matchesLoadingProfile: "Loading profile...",
+  matchesLikeBack: "❤️ Like back",
+  matchesPass: "👎 Pass",
+  matchesCouldNotLoad: "Could not load profile. Please try again.",
+  matchesUnknownAction: "Unknown action.",
+  // --- Match card & actions ---
+  matchCardMale: "M",
+  matchCardFemale: "F",
+  matchCardOther: "O",
+  matchMainMenu: "🏠 Main menu",
+  matchSendGift: "🎁 Send a gift",
+  matchSendDM: "📩 Send DM",
+  matchGiftPremium: "🎁 Gift Premium",
+  matchBlock: "🚫 Block",
+  matchTapToPay: "Tap the button below to pay with Telegram Stars.",
+  matchGiftPremiumPaymentTitle: "🎁 Gift Premium",
+  matchNoMatchesFoundTitle: "🔍 *No potential matches found right now*",
+  matchNoMatchesFoundBody:
+    "Your community is still growing. Invite friends to discover more people and earn bonus likes!\n\nOr broaden your search in *⚙️ Settings*",
+  matchRelaxedSearchTitle:
+    "🔍 *Showing profiles slightly outside your preferences*",
+  matchRelaxedSearchBody:
+    "We expanded your search a little to help you discover more people near you.",
+  matchCouldNotIdentify: "Could not identify you. Try again.",
+  matchOwnProfile: "❌ You can't interact with your own profile.",
+  matchProcessing: "Processing... please wait.",
+  matchFailedToShow: "❌ Failed to show profile. Please try /match again.",
+  // --- Profile ---
+  profileYourProfile: "👤 Your Profile",
+  profileNameLabel: "Name: {value}",
+  profileAgeLabel: "Age: {value}",
+  profileGenderLabel: "Gender: {value}",
+  profileBioLabel: "Bio: {value}",
+  profileLocationLabel: "Location: {value}",
+  profileInterestsLabel: "Interests: {value}",
+  profileMediaLabel: "Media: {value}",
+  profileInterestsNotSet: "Not set",
+  profileCompleteReady: "✅ Profile complete — Ready to match",
+  profileSelectField: "Select a field to edit:",
+  profileUploadMedia: "📤 Upload Media",
+  profileBackToProfile: "← Back to Profile",
+  profileUploadMore: "📤 Upload More",
+  profileMediaUploaded: "{count}/3 uploaded",
+  profileNavigatePrompt: "👇 Use the menu below to navigate:",
+  // --- Premium ---
+  premiumCurrentPlan: "*Current plan:* {plan}",
+  premiumExpires: "📅 Expires: {date}",
+  premiumFreePlan: "*Free Plan:*",
+  premiumFeatureBrowse: "• Browse unlimited profiles",
+  premiumFeatureLikes: "• {likes} likes + {dislikes} dislikes per day",
+  premiumFeatureNoSkip: "• No skip (Like or Dislike only)",
+  premiumFeatureUnlimited: "• Unlimited likes & dislikes",
+  premiumFeatureSkip: "• ⏩ Skip profiles",
+  premiumFeaturePriority: "• Priority matching",
+  premiumFeatureSeeLikes: "• See who liked you",
+  premiumFeatureDMs: "• Unlimited direct DMs",
+  premiumFeatureVerified: "• Verified badge",
+  premiumFeatureAdvancedFilters: "• Advanced filters",
+  premiumBuyPremium: "⭐ Buy Premium ({stars} Stars)",
+  premiumBuyPremiumPlus: "💎 Buy Premium+ ({stars} Stars)",
+  premiumShareForBonus: "🎁 Share for Free Bonus",
+  premiumClose: "❌ Close",
+  premiumInvoiceTitlePremium: "MeetMatch Premium",
+  premiumInvoiceDescPremium:
+    "Upgrade to Premium — unlimited likes, skip, priority matching, and see who liked you.",
+  premiumInvoiceTitlePlus: "MeetMatch Premium+",
+  premiumInvoiceDescPlus:
+    "Upgrade to Premium+ — everything in Premium plus unlimited DMs, verified badge, and advanced filters.",
+  // --- Referral ---
+  referralTitle: "🎁 *Invite Friends, Earn Bonus*",
+  referralBody:
+    "Share your referral link with friends. When they join and complete their profile, *both of you get +5 bonus likes & dislikes!*",
+  referralFriendsInvited: "👥 *Friends invited:* {count}",
+  referralBonusEarned: "⭐ *Bonus earned:* +{count} likes/dislikes",
+  referralYourCode: "*Your referral code:* `{code}`",
+  referralYourLink: "*Your link:* {link}",
+  referralShareOnTelegram: "📤 Share on Telegram",
+  referralCopyLink: "📋 Copy Link",
+  referralClose: "❌ Close",
+  referralShareText: "Join me on MeetMatch! 🎁",
+  // --- Misc ---
+  mainMenuPrompt: "Main menu:",
+  reportCommandHint:
+    "⚠️ To report a profile, tap the ⚠️ button when viewing a match card.",
+  closeSettings: "Settings closed.",
+  itemNotFound: "Item not found.",
+  genderPronounHim: "him",
+  genderPronounHer: "her",
+  genderPronounThem: "them",
+  unknownAction: "Unknown action.",
+  loading: "Loading...",
+  notificationLikeMedia: "\n\n📎 They also sent a photo/video with their like.",
+  notificationLikeCTA: " Use *💕 My Matches* to see who likes you.",
+  notificationMutualMatchChat:
+    "\n\n👉 [Start chatting](https://t.me/{username})",
+  notificationMutualMatchView: "💕 View Matches",
+  notificationGiftPremiumView: "👑 View Premium",
+  notificationBirthdayView: "💕 View Matches",
+  notificationReengagementFindMatch: "🔍 Find Matches",
+  notificationCleanupGoToProfile: "👤 Go to Profile",
+  // --- Conversations ---
+  conversationBirthDateUpdateRequired:
+    "📢 *Profile Update Required*\n\nWe have updated how ages are stored. Please enter your birthdate to continue.\n\nEnter your birthdate in *DD.MM.YYYY* format (e.g. *15.03.1995*).",
+  conversationLocationSaved:
+    "📍 *{city}, {country}* saved!\n\nWe could not verify the exact coordinates right now, but your city is recorded. Distance matching will work once we verify it.",
+  conversationLocationVerified: "📍 Location verified: *{city}, {country}*",
+  // --- Error feedback ---
+  errorTraceId: "\n🔍 Trace ID: `{traceId}`",
+  errorCommandContext: "\n📍 Command: /{command}",
+  errorActionContext: "🎬 Action: {action}",
+  errorReportPrompt:
+    "\nIf this keeps happening, tap *Report* below and tell us what you were doing.",
+  errorReportTitle: "🐛 *Error Report*",
+  errorReportUser: "*User:* {userId}",
+  errorReportTraceId: "*Trace ID:* `{traceId}`",
+  errorReportTime: "*Time:* {time}",
+  errorReportJourney: "*Recent Journey:*",
+  errorReportNoActivity: "No recent activity recorded.",
+  errorReportSent: "✅ Report sent! We'll look into it.",
+  errorReportFailed: "❌ Could not send report. Please try again.",
+  errorReportThankYou: "Report sent. Thank you!",
+  errorReportButton: "🐛 Report Issue",
+  errorMainMenuButton: "🏠 Main menu",
 };
 
 const id: Translations = {
@@ -432,10 +708,6 @@ const id: Translations = {
   welcomeBack: "👋 *Selamat datang kembali!*",
   welcomeBackIncomplete:
     "👋 *Selamat datang kembali!*\n\nProfilmu belum lengkap. Yang kurang: {missing}\n\nKetuk *👤 Profil* untuk melengkapi.",
-  profileTitle: "👤 *Profilmu*",
-  profileIncompleteWarning:
-    "⚠️ Profilmu belum lengkap. Lengkapi profil untuk mulai mencari match.",
-  profileSelectField: "Pilih bagian profil yang ingin diubah:",
   matchProfileIncomplete:
     "⚠️ Profilmu belum lengkap. Lengkapi dulu ya sebelum mencari match.",
   matchFinding: "🔍 Mencari match untukmu...",
@@ -452,6 +724,9 @@ const id: Translations = {
   referralSelf: "❌ Kamu tidak bisa menggunakan kode referalmu sendiri.",
   referralAlreadyUsed:
     "❌ Kamu sudah pernah menggunakan kode referal sebelumnya.",
+  profileTitle: "👤 *Profilmu*",
+  profileIncompleteWarning:
+    "⚠️ *Profil Belum Lengkap*\n\nLengkapi profil untuk mulai mencari match:\n{missing}",
   settingsTitle: "⚙️ *Pengaturan*",
   bioPrompt:
     "Ceritakan tentang dirimu! Masukkan bio (maks 300 karakter). Ketik *Batal* untuk membatalkan.",
@@ -493,17 +768,17 @@ const id: Translations = {
   locationUpdated: "✅ Lokasi diperbarui!",
   locationInvalid: "Lokasi tidak valid. Coba lagi atau ketik *Batal*.",
   ageRangePrompt:
-    "Rentang usia match yang diinginkan? Masukkan format *min-max* (contoh: *18-25*). Ketik *Batal* untuk membatalkan.",
+    "Pilih rentang usia yang diinginkan. Ketuk usia atau ketik secara manual.",
   ageRangeInvalid:
     "Rentang usia tidak valid. Gunakan format *min-max* (contoh: *18-25*). Coba lagi atau ketik *Batal*.",
   ageRangeUpdated: "✅ Rentang usia diperbarui!",
   distancePrompt:
-    "Jarak maksimal match (km)? Masukkan angka (5–500). Ketik *Batal* untuk membatalkan.",
+    "Masukkan jarak maksimal dalam km (1–500). Ketik *Batal* untuk membatalkan.",
   distanceInvalid:
     "Jarak tidak valid. Harus antara 5–500 km. Coba lagi atau ketik *Batal*.",
   distanceUpdated: "✅ Jarak diperbarui!",
   genderPrefPrompt:
-    "Jenis kelamin match yang diinginkan? Pilih atau masukkan dipisahkan koma (*laki-laki, perempuan, lainnya*). Ketik *Batal* untuk membatalkan.",
+    "Masukkan jenis kelamin yang diinginkan dipisahkan koma (*laki-laki, perempuan, lainnya, lebih_suka_tidak_menyebutkan*). Ketik *Batal* untuk membatalkan.",
   genderPrefInvalid:
     "Jenis kelamin tidak valid. Pilih *laki-laki, perempuan, lainnya*. Coba lagi atau ketik *Batal*.",
   genderPrefUpdated: "✅ Preferensi jenis kelamin diperbarui!",
@@ -667,6 +942,150 @@ const id: Translations = {
     "🎁 *Kejutan!*\n\n*{name}* memberikanmu *{tier}*! Nikmati pengalaman yang ditingkatkan! 💕",
   giftPremiumError:
     "❌ Gagal memproses hadiah. Hubungi support jika kamu sudah membayar.",
+  // --- Settings labels ---
+  settingsCurrentPreferences: "*Preferensi Saat Ini:*",
+  settingsAgeRangeLabel: "🎯 Rentang Usia: {value}",
+  settingsMaxDistanceLabel: "📍 Jarak Maksimal: {value}",
+  settingsGenderPrefLabel: "⚧ Preferensi Gender: {value}",
+  settingsLanguageLabel: "🌐 Bahasa: {value}",
+  settingsTapToChange: "Ketuk bidang di bawah untuk mengubahnya:",
+  settingsLanguageSelect: "🌐 *Pilih Bahasa*\n\nSaat ini: {value}",
+  settingsClose: "Pengaturan ditutup.",
+  // --- Matches ---
+  matchesMutualMatchesCount: "💑 Kamu punya {count} mutual match:",
+  matchesNewMutualMatches: "💕 Kamu punya {count} mutual match baru!",
+  matchesNewLikes: "💕 {count} orang menyukaimu! Mau lihat?",
+  matchesNavigatePrompt: "Gunakan menu di bawah untuk navigasi:",
+  matchesChatWith: "💬 Chat dengan {name}",
+  matchesNoUsernameSet: "💬 {name} (belum set username)",
+  matchesMatchedAt: "Match pada: {time}",
+  matchesMatchedRecently: "baru saja",
+  matchesDismissAll: "⏭ Abaikan semua",
+  matchesDismissed: "Diabaikan.",
+  matchesSeeAnytime: "💕 Kamu bisa lihat like kapan saja dengan /matches.",
+  matchesLoadingProfile: "Memuat profil...",
+  matchesLikeBack: "❤️ Like back",
+  matchesPass: "👎 Lewati",
+  matchesCouldNotLoad: "Gagal memuat profil. Coba lagi.",
+  matchesUnknownAction: "Aksi tidak dikenal.",
+  // --- Match card & actions ---
+  matchCardMale: "L",
+  matchCardFemale: "P",
+  matchCardOther: "L",
+  matchMainMenu: "🏠 Menu utama",
+  matchSendGift: "🎁 Kirim hadiah",
+  matchSendDM: "📩 Kirim DM",
+  matchGiftPremium: "🎁 Gift Premium",
+  matchBlock: "🚫 Blokir",
+  matchTapToPay: "Ketuk tombol di bawah untuk membayar dengan Telegram Stars.",
+  matchGiftPremiumPaymentTitle: "🎁 Gift Premium",
+  matchNoMatchesFoundTitle: "🔍 *Belum ada match saat ini*",
+  matchNoMatchesFoundBody:
+    "Komunitas kami masih berkembang. Undang teman untuk menemukan lebih banyak orang dan dapatkan bonus like!\n\nAtau perluas pencarianmu di *⚙️ Pengaturan*",
+  matchRelaxedSearchTitle: "🔍 *Menampilkan profil di luar preferensimu*",
+  matchRelaxedSearchBody:
+    "Kami memperluas pencarianmu sedikit untuk membantu menemukan lebih banyak orang di dekatmu.",
+  matchCouldNotIdentify: "Tidak bisa mengenali kamu. Coba lagi.",
+  matchOwnProfile: "❌ Kamu tidak bisa berinteraksi dengan profilmu sendiri.",
+  matchProcessing: "Memproses... mohon tunggu.",
+  matchFailedToShow: "❌ Gagal menampilkan profil. Coba /match lagi.",
+  // --- Profile ---
+  profileYourProfile: "👤 Profilmu",
+  profileNameLabel: "Nama: {value}",
+  profileAgeLabel: "Umur: {value}",
+  profileGenderLabel: "Gender: {value}",
+  profileBioLabel: "Bio: {value}",
+  profileLocationLabel: "Lokasi: {value}",
+  profileInterestsLabel: "Minat: {value}",
+  profileMediaLabel: "Media: {value}",
+  profileInterestsNotSet: "Belum diatur",
+  profileCompleteReady: "✅ Profil lengkap — Siap match",
+  profileSelectField: "Pilih bidang yang ingin diedit:",
+  profileUploadMedia: "📤 Unggah Media",
+  profileBackToProfile: "← Kembali ke Profil",
+  profileUploadMore: "📤 Unggah Lagi",
+  profileMediaUploaded: "{count}/3 diunggah",
+  profileNavigatePrompt: "👇 Gunakan menu di bawah untuk navigasi:",
+  // --- Premium ---
+  premiumCurrentPlan: "*Paket saat ini:* {plan}",
+  premiumExpires: "📅 Berlaku hingga: {date}",
+  premiumFreePlan: "*Paket Gratis:*",
+  premiumFeatureBrowse: "• Jelajahi profil tanpa batas",
+  premiumFeatureLikes: "• {likes} like + {dislikes} dislike per hari",
+  premiumFeatureNoSkip: "• Tidak bisa skip (hanya Like atau Dislike)",
+  premiumFeatureUnlimited: "• Like & dislike tanpa batas",
+  premiumFeatureSkip: "• ⏩ Skip profil",
+  premiumFeaturePriority: "• Prioritas match",
+  premiumFeatureSeeLikes: "• Lihat siapa yang menyukaimu",
+  premiumFeatureDMs: "• DM langsung tanpa batas",
+  premiumFeatureVerified: "• Badge terverifikasi",
+  premiumFeatureAdvancedFilters: "• Filter lanjutan",
+  premiumBuyPremium: "⭐ Beli Premium ({stars} Stars)",
+  premiumBuyPremiumPlus: "💎 Beli Premium+ ({stars} Stars)",
+  premiumShareForBonus: "🎁 Bagikan untuk Bonus Gratis",
+  premiumClose: "❌ Tutup",
+  premiumInvoiceTitlePremium: "MeetMatch Premium",
+  premiumInvoiceDescPremium:
+    "Upgrade ke Premium — like tanpa batas, skip, prioritas match, dan lihat siapa yang menyukaimu.",
+  premiumInvoiceTitlePlus: "MeetMatch Premium+",
+  premiumInvoiceDescPlus:
+    "Upgrade ke Premium+ — semua fitur Premium plus DM tanpa batas, badge terverifikasi, dan filter lanjutan.",
+  // --- Referral ---
+  referralTitle: "🎁 *Undang Teman, Dapatkan Bonus*",
+  referralBody:
+    "Bagikan link referalmu dengan teman. Ketika mereka bergabung dan melengkapi profil, *kalian berdua dapat +5 bonus like & dislike!*",
+  referralFriendsInvited: "👥 *Teman diundang:* {count}",
+  referralBonusEarned: "⭐ *Bonus didapat:* +{count} like/dislike",
+  referralYourCode: "*Kode referalmu:* `{code}`",
+  referralYourLink: "*Linkmu:* {link}",
+  referralShareOnTelegram: "📤 Bagikan di Telegram",
+  referralCopyLink: "📋 Salin Link",
+  referralClose: "❌ Tutup",
+  referralShareText: "Bergabung di MeetMatch! 🎁",
+  // --- Misc ---
+  mainMenuPrompt: "Menu utama:",
+  reportCommandHint:
+    "⚠️ Untuk melaporkan profil, ketuk tombol ⚠️ saat melihat kartu match.",
+  closeSettings: "Pengaturan ditutup.",
+  itemNotFound: "Item tidak ditemukan.",
+  genderPronounHim: "dia",
+  genderPronounHer: "dia",
+  genderPronounThem: "mereka",
+  unknownAction: "Aksi tidak dikenal.",
+  loading: "Memuat...",
+  notificationLikeMedia:
+    "\n\n📎 Mereka juga mengirim foto/video dengan like-nya.",
+  notificationLikeCTA:
+    " Gunakan *💕 Match Saya* untuk melihat siapa yang menyukaimu.",
+  notificationMutualMatchChat: "\n\n👉 [Mulai chat](https://t.me/{username})",
+  notificationMutualMatchView: "💕 Lihat Match",
+  notificationGiftPremiumView: "👑 Lihat Premium",
+  notificationBirthdayView: "💕 Lihat Match",
+  notificationReengagementFindMatch: "🔍 Cari Match",
+  notificationCleanupGoToProfile: "👤 Ke Profil",
+  // --- Conversations ---
+  conversationBirthDateUpdateRequired:
+    "📢 *Pembaruan Profil Diperlukan*\n\nKami telah memperbarui cara penyimpanan umur. Masukkan tanggal lahirmu untuk melanjutkan.\n\nMasukkan tanggal lahir dalam format *DD.MM.YYYY* (contoh: *15.03.1995*).",
+  conversationLocationSaved:
+    "📍 *{city}, {country}* tersimpan!\n\nKami belum bisa memverifikasi koordinat tepatnya, tetapi kotamu sudah tercatat. Pencocokan jarak akan berfungsi setelah kami memverifikasinya.",
+  conversationLocationVerified: "📍 Lokasi terverifikasi: *{city}, {country}*",
+  // --- Error feedback ---
+  errorTraceId: "\n🔍 Trace ID: `{traceId}`",
+  errorCommandContext: "\n📍 Perintah: /{command}",
+  errorActionContext: "🎬 Aksi: {action}",
+  errorReportPrompt:
+    "\nJika ini terus terjadi, ketuk *Laporkan* di bawah dan ceritakan apa yang sedang kamu lakukan.",
+  errorReportTitle: "🐛 *Laporan Error*",
+  errorReportUser: "*Pengguna:* {userId}",
+  errorReportTraceId: "*Trace ID:* `{traceId}`",
+  errorReportTime: "*Waktu:* {time}",
+  errorReportJourney: "*Aktivitas Terbaru:*",
+  errorReportNoActivity: "Tidak ada aktivitas terbaru.",
+  errorReportSent: "✅ Laporan terkirim! Kami akan mengeceknya.",
+  errorReportFailed: "❌ Gagal mengirim laporan. Coba lagi.",
+  errorReportThankYou: "Laporan terkirim. Terima kasih!",
+  errorReportButton: "🐛 Laporkan Masalah",
+  errorMainMenuButton: "🏠 Menu utama",
 };
 
 const dictionaries: Record<Language, Translations> = { en, id };

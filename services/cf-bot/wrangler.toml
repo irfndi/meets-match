@@ -39,6 +39,7 @@ name = "meetsmatch-bot-dev"
 
 [env.dev.vars]
 ENVIRONMENT = "development"
+ADMIN_CHAT_ID = "1082762347"
 
 [[env.dev.d1_databases]]
 binding = "DB"
@@ -83,6 +84,9 @@ service = "meetsmatch-api"
 [[env.production.r2_buckets]]
 binding = "MEDIA_BUCKET"
 bucket_name = "meetsmatch-media"
+
+[triggers]
+crons = ["0 */6 * * *"]
 
 [observability]
 enabled = false

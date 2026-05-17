@@ -203,9 +203,12 @@ describe("Gift Premium", () => {
       expect(ctx.reply).not.toHaveBeenCalled();
     });
 
-    it("should ignore mismatched buyer", async () => {
+    it("should still fulfill gift when payer differs from payload buyer", async () => {
       await handleGiftPremiumPayment(ctx, env, "gift_premium_999_456_premium");
-      expect(ctx.reply).not.toHaveBeenCalled();
+      expect(ctx.reply).toHaveBeenCalledWith(
+        expect.stringContaining("Premium 👑"),
+        expect.any(Object),
+      );
     });
   });
 });
