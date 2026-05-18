@@ -1,4 +1,5 @@
 import type { Env } from "../index.js";
+import { computeAgeFromBirthDate } from "@meetsmatch/cf-shared";
 
 export async function runBirthdayJob(env: Env): Promise<void> {
   console.log("[birthday] Starting birthday notification job");
@@ -47,26 +48,22 @@ export async function runBirthdayJob(env: Env): Promise<void> {
     for (const user of ageRefreshUsers) {
       const userId = String((user as Record<string, unknown>).id);
       const birthDate = String((user as Record<string, unknown>).birth_date);
-      const birthYear = parseInt(birthDate.slice(0, 4), 10);
+      let age = computeAgeFromBirthDate(birthDate);
+      if (age == null) continue;
+
+      // For leap-day (Feb 29) births, treat Feb 28 of non-leap years as the birthday
       const birthMonth = parseInt(birthDate.slice(5, 7), 10);
       const birthDay = parseInt(birthDate.slice(8, 10), 10);
       const today = new Date();
-      let age = today.getFullYear() - birthYear;
-      const m = today.getMonth() + 1 - birthMonth;
-      // For leap-day (Feb 29) births, treat Feb 28 of non-leap years as the birthday
       const isLeapDayBirth = birthMonth === 2 && birthDay === 29;
       const isFeb28NonLeap =
         today.getMonth() === 1 &&
         today.getDate() === 28 &&
         !isLeapYear(today.getFullYear());
-      if (
-        m < 0 ||
-        (m === 0 &&
-          today.getDate() < birthDay &&
-          !(isLeapDayBirth && isFeb28NonLeap))
-      ) {
-        age--;
+      if (isLeapDayBirth && isFeb28NonLeap) {
+        age++;
       }
+
       try {
         await env.DB.prepare("UPDATE users SET age = ? WHERE id = ?")
           .bind(age, userId)

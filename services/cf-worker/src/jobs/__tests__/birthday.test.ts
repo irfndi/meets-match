@@ -21,9 +21,9 @@ describe("runBirthdayJob", () => {
           const isMatchQuery = sql.includes("FROM matches m");
           const results = isMatchQuery ? matchResults : dbResults;
           return {
-            bind: vi.fn((param: string) => ({
+            bind: vi.fn((...params: unknown[]) => ({
               all: vi.fn(async () => {
-                if (param === "02-29") return { results: leapResults };
+                if (params[0] === "02-29") return { results: leapResults };
                 return { results };
               }),
               first: vi.fn(async () => ({ c: results.length })),
@@ -75,6 +75,9 @@ describe("runBirthdayJob", () => {
   });
 
   it("updates age column for birthday users", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-17T09:00:00Z"));
+
     const env = createEnv({
       dbResults: [
         { id: "user_1", first_name: "Alice", birth_date: "1990-05-17" },
@@ -86,10 +89,19 @@ describe("runBirthdayJob", () => {
     await runBirthdayJob(env);
 
     const prepareCalls = (env.DB.prepare as any).mock.calls;
-    const ageUpdateCall = prepareCalls.find((call: any[]) =>
+    const ageUpdateIdx = prepareCalls.findIndex((call: any[]) =>
       call[0].includes("UPDATE users SET age"),
     );
-    expect(ageUpdateCall).toBeDefined();
+    expect(ageUpdateIdx).toBeGreaterThanOrEqual(0);
+
+    // Verify bind params: age = 36, userId = "user_1"
+    const bindMock = (env.DB.prepare as any).mock.results[ageUpdateIdx].value
+      .bind;
+    const bindCalls = bindMock.mock.calls;
+    expect(bindCalls[0][0]).toBe(36);
+    expect(bindCalls[0][1]).toBe("user_1");
+
+    vi.useRealTimers();
   });
 
   it("handles API failure gracefully", async () => {
