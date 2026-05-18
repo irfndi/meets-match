@@ -2039,7 +2039,7 @@ export async function handleMatchReplyAction(
     return true;
   } catch (error) {
     log.error("handleMatchReplyAction", "Unhandled error", undefined, error);
-    await replyWithError(ctx, env, "en", { action: "match_reply" });
+    await replyWithError(ctx, env, "en", { action: "match_reply" }, error);
     return true;
   }
 }

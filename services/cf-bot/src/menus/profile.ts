@@ -189,7 +189,7 @@ export async function handleProfileCallback(
     await replyWithError(ctx, env, "en", {
       action: "profile_callback",
       extra: data,
-    });
+    }, error);
     return true;
   }
 }
