@@ -2,7 +2,11 @@ import { Effect } from "effect";
 import type { D1Database } from "@cloudflare/workers-types";
 import { DatabaseError, NotFoundError } from "@meetsmatch/cf-shared";
 
-export const ERROR_REPORT_STATUSES = ["pending", "reviewed", "dismissed"] as const;
+export const ERROR_REPORT_STATUSES = [
+  "pending",
+  "reviewed",
+  "dismissed",
+] as const;
 export type ErrorReportStatus = (typeof ERROR_REPORT_STATUSES)[number];
 
 const ERROR_REPORT_SELECT_COLUMNS = `id, reporter_id as reporterId, trace_id as traceId, message, journey,
@@ -206,7 +210,9 @@ export class ErrorReportRepository {
         if (!updated) {
           throw new DatabaseError(
             "updateErrorReportStatus",
-            new Error("Updated error_report row missing after successful update"),
+            new Error(
+              "Updated error_report row missing after successful update",
+            ),
           );
         }
         return updated as unknown as ErrorReport;

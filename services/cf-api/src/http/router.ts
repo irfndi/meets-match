@@ -10,7 +10,10 @@ import { MatchRepository } from "../models/match.js";
 import { NotificationRepository } from "../models/notification.js";
 import { ReportRepository } from "../models/report.js";
 import { FeedbackRepository } from "../models/feedback.js";
-import { ErrorReportRepository, ERROR_REPORT_STATUSES } from "../models/error-report.js";
+import {
+  ErrorReportRepository,
+  ERROR_REPORT_STATUSES,
+} from "../models/error-report.js";
 import { BlockRepository } from "../models/block.js";
 import { GeocodingService } from "../models/geocoding.js";
 import {
@@ -1040,7 +1043,11 @@ export class ApiRouter {
     }
 
     const status = body.status;
-    if (!ERROR_REPORT_STATUSES.includes(status as "pending" | "reviewed" | "dismissed")) {
+    if (
+      !ERROR_REPORT_STATUSES.includes(
+        status as "pending" | "reviewed" | "dismissed",
+      )
+    ) {
       return jsonResponse(
         {
           error: new ValidationError(
@@ -1054,7 +1061,10 @@ export class ApiRouter {
 
     try {
       const result = await runEffect(
-        this.errorReportRepo.updateStatus(id, status as "pending" | "reviewed" | "dismissed"),
+        this.errorReportRepo.updateStatus(
+          id,
+          status as "pending" | "reviewed" | "dismissed",
+        ),
       );
       return jsonResponse({ success: true, report: result });
     } catch (error) {
