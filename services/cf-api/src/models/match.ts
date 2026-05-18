@@ -5,6 +5,7 @@ import {
   MatchStatus,
   MatchAction,
   User,
+  type Preferences,
   type CreateMatchRequest,
   type GetMatchRequest,
   type GetMatchListRequest,
@@ -17,6 +18,7 @@ import {
   NotFoundError,
   DatabaseError,
   ValidationError,
+  computeDefaultPreferences,
 } from "@meetsmatch/cf-shared";
 import { UserRepository } from "./user.js";
 import { BlockRepository } from "./block.js";
@@ -357,7 +359,35 @@ export class MatchRepository {
           return [];
         }
 
-        const prefs = currentUser.preferences;
+        let prefs: Preferences = currentUser.preferences ?? {};
+
+        // Compute default preferences for new users who haven't set any.
+        // This ensures gender filtering is always applied even if the bot-side
+        // default-preference save failed or hasn't run yet.
+        const hasGenderPref =
+          Array.isArray(prefs.genderPreference) &&
+          prefs.genderPreference.length > 0;
+        if (!hasGenderPref && currentUser.gender) {
+          const defaults = computeDefaultPreferences({
+            age: currentUser.age ?? undefined,
+            birthDate: currentUser.birthDate ?? undefined,
+            gender: currentUser.gender,
+          });
+          // Apply defaults field-by-field to preserve type safety and avoid
+          // overwriting existing non-empty preference values.
+          if (defaults.genderPreference != null) {
+            prefs = { ...prefs, genderPreference: defaults.genderPreference };
+          }
+          if (prefs.minAge == null && defaults.minAge != null) {
+            prefs = { ...prefs, minAge: defaults.minAge };
+          }
+          if (prefs.maxAge == null && defaults.maxAge != null) {
+            prefs = { ...prefs, maxAge: defaults.maxAge };
+          }
+          if (prefs.maxDistance == null && defaults.maxDistance != null) {
+            prefs = { ...prefs, maxDistance: defaults.maxDistance };
+          }
+        }
 
         // 2. Build query for candidates including interacted profiles for cooldown/re-engagement
         // We fetch more candidates to allow filtering and variety
@@ -515,11 +545,14 @@ export class MatchRepository {
                 }
               }
               // Distance from candidate's perspective
+              // Skip when either user has geocoded (imprecise) coordinates.
               if (
                 candidate.location?.latitude != null &&
                 candidate.location?.longitude != null &&
                 currentUser.location?.latitude != null &&
                 currentUser.location?.longitude != null &&
+                candidate.location.source !== "geocoded" &&
+                currentUser.location.source !== "geocoded" &&
                 candidatePrefs?.maxDistance
               ) {
                 const dist = haversine(
@@ -533,11 +566,14 @@ export class MatchRepository {
             }
 
             // --- Current user's distance hard constraint ---
+            // Skip when either user has geocoded (imprecise) coordinates.
             if (
               currentUser.location?.latitude != null &&
               currentUser.location?.longitude != null &&
               candidate.location?.latitude != null &&
               candidate.location?.longitude != null &&
+              currentUser.location.source !== "geocoded" &&
+              candidate.location.source !== "geocoded" &&
               prefs?.maxDistance
             ) {
               const dist = haversine(
@@ -827,7 +863,18 @@ export function calculateMatchScore(
   };
 
   // 1. Location Score
-  if (user1.location && user2.location) {
+  // Skip scoring when either user has geocoded city-center coordinates,
+  // which are imprecise and would give misleading scores.
+  // Old data without a source field is treated as potentially GPS for
+  // backward compatibility.
+  if (
+    user1.location?.latitude != null &&
+    user1.location?.longitude != null &&
+    user2.location?.latitude != null &&
+    user2.location?.longitude != null &&
+    user1.location.source !== "geocoded" &&
+    user2.location.source !== "geocoded"
+  ) {
     const dist = haversine(
       user1.location.latitude,
       user1.location.longitude,

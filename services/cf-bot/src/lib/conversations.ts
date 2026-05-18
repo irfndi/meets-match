@@ -654,8 +654,14 @@ export async function handleLocationMessage(
   // Reverse geocode to get city/country
   const geo = await reverseGeocodeLocation(env, latitude, longitude);
   const location = geo?.city
-    ? { latitude, longitude, city: geo.city, country: geo.country }
-    : { latitude, longitude };
+    ? {
+        latitude,
+        longitude,
+        city: geo.city,
+        country: geo.country,
+        source: "gps",
+      }
+    : { latitude, longitude, source: "gps" };
 
   // Only handle if we're in a location conversation or a general location share
   if (!state || state.field !== "location") {
@@ -1115,7 +1121,7 @@ async function handleLocationTextConversation(
     // Geocoding failed twice — accept what user typed, store without lat/lon
     // Distance matching will skip distance filter for this user until geocoded
     const success = await updateUser(env, state.userId, {
-      location: { city, country },
+      location: { city, country, source: "geocoded" as const },
     });
     await clearConversationState(env.KV, state.userId);
     if (success) {
@@ -1146,15 +1152,12 @@ async function handleLocationTextConversation(
   const normalizedCity =
     geo.address?.city ?? geo.address?.town ?? geo.address?.village ?? city;
   const normalizedCountry = geo.address?.country ?? country;
-  const lat = parseFloat(geo.lat);
-  const lon = parseFloat(geo.lon);
 
   const success = await updateUser(env, state.userId, {
     location: {
       city: normalizedCity,
       country: normalizedCountry,
-      latitude: lat,
-      longitude: lon,
+      source: "geocoded" as const,
     },
   });
   await clearConversationState(env.KV, state.userId);

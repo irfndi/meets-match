@@ -32,18 +32,32 @@ function mockCtx(): MyContext {
 }
 
 function createMockApiService(responseMap: Record<string, () => Response>) {
+  const requests: Array<{ url: string; method: string }> = [];
   return {
     fetch: vi.fn().mockImplementation((req: Request) => {
       const url =
         typeof req === "string" ? req : (req as any).url || String(req);
+      const method = (req as any).method || "GET";
+      requests.push({ url, method });
       const sortedPatterns = Object.entries(responseMap).sort(
         (a, b) => b[0].length - a[0].length,
       );
       for (const [pattern, factory] of sortedPatterns) {
-        if (url.includes(pattern)) return Promise.resolve(factory());
+        if (pattern.includes(":")) {
+          // Method-specific pattern: e.g. "PUT:/users/123"
+          const colonIdx = pattern.indexOf(":");
+          const patternMethod = pattern.slice(0, colonIdx);
+          const patternUrl = pattern.slice(colonIdx + 1);
+          if (method === patternMethod && url.includes(patternUrl)) {
+            return Promise.resolve(factory());
+          }
+        } else if (url.includes(pattern)) {
+          return Promise.resolve(factory());
+        }
       }
       return Promise.resolve(new Response(JSON.stringify({}), { status: 404 }));
     }),
+    _requests: requests,
   };
 }
 
@@ -507,6 +521,33 @@ describe("Match Handlers", () => {
         expect.stringContaining("Trace ID:"),
         expect.anything(),
       );
+    });
+
+    it("still proceeds to find matches when default preference PUT fails", async () => {
+      const consoleErrorSpy = vi
+        .spyOn(console, "error")
+        .mockImplementation(() => {});
+      env.API_SERVICE = createMockApiService({
+        "/users/123": () =>
+          new Response(JSON.stringify({ user: completeUser }), { status: 200 }),
+        "PUT:/users/123": () =>
+          new Response(JSON.stringify({ error: "DB error" }), { status: 500 }),
+        "/potential-matches": () =>
+          new Response(JSON.stringify({ potentialMatches: [] }), {
+            status: 200,
+          }),
+      });
+      await matchCommand(ctx, env);
+      // Should still show "finding" and then "no matches"
+      expect(ctx.reply).toHaveBeenCalledWith(
+        expect.stringContaining("Finding"),
+        expect.anything(),
+      );
+      expect(ctx.reply).toHaveBeenCalledWith(
+        expect.stringContaining("No potential matches found"),
+        expect.anything(),
+      );
+      consoleErrorSpy.mockRestore();
     });
   });
 });

@@ -1000,6 +1000,22 @@ describe("handleConversationMessage", () => {
       expect(env.API_SERVICE.fetch).toHaveBeenCalledWith(
         expect.objectContaining({ method: "PUT" }),
       );
+
+      // Verify the PUT body stores city/country WITHOUT lat/lon
+      // (geocoded city-center coordinates are imprecise and should not be stored)
+      const putCall = (env.API_SERVICE.fetch as any).mock.calls.find(
+        (call: any) =>
+          call[0].method === "PUT" && String(call[0].url).includes("/users/"),
+      );
+      expect(putCall).toBeDefined();
+      const body = await putCall[0].text();
+      const parsed = JSON.parse(body);
+      expect(parsed.user.location).toMatchObject({
+        city: "Jakarta",
+        country: "Indonesia",
+      });
+      expect(parsed.user.location.latitude).toBeUndefined();
+      expect(parsed.user.location.longitude).toBeUndefined();
     } finally {
       (globalThis as any).fetch = originalFetch;
     }

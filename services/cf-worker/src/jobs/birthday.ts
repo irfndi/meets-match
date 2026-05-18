@@ -1,4 +1,5 @@
 import type { Env } from "../index.js";
+import { computeAgeFromBirthDate } from "@meetsmatch/cf-shared";
 
 export async function runBirthdayJob(env: Env): Promise<void> {
   console.log("[birthday] Starting birthday notification job");
@@ -19,8 +20,59 @@ export async function runBirthdayJob(env: Env): Promise<void> {
       .bind(`${month}-${day}`)
       .all();
 
-    const birthdayUsers = results ?? [];
+    let birthdayUsers = results ?? [];
     console.log(`[birthday] Found ${birthdayUsers.length} birthday(s) today`);
+
+    // On Feb 28 of non-leap years, also update ages for leap-day (Feb 29) births
+    let leapDayUsers: Array<Record<string, unknown>> = [];
+    const isLeapYear = (y: number) =>
+      (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+    if (month === "02" && day === "28" && !isLeapYear(now.getFullYear())) {
+      const { results: leapResults } = await env.DB.prepare(
+        `SELECT id, first_name, birth_date FROM users
+         WHERE is_active = 1
+         AND birth_date IS NOT NULL
+         AND substr(birth_date, 6, 5) = ?`,
+      )
+        .bind("02-29")
+        .all();
+      leapDayUsers = (leapResults ?? []) as Array<Record<string, unknown>>;
+      console.log(
+        `[birthday] Found ${leapDayUsers.length} leap-day user(s) to refresh`,
+      );
+    }
+
+    const ageRefreshUsers = [...birthdayUsers, ...leapDayUsers];
+
+    // Update age column so cached ages stay current
+    for (const user of ageRefreshUsers) {
+      const userId = String((user as Record<string, unknown>).id);
+      const birthDate = String((user as Record<string, unknown>).birth_date);
+      let age = computeAgeFromBirthDate(birthDate);
+      if (age == null) continue;
+
+      // For leap-day (Feb 29) births, treat Feb 28 of non-leap years as the birthday
+      const birthMonth = parseInt(birthDate.slice(5, 7), 10);
+      const birthDay = parseInt(birthDate.slice(8, 10), 10);
+      const today = new Date();
+      const isLeapDayBirth = birthMonth === 2 && birthDay === 29;
+      const isFeb28NonLeap =
+        today.getMonth() === 1 &&
+        today.getDate() === 28 &&
+        !isLeapYear(today.getFullYear());
+      if (isLeapDayBirth && isFeb28NonLeap) {
+        age++;
+      }
+
+      try {
+        await env.DB.prepare("UPDATE users SET age = ? WHERE id = ?")
+          .bind(age, userId)
+          .run();
+        console.log(`[birthday] Updated age to ${age} for ${userId}`);
+      } catch (error) {
+        console.error(`[birthday] Failed to update age for ${userId}:`, error);
+      }
+    }
 
     for (const user of birthdayUsers) {
       const birthdayUserId = String((user as Record<string, unknown>).id);
