@@ -1033,7 +1033,11 @@ export class ApiRouter {
     }
 
     const status = body.status;
-    if (status !== "pending" && status !== "reviewed" && status !== "dismissed") {
+    if (
+      status !== "pending" &&
+      status !== "reviewed" &&
+      status !== "dismissed"
+    ) {
       return jsonResponse(
         { error: "status must be pending, reviewed, or dismissed" },
         400,
@@ -1055,7 +1059,10 @@ export class ApiRouter {
         { id },
         error,
       );
-      return jsonResponse({ error: "Failed to update error report status" }, 500);
+      return jsonResponse(
+        { error: "Failed to update error report status" },
+        500,
+      );
     }
   }
 

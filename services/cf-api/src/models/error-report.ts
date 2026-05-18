@@ -207,7 +207,10 @@ export class ErrorReportRepository {
         return updated as unknown as ErrorReport;
       },
       catch: (error) => {
-        if (error instanceof Error && error.message.includes("Report not found")) {
+        if (
+          error instanceof Error &&
+          error.message.includes("Report not found")
+        ) {
           return new NotFoundError("ErrorReport", id);
         }
         return new DatabaseError("updateErrorReportStatus", error);

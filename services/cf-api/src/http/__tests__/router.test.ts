@@ -429,7 +429,10 @@ describe("ApiRouter", () => {
         }),
       );
       expect(response.status).toBe(200);
-      const body = (await response.json()) as { success: boolean; report: { status: string } };
+      const body = (await response.json()) as {
+        success: boolean;
+        report: { status: string };
+      };
       expect(body.success).toBe(true);
       expect(body.report.status).toBe("reviewed");
     });
