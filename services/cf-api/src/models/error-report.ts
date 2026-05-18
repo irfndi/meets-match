@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import type { D1Database } from "@cloudflare/workers-types";
-import { DatabaseError } from "@meetsmatch/cf-shared";
+import { DatabaseError, NotFoundError } from "@meetsmatch/cf-shared";
 
 export interface CreateErrorReportRequest {
   reporterId: string;
@@ -149,6 +149,69 @@ export class ErrorReportRepository {
           .run();
       },
       catch: (error) => new DatabaseError("markAlertsSent", error),
+    });
+  }
+
+  findById(
+    id: string,
+  ): Effect.Effect<ErrorReport | null, DatabaseError, never> {
+    return Effect.tryPromise({
+      try: async () => {
+        const result = await this.db
+          .prepare(
+            `SELECT id, reporter_id as reporterId, trace_id as traceId, message, journey,
+                    status, severity, alert_sent as alertSent, source,
+                    bot_version as botVersion, api_version as apiVersion, worker_version as workerVersion,
+                    error_stack as errorStack, user_language as userLanguage, user_tier as userTier,
+                    trigger_input as triggerInput, kv_session as kvSession, cf_metadata as cfMetadata, created_at as createdAt
+             FROM error_reports
+             WHERE id = ?`,
+          )
+          .bind(id)
+          .first();
+        return result as unknown as ErrorReport | null;
+      },
+      catch: (error) => new DatabaseError("findErrorReportById", error),
+    });
+  }
+
+  updateStatus(
+    id: string,
+    status: "pending" | "reviewed" | "dismissed",
+  ): Effect.Effect<ErrorReport, DatabaseError | NotFoundError, never> {
+    return Effect.tryPromise({
+      try: async () => {
+        await this.db
+          .prepare(
+            `UPDATE error_reports SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+          )
+          .bind(status, id)
+          .run();
+
+        const updated = await this.db
+          .prepare(
+            `SELECT id, reporter_id as reporterId, trace_id as traceId, message, journey,
+                    status, severity, alert_sent as alertSent, source,
+                    bot_version as botVersion, api_version as apiVersion, worker_version as workerVersion,
+                    error_stack as errorStack, user_language as userLanguage, user_tier as userTier,
+                    trigger_input as triggerInput, kv_session as kvSession, cf_metadata as cfMetadata, created_at as createdAt
+             FROM error_reports
+             WHERE id = ?`,
+          )
+          .bind(id)
+          .first();
+
+        if (!updated) {
+          throw new Error("Report not found after update");
+        }
+        return updated as unknown as ErrorReport;
+      },
+      catch: (error) => {
+        if (error instanceof Error && error.message.includes("Report not found")) {
+          return new NotFoundError("ErrorReport", id);
+        }
+        return new DatabaseError("updateErrorReportStatus", error);
+      },
     });
   }
 

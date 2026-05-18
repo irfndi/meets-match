@@ -390,6 +390,85 @@ describe("ApiRouter", () => {
       expect(response.status).toBe(400);
     });
 
+    it("routes PATCH /error-reports/:id/status", async () => {
+      const db = createMockD1(() => ({
+        results: [
+          {
+            id: "r1",
+            reporterId: "u1",
+            traceId: null,
+            message: null,
+            journey: null,
+            status: "reviewed",
+            severity: "low",
+            alertSent: 0,
+            source: null,
+            botVersion: null,
+            apiVersion: null,
+            workerVersion: null,
+            errorStack: null,
+            userLanguage: null,
+            userTier: null,
+            triggerInput: null,
+            kvSession: null,
+            cfMetadata: null,
+            createdAt: "2025-01-01T00:00:00Z",
+          },
+        ],
+      }));
+      const router = new ApiRouter({
+        DB: db,
+        KV: createMockKV(),
+        NOTIFICATION_QUEUE: createMockQueue(),
+        MEDIA_BUCKET: createMockR2(),
+      });
+      const response = await router.route(
+        new Request("http://api/error-reports/r1/status", {
+          method: "PATCH",
+          body: JSON.stringify({ status: "reviewed" }),
+        }),
+      );
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as { success: boolean; report: { status: string } };
+      expect(body.success).toBe(true);
+      expect(body.report.status).toBe("reviewed");
+    });
+
+    it("returns 400 for invalid status on PATCH /error-reports/:id/status", async () => {
+      const response = await router.route(
+        new Request("http://api/error-reports/r1/status", {
+          method: "PATCH",
+          body: JSON.stringify({ status: "invalid" }),
+        }),
+      );
+      expect(response.status).toBe(400);
+    });
+
+    it("returns 404 for nonexistent report on PATCH /error-reports/:id/status", async () => {
+      const db = createMockD1((sql) => {
+        if (sql.includes("UPDATE error_reports SET status")) {
+          return { results: [], success: true };
+        }
+        if (sql.includes("FROM error_reports WHERE id")) {
+          return { results: [] };
+        }
+        return { results: [] };
+      });
+      const router = new ApiRouter({
+        DB: db,
+        KV: createMockKV(),
+        NOTIFICATION_QUEUE: createMockQueue(),
+        MEDIA_BUCKET: createMockR2(),
+      });
+      const response = await router.route(
+        new Request("http://api/error-reports/nonexistent/status", {
+          method: "PATCH",
+          body: JSON.stringify({ status: "reviewed" }),
+        }),
+      );
+      expect(response.status).toBe(404);
+    });
+
     it("routes GET /geocode with query", async () => {
       const originalFetch = globalThis.fetch;
       globalThis.fetch = vi.fn(

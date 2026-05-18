@@ -192,6 +192,10 @@ export class ApiRouter {
           return this.handleErrorReportSummary(url.searchParams);
         case url.pathname === "/error-reports/mark-sent" && method === "POST":
           return this.handleMarkAlertsSent();
+        case url.pathname.startsWith("/error-reports/") &&
+          url.pathname.endsWith("/status") &&
+          method === "PATCH":
+          return this.handleUpdateErrorReportStatus(url.pathname, request);
         case url.pathname === "/cron/downgrade-expired-subscriptions" &&
           method === "POST":
           return this.handleDowngradeExpiredSubscriptions();
@@ -1009,6 +1013,49 @@ export class ApiRouter {
     } catch (error) {
       log.error("markAlertsSent", "Failed to mark alerts", undefined, error);
       return jsonResponse({ error: "Failed to mark alerts as sent" }, 500);
+    }
+  }
+
+  private async handleUpdateErrorReportStatus(
+    path: string,
+    request: Request,
+  ): Promise<Response> {
+    const id = path.replace("/error-reports/", "").replace("/status", "");
+    if (!id) {
+      return jsonResponse({ error: "Report ID is required" }, 400);
+    }
+
+    let body: Record<string, unknown>;
+    try {
+      body = (await request.json()) as Record<string, unknown>;
+    } catch {
+      return jsonResponse({ error: "Invalid JSON body" }, 400);
+    }
+
+    const status = body.status;
+    if (status !== "pending" && status !== "reviewed" && status !== "dismissed") {
+      return jsonResponse(
+        { error: "status must be pending, reviewed, or dismissed" },
+        400,
+      );
+    }
+
+    try {
+      const result = await runEffect(
+        this.errorReportRepo.updateStatus(id, status),
+      );
+      return jsonResponse({ success: true, report: result });
+    } catch (error) {
+      if (error instanceof NotFoundError) {
+        return jsonResponse({ error: error.message }, 404);
+      }
+      log.error(
+        "updateErrorReportStatus",
+        "Failed to update status",
+        { id },
+        error,
+      );
+      return jsonResponse({ error: "Failed to update error report status" }, 500);
     }
   }
 
