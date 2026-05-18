@@ -10,7 +10,7 @@ import { MatchRepository } from "../models/match.js";
 import { NotificationRepository } from "../models/notification.js";
 import { ReportRepository } from "../models/report.js";
 import { FeedbackRepository } from "../models/feedback.js";
-import { ErrorReportRepository } from "../models/error-report.js";
+import { ErrorReportRepository, ERROR_REPORT_STATUSES } from "../models/error-report.js";
 import { BlockRepository } from "../models/block.js";
 import { GeocodingService } from "../models/geocoding.js";
 import {
@@ -1020,33 +1020,41 @@ export class ApiRouter {
     path: string,
     request: Request,
   ): Promise<Response> {
-    const id = path.replace("/error-reports/", "").replace("/status", "");
+    const match = path.match(/^\/error-reports\/([^/]+)\/status$/);
+    const id = match?.[1];
     if (!id) {
-      return jsonResponse({ error: "Report ID is required" }, 400);
+      return jsonResponse(
+        { error: new ValidationError("id", "Report ID is required").message },
+        400,
+      );
     }
 
     let body: Record<string, unknown>;
     try {
       body = (await request.json()) as Record<string, unknown>;
     } catch {
-      return jsonResponse({ error: "Invalid JSON body" }, 400);
+      return jsonResponse(
+        { error: new ValidationError("body", "Invalid JSON body").message },
+        400,
+      );
     }
 
     const status = body.status;
-    if (
-      status !== "pending" &&
-      status !== "reviewed" &&
-      status !== "dismissed"
-    ) {
+    if (!ERROR_REPORT_STATUSES.includes(status as "pending" | "reviewed" | "dismissed")) {
       return jsonResponse(
-        { error: "status must be pending, reviewed, or dismissed" },
+        {
+          error: new ValidationError(
+            "status",
+            `status must be one of: ${ERROR_REPORT_STATUSES.join(", ")}`,
+          ).message,
+        },
         400,
       );
     }
 
     try {
       const result = await runEffect(
-        this.errorReportRepo.updateStatus(id, status),
+        this.errorReportRepo.updateStatus(id, status as "pending" | "reviewed" | "dismissed"),
       );
       return jsonResponse({ success: true, report: result });
     } catch (error) {

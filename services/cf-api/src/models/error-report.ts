@@ -2,6 +2,15 @@ import { Effect } from "effect";
 import type { D1Database } from "@cloudflare/workers-types";
 import { DatabaseError, NotFoundError } from "@meetsmatch/cf-shared";
 
+export const ERROR_REPORT_STATUSES = ["pending", "reviewed", "dismissed"] as const;
+export type ErrorReportStatus = (typeof ERROR_REPORT_STATUSES)[number];
+
+const ERROR_REPORT_SELECT_COLUMNS = `id, reporter_id as reporterId, trace_id as traceId, message, journey,
+  status, severity, alert_sent as alertSent, source,
+  bot_version as botVersion, api_version as apiVersion, worker_version as workerVersion,
+  error_stack as errorStack, user_language as userLanguage, user_tier as userTier,
+  trigger_input as triggerInput, kv_session as kvSession, cf_metadata as cfMetadata, created_at as createdAt`;
+
 export interface CreateErrorReportRequest {
   reporterId: string;
   traceId?: string;
@@ -26,7 +35,7 @@ export interface ErrorReport {
   traceId: string | null;
   message: string | null;
   journey: string | null;
-  status: "pending" | "reviewed" | "dismissed";
+  status: ErrorReportStatus;
   severity: "high" | "low";
   alertSent: number;
   source: string | null;
@@ -40,6 +49,7 @@ export interface ErrorReport {
   kvSession: string | null;
   cfMetadata: string | null;
   createdAt: string;
+  updatedAt?: string | null;
 }
 
 export interface AggregatedAlert {
@@ -118,11 +128,7 @@ export class ErrorReportRepository {
       try: async () => {
         const result = await this.db
           .prepare(
-            `SELECT id, reporter_id as reporterId, trace_id as traceId, message, journey,
-                    status, severity, alert_sent as alertSent, source,
-                    bot_version as botVersion, api_version as apiVersion, worker_version as workerVersion,
-                    error_stack as errorStack, user_language as userLanguage, user_tier as userTier,
-                    trigger_input as triggerInput, kv_session as kvSession, cf_metadata as cfMetadata, created_at as createdAt
+            `SELECT ${ERROR_REPORT_SELECT_COLUMNS}
              FROM error_reports
              WHERE severity = 'low' AND alert_sent = 0
              ORDER BY created_at DESC
@@ -159,11 +165,7 @@ export class ErrorReportRepository {
       try: async () => {
         const result = await this.db
           .prepare(
-            `SELECT id, reporter_id as reporterId, trace_id as traceId, message, journey,
-                    status, severity, alert_sent as alertSent, source,
-                    bot_version as botVersion, api_version as apiVersion, worker_version as workerVersion,
-                    error_stack as errorStack, user_language as userLanguage, user_tier as userTier,
-                    trigger_input as triggerInput, kv_session as kvSession, cf_metadata as cfMetadata, created_at as createdAt
+            `SELECT ${ERROR_REPORT_SELECT_COLUMNS}
              FROM error_reports
              WHERE id = ?`,
           )
@@ -177,24 +179,24 @@ export class ErrorReportRepository {
 
   updateStatus(
     id: string,
-    status: "pending" | "reviewed" | "dismissed",
+    status: ErrorReportStatus,
   ): Effect.Effect<ErrorReport, DatabaseError | NotFoundError, never> {
     return Effect.tryPromise({
       try: async () => {
-        await this.db
+        const updateResult = await this.db
           .prepare(
             `UPDATE error_reports SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
           )
           .bind(status, id)
           .run();
 
+        if (!updateResult || (updateResult.meta?.changes as number) === 0) {
+          throw new NotFoundError("ErrorReport", id);
+        }
+
         const updated = await this.db
           .prepare(
-            `SELECT id, reporter_id as reporterId, trace_id as traceId, message, journey,
-                    status, severity, alert_sent as alertSent, source,
-                    bot_version as botVersion, api_version as apiVersion, worker_version as workerVersion,
-                    error_stack as errorStack, user_language as userLanguage, user_tier as userTier,
-                    trigger_input as triggerInput, kv_session as kvSession, cf_metadata as cfMetadata, created_at as createdAt
+            `SELECT ${ERROR_REPORT_SELECT_COLUMNS}
              FROM error_reports
              WHERE id = ?`,
           )
@@ -202,17 +204,16 @@ export class ErrorReportRepository {
           .first();
 
         if (!updated) {
-          throw new Error("Report not found after update");
+          throw new DatabaseError(
+            "updateErrorReportStatus",
+            new Error("Updated error_report row missing after successful update"),
+          );
         }
         return updated as unknown as ErrorReport;
       },
       catch: (error) => {
-        if (
-          error instanceof Error &&
-          error.message.includes("Report not found")
-        ) {
-          return new NotFoundError("ErrorReport", id);
-        }
+        if (error instanceof NotFoundError) return error;
+        if (error instanceof DatabaseError) return error;
         return new DatabaseError("updateErrorReportStatus", error);
       },
     });

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { ErrorReportRepository } from "../error-report.js";
 import { createMockD1, runEffect } from "@meetsmatch/cf-shared/testing";
+import { NotFoundError } from "@meetsmatch/cf-shared";
 
 describe("ErrorReportRepository", () => {
   function createRepo(handler?: Parameters<typeof createMockD1>[0]) {
@@ -179,9 +180,9 @@ describe("ErrorReportRepository", () => {
   });
 
   it("throws NotFoundError when updating nonexistent report", async () => {
-    const { repo } = createRepo(() => ({ results: [] }));
+    const { repo } = createRepo(() => ({ results: [], meta: { changes: 0 } }));
     await expect(
       runEffect(repo.updateStatus("nonexistent", "reviewed")),
-    ).rejects.toThrow();
+    ).rejects.toBeInstanceOf(NotFoundError);
   });
 });

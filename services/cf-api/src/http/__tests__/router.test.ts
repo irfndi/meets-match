@@ -8,6 +8,7 @@ function createMockD1(
   ) => {
     results?: Array<Record<string, unknown>>;
     success?: boolean;
+    meta?: Record<string, unknown>;
   } = () => ({
     results: [],
   }),
@@ -16,7 +17,7 @@ function createMockD1(
     return {
       run: vi.fn(async () => {
         const result = await handler(sql, values);
-        return { success: result.success ?? true };
+        return { success: result.success ?? true, meta: result.meta ?? {} };
       }),
       first: vi.fn(async () => {
         const result = await handler(sql, values);
@@ -391,31 +392,36 @@ describe("ApiRouter", () => {
     });
 
     it("routes PATCH /error-reports/:id/status", async () => {
-      const db = createMockD1(() => ({
-        results: [
-          {
-            id: "r1",
-            reporterId: "u1",
-            traceId: null,
-            message: null,
-            journey: null,
-            status: "reviewed",
-            severity: "low",
-            alertSent: 0,
-            source: null,
-            botVersion: null,
-            apiVersion: null,
-            workerVersion: null,
-            errorStack: null,
-            userLanguage: null,
-            userTier: null,
-            triggerInput: null,
-            kvSession: null,
-            cfMetadata: null,
-            createdAt: "2025-01-01T00:00:00Z",
-          },
-        ],
-      }));
+      const db = createMockD1((sql) => {
+        if (sql.includes("UPDATE error_reports SET status")) {
+          return { results: [], success: true, meta: { changes: 1 } };
+        }
+        return {
+          results: [
+            {
+              id: "r1",
+              reporterId: "u1",
+              traceId: null,
+              message: null,
+              journey: null,
+              status: "reviewed",
+              severity: "low",
+              alertSent: 0,
+              source: null,
+              botVersion: null,
+              apiVersion: null,
+              workerVersion: null,
+              errorStack: null,
+              userLanguage: null,
+              userTier: null,
+              triggerInput: null,
+              kvSession: null,
+              cfMetadata: null,
+              createdAt: "2025-01-01T00:00:00Z",
+            },
+          ],
+        };
+      });
       const router = new ApiRouter({
         DB: db,
         KV: createMockKV(),
@@ -450,7 +456,7 @@ describe("ApiRouter", () => {
     it("returns 404 for nonexistent report on PATCH /error-reports/:id/status", async () => {
       const db = createMockD1((sql) => {
         if (sql.includes("UPDATE error_reports SET status")) {
-          return { results: [], success: true };
+          return { results: [], success: true, meta: { changes: 0 } };
         }
         if (sql.includes("FROM error_reports WHERE id")) {
           return { results: [] };
