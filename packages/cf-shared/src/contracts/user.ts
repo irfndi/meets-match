@@ -5,6 +5,7 @@ import {
   Number,
   String,
   Struct,
+  filter,
   optional,
 } from "effect/Schema";
 
@@ -16,12 +17,19 @@ export type Gender = typeof Gender.Type;
 // --- Nested Types ---
 
 export const Location = Struct({
-  latitude: Number,
-  longitude: Number,
+  latitude: optional(Number),
+  longitude: optional(Number),
   city: optional(String),
   country: optional(String),
+  source: optional(Literal("gps", "geocoded")),
   lastUpdated: optional(String), // ISO 8601
-});
+}).pipe(
+  filter((loc) => {
+    const hasLat = loc.latitude != null;
+    const hasLon = loc.longitude != null;
+    return hasLat === hasLon;
+  }),
+);
 export type Location = typeof Location.Type;
 
 export const SubscriptionTier = Literal("free", "premium", "premium_plus");

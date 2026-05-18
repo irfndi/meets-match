@@ -209,8 +209,8 @@ describe("Settings Handlers", () => {
     });
 
     it("handles partially set preferences", async () => {
-      // Full user with birthDate=1999-03-15 (age ~27), gender=female
-      // getDefaultPreferences computes: minAge=20, maxAge=34, maxDistance=25, genderPref=["male"]
+      // Full user with birthDate=1999-03-15 and age=25, gender=female
+      // getDefaultPreferences now trusts age column first: minAge=18, maxAge=32, maxDistance=25, genderPref=["male"]
       // We set prefs to { maxDistance: 10 }, so result merges defaults + rawPrefs
       env = {
         KV: kv as unknown as KVNamespace,
@@ -224,9 +224,9 @@ describe("Settings Handlers", () => {
 
       await settingsCommand(ctx, env);
       const callArg = (ctx.reply as any).mock.calls[0][0];
-      // Defaults: birthDate ~27 → minAge=20, maxAge=34, gender=female → ["male"]
-      expect(callArg).toContain("20");
-      expect(callArg).toContain("34");
+      // Defaults: age=25 → minAge=18, maxAge=32, gender=female → ["male"]
+      expect(callArg).toContain("18");
+      expect(callArg).toContain("32");
       expect(callArg).toContain("10 km");
       expect(callArg).toContain("Male");
     });

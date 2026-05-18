@@ -7,3 +7,4 @@ export * from "./errors.js";
 export * from "./structured-log.js";
 export * from "./version.js";
 export * from "./media.js";
+export * from "./preferences.js";

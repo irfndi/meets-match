@@ -31,13 +31,13 @@ The entire application runs on **Cloudflare Workers** as three independently dep
 
 ### Cloudflare Platform Resources
 
-| Resource | Binding | Purpose |
-|----------|---------|---------|
-| D1 Database | `DB` | SQLite-compatible relational data (users, matches, notifications, reports, feedback) |
-| KV Namespace | `KV` | Session caching, conversation state, geocoding cache |
-| Queue | `NOTIFICATION_QUEUE` | Async notification delivery (cf-api produces, cf-worker consumes) |
-| R2 Bucket | `MEDIA_BUCKET` | Profile photos and videos |
-| Service Bindings | `API_SERVICE`, `BOT_SERVICE` | Zero-latency RPC between Workers |
+| Resource         | Binding                      | Purpose                                                                              |
+| ---------------- | ---------------------------- | ------------------------------------------------------------------------------------ |
+| D1 Database      | `DB`                         | SQLite-compatible relational data (users, matches, notifications, reports, feedback) |
+| KV Namespace     | `KV`                         | Session caching, conversation state, geocoding cache                                 |
+| Queue            | `NOTIFICATION_QUEUE`         | Async notification delivery (cf-api produces, cf-worker consumes)                    |
+| R2 Bucket        | `MEDIA_BUCKET`               | Profile photos and videos                                                            |
+| Service Bindings | `API_SERVICE`, `BOT_SERVICE` | Zero-latency RPC between Workers                                                     |
 
 ## Technology Stack
 
@@ -267,6 +267,7 @@ cd services/cf-worker && wrangler deploy --env production
 ### Version Files
 
 Each service has an auto-generated `src/lib/version.ts` created by `scripts/generate-version.ts`:
+
 - Runs automatically on `postinstall`, `pretest`, and before `dev`/`deploy`/`build`.
 - Uses git tag for production releases, short commit hash for dev.
 - **Do not edit `src/lib/version.ts` manually.**
@@ -284,6 +285,7 @@ Commands are registered once via `scripts/setup-bot-commands.ts` to avoid rate-l
 ### Observability
 
 Cloudflare Workers natively export OpenTelemetry logs and traces. No SDK bundling required.
+
 - Configure destinations in the Cloudflare Dashboard → Workers & Pages → Observability.
 - Uncomment `destinations` arrays in each `wrangler.toml` after adding backends (Sentry, Honeycomb, etc.).
 
