@@ -13,7 +13,8 @@ const ERROR_REPORT_SELECT_COLUMNS = `id, reporter_id as reporterId, trace_id as 
   status, severity, alert_sent as alertSent, source,
   bot_version as botVersion, api_version as apiVersion, worker_version as workerVersion,
   error_stack as errorStack, user_language as userLanguage, user_tier as userTier,
-  trigger_input as triggerInput, kv_session as kvSession, cf_metadata as cfMetadata, created_at as createdAt`;
+  trigger_input as triggerInput, kv_session as kvSession, cf_metadata as cfMetadata,
+  created_at as createdAt, updated_at as updatedAt`;
 
 export interface CreateErrorReportRequest {
   reporterId: string;

@@ -105,6 +105,16 @@ export async function fetchUserLang(
   }
 }
 
+async function safeAnswerCallbackQuery(
+  ctx: MyContext,
+  text?: string,
+): Promise<void> {
+  if (!ctx.callbackQuery) return;
+  try {
+    await ctx.answerCallbackQuery(text);
+  } catch {}
+}
+
 async function ensureDefaultPreferences(
   env: Env,
   userId: string,
@@ -825,23 +835,21 @@ async function handleMatchAction(
   targetUserId: string,
 ) {
   if (!ctx.from) {
-    await ctx
-      .answerCallbackQuery(t("matchCouldNotIdentify", "en"))
-      .catch(() => {});
+    await safeAnswerCallbackQuery(ctx, t("matchCouldNotIdentify", "en"));
     return;
   }
   const userId = String(ctx.from.id);
   const lang = await fetchUserLang(env, userId);
   if (targetUserId === userId) {
     await ctx.reply(t("matchOwnProfile", lang));
-    await ctx.answerCallbackQuery().catch(() => {});
+    await safeAnswerCallbackQuery(ctx);
     return;
   }
 
   // Acquire action lock to prevent double-processing from rapid taps
   const locked = await acquireActionLock(env.KV, userId);
   if (!locked) {
-    await ctx.answerCallbackQuery(t("matchProcessing", lang)).catch(() => {});
+    await safeAnswerCallbackQuery(ctx, t("matchProcessing", lang));
     return;
   }
 
@@ -878,7 +886,7 @@ async function handleMatchAction(
         parse_mode: "Markdown",
         reply_markup: keyboard,
       });
-      await ctx.answerCallbackQuery().catch(() => {});
+      await safeAnswerCallbackQuery(ctx);
       return;
     }
 
@@ -896,7 +904,7 @@ async function handleMatchAction(
           parse_mode: "Markdown",
           reply_markup: keyboard,
         });
-        await ctx.answerCallbackQuery().catch(() => {});
+        await safeAnswerCallbackQuery(ctx);
         return;
       }
       if (action === "dislike" && (status.dislikesRemaining ?? 0) <= 0) {
@@ -908,7 +916,7 @@ async function handleMatchAction(
           parse_mode: "Markdown",
           reply_markup: keyboard,
         });
-        await ctx.answerCallbackQuery().catch(() => {});
+        await safeAnswerCallbackQuery(ctx);
         return;
       }
     }
@@ -1041,8 +1049,8 @@ async function handleMatchAction(
     });
   } finally {
     await releaseActionLock(env.KV, userId);
+    await safeAnswerCallbackQuery(ctx);
   }
-  await ctx.answerCallbackQuery().catch(() => {});
 }
 
 async function handleSendDM(ctx: MyContext, env: Env, targetUserId: string) {
