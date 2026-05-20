@@ -886,7 +886,6 @@ async function handleMatchAction(
         parse_mode: "Markdown",
         reply_markup: keyboard,
       });
-      await safeAnswerCallbackQuery(ctx);
       return;
     }
 
@@ -904,7 +903,6 @@ async function handleMatchAction(
           parse_mode: "Markdown",
           reply_markup: keyboard,
         });
-        await safeAnswerCallbackQuery(ctx);
         return;
       }
       if (action === "dislike" && (status.dislikesRemaining ?? 0) <= 0) {
@@ -916,7 +914,6 @@ async function handleMatchAction(
           parse_mode: "Markdown",
           reply_markup: keyboard,
         });
-        await safeAnswerCallbackQuery(ctx);
         return;
       }
     }
