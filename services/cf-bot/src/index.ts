@@ -148,6 +148,9 @@ function createBot(env: Env): Bot<MyContext> {
 
     await next();
 
+    const stateAfter = await getConversationState(env.KV, userId);
+    if (stateAfter) return;
+
     const notifications = await getNotifications(env, userId);
     const hasLikes = notifications.some((n) => n.type === "like");
     const hasMutual = notifications.some((n) => n.type === "mutual_match");
