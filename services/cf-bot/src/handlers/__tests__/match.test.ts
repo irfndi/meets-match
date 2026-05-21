@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { matchCommand, matchCallbacks } from "../match.js";
+import { matchCommand, matchCallbacks, showNextMatch } from "../match.js";
 import type { MyContext } from "../../types.js";
 
 function mockKV() {
@@ -548,6 +548,108 @@ describe("Match Handlers", () => {
         expect.anything(),
       );
       consoleErrorSpy.mockRestore();
+    });
+  });
+
+  describe("showNextMatch", () => {
+    beforeEach(() => {
+      (ctx as any).replyWithPhoto = vi.fn().mockResolvedValue(undefined);
+    });
+
+    it("sends match card before premium ad for free tier users", async () => {
+      await env.KV.put(
+        "match_queue:123",
+        JSON.stringify({
+          matches: [
+            { id: "456", displayName: "Alice", age: 24 },
+            { id: "789", displayName: "Bob", age: 25 },
+          ],
+          index: 1,
+          tier: "free",
+          myLocation: undefined,
+        }),
+      );
+      await showNextMatch(ctx, env, "123", "en");
+      const replies = (ctx.reply as any).mock.calls;
+      const matchCardIndex = replies.findIndex((call: any[]) =>
+        String(call[0]).includes("Bob"),
+      );
+      const adIndex = replies.findIndex((call: any[]) =>
+        String(call[0]).includes("Unlock Premium"),
+      );
+      expect(matchCardIndex).toBeGreaterThanOrEqual(0);
+      expect(adIndex).toBeGreaterThanOrEqual(0);
+      expect(matchCardIndex).toBeLessThan(adIndex);
+    });
+
+    it("sends match card before referral prompt at index 2", async () => {
+      await env.KV.put(
+        "match_queue:123",
+        JSON.stringify({
+          matches: [
+            { id: "456", displayName: "Alice", age: 24 },
+            { id: "789", displayName: "Bob", age: 25 },
+            { id: "999", displayName: "Carol", age: 26 },
+          ],
+          index: 2,
+          tier: "free",
+          myLocation: undefined,
+          referralCode: "ABC123",
+        }),
+      );
+      await showNextMatch(ctx, env, "123", "en");
+      const replies = (ctx.reply as any).mock.calls;
+      const matchCardIndex = replies.findIndex((call: any[]) =>
+        String(call[0]).includes("Carol"),
+      );
+      const referralIndex = replies.findIndex((call: any[]) =>
+        String(call[0]).includes("Share MeetMatch"),
+      );
+      expect(matchCardIndex).toBeGreaterThanOrEqual(0);
+      expect(referralIndex).toBeGreaterThanOrEqual(0);
+      expect(matchCardIndex).toBeLessThan(referralIndex);
+    });
+
+    it("does not show premium ad for premium tier users", async () => {
+      await env.KV.put(
+        "match_queue:123",
+        JSON.stringify({
+          matches: [
+            { id: "456", displayName: "Alice", age: 24 },
+            { id: "789", displayName: "Bob", age: 25 },
+          ],
+          index: 1,
+          tier: "premium",
+          myLocation: undefined,
+        }),
+      );
+      await showNextMatch(ctx, env, "123", "en");
+      const replies = (ctx.reply as any).mock.calls;
+      const adIndex = replies.findIndex((call: any[]) =>
+        String(call[0]).includes("Unlock Premium"),
+      );
+      expect(adIndex).toBe(-1);
+    });
+
+    it("does not show premium ad when queue index is 0", async () => {
+      await env.KV.put(
+        "match_queue:123",
+        JSON.stringify({
+          matches: [
+            { id: "456", displayName: "Alice", age: 24 },
+            { id: "789", displayName: "Bob", age: 25 },
+          ],
+          index: 0,
+          tier: "free",
+          myLocation: undefined,
+        }),
+      );
+      await showNextMatch(ctx, env, "123", "en");
+      const replies = (ctx.reply as any).mock.calls;
+      const adIndex = replies.findIndex((call: any[]) =>
+        String(call[0]).includes("Unlock Premium"),
+      );
+      expect(adIndex).toBe(-1);
     });
   });
 });

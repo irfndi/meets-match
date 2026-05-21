@@ -626,7 +626,7 @@ async function sendMatchCard(
   }
 }
 
-async function showNextMatch(
+export async function showNextMatch(
   ctx: MyContext,
   env: Env,
   userId: string,
@@ -653,7 +653,8 @@ async function showNextMatch(
       return;
     }
 
-    // Show referral prompt before the 3rd match (index 2)
+    await sendMatchCard(ctx, match, lang, queue.tier, queue.myLocation);
+
     if (queue.index === 2) {
       const referralKeyboard = new InlineKeyboard()
         .text("🎁 Share & Earn", "referral:show")
@@ -667,7 +668,6 @@ async function showNextMatch(
       );
     }
 
-    // Random premium ad for free users (not too often)
     if (queue.tier === "free" && queue.index > 0) {
       const adKey = `ad_last_shown:${userId}`;
       const adLastShown = await env.KV.get(adKey);
@@ -692,8 +692,6 @@ async function showNextMatch(
         });
       }
     }
-
-    await sendMatchCard(ctx, match, lang, queue.tier, queue.myLocation);
   } catch (error) {
     await replyWithError(ctx, env, lang, { action: "show_next_match" });
   }
@@ -779,18 +777,6 @@ export const matchCommand = async (ctx: MyContext, env: Env): Promise<void> => {
       return;
     }
 
-    // Show gentle notice if soft relaxed filters were used
-    if (relaxed) {
-      const adjustKeyboard = new InlineKeyboard()
-        .text(t("matchUpdateSettingsButton", lang), "settings:show")
-        .row()
-        .text(t("matchDismissButton", lang), "referral:dismiss");
-      await ctx.reply(
-        mdv2`🔍 *${t("matchRelaxedSearchTitle", lang)}*\n\n${t("matchRelaxedSearchBody", lang)}`,
-        { parse_mode: "MarkdownV2", reply_markup: adjustKeyboard },
-      );
-    }
-
     // Extract current user's location for distance display on cards
     const myLocation =
       (user.location as Record<string, unknown> | undefined)?.latitude != null
@@ -814,6 +800,17 @@ export const matchCommand = async (ctx: MyContext, env: Env): Promise<void> => {
       referralCode: (user.referralCode as string | undefined) ?? undefined,
     });
     await showNextMatch(ctx, env, userId, lang);
+
+    if (relaxed) {
+      const adjustKeyboard = new InlineKeyboard()
+        .text(t("matchUpdateSettingsButton", lang), "settings:show")
+        .row()
+        .text(t("matchDismissButton", lang), "referral:dismiss");
+      await ctx.reply(
+        mdv2`🔍 *${t("matchRelaxedSearchTitle", lang)}*\n\n${t("matchRelaxedSearchBody", lang)}`,
+        { parse_mode: "MarkdownV2", reply_markup: adjustKeyboard },
+      );
+    }
   } catch (error) {
     log.error(
       "matchCommand",
