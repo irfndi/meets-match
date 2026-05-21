@@ -394,33 +394,35 @@ describe("ApiRouter", () => {
     it("routes PATCH /error-reports/:id/status", async () => {
       const db = createMockD1((sql) => {
         if (sql.includes("UPDATE error_reports SET status")) {
-          return { results: [], success: true, meta: { changes: 1 } };
+          return {
+            results: [
+              {
+                id: "r1",
+                reporterId: "u1",
+                traceId: null,
+                message: null,
+                journey: null,
+                status: "reviewed",
+                severity: "low",
+                alertSent: 0,
+                source: null,
+                botVersion: null,
+                apiVersion: null,
+                workerVersion: null,
+                errorStack: null,
+                userLanguage: null,
+                userTier: null,
+                triggerInput: null,
+                kvSession: null,
+                cfMetadata: null,
+                createdAt: "2025-01-01T00:00:00Z",
+              },
+            ],
+            success: true,
+            meta: { changes: 1 },
+          };
         }
-        return {
-          results: [
-            {
-              id: "r1",
-              reporterId: "u1",
-              traceId: null,
-              message: null,
-              journey: null,
-              status: "reviewed",
-              severity: "low",
-              alertSent: 0,
-              source: null,
-              botVersion: null,
-              apiVersion: null,
-              workerVersion: null,
-              errorStack: null,
-              userLanguage: null,
-              userTier: null,
-              triggerInput: null,
-              kvSession: null,
-              cfMetadata: null,
-              createdAt: "2025-01-01T00:00:00Z",
-            },
-          ],
-        };
+        return { results: [] };
       });
       const router = new ApiRouter({
         DB: db,
@@ -457,9 +459,6 @@ describe("ApiRouter", () => {
       const db = createMockD1((sql) => {
         if (sql.includes("UPDATE error_reports SET status")) {
           return { results: [], success: true, meta: { changes: 0 } };
-        }
-        if (sql.includes("FROM error_reports WHERE id")) {
-          return { results: [] };
         }
         return { results: [] };
       });

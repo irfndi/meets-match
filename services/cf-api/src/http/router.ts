@@ -1032,9 +1032,9 @@ export class ApiRouter {
       );
     }
 
-    let body: Record<string, unknown>;
+    let body: unknown;
     try {
-      body = (await request.json()) as Record<string, unknown>;
+      body = await request.json();
     } catch {
       return jsonResponse(
         { error: new ValidationError("body", "Invalid JSON body").message },
@@ -1042,7 +1042,14 @@ export class ApiRouter {
       );
     }
 
-    const status = body.status;
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return jsonResponse(
+        { error: new ValidationError("body", "Invalid JSON body").message },
+        400,
+      );
+    }
+
+    const status = (body as Record<string, unknown>).status;
     if (
       !ERROR_REPORT_STATUSES.includes(
         status as "pending" | "reviewed" | "dismissed",

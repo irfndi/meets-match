@@ -188,39 +188,21 @@ export class ErrorReportRepository {
   ): Effect.Effect<ErrorReport, DatabaseError | NotFoundError, never> {
     return Effect.tryPromise({
       try: async () => {
-        const updateResult = await this.db
-          .prepare(
-            `UPDATE error_reports SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-          )
-          .bind(status, id)
-          .run();
-
-        if (!updateResult || (updateResult.meta?.changes as number) === 0) {
-          throw new NotFoundError("ErrorReport", id);
-        }
-
         const updated = await this.db
           .prepare(
-            `SELECT ${ERROR_REPORT_SELECT_COLUMNS}
-             FROM error_reports
-             WHERE id = ?`,
+            `UPDATE error_reports SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+             RETURNING ${ERROR_REPORT_SELECT_COLUMNS}`,
           )
-          .bind(id)
+          .bind(status, id)
           .first();
 
         if (!updated) {
-          throw new DatabaseError(
-            "updateErrorReportStatus",
-            new Error(
-              "Updated error_report row missing after successful update",
-            ),
-          );
+          throw new NotFoundError("ErrorReport", id);
         }
         return updated as unknown as ErrorReport;
       },
       catch: (error) => {
         if (error instanceof NotFoundError) return error;
-        if (error instanceof DatabaseError) return error;
         return new DatabaseError("updateErrorReportStatus", error);
       },
     });
