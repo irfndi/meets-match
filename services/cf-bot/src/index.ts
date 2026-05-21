@@ -138,8 +138,6 @@ function createBot(env: Env): Bot<MyContext> {
     return next();
   });
 
-  // Check for pending notifications on any user interaction
-  // Skip if user is in an active conversation to avoid interrupting input
   bot.use(async (ctx, next) => {
     if (!ctx.from) return next();
     const userId = String(ctx.from.id);
@@ -148,12 +146,13 @@ function createBot(env: Env): Bot<MyContext> {
     const state = await getConversationState(env.KV, userId);
     if (state) return next();
 
+    await next();
+
     const notifications = await getNotifications(env, userId);
     const hasLikes = notifications.some((n) => n.type === "like");
     const hasMutual = notifications.some((n) => n.type === "mutual_match");
 
     if (hasMutual || hasLikes) {
-      // Resolve language for notification text
       let lang: Language = "en";
       try {
         const client = new ApiServiceClient(env.API_SERVICE);
@@ -176,7 +175,6 @@ function createBot(env: Env): Bot<MyContext> {
       );
       await clearNotifications(env, userId);
     }
-    return next();
   });
 
   // Record journey for commands and menu buttons — must be BEFORE handlers
