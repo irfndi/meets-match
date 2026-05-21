@@ -552,11 +552,7 @@ describe("Match Handlers", () => {
   });
 
   describe("showNextMatch", () => {
-    beforeEach(() => {
-      (ctx as any).replyWithPhoto = vi.fn().mockResolvedValue(undefined);
-    });
-
-    it("sends match card before premium ad for free tier users", async () => {
+    it("sends the next match card", async () => {
       await env.KV.put(
         "match_queue:123",
         JSON.stringify({
@@ -570,19 +566,20 @@ describe("Match Handlers", () => {
         }),
       );
       await showNextMatch(ctx, env, "123", "en");
-      const replies = (ctx.reply as any).mock.calls;
-      const matchCardIndex = replies.findIndex((call: any[]) =>
-        String(call[0]).includes("Bob"),
-      );
-      const adIndex = replies.findIndex((call: any[]) =>
-        String(call[0]).includes("Unlock Premium"),
-      );
-      expect(matchCardIndex).toBeGreaterThanOrEqual(0);
-      expect(adIndex).toBeGreaterThanOrEqual(0);
-      expect(matchCardIndex).toBeLessThan(adIndex);
+      expect(ctx.reply).toHaveBeenCalled();
+    });
+  });
+
+  describe("matchCallbacks ad and referral flow", () => {
+    beforeEach(() => {
+      (ctx as any).replyWithPhoto = vi.fn().mockResolvedValue(undefined);
     });
 
-    it("sends match card before referral prompt at index 2", async () => {
+    it("shows referral prompt after acting on third match (index 2)", async () => {
+      ctx.callbackQuery!.data = "match:like:999";
+      (ctx as any).editMessageReplyMarkup = vi
+        .fn()
+        .mockResolvedValue(undefined);
       await env.KV.put(
         "match_queue:123",
         JSON.stringify({
@@ -597,20 +594,114 @@ describe("Match Handlers", () => {
           referralCode: "ABC123",
         }),
       );
-      await showNextMatch(ctx, env, "123", "en");
+      env.API_SERVICE = createMockApiService({
+        "/users/123": () =>
+          new Response(JSON.stringify({ user: completeUser }), { status: 200 }),
+        "GET:/users/123/interaction-status": () =>
+          new Response(
+            JSON.stringify({
+              likesRemaining: 10,
+              dislikesRemaining: 10,
+              tier: "free",
+            }),
+            { status: 200 },
+          ),
+        "/matches": () =>
+          new Response(
+            JSON.stringify({
+              match: {
+                id: "m1",
+                user1Id: "123",
+                user2Id: "999",
+                status: "PENDING",
+              },
+            }),
+            { status: 201 },
+          ),
+        "/matches/m1/like": () =>
+          new Response(
+            JSON.stringify({ isMutual: false, match: { id: "m1" } }),
+            { status: 200 },
+          ),
+      });
+      await matchCallbacks(ctx, env);
       const replies = (ctx.reply as any).mock.calls;
-      const matchCardIndex = replies.findIndex((call: any[]) =>
-        String(call[0]).includes("Carol"),
+      const successIndex = replies.findIndex((call: any[]) =>
+        String(call[0]).includes("liked"),
       );
       const referralIndex = replies.findIndex((call: any[]) =>
         String(call[0]).includes("Share MeetMatch"),
       );
-      expect(matchCardIndex).toBeGreaterThanOrEqual(0);
+      expect(successIndex).toBeGreaterThanOrEqual(0);
       expect(referralIndex).toBeGreaterThanOrEqual(0);
-      expect(matchCardIndex).toBeLessThan(referralIndex);
+      expect(successIndex).toBeLessThan(referralIndex);
     });
 
-    it("does not show premium ad for premium tier users", async () => {
+    it("shows premium ad after match action on free tier", async () => {
+      ctx.callbackQuery!.data = "match:like:789";
+      (ctx as any).editMessageReplyMarkup = vi
+        .fn()
+        .mockResolvedValue(undefined);
+      await env.KV.put(
+        "match_queue:123",
+        JSON.stringify({
+          matches: [
+            { id: "456", displayName: "Alice", age: 24 },
+            { id: "789", displayName: "Bob", age: 25 },
+          ],
+          index: 1,
+          tier: "free",
+          myLocation: undefined,
+        }),
+      );
+      env.API_SERVICE = createMockApiService({
+        "/users/123": () =>
+          new Response(JSON.stringify({ user: completeUser }), { status: 200 }),
+        "GET:/users/123/interaction-status": () =>
+          new Response(
+            JSON.stringify({
+              likesRemaining: 10,
+              dislikesRemaining: 10,
+              tier: "free",
+            }),
+            { status: 200 },
+          ),
+        "/matches": () =>
+          new Response(
+            JSON.stringify({
+              match: {
+                id: "m1",
+                user1Id: "123",
+                user2Id: "789",
+                status: "PENDING",
+              },
+            }),
+            { status: 201 },
+          ),
+        "/matches/m1/like": () =>
+          new Response(
+            JSON.stringify({ isMutual: false, match: { id: "m1" } }),
+            { status: 200 },
+          ),
+      });
+      await matchCallbacks(ctx, env);
+      const replies = (ctx.reply as any).mock.calls;
+      const successIndex = replies.findIndex((call: any[]) =>
+        String(call[0]).includes("liked"),
+      );
+      const adIndex = replies.findIndex((call: any[]) =>
+        String(call[0]).includes("Unlock Premium"),
+      );
+      expect(successIndex).toBeGreaterThanOrEqual(0);
+      expect(adIndex).toBeGreaterThanOrEqual(0);
+      expect(successIndex).toBeLessThan(adIndex);
+    });
+
+    it("does not show premium ad for premium tier users after action", async () => {
+      ctx.callbackQuery!.data = "match:like:789";
+      (ctx as any).editMessageReplyMarkup = vi
+        .fn()
+        .mockResolvedValue(undefined);
       await env.KV.put(
         "match_queue:123",
         JSON.stringify({
@@ -623,28 +714,37 @@ describe("Match Handlers", () => {
           myLocation: undefined,
         }),
       );
-      await showNextMatch(ctx, env, "123", "en");
-      const replies = (ctx.reply as any).mock.calls;
-      const adIndex = replies.findIndex((call: any[]) =>
-        String(call[0]).includes("Unlock Premium"),
-      );
-      expect(adIndex).toBe(-1);
-    });
-
-    it("does not show premium ad when queue index is 0", async () => {
-      await env.KV.put(
-        "match_queue:123",
-        JSON.stringify({
-          matches: [
-            { id: "456", displayName: "Alice", age: 24 },
-            { id: "789", displayName: "Bob", age: 25 },
-          ],
-          index: 0,
-          tier: "free",
-          myLocation: undefined,
-        }),
-      );
-      await showNextMatch(ctx, env, "123", "en");
+      env.API_SERVICE = createMockApiService({
+        "/users/123": () =>
+          new Response(JSON.stringify({ user: completeUser }), { status: 200 }),
+        "GET:/users/123/interaction-status": () =>
+          new Response(
+            JSON.stringify({
+              likesRemaining: 10,
+              dislikesRemaining: 10,
+              tier: "premium",
+            }),
+            { status: 200 },
+          ),
+        "/matches": () =>
+          new Response(
+            JSON.stringify({
+              match: {
+                id: "m1",
+                user1Id: "123",
+                user2Id: "789",
+                status: "PENDING",
+              },
+            }),
+            { status: 201 },
+          ),
+        "/matches/m1/like": () =>
+          new Response(
+            JSON.stringify({ isMutual: false, match: { id: "m1" } }),
+            { status: 200 },
+          ),
+      });
+      await matchCallbacks(ctx, env);
       const replies = (ctx.reply as any).mock.calls;
       const adIndex = replies.findIndex((call: any[]) =>
         String(call[0]).includes("Unlock Premium"),
