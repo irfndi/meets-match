@@ -977,52 +977,55 @@ async function handleMatchAction(
     // --- One-by-one flow: mark current match as acted and show next ---
     const queue = await getMatchQueue(env.KV, userId);
     if (queue) {
-      if (queue.index === 2) {
-        const referralKeyboard = new InlineKeyboard()
-          .text("🎁 Share & Earn", "referral:show")
-          .row()
-          .text("❌ Dismiss", "referral:dismiss");
-        await ctx.reply(
-          t("matchReferralPrompt", lang, {
-            code: queue.referralCode ?? "N/A",
-          }),
-          { reply_markup: referralKeyboard },
-        );
-      }
-
-      if (queue.tier === "free") {
-        const adKey = `ad_last_shown:${userId}`;
-        const adLastShown = await env.KV.get(adKey);
-        const lastIndex = adLastShown ? Number(adLastShown) : -999;
-        const minGap = 4;
-        const maxGap = 7;
-        const gap =
-          minGap +
-          (Array.from(userId).reduce((a, c) => a + c.charCodeAt(0), 0) %
-            (maxGap - minGap + 1));
-
-        if (queue.index - lastIndex >= gap) {
-          await env.KV.put(adKey, String(queue.index), {
-            expirationTtl: 600,
-          });
-          const adKeyboard = new InlineKeyboard()
-            .text("👑 Upgrade to Premium", "premium:show")
-            .row()
-            .text(t("premiumAdDismiss", lang), "premium_ad:dismiss");
-          await ctx.reply(t("premiumAdPrompt", lang), {
-            parse_mode: "Markdown",
-            reply_markup: adKeyboard,
-          });
-        }
-      }
-
-      // Store last action for rollback
       await setLastAction(env.KV, userId, {
         matchId,
         targetUserId,
         action,
         timestamp: new Date().toISOString(),
       });
+
+      try {
+        if (queue.index === 2) {
+          const referralKeyboard = new InlineKeyboard()
+            .text("🎁 Share & Earn", "referral:show")
+            .row()
+            .text("❌ Dismiss", "referral:dismiss");
+          await ctx.reply(
+            t("matchReferralPrompt", lang, {
+              code: queue.referralCode ?? "N/A",
+            }),
+            { reply_markup: referralKeyboard },
+          );
+        }
+
+        if (queue.tier === "free") {
+          const adKey = `ad_last_shown:${userId}`;
+          const adLastShown = await env.KV.get(adKey);
+          const lastIndex = adLastShown ? Number(adLastShown) : -999;
+          const minGap = 4;
+          const maxGap = 7;
+          const gap =
+            minGap +
+            (Array.from(userId).reduce((a, c) => a + c.charCodeAt(0), 0) %
+              (maxGap - minGap + 1));
+
+          if (queue.index - lastIndex >= gap) {
+            await env.KV.put(adKey, String(queue.index), {
+              expirationTtl: 600,
+            });
+            const adKeyboard = new InlineKeyboard()
+              .text("👑 Upgrade to Premium", "premium:show")
+              .row()
+              .text(t("premiumAdDismiss", lang), "premium_ad:dismiss");
+            await ctx.reply(t("premiumAdPrompt", lang), {
+              parse_mode: "Markdown",
+              reply_markup: adKeyboard,
+            });
+          }
+        }
+      } catch {
+        // Best-effort promo display; failures should not block the flow
+      }
 
       try {
         await ctx.editMessageReplyMarkup({
