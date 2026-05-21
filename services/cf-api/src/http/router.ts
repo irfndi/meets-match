@@ -10,7 +10,10 @@ import { MatchRepository } from "../models/match.js";
 import { NotificationRepository } from "../models/notification.js";
 import { ReportRepository } from "../models/report.js";
 import { FeedbackRepository } from "../models/feedback.js";
-import { ErrorReportRepository } from "../models/error-report.js";
+import {
+  ErrorReportRepository,
+  ERROR_REPORT_STATUSES,
+} from "../models/error-report.js";
 import { BlockRepository } from "../models/block.js";
 import { GeocodingService } from "../models/geocoding.js";
 import {
@@ -192,6 +195,10 @@ export class ApiRouter {
           return this.handleErrorReportSummary(url.searchParams);
         case url.pathname === "/error-reports/mark-sent" && method === "POST":
           return this.handleMarkAlertsSent();
+        case url.pathname.startsWith("/error-reports/") &&
+          url.pathname.endsWith("/status") &&
+          method === "PATCH":
+          return this.handleUpdateErrorReportStatus(url.pathname, request);
         case url.pathname === "/cron/downgrade-expired-subscriptions" &&
           method === "POST":
           return this.handleDowngradeExpiredSubscriptions();
@@ -1009,6 +1016,78 @@ export class ApiRouter {
     } catch (error) {
       log.error("markAlertsSent", "Failed to mark alerts", undefined, error);
       return jsonResponse({ error: "Failed to mark alerts as sent" }, 500);
+    }
+  }
+
+  private async handleUpdateErrorReportStatus(
+    path: string,
+    request: Request,
+  ): Promise<Response> {
+    const match = path.match(/^\/error-reports\/([^/]+)\/status$/);
+    const id = match?.[1];
+    if (!id) {
+      return jsonResponse(
+        { error: new ValidationError("id", "Report ID is required").message },
+        400,
+      );
+    }
+
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return jsonResponse(
+        { error: new ValidationError("body", "Invalid JSON body").message },
+        400,
+      );
+    }
+
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return jsonResponse(
+        { error: new ValidationError("body", "Invalid JSON body").message },
+        400,
+      );
+    }
+
+    const status = (body as Record<string, unknown>).status;
+    if (
+      !ERROR_REPORT_STATUSES.includes(
+        status as "pending" | "reviewed" | "dismissed",
+      )
+    ) {
+      return jsonResponse(
+        {
+          error: new ValidationError(
+            "status",
+            `status must be one of: ${ERROR_REPORT_STATUSES.join(", ")}`,
+          ).message,
+        },
+        400,
+      );
+    }
+
+    try {
+      const result = await runEffect(
+        this.errorReportRepo.updateStatus(
+          id,
+          status as "pending" | "reviewed" | "dismissed",
+        ),
+      );
+      return jsonResponse({ success: true, report: result });
+    } catch (error) {
+      if (error instanceof NotFoundError) {
+        return jsonResponse({ error: error.message }, 404);
+      }
+      log.error(
+        "updateErrorReportStatus",
+        "Failed to update status",
+        { id },
+        error,
+      );
+      return jsonResponse(
+        { error: "Failed to update error report status" },
+        500,
+      );
     }
   }
 

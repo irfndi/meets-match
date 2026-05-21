@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { ErrorReportRepository } from "../error-report.js";
 import { createMockD1, runEffect } from "@meetsmatch/cf-shared/testing";
+import { NotFoundError } from "@meetsmatch/cf-shared";
 
 describe("ErrorReportRepository", () => {
   function createRepo(handler?: Parameters<typeof createMockD1>[0]) {
@@ -101,5 +102,87 @@ describe("ErrorReportRepository", () => {
     await expect(
       runEffect(repo.create({ reporterId: "u1" })),
     ).rejects.toThrow();
+  });
+
+  it("finds error report by id", async () => {
+    const { repo, db } = createRepo(() => ({
+      results: [
+        {
+          id: "r1",
+          reporterId: "u1",
+          traceId: "t1",
+          message: "msg",
+          journey: "j1",
+          status: "pending",
+          severity: "low",
+          alertSent: 0,
+          source: "bot",
+          botVersion: "1.0.0",
+          apiVersion: "1.0.0",
+          workerVersion: "1.0.0",
+          errorStack: null,
+          userLanguage: null,
+          userTier: null,
+          triggerInput: null,
+          kvSession: null,
+          cfMetadata: null,
+          createdAt: "2025-01-01T00:00:00Z",
+        },
+      ],
+    }));
+    const result = await runEffect(repo.findById("r1"));
+    expect(result).not.toBeNull();
+    expect(result?.id).toBe("r1");
+    expect(result?.status).toBe("pending");
+    expect(db._captured.length).toBeGreaterThan(0);
+  });
+
+  it("returns null when error report not found", async () => {
+    const { repo } = createRepo(() => ({ results: [] }));
+    const result = await runEffect(repo.findById("nonexistent"));
+    expect(result).toBeNull();
+  });
+
+  it("updates error report status", async () => {
+    const { repo, db } = createRepo(() => ({
+      results: [
+        {
+          id: "r1",
+          reporterId: "u1",
+          traceId: "t1",
+          message: "msg",
+          journey: "j1",
+          status: "reviewed",
+          severity: "low",
+          alertSent: 0,
+          source: "bot",
+          botVersion: "1.0.0",
+          apiVersion: "1.0.0",
+          workerVersion: "1.0.0",
+          errorStack: null,
+          userLanguage: null,
+          userTier: null,
+          triggerInput: null,
+          kvSession: null,
+          cfMetadata: null,
+          createdAt: "2025-01-01T00:00:00Z",
+        },
+      ],
+    }));
+    const result = await runEffect(repo.updateStatus("r1", "reviewed"));
+    expect(result.status).toBe("reviewed");
+    expect(result.id).toBe("r1");
+    expect(
+      db._captured.some((q) =>
+        q.sql.includes("UPDATE error_reports SET status = ?"),
+      ),
+    ).toBe(true);
+  });
+
+  it("throws NotFoundError when updating nonexistent report", async () => {
+    const { repo } = createRepo(() => ({ results: [], meta: { changes: 0 } }));
+    await expect(
+      runEffect(repo.updateStatus("nonexistent", "reviewed")),
+    ).rejects.toBeInstanceOf(NotFoundError);
   });
 });

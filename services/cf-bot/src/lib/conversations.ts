@@ -10,6 +10,7 @@ import {
 import { getMainMenuKeyboard } from "./main-menu.js";
 import { t, type Language, type Translations, escapeMd } from "./i18n.js";
 import { InlineKeyboard, Keyboard } from "grammy";
+import { isBotBlockedError } from "./error-feedback.js";
 import {
   createLogger,
   buildMediaKey,
@@ -366,6 +367,9 @@ export async function checkMandatoryUpdates(
 
     return false;
   } catch (error) {
+    if (isBotBlockedError(error)) {
+      return false;
+    }
     log.error(
       "checkMandatoryUpdates",
       "Failed to check mandatory updates",
