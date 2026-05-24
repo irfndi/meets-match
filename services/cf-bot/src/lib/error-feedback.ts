@@ -139,8 +139,10 @@ async function buildErrorReportPayload(
   const journeyText = formatJourneyForReport(journey);
 
   // Build report text for admin / message field
+  const isUserSubmitted =
+    error instanceof Error && error.message === "User-submitted error report";
   const reportLines = [
-    t("errorReportTitle", "en"),
+    t(isUserSubmitted ? "errorFeedbackTitle" : "errorReportTitle", "en"),
     "",
     `🤖 *Bot:* \`${botVersion}\``,
     `🔗 *API:* \`${apiVersion}\``,
