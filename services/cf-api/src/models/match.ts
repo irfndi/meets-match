@@ -489,8 +489,7 @@ export class MatchRepository {
         const rows = (results ?? []) as Array<Record<string, unknown>>;
 
         // 3. Filter and score candidates
-        const now = new Date();
-        const nowTime = now.getTime();
+        const nowTime = Date.now();
         const scored = rows
           .map((row) => {
             const candidate = this.rowToUser(row);
@@ -886,35 +885,17 @@ export function calculateMatchScore(
     let intersectionSize = 0;
     let unionSize = 0;
 
-    // Use direct iteration for small arrays to avoid Set allocation overhead;
-    // fall back to Sets for larger inputs to keep complexity O(n + m).
-    if (user1.interests.length <= 10 && user2.interests.length <= 10) {
-      const [smaller, larger] =
-        user1.interests.length < user2.interests.length
-          ? [user1.interests, user2.interests]
-          : [user2.interests, user1.interests];
+    const set1 = new Set(user1.interests);
+    const set2 = new Set(user2.interests);
 
-      for (const item of smaller) {
-        if (larger.includes(item)) {
-          intersectionSize++;
-        }
+    const [smaller, larger] =
+      set1.size < set2.size ? [set1, set2] : [set2, set1];
+    for (const item of smaller) {
+      if (larger.has(item)) {
+        intersectionSize++;
       }
-      // Assuming interests are unique per user
-      unionSize =
-        user1.interests.length + user2.interests.length - intersectionSize;
-    } else {
-      const set1 = new Set(user1.interests);
-      const set2 = new Set(user2.interests);
-
-      const [smaller, larger] =
-        set1.size < set2.size ? [set1, set2] : [set2, set1];
-      for (const item of smaller) {
-        if (larger.has(item)) {
-          intersectionSize++;
-        }
-      }
-      unionSize = set1.size + set2.size - intersectionSize;
     }
+    unionSize = set1.size + set2.size - intersectionSize;
 
     if (unionSize > 0) {
       score.interests = intersectionSize / unionSize;
