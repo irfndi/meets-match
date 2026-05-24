@@ -76,11 +76,7 @@ function getGenderLabel(
         if (gp[0] === "male") return { plural: "men", singular: "man" };
         return { plural: "people", singular: "person" };
       }
-      if (
-        gp.includes("male") &&
-        gp.includes("female") &&
-        gp.length === 2
-      ) {
+      if (gp.includes("male") && gp.includes("female") && gp.length === 2) {
         return { plural: "men and women", singular: "person" };
       }
       return { plural: "people", singular: "person" };
@@ -159,12 +155,7 @@ const MESSAGE_VARIANTS = [
 
 function pickVariant(
   index?: number,
-): (
-  name: string,
-  count: number,
-  label: string,
-  loc?: string | null,
-) => string {
+): (name: string, count: number, label: string, loc?: string | null) => string {
   const idx = index ?? Math.floor(Math.random() * MESSAGE_VARIANTS.length);
   return MESSAGE_VARIANTS[idx % MESSAGE_VARIANTS.length];
 }

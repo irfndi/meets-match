@@ -51,7 +51,13 @@ describe("runReengagementJob", () => {
   it("sends reengagement notification for inactive user", async () => {
     const env = createEnv({
       candidates: [
-        { id: "user_1", first_name: "Alice", gender: "female", location: null, preferences: null },
+        {
+          id: "user_1",
+          first_name: "Alice",
+          gender: "female",
+          location: null,
+          preferences: null,
+        },
       ],
       nearbyCount: 5,
       apiOk: true,
@@ -70,7 +76,13 @@ describe("runReengagementJob", () => {
   it("handles API failure gracefully", async () => {
     const env = createEnv({
       candidates: [
-        { id: "user_1", first_name: "Bob", gender: "male", location: null, preferences: null },
+        {
+          id: "user_1",
+          first_name: "Bob",
+          gender: "male",
+          location: null,
+          preferences: null,
+        },
       ],
       apiOk: false,
     });
@@ -80,7 +92,13 @@ describe("runReengagementJob", () => {
   it("counts all users when no gender preference", async () => {
     const env = createEnv({
       candidates: [
-        { id: "user_1", first_name: "Alex", gender: null, location: null, preferences: null },
+        {
+          id: "user_1",
+          first_name: "Alex",
+          gender: null,
+          location: null,
+          preferences: null,
+        },
       ],
       nearbyCount: 10,
     });
@@ -183,7 +201,13 @@ describe("runReengagementJob", () => {
   it("uses marketing count instead of real count", async () => {
     const env = createEnv({
       candidates: [
-        { id: "user_1", first_name: "Alice", gender: "female", location: null, preferences: null },
+        {
+          id: "user_1",
+          first_name: "Alice",
+          gender: "female",
+          location: null,
+          preferences: null,
+        },
       ],
       nearbyCount: 1, // very low real count
       apiOk: true,
@@ -234,7 +258,10 @@ describe("runReengagementJob", () => {
           id: "user_1",
           first_name: "Alice",
           gender: "female",
-          location: JSON.stringify({ city: "Kuala*Lumpur", country: "Malaysia" }),
+          location: JSON.stringify({
+            city: "Kuala*Lumpur",
+            country: "Malaysia",
+          }),
           preferences: null,
         },
       ],
@@ -255,7 +282,13 @@ describe("runReengagementJob", () => {
   it("uses fallback gender label based on user gender when no preference", async () => {
     const env = createEnv({
       candidates: [
-        { id: "user_1", first_name: "Bob", gender: "male", location: null, preferences: null },
+        {
+          id: "user_1",
+          first_name: "Bob",
+          gender: "male",
+          location: null,
+          preferences: null,
+        },
       ],
       nearbyCount: 5,
       apiOk: true,
