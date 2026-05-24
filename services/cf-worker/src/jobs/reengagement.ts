@@ -45,6 +45,11 @@ function getMarketingCount(realCount: number): number {
   return Math.ceil(realCount / 100) * 100;
 }
 
+/** Escape MarkdownV2 special characters in a string. */
+function escapeMarkdown(text: string): string {
+  return text.replace(/[_*\[\]`\.!#+\-={}|~()><\\]/g, "\\$&");
+}
+
 /** Extract a human-readable city from the JSON location column. */
 function extractCity(locationJson: string | null): string | null {
   if (!locationJson) return null;
@@ -60,29 +65,32 @@ function extractCity(locationJson: string | null): string | null {
   return null;
 }
 
+interface ParsedPreferences {
+  genderPreference?: string[];
+}
+
 /** Build gender label(s) from the user's stored preferences.
  *  Falls back to opposite gender when no preference is set.
  */
 function getGenderLabel(
   gender: string | null,
-  preferencesJson: string | null,
+  prefs: ParsedPreferences,
 ): { plural: string; singular: string } {
-  try {
-    const prefs = preferencesJson ? JSON.parse(preferencesJson) : {};
-    const gp = prefs.genderPreference;
-    if (Array.isArray(gp) && gp.length > 0) {
-      if (gp.length === 1) {
-        if (gp[0] === "female") return { plural: "women", singular: "woman" };
-        if (gp[0] === "male") return { plural: "men", singular: "man" };
-        return { plural: "people", singular: "person" };
-      }
-      if (gp.includes("male") && gp.includes("female") && gp.length === 2) {
-        return { plural: "men and women", singular: "person" };
-      }
+  const gp = prefs.genderPreference;
+  if (Array.isArray(gp) && gp.length > 0) {
+    if (gp.length === 1) {
+      if (gp[0] === "female") return { plural: "women", singular: "woman" };
+      if (gp[0] === "male") return { plural: "men", singular: "man" };
       return { plural: "people", singular: "person" };
     }
-  } catch {
-    // fall through to fallback
+    if (
+      gp.includes("male") &&
+      gp.includes("female") &&
+      gp.length === 2
+    ) {
+      return { plural: "men and women", singular: "person" };
+    }
+    return { plural: "people", singular: "person" };
   }
 
   const g = (gender ?? "").toLowerCase();
@@ -160,20 +168,17 @@ function pickVariant(
   return MESSAGE_VARIANTS[idx % MESSAGE_VARIANTS.length];
 }
 
-/** Count active, profile-complete users that match the user's gender preference. */
+/** Count active, profile-complete users that match the user's gender preference.
+ *  When no preference is set, falls back to opposite gender (to stay aligned
+ *  with the label returned by `getGenderLabel`).
+ */
 async function countNearbyUsers(
   db: D1Database,
   userId: string,
-  preferencesJson: string | null,
+  gender: string | null,
+  prefs: ParsedPreferences,
 ): Promise<number> {
   try {
-    let prefs: Record<string, unknown> = {};
-    try {
-      prefs = preferencesJson ? JSON.parse(preferencesJson) : {};
-    } catch {
-      /* ignore */
-    }
-
     const gp = prefs.genderPreference;
     if (Array.isArray(gp) && gp.length > 0 && gp.length < 4) {
       const placeholders = gp.map(() => "?").join(",");
@@ -192,7 +197,26 @@ async function countNearbyUsers(
       );
     }
 
-    // No preference or "all" selected — count everyone
+    // No preference set — fall back to opposite gender (same as getGenderLabel)
+    const g = (gender ?? "").toLowerCase();
+    if (g === "male" || g === "female") {
+      const oppositeGender = g === "male" ? "female" : "male";
+      const { results } = await db
+        .prepare(
+          `SELECT COUNT(*) as c FROM users
+           WHERE id != ?
+             AND is_active = 1
+             AND is_profile_complete = 1
+             AND gender = ?`,
+        )
+        .bind(userId, oppositeGender)
+        .all();
+      return Number(
+        (results?.[0] as Record<string, unknown> | undefined)?.c ?? 0,
+      );
+    }
+
+    // Unknown gender and no preference — count everyone
     const { results } = await db
       .prepare(
         `SELECT COUNT(*) as c FROM users
@@ -213,6 +237,15 @@ async function countNearbyUsers(
       error,
     );
     return 0;
+  }
+}
+
+function parsePreferences(preferencesJson: string | null): ParsedPreferences {
+  if (!preferencesJson) return {};
+  try {
+    return JSON.parse(preferencesJson) as ParsedPreferences;
+  } catch {
+    return {};
   }
 }
 
@@ -243,21 +276,23 @@ export async function runReengagementJob(env: Env): Promise<void> {
       const userId = String(user.id);
       const firstName = String(user.first_name || "there");
       const gender = user.gender ? String(user.gender) : null;
-      const preferences = user.preferences ? String(user.preferences) : null;
+      const preferences = parsePreferences(
+        user.preferences ? String(user.preferences) : null,
+      );
 
       try {
-        const nearbyCount = await countNearbyUsers(env.DB, userId, preferences);
+        const nearbyCount = await countNearbyUsers(
+          env.DB,
+          userId,
+          gender,
+          preferences,
+        );
         const marketingCount = getMarketingCount(nearbyCount);
         const genderLabel = getGenderLabel(gender, preferences);
         const variant = pickVariant();
-        const safeName = firstName.replace(
-          /[_*\[\]`\.!#+\-={}|~()><\\]/g,
-          "\\$&",
-        );
+        const safeName = escapeMarkdown(firstName);
         const city = extractCity(user.location ? String(user.location) : null);
-        const safeCity = city
-          ? city.replace(/[_*\[\]`\.!#+\-={}|~()><\\]/g, "\\$&")
-          : null;
+        const safeCity = city ? escapeMarkdown(city) : null;
 
         const message = variant(
           safeName,

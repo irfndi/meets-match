@@ -313,7 +313,6 @@ export interface Translations {
   errorActionContext: string;
   errorReportPrompt: string;
   errorReportTitle: string;
-  errorFeedbackTitle: string;
   errorReportUser: string;
   errorReportTraceId: string;
   errorReportTime: string;

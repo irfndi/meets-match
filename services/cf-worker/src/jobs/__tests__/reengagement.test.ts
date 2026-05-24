@@ -89,7 +89,21 @@ describe("runReengagementJob", () => {
     await expect(runReengagementJob(env)).resolves.toBeUndefined();
   });
 
-  it("counts all users when no gender preference", async () => {
+  it("counts opposite gender for known gender with no preference", async () => {
+    const env = createEnv({
+      candidates: [
+        { id: "user_1", first_name: "Alice", gender: "female", location: null, preferences: null },
+      ],
+      nearbyCount: 7,
+    });
+    await runReengagementJob(env);
+    const countCall = (env.DB.prepare as any).mock.calls.find((c: [string]) =>
+      c[0].includes("gender = ?"),
+    );
+    expect(countCall).toBeDefined();
+  });
+
+  it("counts all users for unknown gender with no preference", async () => {
     const env = createEnv({
       candidates: [
         {
@@ -107,6 +121,7 @@ describe("runReengagementJob", () => {
       c[0].includes("COUNT(*)"),
     );
     expect(countCall).toBeDefined();
+    expect(countCall[0]).not.toContain("gender = ?");
     expect(countCall[0]).not.toContain("gender IN");
   });
 
@@ -150,6 +165,56 @@ describe("runReengagementJob", () => {
     );
     expect(countCall).toBeDefined();
     expect(countCall[0]).toContain("gender IN (?,?)");
+  });
+
+  it("filters by gender IN when preference includes three genders", async () => {
+    const env = createEnv({
+      candidates: [
+        {
+          id: "user_1",
+          first_name: "Alex",
+          gender: "other",
+          location: null,
+          preferences: JSON.stringify({
+            genderPreference: ["male", "female", "other"],
+          }),
+        },
+      ],
+      nearbyCount: 12,
+    });
+    await runReengagementJob(env);
+    const genderFilteredCountCall = (env.DB.prepare as any).mock.calls.find(
+      (c: [string]) => c[0].includes("gender IN"),
+    );
+    expect(genderFilteredCountCall).toBeDefined();
+    expect(genderFilteredCountCall[0]).toContain("gender IN (?,?,?)");
+  });
+
+  it("counts all users when gender preference includes four genders", async () => {
+    const env = createEnv({
+      candidates: [
+        {
+          id: "user_1",
+          first_name: "Alex",
+          gender: "other",
+          location: null,
+          preferences: JSON.stringify({
+            genderPreference: ["male", "female", "other", "prefer_not_to_say"],
+          }),
+        },
+      ],
+      nearbyCount: 12,
+    });
+    await runReengagementJob(env);
+    const genderFilteredCountCall = (env.DB.prepare as any).mock.calls.find(
+      (c: [string]) => c[0].includes("gender IN"),
+    );
+    expect(genderFilteredCountCall).toBeUndefined();
+
+    const countCall = (env.DB.prepare as any).mock.calls.find(
+      (c: [string]) => c[0].includes("COUNT(*)"),
+    );
+    expect(countCall).toBeDefined();
   });
 
   it("escapes special characters in names", async () => {
@@ -212,12 +277,14 @@ describe("runReengagementJob", () => {
       nearbyCount: 1, // very low real count
       apiOk: true,
     });
-
+    // Force variant 0 which always includes a numeric count
+    const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0);
     await runReengagementJob(env);
+    randomSpy.mockRestore();
+
     const req = (env.API_SERVICE.fetch as any).mock.calls[0][0] as Request;
     const body = JSON.parse(await new Response(req.body).text());
     const payload = JSON.parse(body.payload);
-    // Marketing count for realCount=1 should be 21-100
     const match = payload.message.match(/(\d+)/);
     expect(match).toBeTruthy();
     const marketingCount = parseInt(match![1], 10);
@@ -316,7 +383,11 @@ describe("runReengagementJob", () => {
       apiOk: true,
     });
 
+    // Force variant 0 which always includes the label
+    const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0);
     await runReengagementJob(env);
+    randomSpy.mockRestore();
+
     const req = (env.API_SERVICE.fetch as any).mock.calls[0][0] as Request;
     const body = JSON.parse(await new Response(req.body).text());
     const payload = JSON.parse(body.payload);
