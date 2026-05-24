@@ -92,7 +92,13 @@ describe("runReengagementJob", () => {
   it("counts opposite gender for known gender with no preference", async () => {
     const env = createEnv({
       candidates: [
-        { id: "user_1", first_name: "Alice", gender: "female", location: null, preferences: null },
+        {
+          id: "user_1",
+          first_name: "Alice",
+          gender: "female",
+          location: null,
+          preferences: null,
+        },
       ],
       nearbyCount: 7,
     });
@@ -211,8 +217,8 @@ describe("runReengagementJob", () => {
     );
     expect(genderFilteredCountCall).toBeUndefined();
 
-    const countCall = (env.DB.prepare as any).mock.calls.find(
-      (c: [string]) => c[0].includes("COUNT(*)"),
+    const countCall = (env.DB.prepare as any).mock.calls.find((c: [string]) =>
+      c[0].includes("COUNT(*)"),
     );
     expect(countCall).toBeDefined();
   });

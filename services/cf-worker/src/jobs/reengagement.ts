@@ -83,11 +83,7 @@ function getGenderLabel(
       if (gp[0] === "male") return { plural: "men", singular: "man" };
       return { plural: "people", singular: "person" };
     }
-    if (
-      gp.includes("male") &&
-      gp.includes("female") &&
-      gp.length === 2
-    ) {
+    if (gp.includes("male") && gp.includes("female") && gp.length === 2) {
       return { plural: "men and women", singular: "person" };
     }
     return { plural: "people", singular: "person" };
