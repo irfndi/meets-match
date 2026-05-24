@@ -489,7 +489,7 @@ export class MatchRepository {
         const rows = (results ?? []) as Array<Record<string, unknown>>;
 
         // 3. Filter and score candidates
-        const now = new Date();
+        const nowTime = Date.now();
         const scored = rows
           .map((row) => {
             const candidate = this.rowToUser(row);
@@ -597,10 +597,7 @@ export class MatchRepository {
               matchUpdatedAt
             ) {
               const cooldownMs = 3 * 24 * 60 * 60 * 1000; // 3 days
-              if (
-                now.getTime() - new Date(matchUpdatedAt).getTime() <
-                cooldownMs
-              ) {
+              if (nowTime - Date.parse(matchUpdatedAt) < cooldownMs) {
                 return null;
               }
             }
@@ -609,10 +606,7 @@ export class MatchRepository {
             if (myAction === "SKIP" && matchUpdatedAt) {
               if (otherAction !== "LIKE") {
                 const cooldownMs = 6 * 60 * 60 * 1000; // 6 hours
-                if (
-                  now.getTime() - new Date(matchUpdatedAt).getTime() <
-                  cooldownMs
-                ) {
+                if (nowTime - Date.parse(matchUpdatedAt) < cooldownMs) {
                   return null;
                 }
               }
@@ -627,10 +621,7 @@ export class MatchRepository {
               matchUpdatedAt
             ) {
               const expireMs = 30 * 24 * 60 * 60 * 1000; // 30 days
-              if (
-                now.getTime() - new Date(matchUpdatedAt).getTime() <
-                expireMs
-              ) {
+              if (nowTime - Date.parse(matchUpdatedAt) < expireMs) {
                 return null;
               }
             }
@@ -641,8 +632,7 @@ export class MatchRepository {
             // Variety: penalize recently shown profiles
             if (viewedAt) {
               const hoursSinceViewed =
-                (now.getTime() - new Date(viewedAt).getTime()) /
-                (1000 * 60 * 60);
+                (nowTime - Date.parse(viewedAt)) / (1000 * 60 * 60);
               if (hoursSinceViewed < 24) {
                 baseScore *= 0.1; // Heavily penalize profiles shown in last 24h
               } else if (hoursSinceViewed < 72) {
@@ -653,8 +643,7 @@ export class MatchRepository {
             // Matched recycling: recent matches deprioritized, old matches normalize
             if (matchStatus === "matched" && matchedAt) {
               const daysSinceMatched =
-                (now.getTime() - new Date(matchedAt).getTime()) /
-                (1000 * 60 * 60 * 24);
+                (nowTime - Date.parse(matchedAt)) / (1000 * 60 * 60 * 24);
               if (daysSinceMatched < 14) {
                 baseScore *= 0.05; // Very low priority for fresh matches
               } else if (daysSinceMatched < 30) {
@@ -665,8 +654,7 @@ export class MatchRepository {
             // Disliked after cooldown: lower priority, normalizes after 14 days
             if (matchStatus === "rejected" && myAction === "DISLIKE") {
               const daysSinceDislike = matchUpdatedAt
-                ? (now.getTime() - new Date(matchUpdatedAt).getTime()) /
-                  (1000 * 60 * 60 * 24)
+                ? (nowTime - Date.parse(matchUpdatedAt)) / (1000 * 60 * 60 * 24)
                 : 999;
               if (daysSinceDislike < 14) {
                 baseScore *= 0.3;
@@ -894,11 +882,12 @@ export function calculateMatchScore(
     user2.interests &&
     user2.interests.length > 0
   ) {
-    // Use two Sets for O(1) lookups instead of multiple allocations and array spreads.
+    let intersectionSize = 0;
+    let unionSize = 0;
+
     const set1 = new Set(user1.interests);
     const set2 = new Set(user2.interests);
-    let intersectionSize = 0;
-    // Iterate over the smaller set to minimize lookups.
+
     const [smaller, larger] =
       set1.size < set2.size ? [set1, set2] : [set2, set1];
     for (const item of smaller) {
@@ -906,7 +895,8 @@ export function calculateMatchScore(
         intersectionSize++;
       }
     }
-    const unionSize = set1.size + set2.size - intersectionSize;
+    unionSize = set1.size + set2.size - intersectionSize;
+
     if (unionSize > 0) {
       score.interests = intersectionSize / unionSize;
     }
