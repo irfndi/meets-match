@@ -367,7 +367,11 @@ describe("runReengagementJob", () => {
       apiOk: true,
     });
 
+    // Force variant 0 which always includes the label
+    const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0);
     await runReengagementJob(env);
+    randomSpy.mockRestore();
+
     const req = (env.API_SERVICE.fetch as any).mock.calls[0][0] as Request;
     const body = JSON.parse(await new Response(req.body).text());
     const payload = JSON.parse(body.payload);
