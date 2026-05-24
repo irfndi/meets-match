@@ -308,6 +308,7 @@ export interface Translations {
   conversationLocationVerified: string;
   // --- Error feedback ---
   errorTraceId: string;
+  errorFeedbackTitle: string;
   errorCommandContext: string;
   errorActionContext: string;
   errorReportPrompt: string;
@@ -721,6 +722,7 @@ const en: Translations = {
   errorReportPrompt:
     "\nIf this keeps happening, tap *Report* below and tell us what you were doing.",
   errorReportTitle: "🐛 *Error Report*",
+  errorFeedbackTitle: "📝 *User Feedback Report*",
   errorReportUser: "*User:* {userId}",
   errorReportTraceId: "*Trace ID:* `{traceId}`",
   errorReportTime: "*Time:* {time}",
@@ -1127,6 +1129,7 @@ const id: Translations = {
   errorReportPrompt:
     "\nJika ini terus terjadi, ketuk *Laporkan* di bawah dan ceritakan apa yang sedang kamu lakukan.",
   errorReportTitle: "🐛 *Laporan Error*",
+  errorFeedbackTitle: "📝 *Laporan Umpan Balik Pengguna*",
   errorReportUser: "*Pengguna:* {userId}",
   errorReportTraceId: "*Trace ID:* `{traceId}`",
   errorReportTime: "*Waktu:* {time}",
