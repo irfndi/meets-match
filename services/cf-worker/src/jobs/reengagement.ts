@@ -176,17 +176,33 @@ async function countNearbyUsers(
 ): Promise<number> {
   try {
     const gp = prefs.genderPreference;
-    if (Array.isArray(gp) && gp.length > 0 && gp.length < 4) {
-      const placeholders = gp.map(() => "?").join(",");
+    if (Array.isArray(gp) && gp.length > 0) {
+      if (gp.length < 4) {
+        // Specific gender preference — filter by selected genders
+        const placeholders = gp.map(() => "?").join(",");
+        const { results } = await db
+          .prepare(
+            `SELECT COUNT(*) as c FROM users
+             WHERE id != ?
+               AND is_active = 1
+               AND is_profile_complete = 1
+               AND gender IN (${placeholders})`,
+          )
+          .bind(userId, ...gp)
+          .all();
+        return Number(
+          (results?.[0] as Record<string, unknown> | undefined)?.c ?? 0,
+        );
+      }
+      // 4+ genders selected effectively means "all" — count everyone
       const { results } = await db
         .prepare(
           `SELECT COUNT(*) as c FROM users
            WHERE id != ?
              AND is_active = 1
-             AND is_profile_complete = 1
-             AND gender IN (${placeholders})`,
+             AND is_profile_complete = 1`,
         )
-        .bind(userId, ...gp)
+        .bind(userId)
         .all();
       return Number(
         (results?.[0] as Record<string, unknown> | undefined)?.c ?? 0,
