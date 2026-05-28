@@ -3,6 +3,7 @@ import { runDLQHealthCheck } from "./jobs/dlqHealth.js";
 import { runBirthdayJob } from "./jobs/birthday.js";
 import { runCleanupJob } from "./jobs/cleanup.js";
 import { runSubscriptionExpiryJob } from "./jobs/subscriptionExpiry.js";
+import { runIncompleteProfileReengagementJob } from "./jobs/incompleteProfileReengagement.js";
 import { getVersionInfo } from "./lib/version.js";
 
 export interface Env {
@@ -15,6 +16,7 @@ export interface Env {
   BIRTHDAY_SCHEDULE?: string;
   CLEANUP_SCHEDULE?: string;
   SUBSCRIPTION_EXPIRY_SCHEDULE?: string;
+  INCOMPLETE_PROFILE_SCHEDULE?: string;
 }
 
 export default {
@@ -96,6 +98,8 @@ export default {
     const cleanupSchedule = env.CLEANUP_SCHEDULE || "0 11 * * *";
     const subscriptionExpirySchedule =
       env.SUBSCRIPTION_EXPIRY_SCHEDULE || "0 0 * * *";
+    const incompleteProfileSchedule =
+      env.INCOMPLETE_PROFILE_SCHEDULE || "0 12 * * *";
 
     if (event.cron === reengagementSchedule) {
       await runReengagementJob(env);
@@ -107,6 +111,8 @@ export default {
       await runCleanupJob(env);
     } else if (event.cron === subscriptionExpirySchedule) {
       await runSubscriptionExpiryJob(env);
+    } else if (event.cron === incompleteProfileSchedule) {
+      await runIncompleteProfileReengagementJob(env);
     } else {
       console.log(`[scheduled] Unknown cron: ${event.cron}`);
     }

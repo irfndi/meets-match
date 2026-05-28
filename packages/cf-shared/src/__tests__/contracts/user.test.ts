@@ -5,12 +5,17 @@ import {
   Gender,
   Location,
   Preferences,
+  SubscriptionTier,
   GetUserRequest,
   GetUserResponse,
   CreateUserRequest,
   CreateUserResponse,
   UpdateUserRequest,
   UpdateUserResponse,
+  UpdateLastActiveRequest,
+  UpdateLastActiveResponse,
+  UpdateLastRemindedAtRequest,
+  UpdateLastRemindedAtResponse,
 } from "../../contracts/user.js";
 
 const validUser = {
@@ -233,6 +238,138 @@ describe("User Contracts", () => {
         user: validUser,
       });
       expect(result.updateMask).toBeUndefined();
+    });
+  });
+
+  describe("SubscriptionTier schema", () => {
+    it.each(["free", "premium", "premium_plus"] as const)(
+      "should accept %s",
+      (tier) => {
+        expect(() =>
+          Schema.decodeUnknownSync(SubscriptionTier)(tier),
+        ).not.toThrow();
+      },
+    );
+
+    it("should reject invalid tier", () => {
+      expect(() =>
+        Schema.decodeUnknownSync(SubscriptionTier)("gold"),
+      ).toThrow();
+    });
+  });
+
+  describe("UpdateLastActiveRequest / UpdateLastActiveResponse", () => {
+    it("should decode valid UpdateLastActiveRequest", () => {
+      const result = Schema.decodeUnknownSync(UpdateLastActiveRequest)({
+        userId: "abc",
+      });
+      expect(result.userId).toBe("abc");
+    });
+
+    it("should reject UpdateLastActiveRequest with missing userId", () => {
+      expect(() =>
+        Schema.decodeUnknownSync(UpdateLastActiveRequest)({}),
+      ).toThrow();
+    });
+
+    it("should decode UpdateLastActiveResponse with success=true", () => {
+      const result = Schema.decodeUnknownSync(UpdateLastActiveResponse)({
+        success: true,
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it("should decode UpdateLastActiveResponse with success=false", () => {
+      const result = Schema.decodeUnknownSync(UpdateLastActiveResponse)({
+        success: false,
+      });
+      expect(result.success).toBe(false);
+    });
+  });
+
+  describe("UpdateLastRemindedAtRequest / UpdateLastRemindedAtResponse", () => {
+    it("should decode valid UpdateLastRemindedAtRequest", () => {
+      const result = Schema.decodeUnknownSync(UpdateLastRemindedAtRequest)({
+        userId: "abc",
+      });
+      expect(result.userId).toBe("abc");
+    });
+
+    it("should decode UpdateLastRemindedAtResponse", () => {
+      const result = Schema.decodeUnknownSync(UpdateLastRemindedAtResponse)({
+        success: true,
+      });
+      expect(result.success).toBe(true);
+    });
+  });
+
+  describe("User mediaUrls validation", () => {
+    it("should reject media item with invalid type", () => {
+      const invalid = {
+        ...validUser,
+        mediaUrls: [
+          {
+            url: "https://example.com/file.pdf",
+            type: "document",
+            uploadedAt: "2025-01-01T00:00:00Z",
+          },
+        ],
+      };
+      expect(() => Schema.decodeUnknownSync(User)(invalid)).toThrow();
+    });
+
+    it("should accept media item with type image", () => {
+      const user = {
+        id: "user-media",
+        mediaUrls: [
+          {
+            url: "https://example.com/photo.jpg",
+            type: "image",
+            uploadedAt: "2025-01-01T00:00:00Z",
+          },
+        ],
+      };
+      expect(() => Schema.decodeUnknownSync(User)(user)).not.toThrow();
+    });
+
+    it("should accept media item with type video", () => {
+      const user = {
+        id: "user-media",
+        mediaUrls: [
+          {
+            url: "https://example.com/video.mp4",
+            type: "video",
+            uploadedAt: "2025-01-01T00:00:00Z",
+          },
+        ],
+      };
+      expect(() => Schema.decodeUnknownSync(User)(user)).not.toThrow();
+    });
+  });
+
+  describe("Location schema — source field", () => {
+    it("should accept GPS source", () => {
+      const loc = { latitude: 1, longitude: 2, source: "gps" };
+      expect(() => Schema.decodeUnknownSync(Location)(loc)).not.toThrow();
+    });
+
+    it("should accept geocoded source", () => {
+      const loc = { latitude: 1, longitude: 2, source: "geocoded" };
+      expect(() => Schema.decodeUnknownSync(Location)(loc)).not.toThrow();
+    });
+
+    it("should reject invalid source value", () => {
+      const loc = { latitude: 1, longitude: 2, source: "manual" };
+      expect(() => Schema.decodeUnknownSync(Location)(loc)).toThrow();
+    });
+
+    it("should decode NaN as numeric value (Effect schema permits it)", () => {
+      const result = Schema.decodeUnknownSync(Location)({
+        latitude: NaN,
+        longitude: 0,
+      });
+      expect(Number.isNaN(result.latitude)).toBe(true);
+      expect(result.longitude).toBe(0);
     });
   });
 });

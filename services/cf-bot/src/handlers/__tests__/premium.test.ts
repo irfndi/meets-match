@@ -987,4 +987,79 @@ describe("premiumCallbacks", () => {
       expect(ctx.reply).not.toHaveBeenCalled();
     });
   });
+
+  describe("premiumCallbacks catch block", () => {
+    it("answers callback query and replies with trace ID on unexpected error", async () => {
+      const ctx = mockCtx({
+        callbackQuery: { id: "cb1", data: "premium:show" },
+      });
+      ctx.reply = vi
+        .fn()
+        .mockRejectedValueOnce(new Error("reply failure"))
+        .mockResolvedValue(undefined);
+      const env = {
+        KV: mockKV() as unknown as KVNamespace,
+        API_SERVICE: createMockApiService(
+          withUser({
+            "/users/123/interaction-status": () => ok(interactionFree),
+          }),
+        ),
+      } as any;
+
+      await premiumCallbacks(ctx, env);
+      expect(ctx.answerCallbackQuery).toHaveBeenCalled();
+      expect(ctx.reply).toHaveBeenCalledWith(
+        expect.stringContaining("Trace ID:"),
+        expect.anything(),
+      );
+    });
+  });
+
+  describe("premiumCommand edge cases", () => {
+    it("handles missing ctx.api.getMe gracefully", async () => {
+      const ctx = mockCtx();
+      ctx.api.getMe = vi.fn().mockRejectedValue(new Error("no api"));
+      const env = {
+        KV: mockKV() as unknown as KVNamespace,
+        API_SERVICE: createMockApiService(
+          withUser({
+            "/users/123/interaction-status": () => ok(interactionFree),
+          }),
+        ),
+      } as any;
+
+      await premiumCommand(ctx, env);
+      expect(ctx.reply).toHaveBeenCalled();
+    });
+
+    it("handles user with premium tier but no interaction status (null)", async () => {
+      const ctx = mockCtx();
+      const env = {
+        KV: mockKV() as unknown as KVNamespace,
+        API_SERVICE: createMockApiService({
+          "/users/123": () => ok({ user: existingUser }),
+          "/users/123/interaction-status": () => err(500),
+        }),
+      } as any;
+
+      await premiumCommand(ctx, env);
+      const msg: string = (ctx.reply as any).mock.calls[0][0];
+      expect(msg).toContain("*Current plan:* Free");
+    });
+
+    it("handles expiry fetch failure gracefully (non-free tier)", async () => {
+      const ctx = mockCtx();
+      const env = {
+        KV: mockKV() as unknown as KVNamespace,
+        API_SERVICE: createMockApiService({
+          "/users/123/interaction-status": () => ok(interactionPremium),
+          "/users/123": () => ok({ user: existingUser }),
+        }),
+      } as any;
+
+      await premiumCommand(ctx, env);
+      const msg: string = (ctx.reply as any).mock.calls[0][0];
+      expect(msg).toContain("*Current plan:* Premium");
+    });
+  });
 });

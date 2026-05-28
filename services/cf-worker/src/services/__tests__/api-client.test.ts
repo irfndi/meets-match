@@ -356,4 +356,32 @@ describe("ApiServiceClient", () => {
       expect(caught).toBeInstanceOf(Error);
     });
   });
+
+  describe("network error handling", () => {
+    it("throws when fetch itself rejects", async () => {
+      const mock = {
+        fetch: vi.fn(() => Promise.reject(new Error("Connection refused"))),
+      } as unknown as Fetcher;
+      const client = new ApiServiceClient(mock);
+
+      await expect(client.getUser({ userId: "u1" })).rejects.toThrow(
+        "Connection refused",
+      );
+    });
+
+    it("throws on JSON parse failure after successful response", async () => {
+      const mock = {
+        fetch: vi.fn(async () => ({
+          ok: true,
+          status: 200,
+          json: async () => {
+            throw new SyntaxError("Unexpected token");
+          },
+        })),
+      } as unknown as Fetcher;
+      const client = new ApiServiceClient(mock);
+
+      await expect(client.getUser({ userId: "u1" })).rejects.toThrow();
+    });
+  });
 });

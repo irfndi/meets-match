@@ -5,6 +5,7 @@ import {
   handleAgeRangeCallback,
   handleDistanceCallback,
   handleGenderPrefCallback,
+  handleSettingsLanguageCallback,
 } from "../settings.js";
 import type { MyContext } from "../../types.js";
 
@@ -1274,6 +1275,595 @@ describe("Settings Handlers", () => {
         expect.stringContaining("Trace ID:"),
         expect.anything(),
       );
+    });
+  });
+
+  // =========================================================================
+  // settingsCallbacks — settings:language case
+  // =========================================================================
+  describe("settingsCallbacks — settings:language", () => {
+    beforeEach(() => {
+      kv = mockKV();
+      ctx = mockCtx({ editMessageText: vi.fn().mockResolvedValue(undefined) });
+    });
+
+    it("edits message to language picker with keyboard", async () => {
+      env = {
+        KV: kv as unknown as KVNamespace,
+        API_SERVICE: createMockApiService({
+          "/users/123": () => makeUserResponse(),
+        }),
+      };
+      ctx.callbackQuery!.data = "settings:language";
+      await settingsCallbacks(ctx, env);
+
+      expect(ctx.editMessageText).toHaveBeenCalledWith(
+        expect.stringContaining("Select Language"),
+        expect.objectContaining({
+          parse_mode: "MarkdownV2",
+          reply_markup: expect.anything(),
+        }),
+      );
+      expect(ctx.answerCallbackQuery).toHaveBeenCalled();
+
+      // Verify keyboard has language buttons
+      const editCall = (ctx.editMessageText as any).mock.calls[0];
+      const replyMarkup = editCall[1]?.reply_markup as any;
+      const buttons = (replyMarkup?.inline_keyboard ?? []).flat();
+      expect(buttons.length).toBeGreaterThanOrEqual(2); // EN, ID + Back
+      expect(
+        buttons.some((b: any) => b.callback_data === "settings:back"),
+      ).toBe(true);
+    });
+
+    it("shows language picker in Indonesian when user lang is id", async () => {
+      env = {
+        KV: kv as unknown as KVNamespace,
+        API_SERVICE: createMockApiService({
+          "/users/123": () => makeUserResponse({ language: "id" }),
+        }),
+      };
+      ctx.callbackQuery!.data = "settings:language";
+      await settingsCallbacks(ctx, env);
+
+      expect(ctx.editMessageText).toHaveBeenCalledWith(
+        expect.stringContaining("Pilih Bahasa"),
+        expect.any(Object),
+      );
+    });
+
+    it("falls back to en when user API fails for language picker", async () => {
+      env = {
+        KV: kv as unknown as KVNamespace,
+        API_SERVICE: createMockApiService({
+          "/users/123": () => makeErrorResponse(500),
+        }),
+      };
+      ctx.callbackQuery!.data = "settings:language";
+      await settingsCallbacks(ctx, env);
+
+      expect(ctx.editMessageText).toHaveBeenCalledWith(
+        expect.stringContaining("Select Language"),
+        expect.any(Object),
+      );
+    });
+  });
+
+  // =========================================================================
+  // handleSettingsLanguageCallback
+  // =========================================================================
+  describe("handleSettingsLanguageCallback", () => {
+    beforeEach(() => {
+      kv = mockKV();
+      ctx = mockCtx({
+        reply: vi.fn().mockResolvedValue(undefined),
+        answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
+        editMessageText: vi.fn().mockResolvedValue(undefined),
+      });
+    });
+
+    it("returns false when ctx.from is missing", async () => {
+      (ctx as any).from = undefined;
+      const result = await handleSettingsLanguageCallback(
+        ctx,
+        env,
+        "settings-lang:en",
+      );
+      expect(result).toBe(false);
+    });
+
+    it("returns false for non-settings-lang callback data", async () => {
+      const result = await handleSettingsLanguageCallback(
+        ctx,
+        env,
+        "random:data",
+      );
+      expect(result).toBe(false);
+    });
+
+    it("updates language when API succeeds and re-renders settings", async () => {
+      env = {
+        KV: kv as unknown as KVNamespace,
+        API_SERVICE: createMockApiService({
+          "/users/123": () => makeUserResponse({ language: "id" }),
+          "PUT:/users/123": () => makePutOkResponse(),
+        }),
+      };
+      const result = await handleSettingsLanguageCallback(
+        ctx,
+        env,
+        "settings-lang:id",
+      );
+      expect(result).toBe(true);
+      expect(ctx.answerCallbackQuery).toHaveBeenCalledWith(
+        expect.stringContaining("Indonesia"),
+      );
+      expect(ctx.reply).toHaveBeenCalledWith(
+        expect.stringContaining("Pengaturan"),
+        expect.any(Object),
+      );
+    });
+
+    it("falls back to DEFAULT_LANGUAGE for invalid language code", async () => {
+      env = {
+        KV: kv as unknown as KVNamespace,
+        API_SERVICE: createMockApiService({
+          "/users/123": () => makeUserResponse(),
+          "PUT:/users/123": () => makePutOkResponse(),
+        }),
+      };
+      const result = await handleSettingsLanguageCallback(
+        ctx,
+        env,
+        "settings-lang:fr",
+      );
+      expect(result).toBe(true);
+      // Falls back to English
+      expect(ctx.answerCallbackQuery).toHaveBeenCalledWith(
+        expect.stringContaining("English"),
+      );
+    });
+
+    it("shows error when PUT API returns non-ok status", async () => {
+      env = {
+        KV: kv as unknown as KVNamespace,
+        API_SERVICE: createMockApiService({
+          "PUT:/users/123": () => makeErrorResponse(500),
+        }),
+      };
+      const result = await handleSettingsLanguageCallback(
+        ctx,
+        env,
+        "settings-lang:id",
+      );
+      expect(result).toBe(true);
+      expect(ctx.answerCallbackQuery).toHaveBeenCalledWith(
+        expect.stringContaining("Failed to change language"),
+      );
+    });
+
+    it("handles API fetch rejection in catch block", async () => {
+      env = {
+        KV: kv as unknown as KVNamespace,
+        API_SERVICE: {
+          fetch: vi.fn().mockRejectedValue(new Error("Network failure")),
+        },
+      };
+      const result = await handleSettingsLanguageCallback(
+        ctx,
+        env,
+        "settings-lang:en",
+      );
+      expect(result).toBe(true);
+      expect(ctx.reply).toHaveBeenCalledWith(
+        expect.stringContaining("Trace ID:"),
+        expect.anything(),
+      );
+    });
+
+    it("handles answerCallbackQuery failure gracefully", async () => {
+      (ctx.answerCallbackQuery as any).mockRejectedValue(
+        new Error("callback failed"),
+      );
+      env = {
+        KV: kv as unknown as KVNamespace,
+        API_SERVICE: createMockApiService({
+          "/users/123": () => makeUserResponse(),
+          "PUT:/users/123": () => makePutOkResponse(),
+        }),
+      };
+      const result = await handleSettingsLanguageCallback(
+        ctx,
+        env,
+        "settings-lang:id",
+      );
+      expect(result).toBe(true);
+    });
+  });
+
+  // =========================================================================
+  // Pure function coverage via exported handlers — formatGenderPreference
+  // =========================================================================
+  describe("formatGenderPreference (via settingsCommand)", () => {
+    it("shows 'All genders' when all four prefs are set", async () => {
+      env = {
+        KV: kv as unknown as KVNamespace,
+        API_SERVICE: createMockApiService({
+          "/users/123": () =>
+            makeUserResponse({
+              preferences: {
+                minAge: 18,
+                maxAge: 35,
+                maxDistance: 25,
+                genderPreference: [
+                  "male",
+                  "female",
+                  "other",
+                  "prefer_not_to_say",
+                ],
+              },
+            }),
+        }),
+      };
+      await settingsCommand(ctx, env);
+      const callArg = (ctx.reply as any).mock.calls[0][0];
+      expect(callArg).toContain("All genders");
+    });
+
+    it("shows comma-separated display when partial prefs set", async () => {
+      env = {
+        KV: kv as unknown as KVNamespace,
+        API_SERVICE: createMockApiService({
+          "/users/123": () =>
+            makeUserResponse({
+              preferences: {
+                minAge: 18,
+                maxAge: 35,
+                maxDistance: 25,
+                genderPreference: ["female", "other"],
+              },
+            }),
+        }),
+      };
+      await settingsCommand(ctx, env);
+      const callArg = (ctx.reply as any).mock.calls[0][0];
+      expect(callArg).toContain("Female, Other");
+    });
+
+    it("shows 'Not set' for empty gender preference array", async () => {
+      env = {
+        KV: kv as unknown as KVNamespace,
+        API_SERVICE: createMockApiService({
+          "/users/123": () =>
+            makeUserResponse({
+              preferences: {
+                minAge: 18,
+                maxAge: 35,
+                maxDistance: 25,
+                genderPreference: [],
+              },
+            }),
+        }),
+      };
+      await settingsCommand(ctx, env);
+      const callArg = (ctx.reply as any).mock.calls[0][0];
+      expect(callArg).toContain("Not set");
+    });
+
+    it("handles unknown gender value gracefully (uses raw value)", async () => {
+      env = {
+        KV: kv as unknown as KVNamespace,
+        API_SERVICE: createMockApiService({
+          "/users/123": () =>
+            makeUserResponse({
+              preferences: {
+                minAge: 18,
+                maxAge: 35,
+                maxDistance: 25,
+                genderPreference: ["male", "unknown_value"],
+              },
+            }),
+        }),
+      };
+      await settingsCommand(ctx, env);
+      const callArg = (ctx.reply as any).mock.calls[0][0];
+      expect(callArg).toContain("Male, unknown\\_value");
+    });
+  });
+
+  // =========================================================================
+  // Pure function coverage via exported handlers — buildAgeGridKeyboard
+  // =========================================================================
+  describe("buildAgeGridKeyboard (via handleAgeRangeCallback)", () => {
+    beforeEach(() => {
+      kv = mockKV();
+      ctx = mockCtx({ editMessageText: vi.fn().mockResolvedValue(undefined) });
+    });
+
+    it("generates grid for very young user (age 12)", async () => {
+      env = {
+        KV: kv as unknown as KVNamespace,
+        API_SERVICE: createMockApiService({
+          "/users/123": () =>
+            makeUserResponse({ age: 12, birthDate: undefined }),
+        }),
+      };
+      await handleAgeRangeCallback(ctx, env, "agerange:min:12");
+      // gridStart = max(12, 12-13) = 12, gridEnd = min(80, 12+15) = 27
+      const editCall = (ctx.editMessageText as any).mock.calls[0];
+      const replyMarkup = editCall[1]?.reply_markup as any;
+      const buttons = (replyMarkup?.inline_keyboard ?? []).flat();
+      // Should have ages 12-27 plus manual button
+      const ageButtons = buttons.filter(
+        (b: any) => b.callback_data && b.callback_data.startsWith("agerange:"),
+      );
+      expect(ageButtons.length).toBeGreaterThan(16); // 12-27 = 16 ages + manual
+      expect(ageButtons[0].text).toBe("12");
+    });
+
+    it("generates grid for older user (age 65)", async () => {
+      env = {
+        KV: kv as unknown as KVNamespace,
+        API_SERVICE: createMockApiService({
+          "/users/123": () =>
+            makeUserResponse({ age: 65, birthDate: undefined }),
+        }),
+      };
+      await handleAgeRangeCallback(ctx, env, "agerange:min:52");
+      const editCall = (ctx.editMessageText as any).mock.calls[0];
+      const replyMarkup = editCall[1]?.reply_markup as any;
+      const buttons = (replyMarkup?.inline_keyboard ?? []).flat();
+      const ageButtons = buttons.filter(
+        (b: any) => b.callback_data && b.callback_data.startsWith("agerange:"),
+      );
+      // gridStart = max(12, 65-13) = 52, gridEnd = min(80, 65+15) = 80
+      expect(ageButtons[0].text).toBe("52");
+      expect(ageButtons[ageButtons.length - 2].text).toBe("80");
+    });
+
+    it("generates max grid with selectedMin filtering (skips ages below min)", async () => {
+      await kv.put(
+        "conversation:123",
+        JSON.stringify({
+          userId: "123",
+          field: "age-range",
+          step: 1,
+          data: { min: 25 },
+        }),
+      );
+      env = {
+        KV: kv as unknown as KVNamespace,
+        API_SERVICE: createMockApiService({
+          "/users/123": () =>
+            makeUserResponse({ age: 25, birthDate: undefined }),
+        }),
+      };
+      await handleAgeRangeCallback(ctx, env, "agerange:min:25");
+      const editCall = (ctx.editMessageText as any).mock.calls[0];
+      const replyMarkup = editCall[1]?.reply_markup as any;
+      const buttons = (replyMarkup?.inline_keyboard ?? []).flat();
+      const ageButtons = buttons.filter(
+        (b: any) =>
+          b.callback_data && b.callback_data.startsWith("agerange:max:"),
+      );
+      // Should start at 25 (the selected min), not at gridStart
+      expect(ageButtons[0].text).toBe("25");
+    });
+
+    it("includes manual entry button in both min and max grids", async () => {
+      env = {
+        KV: kv as unknown as KVNamespace,
+        API_SERVICE: createMockApiService({
+          "/users/123": () => makeUserResponse(),
+        }),
+      };
+      await handleAgeRangeCallback(ctx, env, "agerange:min:20");
+      const editCall = (ctx.editMessageText as any).mock.calls[0];
+      const replyMarkup = editCall[1]?.reply_markup as any;
+      const buttons = (replyMarkup?.inline_keyboard ?? []).flat();
+      expect(buttons.some((b: any) => b.text === "✏️ Type manually")).toBe(
+        true,
+      );
+    });
+  });
+
+  // =========================================================================
+  // Pure function coverage via exported handlers — buildDistanceKeyboard
+  // =========================================================================
+  describe("buildDistanceKeyboard (via settingsCallbacks)", () => {
+    it("builds distance keyboard with 5,10,25,50,100,200 km options plus manual", async () => {
+      ctx.callbackQuery!.data = "settings:distance";
+      await settingsCallbacks(ctx, env);
+
+      const replyCall = (ctx.reply as any).mock.calls[0];
+      const replyMarkup = replyCall[1]?.reply_markup as any;
+      const buttons = (replyMarkup?.inline_keyboard ?? []).flat();
+      const distanceButtons = buttons.filter(
+        (b: any) => b.callback_data && b.callback_data.startsWith("distance:"),
+      );
+      expect(distanceButtons).toHaveLength(7); // 6 values + manual
+      expect(distanceButtons[0].text).toBe("5 km");
+      expect(distanceButtons[1].text).toBe("10 km");
+      expect(distanceButtons[5].text).toBe("200 km");
+      expect(distanceButtons[6].text).toBe("✏️ Type manually");
+
+      // Verify Back button
+      expect(
+        buttons.some((b: any) => b.callback_data === "settings:back"),
+      ).toBe(true);
+    });
+  });
+
+  // =========================================================================
+  // Pure function coverage via exported handlers — buildGenderPrefKeyboard
+  // =========================================================================
+  describe("buildGenderPrefKeyboard (via settingsCallbacks)", () => {
+    it("builds gender pref keyboard with all options", async () => {
+      ctx.callbackQuery!.data = "settings:gender-pref";
+      await settingsCallbacks(ctx, env);
+
+      const replyCall = (ctx.reply as any).mock.calls[0];
+      const replyMarkup = replyCall[1]?.reply_markup as any;
+      const buttons = (replyMarkup?.inline_keyboard ?? []).flat();
+      expect(
+        buttons.some((b: any) => b.callback_data === "genderpref:male"),
+      ).toBe(true);
+      expect(
+        buttons.some((b: any) => b.callback_data === "genderpref:female"),
+      ).toBe(true);
+      expect(
+        buttons.some((b: any) => b.callback_data === "genderpref:other"),
+      ).toBe(true);
+      expect(
+        buttons.some(
+          (b: any) => b.callback_data === "genderpref:prefer_not_to_say",
+        ),
+      ).toBe(true);
+      expect(
+        buttons.some((b: any) => b.callback_data === "genderpref:all"),
+      ).toBe(true);
+      expect(
+        buttons.some((b: any) => b.callback_data === "settings:back"),
+      ).toBe(true);
+    });
+  });
+
+  // =========================================================================
+  // Pure function coverage via exported handlers — getSettingsKeyboard
+  // =========================================================================
+  describe("getSettingsKeyboard (via settingsCommand)", () => {
+    it("returns keyboard with all four setting fields plus close", async () => {
+      await settingsCommand(ctx, env);
+
+      const replyCall = (ctx.reply as any).mock.calls[0];
+      const replyMarkup = replyCall[1]?.reply_markup as any;
+      const buttons = (replyMarkup?.inline_keyboard ?? []).flat();
+      expect(
+        buttons.some((b: any) => b.callback_data === "settings:age-range"),
+      ).toBe(true);
+      expect(
+        buttons.some((b: any) => b.callback_data === "settings:distance"),
+      ).toBe(true);
+      expect(
+        buttons.some((b: any) => b.callback_data === "settings:gender-pref"),
+      ).toBe(true);
+      expect(
+        buttons.some((b: any) => b.callback_data === "settings:language"),
+      ).toBe(true);
+      expect(
+        buttons.some((b: any) => b.callback_data === "settings:close"),
+      ).toBe(true);
+    });
+  });
+
+  // =========================================================================
+  // Pure function coverage — getLanguageLabel (via settingsCommand)
+  // =========================================================================
+  describe("getLanguageLabel (via settingsCommand)", () => {
+    it("shows English flag+label for en user", async () => {
+      env = {
+        KV: kv as unknown as KVNamespace,
+        API_SERVICE: createMockApiService({
+          "/users/123": () => makeUserResponse({ language: "en" }),
+        }),
+      };
+      await settingsCommand(ctx, env);
+      const callArg = (ctx.reply as any).mock.calls[0][0];
+      expect(callArg).toContain("English");
+    });
+
+    it("shows Indonesian flag+label for id user", async () => {
+      env = {
+        KV: kv as unknown as KVNamespace,
+        API_SERVICE: createMockApiService({
+          "/users/123": () => makeUserResponse({ language: "id" }),
+        }),
+      };
+      await settingsCommand(ctx, env);
+      const callArg = (ctx.reply as any).mock.calls[0][0];
+      expect(callArg).toContain("Indonesia");
+    });
+  });
+
+  // =========================================================================
+  // handleDistanceCallback — edge case: distance:manual with unknown user
+  // =========================================================================
+  describe("handleDistanceCallback — manual edge cases", () => {
+    it("handles distance:manual with API failure (still starts conversation)", async () => {
+      env = {
+        KV: kv as unknown as KVNamespace,
+        API_SERVICE: createMockApiService({
+          "/users/123": () => makeErrorResponse(500),
+        }),
+      };
+      const result = await handleDistanceCallback(ctx, env, "distance:manual");
+      expect(result).toBe(true);
+      expect(ctx.reply).toHaveBeenCalledWith(
+        expect.stringContaining("Enter max distance"),
+        expect.any(Object),
+      );
+    });
+  });
+
+  // =========================================================================
+  // handleAgeRangeCallback — edge cases for age extremes
+  // =========================================================================
+  describe("handleAgeRangeCallback — age extremes", () => {
+    beforeEach(() => {
+      kv = mockKV();
+      ctx = mockCtx({ editMessageText: vi.fn().mockResolvedValue(undefined) });
+    });
+
+    it("handles user with no API response (uses default age 25)", async () => {
+      env = {
+        KV: kv as unknown as KVNamespace,
+        API_SERVICE: createMockApiService({
+          "/users/123": () => makeErrorResponse(404),
+        }),
+      };
+      const result = await handleAgeRangeCallback(ctx, env, "agerange:min:18");
+      expect(result).toBe(true);
+      // Should still work with fallback age 25
+      const stateRaw = await kv.get("conversation:123");
+      const state = JSON.parse(stateRaw!);
+      expect(state.data.min).toBe(18);
+    });
+
+    it("computes age from birthDate when age column is missing", async () => {
+      // birthDate "1990-01-01" → age ~35 (year dependent)
+      env = {
+        KV: kv as unknown as KVNamespace,
+        API_SERVICE: createMockApiService({
+          "/users/123": () =>
+            makeUserResponse({
+              birthDate: "1990-01-01",
+              age: undefined,
+            }),
+        }),
+      };
+      const result = await handleAgeRangeCallback(ctx, env, "agerange:min:18");
+      expect(result).toBe(true);
+      const stateRaw = await kv.get("conversation:123");
+      const state = JSON.parse(stateRaw!);
+      expect(state.data.min).toBe(18);
+    });
+
+    it("falls back to age 25 when user has no birthDate and no age column", async () => {
+      env = {
+        KV: kv as unknown as KVNamespace,
+        API_SERVICE: createMockApiService({
+          "/users/123": () =>
+            makeUserResponse({
+              birthDate: undefined,
+              age: undefined,
+            }),
+        }),
+      };
+      const result = await handleAgeRangeCallback(ctx, env, "agerange:min:18");
+      expect(result).toBe(true);
+      const stateRaw = await kv.get("conversation:123");
+      const state = JSON.parse(stateRaw!);
+      expect(state.data.min).toBe(18);
     });
   });
 });

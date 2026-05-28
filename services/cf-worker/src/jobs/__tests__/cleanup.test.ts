@@ -104,4 +104,139 @@ describe("runCleanupJob", () => {
     // Should notify user
     expect(botService.fetch).toHaveBeenCalled();
   });
+
+  it("skips DB update when R2 deletion fails with non-404 error", async () => {
+    const oldDate = new Date(
+      Date.now() - 31 * 24 * 60 * 60 * 1000,
+    ).toISOString();
+    const db = mockD1([
+      {
+        id: "2",
+        telegram_id: "456",
+        hidden_from_matches: 0,
+        media_deleted_at: null,
+        last_interaction_at: oldDate,
+        media_urls: JSON.stringify([
+          {
+            url: "https://pub-15c733bf3c734c6ea7fc120d0becd3ed.r2.dev/2/file.jpg",
+            type: "image",
+          },
+        ]),
+      },
+    ]);
+    const apiService = {
+      fetch: vi.fn().mockResolvedValue(new Response("fail", { status: 500 })),
+    };
+    const botService = mockBotService();
+    const env = {
+      DB: db as unknown as D1Database,
+      API_SERVICE: apiService as unknown as Fetcher,
+      BOT_SERVICE: botService as unknown as Fetcher,
+      KV: {} as KVNamespace,
+    };
+
+    await expect(runCleanupJob(env)).rejects.toThrow();
+    // Bot should NOT be called since DB update was skipped
+    expect(botService.fetch).not.toHaveBeenCalled();
+  });
+
+  it("skips DB update when R2 deletion throws an exception", async () => {
+    const oldDate = new Date(
+      Date.now() - 31 * 24 * 60 * 60 * 1000,
+    ).toISOString();
+    const db = mockD1([
+      {
+        id: "3",
+        telegram_id: "789",
+        hidden_from_matches: 0,
+        media_deleted_at: null,
+        last_interaction_at: oldDate,
+        media_urls: JSON.stringify([
+          {
+            url: "not-a-valid-url",
+            type: "image",
+          },
+        ]),
+      },
+    ]);
+    const apiService = {
+      fetch: vi.fn().mockRejectedValue(new Error("Connection failed")),
+    };
+    const botService = mockBotService();
+    const env = {
+      DB: db as unknown as D1Database,
+      API_SERVICE: apiService as unknown as Fetcher,
+      BOT_SERVICE: botService as unknown as Fetcher,
+      KV: {} as KVNamespace,
+    };
+
+    await expect(runCleanupJob(env)).rejects.toThrow();
+    expect(botService.fetch).not.toHaveBeenCalled();
+  });
+
+  it("cleans multiple users with media in a single run", async () => {
+    const oldDate = new Date(
+      Date.now() - 31 * 24 * 60 * 60 * 1000,
+    ).toISOString();
+    const db = mockD1([
+      {
+        id: "a",
+        telegram_id: "111",
+        hidden_from_matches: 0,
+        media_deleted_at: null,
+        last_interaction_at: oldDate,
+        media_urls: JSON.stringify([
+          { url: "https://pub-test.r2.dev/a/pic.jpg", type: "image" },
+        ]),
+      },
+      {
+        id: "b",
+        telegram_id: "222",
+        hidden_from_matches: 0,
+        media_deleted_at: null,
+        last_interaction_at: oldDate,
+        media_urls: JSON.stringify([
+          { url: "https://pub-test.r2.dev/b/pic.jpg", type: "image" },
+        ]),
+      },
+    ]);
+    const apiService = mockApiService();
+    const botService = mockBotService();
+    const env = {
+      DB: db as unknown as D1Database,
+      API_SERVICE: apiService as unknown as Fetcher,
+      BOT_SERVICE: botService as unknown as Fetcher,
+      KV: {} as KVNamespace,
+    };
+
+    await runCleanupJob(env);
+    expect(apiService.fetch).toHaveBeenCalledTimes(2);
+    expect(botService.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("handles invalid JSON in media_urls gracefully", async () => {
+    const oldDate = new Date(
+      Date.now() - 31 * 24 * 60 * 60 * 1000,
+    ).toISOString();
+    const db = mockD1([
+      {
+        id: "5",
+        telegram_id: "555",
+        hidden_from_matches: 0,
+        media_deleted_at: null,
+        last_interaction_at: oldDate,
+        media_urls: "{invalid-json",
+      },
+    ]);
+    const apiService = mockApiService();
+    const botService = mockBotService();
+    const env = {
+      DB: db as unknown as D1Database,
+      API_SERVICE: apiService as unknown as Fetcher,
+      BOT_SERVICE: botService as unknown as Fetcher,
+      KV: {} as KVNamespace,
+    };
+
+    await expect(runCleanupJob(env)).rejects.toThrow();
+  });
 });

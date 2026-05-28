@@ -300,6 +300,12 @@ function createBot(env: Env): Bot<MyContext> {
         return await settingsCallbacks(ctx, env);
       }
 
+      if (data === "relaxed:dismiss") {
+        await ctx.deleteMessage().catch(() => {});
+        await ctx.answerCallbackQuery().catch(() => {});
+        return;
+      }
+
       if (data.startsWith("agerange:")) {
         const handled = await handleAgeRangeCallback(ctx, env, data);
         if (handled) return;

@@ -44,5 +44,51 @@ describe("version utilities", () => {
       const ts = new Date("2026-05-17T13:00:00Z").toISOString();
       expect(formatDuration(ts)).toBe("0s ago");
     });
+
+    it("handles exactly 0 seconds difference", () => {
+      const ts = "2026-05-17T12:00:00.000Z";
+      expect(formatDuration(ts)).toBe("0s ago");
+    });
+
+    it("handles exactly 1 minute boundary", () => {
+      const ts = "2026-05-17T11:59:00.000Z";
+      expect(formatDuration(ts)).toBe("1m ago");
+    });
+
+    it("handles exactly 1 hour boundary", () => {
+      const ts = "2026-05-17T11:00:00.000Z";
+      expect(formatDuration(ts)).toBe("1h 0m ago");
+    });
+
+    it("handles exactly 1 day boundary", () => {
+      const ts = "2026-05-16T12:00:00.000Z";
+      expect(formatDuration(ts)).toBe("1d 0h ago");
+    });
+
+    it("handles large multi-day duration", () => {
+      const ts = "2026-05-01T00:00:00.000Z";
+      const result = formatDuration(ts);
+      expect(result).toMatch(/^\d+d \d+h ago$/);
+    });
+
+    it("handles fractional seconds (sub-second difference)", () => {
+      const ts = "2026-05-17T11:59:59.500Z";
+      expect(formatDuration(ts)).toBe("0s ago");
+    });
+
+    it("handles exactly 59 seconds", () => {
+      const ts = "2026-05-17T11:59:01.000Z";
+      expect(formatDuration(ts)).toBe("59s ago");
+    });
+
+    it("handles exactly 59 minutes", () => {
+      const ts = "2026-05-17T11:01:00.000Z";
+      expect(formatDuration(ts)).toBe("59m ago");
+    });
+
+    it("handles exactly 23 hours", () => {
+      const ts = "2026-05-16T13:00:00.000Z";
+      expect(formatDuration(ts)).toBe("23h 0m ago");
+    });
   });
 });

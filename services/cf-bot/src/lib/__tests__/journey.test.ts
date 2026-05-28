@@ -100,6 +100,125 @@ describe("Journey Tracking", () => {
       const text = formatJourneyForReport({ events: [] });
       expect(text).toContain("No recent activity");
     });
+
+    it("should handle invalid timestamp gracefully", () => {
+      const journey = {
+        events: [{ ts: "not-a-valid-date", action: "something" }],
+      };
+      const text = formatJourneyForReport(journey);
+      expect(text).toContain("invalid time");
+      expect(text).toContain("something");
+    });
+
+    it("should handle empty timestamp string", () => {
+      const journey = {
+        events: [{ ts: "", action: "empty-ts" }],
+      };
+      const text = formatJourneyForReport(journey);
+      expect(text).toContain("invalid time");
+      expect(text).toContain("empty-ts");
+    });
+
+    it("should include event detail when present", () => {
+      const journey = {
+        events: [
+          { ts: "2024-01-01T10:00:00Z", action: "cmd", detail: "ref_abc" },
+        ],
+      };
+      const text = formatJourneyForReport(journey);
+      expect(text).toContain("(ref_abc)");
+    });
+
+    it("should include target ID arrow when present", () => {
+      const journey = {
+        events: [
+          { ts: "2024-01-01T10:00:00Z", action: "like", targetId: "999" },
+        ],
+      };
+      const text = formatJourneyForReport(journey);
+      expect(text).toContain("→ 999");
+    });
+
+    it("should only show last 10 events", () => {
+      const events = Array.from({ length: 15 }, (_, i) => ({
+        ts: "2024-01-01T10:00:00Z",
+        action: `event-${i}`,
+      }));
+      const text = formatJourneyForReport({ events });
+      const lines = text.split("\n");
+      expect(lines.length).toBeLessThanOrEqual(10);
+      expect(text).toContain("event-14");
+      expect(text).not.toContain("event-0");
+    });
+
+    it("should handle journey with empty events array", () => {
+      const text = formatJourneyForReport({ events: [] } as any);
+      expect(text).toContain("No recent activity");
+    });
+  });
+
+  describe("recordJourneyEvent failure handling", () => {
+    it("should not throw on KV put failure", async () => {
+      const failingKv = {
+        get: vi.fn().mockResolvedValue(null),
+        put: vi.fn().mockRejectedValue(new Error("KV write failed")),
+        _store: new Map(),
+      };
+
+      await expect(
+        recordJourneyEvent(failingKv as unknown as KVNamespace, "123", {
+          action: "test",
+        }),
+      ).resolves.toBeUndefined();
+    });
+
+    it("should not throw on KV get failure", async () => {
+      const failingKv = {
+        get: vi.fn().mockRejectedValue(new Error("KV read failed")),
+        put: vi.fn().mockResolvedValue(undefined),
+        _store: new Map(),
+      };
+
+      await expect(
+        recordJourneyEvent(failingKv as unknown as KVNamespace, "123", {
+          action: "test",
+        }),
+      ).resolves.toBeUndefined();
+    });
+  });
+
+  describe("recordJourneyError failure handling", () => {
+    it("should not throw on KV put failure", async () => {
+      const failingKv = {
+        get: vi.fn().mockResolvedValue(null),
+        put: vi.fn().mockRejectedValue(new Error("KV write failed")),
+        _store: new Map(),
+      };
+
+      await expect(
+        recordJourneyError(
+          failingKv as unknown as KVNamespace,
+          "123",
+          "TRACE001",
+        ),
+      ).resolves.toBeUndefined();
+    });
+
+    it("should not throw on KV get failure", async () => {
+      const failingKv = {
+        get: vi.fn().mockRejectedValue(new Error("KV read failed")),
+        put: vi.fn().mockResolvedValue(undefined),
+        _store: new Map(),
+      };
+
+      await expect(
+        recordJourneyError(
+          failingKv as unknown as KVNamespace,
+          "123",
+          "TRACE001",
+        ),
+      ).resolves.toBeUndefined();
+    });
   });
 
   describe("generateTraceId", () => {
