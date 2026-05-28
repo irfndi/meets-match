@@ -18,7 +18,7 @@ describe("getMainMenuKeyboard", () => {
   it("has keyboard property containing the button rows", () => {
     const keyboard = getMainMenuKeyboard();
     const buttons = keyboard.keyboard.flat();
-    const texts = buttons.map((b: { text: string }) => b.text);
+    const texts = buttons.map((b) => (typeof b === "string" ? b : b.text));
 
     expect(texts).toContain(MENU_FIND_MATCH);
     expect(texts).toContain(MENU_MY_MATCHES);
