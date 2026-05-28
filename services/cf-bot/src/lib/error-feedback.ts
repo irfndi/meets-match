@@ -139,8 +139,11 @@ async function buildErrorReportPayload(
   const journeyText = formatJourneyForReport(journey);
 
   // Build report text for admin / message field
+  const isUserSubmitted =
+    error instanceof Error &&
+    (error as Error & { code?: string }).code === "USER_SUBMITTED_REPORT";
   const reportLines = [
-    t("errorReportTitle", "en"),
+    t(isUserSubmitted ? "errorFeedbackTitle" : "errorReportTitle", "en"),
     "",
     `🤖 *Bot:* \`${botVersion}\``,
     `🔗 *API:* \`${apiVersion}\``,
@@ -271,7 +274,9 @@ export async function handleErrorReportCallback(
       env,
       traceId,
       { action: "error_report_callback" },
-      new Error("User-submitted error report"),
+      Object.assign(new Error("User-submitted error report"), {
+        code: "USER_SUBMITTED_REPORT",
+      }),
     );
 
     // Persist to database via API
