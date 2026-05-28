@@ -58,5 +58,88 @@ describe("media utilities", () => {
     it("returns null for empty string", () => {
       expect(extractMediaKeyFromUrl("")).toBeNull();
     });
+
+    it("returns null for URL that is exactly the CDN base with trailing slash", () => {
+      expect(
+        extractMediaKeyFromUrl(
+          "https://pub-15c733bf3c734c6ea7fc120d0becd3ed.r2.dev/",
+        ),
+      ).toBeNull();
+    });
+
+    it("returns null for URL that is exactly the CDN base without trailing slash", () => {
+      expect(
+        extractMediaKeyFromUrl(
+          "https://pub-15c733bf3c734c6ea7fc120d0becd3ed.r2.dev",
+        ),
+      ).toBeNull();
+    });
+
+    it("extracts key from deep CDN URL path", () => {
+      const key = extractMediaKeyFromUrl(
+        "https://pub-15c733bf3c734c6ea7fc120d0becd3ed.r2.dev/user/123/profile/photo.jpg",
+      );
+      expect(key).toBe("user/123/profile/photo.jpg");
+    });
+  });
+
+  describe("buildMediaKey — error handling", () => {
+    it("throws for userId with special characters", () => {
+      expect(() => buildMediaKey("user/../etc", "jpg")).toThrow(
+        "Invalid userId for media key",
+      );
+      expect(() => buildMediaKey("user with spaces", "jpg")).toThrow(
+        "Invalid userId for media key",
+      );
+      expect(() => buildMediaKey("user@domain", "jpg")).toThrow(
+        "Invalid userId for media key",
+      );
+    });
+
+    it("throws for extension with special characters", () => {
+      expect(() => buildMediaKey("user1", "jpeg.exe")).toThrow(
+        "Invalid extension for media key",
+      );
+      expect(() => buildMediaKey("user1", "mp4 virus")).toThrow(
+        "Invalid extension for media key",
+      );
+      expect(() => buildMediaKey("user1", ".png")).toThrow(
+        "Invalid extension for media key",
+      );
+    });
+
+    it("throws for empty userId", () => {
+      expect(() => buildMediaKey("", "jpg")).toThrow(
+        "Invalid userId for media key",
+      );
+    });
+
+    it("throws for empty extension", () => {
+      expect(() => buildMediaKey("user1", "")).toThrow(
+        "Invalid extension for media key",
+      );
+    });
+
+    it("accepts userId with underscores and hyphens", () => {
+      expect(() => buildMediaKey("user_name-123", "jpg")).not.toThrow();
+    });
+
+    it("accepts numeric extensions", () => {
+      expect(() => buildMediaKey("user1", "webp")).not.toThrow();
+    });
+  });
+
+  describe("buildMediaPublicUrl — edge cases", () => {
+    it("handles key with special characters", () => {
+      const url = buildMediaPublicUrl("user/photo%20name.jpg");
+      expect(url).toContain("photo%20name.jpg");
+    });
+
+    it("handles nested keys", () => {
+      const url = buildMediaPublicUrl("a/b/c/d.jpg");
+      expect(url).toBe(
+        "https://pub-15c733bf3c734c6ea7fc120d0becd3ed.r2.dev/a/b/c/d.jpg",
+      );
+    });
   });
 });

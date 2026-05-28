@@ -53,4 +53,16 @@ describe("runSubscriptionExpiryJob", () => {
     };
     await expect(runSubscriptionExpiryJob(env)).rejects.toThrow();
   });
+
+  it("handles API response with zero downgraded subscriptions", async () => {
+    const env = createEnv({ ok: true, json: { downgraded: 0 } });
+    await runSubscriptionExpiryJob(env);
+    expect(env.API_SERVICE.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("handles API response with missing downgraded field", async () => {
+    const env = createEnv({ ok: true, json: {} });
+    await runSubscriptionExpiryJob(env);
+    expect(env.API_SERVICE.fetch).toHaveBeenCalledTimes(1);
+  });
 });

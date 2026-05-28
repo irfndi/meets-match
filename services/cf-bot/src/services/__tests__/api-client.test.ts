@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { ApiServiceClient } from "../api-client.js";
+import { ApiServiceClient, ApiError } from "../api-client.js";
 
 // --------------------------------------------------------------------------
 // Test helpers
@@ -784,6 +784,109 @@ describe("unblockUser", () => {
     await expect(client.unblockUser("blocker1", "blocked1")).rejects.toThrow(
       "API 404 on /users/blocker1/unblock",
     );
+  });
+});
+
+// --------------------------------------------------------------------------
+// ApiError class
+// --------------------------------------------------------------------------
+
+describe("ApiError", () => {
+  it("has correct name, message, status, body, and endpoint", () => {
+    const error = new ApiError(404, { error: "not found" }, "/users/nope");
+    expect(error.name).toBe("ApiError");
+    expect(error.message).toBe("API 404 on /users/nope");
+    expect(error.status).toBe(404);
+    expect(error.body).toEqual({ error: "not found" });
+    expect(error.endpoint).toBe("/users/nope");
+  });
+
+  it("is an instance of Error", () => {
+    const error = new ApiError(500, "server error", "/test");
+    expect(error).toBeInstanceOf(Error);
+  });
+});
+
+// --------------------------------------------------------------------------
+// Idempotency header tests
+// --------------------------------------------------------------------------
+
+describe("Idempotency-Key header", () => {
+  it("is set on idempotent POST requests like createUser", async () => {
+    const fetcher = mockFetcher(ok({ user: { id: "u1" } }));
+    const client = new ApiServiceClient(fetcher as any);
+    await client.createUser({ user: { id: "u1", displayName: "A" } });
+    const req = await getLastRequest(fetcher);
+    expect(req.headers["idempotency-key"]).toBeDefined();
+    expect(req.headers["idempotency-key"]).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+    );
+  });
+
+  it("is set on likeMatch (idempotent)", async () => {
+    const fetcher = mockFetcher(ok({ isMutual: false }));
+    const client = new ApiServiceClient(fetcher as any);
+    await client.likeMatch({ matchId: "m1", userId: "u1" });
+    const req = await getLastRequest(fetcher);
+    expect(req.headers["idempotency-key"]).toBeDefined();
+  });
+
+  it("is NOT set on non-idempotent GET requests like getUser", async () => {
+    const fetcher = mockFetcher(ok({ user: { id: "u1" } }));
+    const client = new ApiServiceClient(fetcher as any);
+    await client.getUser({ userId: "u1" });
+    const req = await getLastRequest(fetcher);
+    expect(req.headers["idempotency-key"]).toBeUndefined();
+  });
+
+  it("is NOT set on non-idempotent PUT requests like updateUser", async () => {
+    const fetcher = mockFetcher(ok({ user: { id: "u1" } }));
+    const client = new ApiServiceClient(fetcher as any);
+    await client.updateUser({
+      userId: "u1",
+      user: { id: "u1", displayName: "X" },
+    });
+    const req = await getLastRequest(fetcher);
+    expect(req.headers["idempotency-key"]).toBeUndefined();
+  });
+});
+
+// --------------------------------------------------------------------------
+// Non-JSON error response handling
+// --------------------------------------------------------------------------
+
+describe("Non-JSON error response", () => {
+  it("handles error response with text body (not JSON)", async () => {
+    const textResponse = new Response("plain text error", {
+      status: 500,
+      headers: { "Content-Type": "text/plain" },
+    });
+    const { client } = createClient(textResponse);
+    let error: any;
+    try {
+      await client.getUser({ userId: "u1" });
+    } catch (e) {
+      error = e;
+    }
+    expect(error).toBeDefined();
+    expect(error.name).toBe("ApiError");
+    expect(error.status).toBe(500);
+    expect(error.endpoint).toBe("/users/u1");
+  });
+
+  it("handles error response with empty body", async () => {
+    const emptyResponse = new Response(null, { status: 503 });
+    const { client } = createClient(emptyResponse);
+    let error: any;
+    try {
+      await client.getUser({ userId: "u1" });
+    } catch (e) {
+      error = e;
+    }
+    expect(error).toBeDefined();
+    expect(error.name).toBe("ApiError");
+    expect(error.status).toBe(503);
+    expect(error.endpoint).toBe("/users/u1");
   });
 });
 

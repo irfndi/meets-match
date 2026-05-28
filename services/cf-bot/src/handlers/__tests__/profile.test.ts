@@ -166,7 +166,87 @@ describe("profile handler", () => {
 
     await profileCommand(ctx, env);
     const call = (ctx.reply as any).mock.calls[0];
-    // Age from 1990-01-01 should be present (around 35)
     expect(call[0]).toMatch(/3[456]/);
+  });
+
+  it("displays Male for gender=male", async () => {
+    const ctx = createCtx();
+    const env = createEnv({ gender: "male" });
+
+    await profileCommand(ctx, env);
+    const call = (ctx.reply as any).mock.calls[0];
+    expect(call[0]).toContain("Male");
+  });
+
+  it("displays Other for non-standard gender", async () => {
+    const ctx = createCtx();
+    const env = createEnv({ gender: "nonbinary" });
+
+    await profileCommand(ctx, env);
+    const call = (ctx.reply as any).mock.calls[0];
+    expect(call[0]).toContain("Other");
+  });
+
+  it("displays coordinates location when city is missing but lat exists", async () => {
+    const ctx = createCtx();
+    const env = createEnv({
+      location: { latitude: 40.7, longitude: -74 },
+    });
+
+    await profileCommand(ctx, env);
+    const call = (ctx.reply as any).mock.calls[0];
+    expect(call[0]).toContain("Shared");
+  });
+
+  it("displays city-only location when country is missing", async () => {
+    const ctx = createCtx();
+    const env = createEnv({
+      location: { city: "Jakarta" },
+    });
+
+    await profileCommand(ctx, env);
+    const call = (ctx.reply as any).mock.calls[0];
+    expect(call[0]).toContain("Jakarta");
+  });
+
+  it("shows 'Not set' for empty gender string", async () => {
+    const ctx = createCtx();
+    const env = createEnv({ gender: "" });
+
+    await profileCommand(ctx, env);
+    const call = (ctx.reply as any).mock.calls[0];
+    expect(call[0]).toContain("Not set");
+  });
+
+  it("shows complete profile with video and sends via replyWithVideo", async () => {
+    const ctx = createCtx();
+    const env = createEnv({
+      mediaUrls: [{ url: "https://example.com/video2.mp4", type: "video" }],
+    });
+
+    await profileCommand(ctx, env);
+    expect(ctx.replyWithVideo).toHaveBeenCalledWith(
+      expect.stringContaining("video2.mp4"),
+      expect.objectContaining({
+        caption: expect.stringContaining("Alice"),
+        parse_mode: "MarkdownV2",
+      }),
+    );
+  });
+
+  it("catches unhandled error and replies with trace ID", async () => {
+    const ctx = createCtx();
+    ctx.reply = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("fatal"))
+      .mockRejectedValueOnce(new Error("fatal"))
+      .mockResolvedValue(undefined);
+    const env = createEnv();
+
+    await profileCommand(ctx, env);
+    expect(ctx.reply).toHaveBeenCalledWith(
+      expect.stringContaining("Trace ID:"),
+      expect.anything(),
+    );
   });
 });

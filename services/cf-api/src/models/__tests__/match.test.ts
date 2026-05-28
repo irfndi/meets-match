@@ -2,7 +2,13 @@ import { describe, it, expect, vi } from "vitest";
 import { Effect } from "effect";
 import { MatchRepository, calculateMatchScore, haversine } from "../match.js";
 import { UserRepository } from "../user.js";
-import { computeDefaultPreferences } from "@meetsmatch/cf-shared";
+import {
+  computeDefaultPreferences,
+  NotFoundError,
+  ValidationError,
+  DatabaseError,
+} from "@meetsmatch/cf-shared";
+import { runEffect } from "@meetsmatch/cf-shared/testing";
 
 function createMockD1(
   candidates: Array<Record<string, unknown>> = [],
@@ -1018,5 +1024,814 @@ describe("computeDefaultPreferences", () => {
     });
     expect(result.minAge).toBe(18);
     expect(result.maxAge).toBe(32);
+  });
+});
+
+// ─── CRUD Test Helpers ───────────────────────────────────────────────────────
+
+/**
+ * Create a sequential mock D1Database where each .first() call returns
+ * the next result from the queue. Suitable for CRUD methods that make
+ * multiple sequential DB calls.
+ */
+function createSequentialMockD1(
+  firstQueue: Array<Record<string, unknown> | null>,
+) {
+  let firstIdx = 0;
+  const capturedSql: string[] = [];
+  const capturedValues: unknown[][] = [];
+
+  const mockD1 = {
+    prepare: vi.fn((sql: string) => {
+      capturedSql.push(sql);
+      return {
+        bind: vi.fn((...values: unknown[]) => {
+          capturedValues.push(values);
+          return {
+            run: vi.fn(async () => ({ success: true })),
+            first: vi.fn(async () => {
+              const result = firstQueue[firstIdx++];
+              return result !== undefined ? result : null;
+            }),
+            all: vi.fn(async () => ({ results: [] })),
+          };
+        }),
+      };
+    }),
+    batch: vi.fn(async () => ({ success: true })),
+    _capturedSql: capturedSql,
+    _capturedValues: capturedValues,
+    _firstIdx: () => firstIdx,
+  };
+
+  return mockD1;
+}
+
+/**
+ * Build a DB row (snake_case) matching what toMatch() expects.
+ */
+function createMatchRow(
+  overrides: Partial<Record<string, unknown>> = {},
+): Record<string, unknown> {
+  return {
+    id: "match-1",
+    user1_id: "user-a",
+    user2_id: "user-b",
+    status: "pending",
+    score: "{}",
+    created_at: "2025-01-01 00:00:00",
+    updated_at: "2025-01-01 00:00:00",
+    matched_at: null,
+    user1_action: "none",
+    user2_action: "none",
+    like_message: null,
+    ...overrides,
+  };
+}
+
+// ─── getById ─────────────────────────────────────────────────────────────────
+
+describe("MatchRepository.getById", () => {
+  it("returns the match when found", async () => {
+    const row = createMatchRow({ id: "m1" });
+    const mockD1 = createSequentialMockD1([row]);
+
+    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const result = await Effect.runPromise(repo.getById({ matchId: "m1" }));
+
+    expect(result.id).toBe("m1");
+    expect(result.user1Id).toBe("user-a");
+    expect(result.user2Id).toBe("user-b");
+    expect(result.status).toBe("PENDING");
+  });
+
+  it("throws NotFoundError when match is not found", async () => {
+    const mockD1 = createSequentialMockD1([null]);
+
+    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    await expect(runEffect(repo.getById({ matchId: "m1" }))).rejects.toThrow(
+      NotFoundError,
+    );
+  });
+
+  it("queries by matchId in the SQL", async () => {
+    const row = createMatchRow({ id: "m1" });
+    const mockD1 = createSequentialMockD1([row]);
+
+    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    await Effect.runPromise(repo.getById({ matchId: "m1" }));
+
+    expect(mockD1._capturedSql[0]).toContain("WHERE id = ?");
+    expect(mockD1._capturedValues[0]).toContain("m1");
+  });
+});
+
+// ─── create ──────────────────────────────────────────────────────────────────
+
+describe("MatchRepository.create", () => {
+  it("creates a new match when pair does not exist", async () => {
+    const mockD1 = createSequentialMockD1([null]);
+
+    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const result = await Effect.runPromise(
+      repo.create({ user1Id: "user-b", user2Id: "user-a" }),
+    );
+
+    expect(result.status).toBe("PENDING");
+    expect(result.id).toBeTruthy();
+    expect(result.user1Id).toBe("user-a");
+    expect(result.user2Id).toBe("user-b");
+  });
+
+  it("returns existing match when pair already exists", async () => {
+    const existingRow = createMatchRow({
+      id: "existing-match",
+      user1_id: "user-a",
+      user2_id: "user-b",
+      status: "pending",
+    });
+    const mockD1 = createSequentialMockD1([existingRow]);
+
+    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const result = await Effect.runPromise(
+      repo.create({ user1Id: "user-a", user2Id: "user-b" }),
+    );
+
+    expect(result.id).toBe("existing-match");
+    expect(result.user1Id).toBe("user-a");
+    expect(result.user2Id).toBe("user-b");
+  });
+
+  it("does not insert when match already exists", async () => {
+    const existingRow = createMatchRow({ id: "existing-match" });
+    const mockD1 = createSequentialMockD1([existingRow]);
+
+    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    await Effect.runPromise(
+      repo.create({ user1Id: "user-a", user2Id: "user-b" }),
+    );
+
+    // Only SELECT should have been called, no INSERT
+    const sqls = mockD1._capturedSql;
+    expect(sqls).toHaveLength(1);
+    expect(sqls[0]).toContain("SELECT");
+  });
+
+  it("sorts user IDs so user1Id < user2Id", async () => {
+    const mockD1 = createSequentialMockD1([null]);
+
+    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const result = await Effect.runPromise(
+      repo.create({ user1Id: "zzz", user2Id: "aaa" }),
+    );
+
+    expect(result.user1Id).toBe("aaa");
+    expect(result.user2Id).toBe("zzz");
+  });
+});
+
+// ─── like ────────────────────────────────────────────────────────────────────
+
+describe("MatchRepository.like", () => {
+  it("successfully likes a pending match (non-mutual)", async () => {
+    const initialRow = createMatchRow({
+      status: "pending",
+      user1_action: "none",
+      user2_action: "none",
+    });
+    const updatedRow = createMatchRow({
+      status: "pending",
+      user1_action: "LIKE",
+      user2_action: "none",
+    });
+    const mockD1 = createSequentialMockD1([initialRow, updatedRow]);
+
+    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const result = await Effect.runPromise(
+      repo.like({ matchId: "match-1", userId: "user-a" }),
+    );
+
+    expect(result.isMutual).toBe(false);
+    expect(result.match.status).toBe("PENDING");
+    expect(result.match.user1Action).toBe("LIKE");
+  });
+
+  it("detects mutual match when other user already liked", async () => {
+    const initialRow = createMatchRow({
+      status: "pending",
+      user1_action: "like",
+      user2_action: "none",
+    });
+    const finalRow = createMatchRow({
+      status: "matched",
+      user1_action: "LIKE",
+      user2_action: "LIKE",
+      matched_at: "2025-01-02 00:00:00",
+    });
+    const mockD1 = createSequentialMockD1([initialRow, finalRow]);
+
+    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const result = await Effect.runPromise(
+      repo.like({ matchId: "match-1", userId: "user-b" }),
+    );
+
+    expect(result.isMutual).toBe(true);
+    expect(result.match.status).toBe("MATCHED");
+  });
+
+  it("like with message updates like_message column", async () => {
+    const initialRow = createMatchRow({
+      status: "pending",
+      user1_action: "none",
+      user2_action: "none",
+    });
+    const updatedRow = createMatchRow({
+      status: "pending",
+      user1_action: "LIKE",
+      user2_action: "none",
+      like_message: JSON.stringify({
+        fromUserId: "user-a",
+        text: "Hello!",
+        mediaUrl: null,
+        createdAt: "2025-01-01T00:00:00.000Z",
+      }),
+    });
+    const mockD1 = createSequentialMockD1([initialRow, updatedRow]);
+
+    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const result = await Effect.runPromise(
+      repo.like({
+        matchId: "match-1",
+        userId: "user-a",
+        message: { text: "Hello!" },
+      }),
+    );
+
+    expect(result.isMutual).toBe(false);
+    expect(result.match.likeMessage).toBeDefined();
+    expect(result.match.likeMessage?.text).toBe("Hello!");
+  });
+
+  it("like with mediaUrl in message", async () => {
+    const initialRow = createMatchRow({
+      status: "pending",
+      user1_action: "none",
+      user2_action: "none",
+    });
+    const updatedRow = createMatchRow({
+      status: "pending",
+      user1_action: "LIKE",
+      user2_action: "none",
+      like_message: JSON.stringify({
+        fromUserId: "user-a",
+        text: null,
+        mediaUrl: "https://example.com/photo.jpg",
+        createdAt: "2025-01-01T00:00:00.000Z",
+      }),
+    });
+    const mockD1 = createSequentialMockD1([initialRow, updatedRow]);
+
+    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const result = await Effect.runPromise(
+      repo.like({
+        matchId: "match-1",
+        userId: "user-a",
+        message: { mediaUrl: "https://example.com/photo.jpg" },
+      }),
+    );
+
+    expect(result.match.likeMessage?.mediaUrl).toBe(
+      "https://example.com/photo.jpg",
+    );
+  });
+
+  it("throws ValidationError when user is not part of the match", async () => {
+    const row = createMatchRow({
+      user1_id: "other-a",
+      user2_id: "other-b",
+    });
+    const mockD1 = createSequentialMockD1([row]);
+
+    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    await expect(
+      runEffect(repo.like({ matchId: "match-1", userId: "user-c" })),
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("throws NotFoundError when match does not exist", async () => {
+    const mockD1 = createSequentialMockD1([null]);
+
+    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    await expect(
+      runEffect(repo.like({ matchId: "match-1", userId: "user-a" })),
+    ).rejects.toThrow(NotFoundError);
+  });
+
+  it("like as user2 works correctly", async () => {
+    const initialRow = createMatchRow({
+      status: "pending",
+      user1_action: "none",
+      user2_action: "none",
+    });
+    const updatedRow = createMatchRow({
+      status: "pending",
+      user1_action: "none",
+      user2_action: "LIKE",
+    });
+    const mockD1 = createSequentialMockD1([initialRow, updatedRow]);
+
+    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const result = await Effect.runPromise(
+      repo.like({ matchId: "match-1", userId: "user-b" }),
+    );
+
+    expect(result.match.user2Action).toBe("LIKE");
+  });
+
+  it("mutual match as user2 when user1 already liked", async () => {
+    const initialRow = createMatchRow({
+      status: "pending",
+      user1_action: "like",
+      user2_action: "none",
+    });
+    const finalRow = createMatchRow({
+      status: "matched",
+      user1_action: "LIKE",
+      user2_action: "LIKE",
+      matched_at: "2025-01-02 00:00:00",
+    });
+    const mockD1 = createSequentialMockD1([initialRow, finalRow]);
+
+    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const result = await Effect.runPromise(
+      repo.like({ matchId: "match-1", userId: "user-b" }),
+    );
+
+    expect(result.isMutual).toBe(true);
+  });
+});
+
+// ─── dislike ─────────────────────────────────────────────────────────────────
+
+describe("MatchRepository.dislike", () => {
+  it("dislikes a match and sets status to rejected", async () => {
+    const initialRow = createMatchRow({
+      status: "pending",
+      user1_action: "none",
+      user2_action: "none",
+    });
+    const updatedRow = createMatchRow({
+      status: "rejected",
+      user1_action: "DISLIKE",
+      user2_action: "none",
+    });
+    const mockD1 = createSequentialMockD1([initialRow, updatedRow]);
+
+    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const result = await Effect.runPromise(
+      repo.dislike({ matchId: "match-1", userId: "user-a" }),
+    );
+
+    expect(result.status).toBe("REJECTED");
+    expect(result.user1Action).toBe("DISLIKE");
+  });
+
+  it("dislike as user2 works", async () => {
+    const initialRow = createMatchRow({
+      status: "pending",
+      user1_action: "none",
+      user2_action: "none",
+    });
+    const updatedRow = createMatchRow({
+      status: "rejected",
+      user1_action: "none",
+      user2_action: "DISLIKE",
+    });
+    const mockD1 = createSequentialMockD1([initialRow, updatedRow]);
+
+    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const result = await Effect.runPromise(
+      repo.dislike({ matchId: "match-1", userId: "user-b" }),
+    );
+
+    expect(result.status).toBe("REJECTED");
+    expect(result.user2Action).toBe("DISLIKE");
+  });
+
+  it("throws ValidationError when user is not part of the match", async () => {
+    const row = createMatchRow({
+      user1_id: "other-a",
+      user2_id: "other-b",
+    });
+    const mockD1 = createSequentialMockD1([row]);
+
+    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    await expect(
+      runEffect(repo.dislike({ matchId: "match-1", userId: "user-c" })),
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("throws NotFoundError when match does not exist", async () => {
+    const mockD1 = createSequentialMockD1([null]);
+
+    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    await expect(
+      runEffect(repo.dislike({ matchId: "match-1", userId: "user-a" })),
+    ).rejects.toThrow(NotFoundError);
+  });
+});
+
+// ─── skip ────────────────────────────────────────────────────────────────────
+
+describe("MatchRepository.skip", () => {
+  it("skips a match without changing status", async () => {
+    const initialRow = createMatchRow({
+      status: "pending",
+      user1_action: "none",
+      user2_action: "none",
+    });
+    const updatedRow = createMatchRow({
+      status: "pending",
+      user1_action: "SKIP",
+      user2_action: "none",
+    });
+    const mockD1 = createSequentialMockD1([initialRow, updatedRow]);
+
+    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const result = await Effect.runPromise(
+      repo.skip({ matchId: "match-1", userId: "user-a" }),
+    );
+
+    expect(result.status).toBe("PENDING");
+    expect(result.user1Action).toBe("SKIP");
+  });
+
+  it("skip as user2 works", async () => {
+    const initialRow = createMatchRow({
+      status: "pending",
+      user1_action: "none",
+      user2_action: "none",
+    });
+    const updatedRow = createMatchRow({
+      status: "pending",
+      user1_action: "none",
+      user2_action: "SKIP",
+    });
+    const mockD1 = createSequentialMockD1([initialRow, updatedRow]);
+
+    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const result = await Effect.runPromise(
+      repo.skip({ matchId: "match-1", userId: "user-b" }),
+    );
+
+    expect(result.status).toBe("PENDING");
+    expect(result.user2Action).toBe("SKIP");
+  });
+
+  it("throws ValidationError when user is not part of the match", async () => {
+    const row = createMatchRow({
+      user1_id: "other-a",
+      user2_id: "other-b",
+    });
+    const mockD1 = createSequentialMockD1([row]);
+
+    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    await expect(
+      runEffect(repo.skip({ matchId: "match-1", userId: "user-c" })),
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("throws NotFoundError when match does not exist", async () => {
+    const mockD1 = createSequentialMockD1([null]);
+
+    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    await expect(
+      runEffect(repo.skip({ matchId: "match-1", userId: "user-a" })),
+    ).rejects.toThrow(NotFoundError);
+  });
+});
+
+// ─── undo ────────────────────────────────────────────────────────────────────
+
+describe("MatchRepository.undo", () => {
+  it("returns restored:false when action is NONE", async () => {
+    const row = createMatchRow({
+      status: "pending",
+      user1_action: "none",
+      user2_action: "none",
+    });
+    const mockD1 = createSequentialMockD1([row]);
+
+    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const result = await Effect.runPromise(
+      repo.undo({ matchId: "match-1", userId: "user-a" }),
+    );
+
+    expect(result.restored).toBe(false);
+    expect(result.match.user1Action).toBe("NONE");
+  });
+
+  it("undoes a skip and reverts action to none", async () => {
+    const initialRow = createMatchRow({
+      status: "pending",
+      user1_action: "skip",
+      user2_action: "none",
+    });
+    const updatedRow = createMatchRow({
+      status: "pending",
+      user1_action: "NONE",
+      user2_action: "none",
+    });
+    const mockD1 = createSequentialMockD1([initialRow, updatedRow]);
+
+    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const result = await Effect.runPromise(
+      repo.undo({ matchId: "match-1", userId: "user-a" }),
+    );
+
+    expect(result.restored).toBe(true);
+    expect(result.match.user1Action).toBe("NONE");
+    expect(result.match.status).toBe("PENDING");
+  });
+
+  it("undoes a mutual match and reverts status to pending", async () => {
+    const initialRow = createMatchRow({
+      status: "matched",
+      user1_action: "like",
+      user2_action: "like",
+      matched_at: "2025-01-02 00:00:00",
+    });
+    const updatedRow = createMatchRow({
+      status: "pending",
+      user1_action: "NONE",
+      user2_action: "LIKE",
+      matched_at: null,
+    });
+    const mockD1 = createSequentialMockD1([initialRow, updatedRow]);
+
+    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const result = await Effect.runPromise(
+      repo.undo({ matchId: "match-1", userId: "user-a" }),
+    );
+
+    expect(result.restored).toBe(true);
+    expect(result.match.status).toBe("PENDING");
+    expect(result.match.user1Action).toBe("NONE");
+    expect(result.match.matchedAt).toBeUndefined();
+  });
+
+  it("undoes a rejection and reverts status to pending", async () => {
+    const initialRow = createMatchRow({
+      status: "rejected",
+      user1_action: "dislike",
+      user2_action: "none",
+    });
+    const updatedRow = createMatchRow({
+      status: "pending",
+      user1_action: "NONE",
+      user2_action: "none",
+    });
+    const mockD1 = createSequentialMockD1([initialRow, updatedRow]);
+
+    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const result = await Effect.runPromise(
+      repo.undo({ matchId: "match-1", userId: "user-a" }),
+    );
+
+    expect(result.restored).toBe(true);
+    expect(result.match.status).toBe("PENDING");
+    expect(result.match.user1Action).toBe("NONE");
+  });
+
+  it("undo as user2 works for skip", async () => {
+    const initialRow = createMatchRow({
+      status: "pending",
+      user1_action: "none",
+      user2_action: "skip",
+    });
+    const updatedRow = createMatchRow({
+      status: "pending",
+      user1_action: "none",
+      user2_action: "NONE",
+    });
+    const mockD1 = createSequentialMockD1([initialRow, updatedRow]);
+
+    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const result = await Effect.runPromise(
+      repo.undo({ matchId: "match-1", userId: "user-b" }),
+    );
+
+    expect(result.restored).toBe(true);
+    expect(result.match.user2Action).toBe("NONE");
+  });
+
+  it("throws ValidationError when user is not part of the match", async () => {
+    const row = createMatchRow({
+      user1_id: "other-a",
+      user2_id: "other-b",
+    });
+    const mockD1 = createSequentialMockD1([row]);
+
+    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    await expect(
+      runEffect(repo.undo({ matchId: "match-1", userId: "user-c" })),
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("throws NotFoundError when match does not exist", async () => {
+    const mockD1 = createSequentialMockD1([null]);
+
+    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    await expect(
+      runEffect(repo.undo({ matchId: "match-1", userId: "user-a" })),
+    ).rejects.toThrow(NotFoundError);
+  });
+});
+
+// ─── getList ─────────────────────────────────────────────────────────────────
+
+describe("MatchRepository.getList", () => {
+  function createSequentialMockD1WithAll(
+    allResults: Array<Record<string, unknown>>,
+    firstResults: Array<Record<string, unknown> | null> = [],
+  ) {
+    let firstIdx = 0;
+    const capturedSql: string[] = [];
+    const capturedValues: unknown[][] = [];
+
+    const mockD1 = {
+      prepare: vi.fn((sql: string) => {
+        capturedSql.push(sql);
+        return {
+          bind: vi.fn((...values: unknown[]) => {
+            capturedValues.push(values);
+            return {
+              run: vi.fn(async () => ({ success: true })),
+              first: vi.fn(async () => {
+                const result = firstResults[firstIdx++];
+                return result !== undefined ? result : null;
+              }),
+              all: vi.fn(async () => ({
+                results: allResults,
+              })),
+            };
+          }),
+        };
+      }),
+      batch: vi.fn(async () => ({ success: true })),
+      _capturedSql: capturedSql,
+      _capturedValues: capturedValues,
+    };
+
+    return mockD1;
+  }
+
+  it("returns all matches for a user", async () => {
+    const rows = [
+      createMatchRow({ id: "m1", status: "pending" }),
+      createMatchRow({ id: "m2", status: "matched" }),
+    ];
+    const mockD1 = createSequentialMockD1WithAll(rows);
+
+    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const result = await Effect.runPromise(repo.getList({ userId: "user-a" }));
+
+    expect(result).toHaveLength(2);
+    expect(result[0].id).toBe("m1");
+    expect(result[1].id).toBe("m2");
+  });
+
+  it("filters by status when provided", async () => {
+    const rows = [createMatchRow({ id: "m1", status: "matched" })];
+    const mockD1 = createSequentialMockD1WithAll(rows);
+
+    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    await Effect.runPromise(
+      repo.getList({ userId: "user-a", status: "MATCHED" }),
+    );
+
+    const sql = mockD1._capturedSql[0];
+    expect(sql).toContain("status = ?");
+  });
+
+  it("includes LIMIT and OFFSET when provided", async () => {
+    const mockD1 = createSequentialMockD1WithAll([]);
+
+    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    await Effect.runPromise(
+      repo.getList({ userId: "user-a", limit: 5, offset: 10 }),
+    );
+
+    const sql = mockD1._capturedSql[0];
+    expect(sql).toContain("LIMIT ?");
+    expect(sql).toContain("OFFSET ?");
+  });
+
+  it("queries for both user1_id and user2_id", async () => {
+    const mockD1 = createSequentialMockD1WithAll([]);
+
+    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    await Effect.runPromise(repo.getList({ userId: "user-a" }));
+
+    const sql = mockD1._capturedSql[0];
+    expect(sql).toContain("user1_id = ?");
+    expect(sql).toContain("user2_id = ?");
+    expect(mockD1._capturedValues[0]).toContain("user-a");
+  });
+
+  it("returns empty array when no matches exist", async () => {
+    const mockD1 = createSequentialMockD1WithAll([]);
+
+    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const result = await Effect.runPromise(repo.getList({ userId: "user-a" }));
+
+    expect(result).toHaveLength(0);
+  });
+});
+
+// ─── getPendingLikes (extended) ──────────────────────────────────────────────
+
+describe("MatchRepository.getPendingLikes (extended)", () => {
+  function createPendingLikesMockD1(
+    allResults: Array<Record<string, unknown>>,
+  ) {
+    const capturedSql: string[] = [];
+    const capturedValues: unknown[][] = [];
+
+    const mockD1 = {
+      prepare: vi.fn((sql: string) => {
+        capturedSql.push(sql);
+        return {
+          bind: vi.fn((...values: unknown[]) => {
+            capturedValues.push(values);
+            return {
+              run: vi.fn(async () => ({ success: true })),
+              first: vi.fn(async () => null),
+              all: vi.fn(async () => ({
+                results: allResults,
+              })),
+            };
+          }),
+        };
+      }),
+      batch: vi.fn(async () => ({ success: true })),
+      _capturedSql: capturedSql,
+      _capturedValues: capturedValues,
+    };
+
+    return mockD1;
+  }
+
+  it("returns users who liked the current user", async () => {
+    const rows = [
+      {
+        id: "user-b",
+        username: "bob",
+        first_name: "Bob",
+        last_name: null,
+        bio: null,
+        age: 28,
+        gender: "male",
+        interests: JSON.stringify(["music"]),
+        media_urls: "[]",
+        location: "{}",
+        preferences: "{}",
+        is_active: 1,
+        is_profile_complete: 1,
+      },
+    ];
+    const mockD1 = createPendingLikesMockD1(rows);
+
+    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const result = await Effect.runPromise(
+      repo.getPendingLikes({ userId: "user-a" }),
+    );
+
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe("user-b");
+    expect(result[0].displayName).toBe("Bob");
+  });
+
+  it("returns empty array when no pending likes", async () => {
+    const mockD1 = createPendingLikesMockD1([]);
+
+    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const result = await Effect.runPromise(
+      repo.getPendingLikes({ userId: "user-a" }),
+    );
+
+    expect(result).toHaveLength(0);
+  });
+
+  it("queries with correct pending-likes filter", async () => {
+    const mockD1 = createPendingLikesMockD1([]);
+
+    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    await Effect.runPromise(repo.getPendingLikes({ userId: "user-a" }));
+
+    const sql = mockD1._capturedSql[0];
+    expect(sql).toContain("m.status = 'pending'");
+    expect(sql).toContain("m.user2_action = 'like'");
+    expect(sql).toContain("m.user1_action = 'none'");
   });
 });

@@ -762,17 +762,6 @@ export const matchCommand = async (ctx: MyContext, env: Env): Promise<void> => {
       referralCode: (user.referralCode as string | undefined) ?? undefined,
     });
     await showNextMatch(ctx, env, userId, lang);
-
-    if (relaxed) {
-      const adjustKeyboard = new InlineKeyboard()
-        .text(t("matchUpdateSettingsButton", lang), "settings:show")
-        .row()
-        .text(t("matchDismissButton", lang), "referral:dismiss");
-      await ctx.reply(
-        mdv2`🔍 *${t("matchRelaxedSearchTitle", lang)}*\n\n${t("matchRelaxedSearchBody", lang)}`,
-        { parse_mode: "MarkdownV2", reply_markup: adjustKeyboard },
-      );
-    }
   } catch (error) {
     log.error(
       "matchCommand",
@@ -984,6 +973,8 @@ async function handleMatchAction(
         timestamp: new Date().toISOString(),
       });
 
+      let showedAdOrPrompt = false;
+
       try {
         if (queue.index === 2) {
           const referralKeyboard = new InlineKeyboard()
@@ -996,9 +987,8 @@ async function handleMatchAction(
             }),
             { reply_markup: referralKeyboard },
           );
-        }
-
-        if (queue.tier === "free") {
+          showedAdOrPrompt = true;
+        } else if (queue.tier === "free") {
           const adKey = `ad_last_shown:${userId}`;
           const adLastShown = await env.KV.get(adKey);
           const lastIndex = adLastShown ? Number(adLastShown) : -999;
@@ -1021,6 +1011,7 @@ async function handleMatchAction(
               parse_mode: "Markdown",
               reply_markup: adKeyboard,
             });
+            showedAdOrPrompt = true;
           }
         }
       } catch {
@@ -1035,9 +1026,27 @@ async function handleMatchAction(
         // Message might be too old or not editable; ignore
       }
 
-      queue.index++;
-      await setMatchQueue(env.KV, userId, queue);
-      await showNextMatch(ctx, env, userId, lang);
+      if (showedAdOrPrompt) {
+        // Don't advance queue yet — the dismiss callback will do it
+        await env.KV.put(`ad_pending:${userId}`, "1", {
+          expirationTtl: 300,
+        });
+      } else {
+        await env.KV.delete(`ad_pending:${userId}`);
+        if (queue.index === 0 && queue.relaxed) {
+          const adjustKeyboard = new InlineKeyboard()
+            .text(t("matchUpdateSettingsButton", lang), "settings:show")
+            .row()
+            .text(t("matchDismissButton", lang), "relaxed:dismiss");
+          await ctx.reply(
+            mdv2`🔍 *${t("matchRelaxedSearchTitle", lang)}*\n\n${t("matchRelaxedSearchBody", lang)}`,
+            { parse_mode: "MarkdownV2", reply_markup: adjustKeyboard },
+          );
+        }
+        queue.index++;
+        await setMatchQueue(env.KV, userId, queue);
+        await showNextMatch(ctx, env, userId, lang);
+      }
     }
   } catch (error) {
     console.error("Match action error:", error);

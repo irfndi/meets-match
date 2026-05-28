@@ -166,4 +166,56 @@ describe("NotificationQueueConsumer", () => {
     await consumer.processBatch({ messages: [msg] } as any);
     expect(msg.retry).toHaveBeenCalled();
   });
+
+  it("returns early when notification not found in DB", async () => {
+    const { consumer, bot } = createConsumer([]);
+    const msg = createMessage({
+      notificationId: "n-missing",
+      userId: "u1",
+      type: "LIKE",
+    });
+    await consumer.processBatch({ messages: [msg] } as any);
+    expect(bot.fetch).not.toHaveBeenCalled();
+    expect(msg.ack).toHaveBeenCalled();
+  });
+
+  it("skips DLQ notifications", async () => {
+    const { consumer, bot } = createConsumer([{ id: "n1", status: "dlq" }]);
+    const msg = createMessage({
+      notificationId: "n1",
+      userId: "u1",
+      type: "LIKE",
+    });
+    await consumer.processBatch({ messages: [msg] } as any);
+    expect(bot.fetch).not.toHaveBeenCalled();
+    expect(msg.ack).toHaveBeenCalled();
+  });
+
+  it("handles bot service fetch throwing in processMessage", async () => {
+    const db = createMockD1((sql, values) => {
+      if (sql.includes("SELECT * FROM notifications WHERE id")) {
+        return { results: [{ id: "n1", status: "pending" }] };
+      }
+      return { results: [] };
+    });
+
+    const bot = {
+      fetch: vi.fn(async () => {
+        throw new Error("network down");
+      }),
+    } as unknown as Fetcher;
+
+    const consumer = new NotificationQueueConsumer(db, bot);
+    const msg = createMessage({
+      notificationId: "n1",
+      userId: "u1",
+      type: "LIKE",
+    });
+    await consumer.processBatch({ messages: [msg] } as any);
+
+    // processMessage catches the fetch error internally, marks as failed, returns.
+    // processBatch then acks the message since processMessage did not throw.
+    expect(msg.ack).toHaveBeenCalled();
+    expect(msg.retry).not.toHaveBeenCalled();
+  });
 });

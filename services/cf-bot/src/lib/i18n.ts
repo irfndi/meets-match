@@ -323,6 +323,7 @@ export interface Translations {
   errorReportThankYou: string;
   errorReportButton: string;
   errorMainMenuButton: string;
+  notificationIncompleteProfileCTA: string;
 }
 
 const en: Translations = {
@@ -733,6 +734,7 @@ const en: Translations = {
   errorReportThankYou: "Report sent. Thank you!",
   errorReportButton: "🐛 Report Issue",
   errorMainMenuButton: "🏠 Main menu",
+  notificationIncompleteProfileCTA: "👤 Complete Profile",
 };
 
 const id: Translations = {
@@ -1140,6 +1142,7 @@ const id: Translations = {
   errorReportThankYou: "Laporan terkirim. Terima kasih!",
   errorReportButton: "🐛 Laporkan Masalah",
   errorMainMenuButton: "🏠 Menu utama",
+  notificationIncompleteProfileCTA: "👤 Lengkapi Profil",
 };
 
 const dictionaries: Record<Language, Translations> = { en, id };
