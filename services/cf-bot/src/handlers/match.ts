@@ -1034,6 +1034,7 @@ async function handleMatchAction(
           expirationTtl: 300,
         });
       } else {
+        await env.KV.delete(`ad_pending:${userId}`);
         if (queue.index === 0 && queue.relaxed) {
           const adjustKeyboard = new InlineKeyboard()
             .text(t("matchUpdateSettingsButton", lang), "settings:show")
