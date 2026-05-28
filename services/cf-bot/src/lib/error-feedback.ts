@@ -197,6 +197,18 @@ export async function replyWithError(
   const source = buildErrorSource(context);
   const severity = classifySeverity(context);
 
+  // Write error metric to Analytics Engine (fire-and-forget, no await)
+  env.ANALYTICS?.writeDataPoint({
+    blobs: [
+      source,
+      severity,
+      context?.userTier ?? "unknown",
+      context?.userLanguage ?? "unknown",
+    ],
+    doubles: [1, Date.now()],
+    indexes: [userId],
+  });
+
   // Record error in journey
   await recordJourneyError(env.KV, userId, traceId);
 
