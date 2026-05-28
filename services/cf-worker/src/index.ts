@@ -164,7 +164,7 @@ async function processNotificationMessage(
         .run();
       await env.DB.prepare(
         `INSERT INTO notification_delivery_attempts (notification_id, status, error_message, duration_ms)
-         VALUES (?, 'permanent_failure', ?, ?)`,
+         VALUES (?, 'failed', ?, ?)`,
       )
         .bind(notificationId, errorText, durationMs)
         .run();
