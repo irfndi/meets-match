@@ -11,21 +11,26 @@ export default {
     const now = Date.now();
 
     for (const event of events) {
-      const eventInfo = event.event;
-      const url =
-        eventInfo != null && "request" in eventInfo
-          ? (eventInfo as TraceItemFetchEventInfo).request.url
-          : "";
-      const method =
-        eventInfo != null && "request" in eventInfo
-          ? (eventInfo as TraceItemFetchEventInfo).request.method
-          : "";
-      const responseStatus =
-        eventInfo != null &&
-        "response" in eventInfo &&
-        eventInfo.response != null
-          ? eventInfo.response.status
-          : null;
+      let url = "";
+      let method = "";
+      let responseStatus: number | null = null;
+
+      try {
+        const eventInfo = event.event as Record<string, unknown> | undefined;
+        if (eventInfo) {
+          const request = eventInfo.request as Record<string, unknown> | undefined;
+          if (request) {
+            url = String(request.url ?? "");
+            method = String(request.method ?? "");
+          }
+          const response = eventInfo.response as Record<string, unknown> | undefined;
+          if (response && typeof response.status === "number") {
+            responseStatus = response.status;
+          }
+        }
+      } catch {
+        // Ignore parse errors, use empty values
+      }
 
       env.ANALYTICS.writeDataPoint({
         blobs: [
