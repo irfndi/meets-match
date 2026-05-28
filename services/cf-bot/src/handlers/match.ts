@@ -762,17 +762,6 @@ export const matchCommand = async (ctx: MyContext, env: Env): Promise<void> => {
       referralCode: (user.referralCode as string | undefined) ?? undefined,
     });
     await showNextMatch(ctx, env, userId, lang);
-
-    if (relaxed) {
-      const adjustKeyboard = new InlineKeyboard()
-        .text(t("matchUpdateSettingsButton", lang), "settings:show")
-        .row()
-        .text(t("matchDismissButton", lang), "relaxed:dismiss");
-      await ctx.reply(
-        mdv2`🔍 *${t("matchRelaxedSearchTitle", lang)}*\n\n${t("matchRelaxedSearchBody", lang)}`,
-        { parse_mode: "MarkdownV2", reply_markup: adjustKeyboard },
-      );
-    }
   } catch (error) {
     log.error(
       "matchCommand",
@@ -1045,6 +1034,16 @@ async function handleMatchAction(
           expirationTtl: 300,
         });
       } else {
+        if (queue.index === 0 && queue.relaxed) {
+          const adjustKeyboard = new InlineKeyboard()
+            .text(t("matchUpdateSettingsButton", lang), "settings:show")
+            .row()
+            .text(t("matchDismissButton", lang), "relaxed:dismiss");
+          await ctx.reply(
+            mdv2`🔍 *${t("matchRelaxedSearchTitle", lang)}*\n\n${t("matchRelaxedSearchBody", lang)}`,
+            { parse_mode: "MarkdownV2", reply_markup: adjustKeyboard },
+          );
+        }
         queue.index++;
         await setMatchQueue(env.KV, userId, queue);
         await showNextMatch(ctx, env, userId, lang);
