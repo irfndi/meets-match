@@ -23,6 +23,19 @@ import {
 import { UserRepository } from "./user.js";
 import { BlockRepository } from "./block.js";
 
+/**
+ * Parse a SQLite CURRENT_TIMESTAMP string as UTC.
+ * SQLite stores timestamps as 'YYYY-MM-DD HH:MM:SS' (no 'T' or 'Z'),
+ * which Date.parse treats as local time. Adding 'T' and 'Z' forces UTC.
+ * Also handles ISO 8601 strings that already contain 'T' or 'Z'.
+ */
+function parseSqliteTimestamp(ts: string): number {
+  if (ts.includes("T") || ts.endsWith("Z")) {
+    return Date.parse(ts);
+  }
+  return Date.parse(ts.replace(" ", "T") + "Z");
+}
+
 export class MatchRepository {
   constructor(
     private readonly db: D1Database,
@@ -489,7 +502,7 @@ export class MatchRepository {
         const rows = (results ?? []) as Array<Record<string, unknown>>;
 
         // 3. Filter and score candidates
-        const now = new Date();
+        const nowTime = Date.now();
         const scored = rows
           .map((row) => {
             const candidate = this.rowToUser(row);
@@ -507,6 +520,14 @@ export class MatchRepository {
               : null;
             const matchedAt = row.matched_at ? String(row.matched_at) : null;
             const viewedAt = row.viewed_at ? String(row.viewed_at) : null;
+
+            const matchUpdatedTime = matchUpdatedAt
+              ? parseSqliteTimestamp(matchUpdatedAt)
+              : null;
+            const matchedTime = matchedAt
+              ? parseSqliteTimestamp(matchedAt)
+              : null;
+            const viewedTime = viewedAt ? parseSqliteTimestamp(viewedAt) : null;
 
             // Determine current user's action in this match
             // Use String() to avoid type mismatch (D1 may return numbers for numeric IDs)
@@ -598,8 +619,8 @@ export class MatchRepository {
             ) {
               const cooldownMs = 3 * 24 * 60 * 60 * 1000; // 3 days
               if (
-                now.getTime() - new Date(matchUpdatedAt).getTime() <
-                cooldownMs
+                matchUpdatedTime !== null &&
+                nowTime - matchUpdatedTime < cooldownMs
               ) {
                 return null;
               }
@@ -610,8 +631,8 @@ export class MatchRepository {
               if (otherAction !== "LIKE") {
                 const cooldownMs = 6 * 60 * 60 * 1000; // 6 hours
                 if (
-                  now.getTime() - new Date(matchUpdatedAt).getTime() <
-                  cooldownMs
+                  matchUpdatedTime !== null &&
+                  nowTime - matchUpdatedTime < cooldownMs
                 ) {
                   return null;
                 }
@@ -628,8 +649,8 @@ export class MatchRepository {
             ) {
               const expireMs = 30 * 24 * 60 * 60 * 1000; // 30 days
               if (
-                now.getTime() - new Date(matchUpdatedAt).getTime() <
-                expireMs
+                matchUpdatedTime !== null &&
+                nowTime - matchUpdatedTime < expireMs
               ) {
                 return null;
               }
@@ -639,10 +660,9 @@ export class MatchRepository {
             let baseScore = calculateMatchScore(currentUser, candidate).total;
 
             // Variety: penalize recently shown profiles
-            if (viewedAt) {
+            if (viewedTime !== null) {
               const hoursSinceViewed =
-                (now.getTime() - new Date(viewedAt).getTime()) /
-                (1000 * 60 * 60);
+                (nowTime - viewedTime) / (1000 * 60 * 60);
               if (hoursSinceViewed < 24) {
                 baseScore *= 0.1; // Heavily penalize profiles shown in last 24h
               } else if (hoursSinceViewed < 72) {
@@ -651,10 +671,9 @@ export class MatchRepository {
             }
 
             // Matched recycling: recent matches deprioritized, old matches normalize
-            if (matchStatus === "matched" && matchedAt) {
+            if (matchStatus === "matched" && matchedTime !== null) {
               const daysSinceMatched =
-                (now.getTime() - new Date(matchedAt).getTime()) /
-                (1000 * 60 * 60 * 24);
+                (nowTime - matchedTime) / (1000 * 60 * 60 * 24);
               if (daysSinceMatched < 14) {
                 baseScore *= 0.05; // Very low priority for fresh matches
               } else if (daysSinceMatched < 30) {
@@ -664,10 +683,10 @@ export class MatchRepository {
 
             // Disliked after cooldown: lower priority, normalizes after 14 days
             if (matchStatus === "rejected" && myAction === "DISLIKE") {
-              const daysSinceDislike = matchUpdatedAt
-                ? (now.getTime() - new Date(matchUpdatedAt).getTime()) /
-                  (1000 * 60 * 60 * 24)
-                : 999;
+              const daysSinceDislike =
+                matchUpdatedTime !== null
+                  ? (nowTime - matchUpdatedTime) / (1000 * 60 * 60 * 24)
+                  : 999;
               if (daysSinceDislike < 14) {
                 baseScore *= 0.3;
               } // 14-30 days stays at 0.3, >30 normalizes
@@ -894,11 +913,12 @@ export function calculateMatchScore(
     user2.interests &&
     user2.interests.length > 0
   ) {
-    // Use two Sets for O(1) lookups instead of multiple allocations and array spreads.
+    let intersectionSize = 0;
+    let unionSize = 0;
+
     const set1 = new Set(user1.interests);
     const set2 = new Set(user2.interests);
-    let intersectionSize = 0;
-    // Iterate over the smaller set to minimize lookups.
+
     const [smaller, larger] =
       set1.size < set2.size ? [set1, set2] : [set2, set1];
     for (const item of smaller) {
@@ -906,7 +926,8 @@ export function calculateMatchScore(
         intersectionSize++;
       }
     }
-    const unionSize = set1.size + set2.size - intersectionSize;
+    unionSize = set1.size + set2.size - intersectionSize;
+
     if (unionSize > 0) {
       score.interests = intersectionSize / unionSize;
     }
