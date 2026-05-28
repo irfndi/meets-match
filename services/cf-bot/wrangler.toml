@@ -105,6 +105,9 @@ bucket_name = "meetsmatch-media"
 binding = "ERROR_ANALYTICS"
 dataset = "bot_errors"
 
+[[env.production.tail_consumers]]
+service = "meetsmatch-tail"
+
 [triggers]
 crons = ["0 */6 * * *"]
 

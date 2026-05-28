@@ -6,7 +6,8 @@
   "main": "./dist/index.js",
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy --env dev",
+    "deploy": "wrangler deploy",
+    "deploy:dev": "wrangler deploy --env dev",
     "build": "tsc -p tsconfig.json",
     "test": "vitest",
     "lint": "tsc --noEmit"

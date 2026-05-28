@@ -203,7 +203,7 @@ export async function replyWithError(
         source,
         severity,
         context?.userTier ?? "unknown",
-        context?.userLanguage ?? "unknown",
+        context?.userLanguage ?? lang ?? ctx.from?.language_code ?? "unknown",
       ],
       doubles: [1, Date.now()],
       indexes: [userId],

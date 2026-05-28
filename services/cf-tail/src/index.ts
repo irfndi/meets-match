@@ -25,7 +25,7 @@ export default {
             | Record<string, unknown>
             | undefined;
           if (request) {
-            url = String(request.url ?? "").slice(0, MAX_URL_LEN);
+            url = String(request.url ?? "").split("?")[0].slice(0, MAX_URL_LEN);
             method = String(request.method ?? "");
           }
           const response = eventInfo.response as

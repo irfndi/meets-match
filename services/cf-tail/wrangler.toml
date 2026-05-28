@@ -3,8 +3,21 @@ main = "src/index.ts"
 compatibility_date = "2026-05-01"
 compatibility_flags = ["nodejs_compat"]
 
-# Analytics Engine for tail event metrics
 [[analytics_engine_datasets]]
+binding = "ANALYTICS"
+dataset = "bot_metrics"
+
+[env.dev]
+name = "meetsmatch-tail-dev"
+
+[[env.dev.analytics_engine_datasets]]
+binding = "ANALYTICS"
+dataset = "bot_metrics"
+
+[env.production]
+name = "meetsmatch-tail"
+
+[[env.production.analytics_engine_datasets]]
 binding = "ANALYTICS"
 dataset = "bot_metrics"
 
