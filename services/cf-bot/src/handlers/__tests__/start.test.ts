@@ -290,6 +290,14 @@ describe("start handler", () => {
 
       const result = await languageCallback(ctx, env, "lang:fr");
       expect(result).toBe(true);
+
+      const putCall = (env.API_SERVICE.fetch as ReturnType<typeof vi.fn>).mock.calls.find(
+        (c: unknown[]) => (c[0] as Request)?.method === "PUT",
+      );
+      expect(putCall).toBeDefined();
+      const body = JSON.parse(await (putCall![0] as Request).text());
+      expect(["en", "id"]).toContain(body.user.language);
+      expect(body.user.language).not.toBe("fr");
     });
 
     it("handles user fetch failure after language set", async () => {

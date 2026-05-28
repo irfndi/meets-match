@@ -576,7 +576,7 @@ describe("Matches Handlers", () => {
           ),
       });
       await matchesCallbacks(ctx, env);
-      const notificationsRaw = await kv.get("notifications:list:123");
+      const notificationsRaw = await kv.get("notifications:123");
       const ids = notificationsRaw ? JSON.parse(notificationsRaw) : [];
       expect(ids.length).toBe(0);
     });

@@ -151,7 +151,7 @@ describe("Journey Tracking", () => {
       expect(text).not.toContain("event-0");
     });
 
-    it("should handle journey with no events property", () => {
+    it("should handle journey with empty events array", () => {
       const text = formatJourneyForReport({ events: [] } as any);
       expect(text).toContain("No recent activity");
     });
