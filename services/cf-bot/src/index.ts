@@ -69,7 +69,7 @@ export interface Env {
   KV: KVNamespace;
   API_SERVICE: Fetcher;
   MEDIA_BUCKET?: R2Bucket;
-  ANALYTICS?: AnalyticsEngineDataset;
+  ERROR_ANALYTICS?: AnalyticsEngineDataset;
   BOT_TOKEN: string;
   TELEGRAM_WEBHOOK_SECRET?: string;
   ENVIRONMENT?: string;
