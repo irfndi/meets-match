@@ -849,7 +849,6 @@ export default {
           headers: { "Content-Type": "application/json" },
         });
       } catch (error) {
-        console.error("Send notification error:", error);
         if (isPermanentDeliveryError(error)) {
           return new Response(
             JSON.stringify({
@@ -864,6 +863,7 @@ export default {
             },
           );
         }
+        console.error("Send notification error:", error);
         return new Response(
           JSON.stringify({ error: "Internal Server Error" }),
           {
