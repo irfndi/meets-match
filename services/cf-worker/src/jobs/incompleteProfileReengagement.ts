@@ -60,11 +60,18 @@ export async function runIncompleteProfileReengagementJob(
          AND (last_reminded_at IS NULL OR last_reminded_at <= ?)
        LIMIT ?`,
     )
-      .bind(minCreatedDate.toISOString(), cooldownDate.toISOString(), BATCH_SIZE)
+      .bind(
+        minCreatedDate.toISOString(),
+        cooldownDate.toISOString(),
+        BATCH_SIZE,
+      )
       .all();
 
     const candidates = (results ?? []) as Array<Record<string, unknown>>;
-    log.info("incompleteProfileReengagement", `Found ${candidates.length} candidates`);
+    log.info(
+      "incompleteProfileReengagement",
+      `Found ${candidates.length} candidates`,
+    );
 
     for (const user of candidates) {
       const userId = String(user.id);
@@ -112,7 +119,12 @@ export async function runIncompleteProfileReengagementJob(
           );
         }
       } catch (error) {
-        log.error("incompleteProfileReengagement", `Error for ${userId}`, undefined, error);
+        log.error(
+          "incompleteProfileReengagement",
+          `Error for ${userId}`,
+          undefined,
+          error,
+        );
       }
     }
 
