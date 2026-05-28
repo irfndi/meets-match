@@ -154,6 +154,8 @@ describe("ErrorReportRepository extended", () => {
     expect(result.triggerInput).toBe("/start");
     expect(result.kvSession).toBe('{"state":"active"}');
     expect(result.cfMetadata).toBe('{"country":"US"}');
-    expect(result.createdAt >= dateBefore && result.createdAt <= dateAfter).toBe(true);
+    expect(
+      result.createdAt >= dateBefore && result.createdAt <= dateAfter,
+    ).toBe(true);
   });
 });

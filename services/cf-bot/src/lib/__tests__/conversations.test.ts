@@ -541,7 +541,9 @@ describe("continueOnboarding", () => {
     const keyboard = replyCall[1]?.reply_markup?.keyboard;
     expect(keyboard).toBeDefined();
     const allTexts = keyboard.flat().map((b: any) => b.text);
-    expect(allTexts.some((t: string) => t.includes("Telegram name"))).toBe(true);
+    expect(allTexts.some((t: string) => t.includes("Telegram name"))).toBe(
+      true,
+    );
     expect(allTexts).toContain("Cancel");
   });
 

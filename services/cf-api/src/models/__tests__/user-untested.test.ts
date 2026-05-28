@@ -59,14 +59,19 @@ describe("UserRepository update", () => {
   it("creates (upserts) when user does not exist", async () => {
     const db = createMockD1((sql, _values) => {
       // First SELECT id – user does not exist
-      if (sql.includes("SELECT id FROM users WHERE id =")) return { results: [] };
+      if (sql.includes("SELECT id FROM users WHERE id ="))
+        return { results: [] };
       // INSERT
-      if (sql.includes("INSERT INTO users (id, first_name)")) return { results: [], success: true };
+      if (sql.includes("INSERT INTO users (id, first_name)"))
+        return { results: [], success: true };
       // UPDATE
-      if (sql.includes("UPDATE users SET")) return { results: [], success: true };
+      if (sql.includes("UPDATE users SET"))
+        return { results: [], success: true };
       // Final SELECT *
       if (sql.includes("SELECT * FROM users WHERE id =")) {
-        return { results: [{ id: "newUser", first_name: "Fresh", is_active: 1 }] };
+        return {
+          results: [{ id: "newUser", first_name: "Fresh", is_active: 1 }],
+        };
       }
       return { results: [] };
     });
@@ -84,8 +89,10 @@ describe("UserRepository update", () => {
 
   it("updates all fields with dynamic field building", async () => {
     const db = createMockD1((sql, _values) => {
-      if (sql.includes("SELECT id FROM users WHERE id =")) return { results: [{ id: "u1" }] };
-      if (sql.includes("UPDATE users SET")) return { results: [], success: true };
+      if (sql.includes("SELECT id FROM users WHERE id ="))
+        return { results: [{ id: "u1" }] };
+      if (sql.includes("UPDATE users SET"))
+        return { results: [], success: true };
       if (sql.includes("SELECT preferences FROM users")) {
         return { results: [{ preferences: '{"oldPref":true}' }] };
       }
@@ -132,7 +139,8 @@ describe("UserRepository update", () => {
 
   it("returns early when fields is empty", async () => {
     const db = createMockD1((sql, _values) => {
-      if (sql.includes("SELECT id FROM users WHERE id =")) return { results: [{ id: "u1" }] };
+      if (sql.includes("SELECT id FROM users WHERE id ="))
+        return { results: [{ id: "u1" }] };
       if (sql.includes("SELECT * FROM users WHERE id =")) {
         return { results: [makeUserRow()] };
       }
@@ -151,12 +159,19 @@ describe("UserRepository update", () => {
 
   it("merges existing preferences", async () => {
     const db = createMockD1((sql, values) => {
-      if (sql.includes("SELECT id FROM users WHERE id =")) return { results: [{ id: "u1" }] };
+      if (sql.includes("SELECT id FROM users WHERE id ="))
+        return { results: [{ id: "u1" }] };
       if (sql.includes("SELECT preferences FROM users")) {
-        return { results: [{ preferences: '{"existing":true,"maxDistance":20}' }] };
+        return {
+          results: [{ preferences: '{"existing":true,"maxDistance":20}' }],
+        };
       }
       if (sql.includes("UPDATE users SET")) {
-        const captured = (db as unknown as { _captured: Array<{ sql: string; values: unknown[] }> })._captured;
+        const captured = (
+          db as unknown as {
+            _captured: Array<{ sql: string; values: unknown[] }>;
+          }
+        )._captured;
         const updateCall = captured.at(-1);
         if (updateCall && updateCall.sql.includes("UPDATE users SET")) {
           const prefsIdx = updateCall.values.findIndex(
@@ -187,11 +202,13 @@ describe("UserRepository update", () => {
 
   it("handles malformed JSON in preferences", async () => {
     const db = createMockD1((sql, _values) => {
-      if (sql.includes("SELECT id FROM users WHERE id =")) return { results: [{ id: "u1" }] };
+      if (sql.includes("SELECT id FROM users WHERE id ="))
+        return { results: [{ id: "u1" }] };
       if (sql.includes("SELECT preferences FROM users")) {
         return { results: [{ preferences: "not-json" }] };
       }
-      if (sql.includes("UPDATE users SET")) return { results: [], success: true };
+      if (sql.includes("UPDATE users SET"))
+        return { results: [], success: true };
       if (sql.includes("SELECT * FROM users WHERE id =")) {
         return { results: [makeUserRow()] };
       }
@@ -215,8 +232,10 @@ describe("UserRepository update", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2024-06-15"));
     const db = createMockD1((sql, _values) => {
-      if (sql.includes("SELECT id FROM users WHERE id =")) return { results: [{ id: "u1" }] };
-      if (sql.includes("UPDATE users SET")) return { results: [], success: true };
+      if (sql.includes("SELECT id FROM users WHERE id ="))
+        return { results: [{ id: "u1" }] };
+      if (sql.includes("UPDATE users SET"))
+        return { results: [], success: true };
       if (sql.includes("SELECT * FROM users WHERE id =")) {
         return { results: [makeUserRow()] };
       }
@@ -233,19 +252,24 @@ describe("UserRepository update", () => {
         updateMask: ["birthDate"],
       }),
     );
-    const updateCall = db._captured.findLast((c) =>
-      c.sql.includes("UPDATE users SET") && c.values.length > 0,
+    const updateCall = db._captured.findLast(
+      (c) => c.sql.includes("UPDATE users SET") && c.values.length > 0,
     );
-    const ageIdx = updateCall?.values.findIndex((v) => typeof v === "number" && v >= 20 && v <= 30);
+    const ageIdx = updateCall?.values.findIndex(
+      (v) => typeof v === "number" && v >= 20 && v <= 30,
+    );
     expect(ageIdx).toBeGreaterThanOrEqual(0);
     vi.useRealTimers();
   });
 
   it("throws NotFoundError when final read returns nothing", async () => {
     const db = createMockD1((sql, _values) => {
-      if (sql.includes("SELECT id FROM users WHERE id =")) return { results: [{ id: "u1" }] };
-      if (sql.includes("UPDATE users SET")) return { results: [], success: true };
-      if (sql.includes("SELECT * FROM users WHERE id =")) return { results: [] };
+      if (sql.includes("SELECT id FROM users WHERE id ="))
+        return { results: [{ id: "u1" }] };
+      if (sql.includes("UPDATE users SET"))
+        return { results: [], success: true };
+      if (sql.includes("SELECT * FROM users WHERE id ="))
+        return { results: [] };
       return { results: [] };
     });
     const repo = new UserRepository(db);
@@ -297,7 +321,9 @@ describe("UserRepository getOrCreateReferralCode", () => {
   it("throws NotFoundError when user missing", async () => {
     const db = createMockD1(() => ({ results: [] }));
     const repo = new UserRepository(db);
-    await expect(runEffect(repo.getOrCreateReferralCode("nope"))).rejects.toThrow(NotFoundError);
+    await expect(
+      runEffect(repo.getOrCreateReferralCode("nope")),
+    ).rejects.toThrow(NotFoundError);
   });
 });
 
@@ -311,7 +337,9 @@ describe("UserRepository applyReferral", () => {
     referrerRow: Record<string, unknown> | null = null,
   ) {
     return createMockD1((sql, values) => {
-      if (sql.includes("SELECT referral_code, referred_by FROM users WHERE id =")) {
+      if (
+        sql.includes("SELECT referral_code, referred_by FROM users WHERE id =")
+      ) {
         return { results: selfRow ? [selfRow] : [] };
       }
       if (
@@ -333,7 +361,9 @@ describe("UserRepository applyReferral", () => {
   });
 
   it("rejects self-referral", async () => {
-    const repo = new UserRepository(createReferralDb({ referral_code: "ABC123" }));
+    const repo = new UserRepository(
+      createReferralDb({ referral_code: "ABC123" }),
+    );
     const result = await runEffect(repo.applyReferral("u1", "ABC123"));
     expect(result.success).toBe(false);
     expect(result.message).toContain("own referral code");
@@ -349,7 +379,9 @@ describe("UserRepository applyReferral", () => {
   });
 
   it("rejects when referrer code not found", async () => {
-    const repo = new UserRepository(createReferralDb({ referral_code: "ABC123" }, null));
+    const repo = new UserRepository(
+      createReferralDb({ referral_code: "ABC123" }, null),
+    );
     const result = await runEffect(repo.applyReferral("u1", "XYZ456"));
     expect(result.success).toBe(false);
     expect(result.message).toContain("not found");
@@ -357,7 +389,9 @@ describe("UserRepository applyReferral", () => {
 
   it("applies referral successfully", async () => {
     const db = createMockD1((sql) => {
-      if (sql.includes("SELECT referral_code, referred_by FROM users WHERE id =")) {
+      if (
+        sql.includes("SELECT referral_code, referred_by FROM users WHERE id =")
+      ) {
         return { results: [{ referral_code: "MYCODE", referred_by: null }] };
       }
       if (
@@ -366,7 +400,9 @@ describe("UserRepository applyReferral", () => {
         )
       ) {
         return {
-          results: [{ id: "ref1", referral_count: 2, referral_bonus_swipes: 5 }],
+          results: [
+            { id: "ref1", referral_count: 2, referral_bonus_swipes: 5 },
+          ],
         };
       }
       return { results: [], success: true };
@@ -380,7 +416,9 @@ describe("UserRepository applyReferral", () => {
   it("throws NotFoundError when self user does not exist", async () => {
     const db = createMockD1(() => ({ results: [] }));
     const repo = new UserRepository(db);
-    await expect(runEffect(repo.applyReferral("nope", "CODE"))).rejects.toThrow(NotFoundError);
+    await expect(runEffect(repo.applyReferral("nope", "CODE"))).rejects.toThrow(
+      NotFoundError,
+    );
   });
 });
 
@@ -490,7 +528,9 @@ describe("UserRepository getSwipeStatus", () => {
   it("throws NotFoundError when user missing", async () => {
     const db = createMockD1(() => ({ results: [] }));
     const repo = new UserRepository(db);
-    await expect(runEffect(repo.getSwipeStatus("nope"))).rejects.toThrow(NotFoundError);
+    await expect(runEffect(repo.getSwipeStatus("nope"))).rejects.toThrow(
+      NotFoundError,
+    );
   });
 });
 
@@ -737,7 +777,9 @@ describe("UserRepository getDMStatus", () => {
   it("throws NotFoundError when user missing", async () => {
     const db = createMockD1(() => ({ results: [] }));
     const repo = new UserRepository(db);
-    await expect(runEffect(repo.getDMStatus("nope"))).rejects.toThrow(NotFoundError);
+    await expect(runEffect(repo.getDMStatus("nope"))).rejects.toThrow(
+      NotFoundError,
+    );
   });
 });
 
@@ -794,7 +836,9 @@ describe("UserRepository useDMCredit", () => {
   it("throws NotFoundError when user missing", async () => {
     const db = createMockD1(() => ({ results: [] }));
     const repo = new UserRepository(db);
-    await expect(runEffect(repo.useDMCredit("nope"))).rejects.toThrow(NotFoundError);
+    await expect(runEffect(repo.useDMCredit("nope"))).rejects.toThrow(
+      NotFoundError,
+    );
   });
 });
 
@@ -830,7 +874,9 @@ describe("UserRepository addDMCredits", () => {
   it("throws NotFoundError when user missing", async () => {
     const db = createMockD1(() => ({ results: [] }));
     const repo = new UserRepository(db);
-    await expect(runEffect(repo.addDMCredits("nope", 5))).rejects.toThrow(NotFoundError);
+    await expect(runEffect(repo.addDMCredits("nope", 5))).rejects.toThrow(
+      NotFoundError,
+    );
   });
 });
 
@@ -935,7 +981,9 @@ describe("UserRepository getMediaUploadStatus", () => {
   it("throws NotFoundError when user missing", async () => {
     const db = createMockD1(() => ({ results: [] }));
     const repo = new UserRepository(db);
-    await expect(runEffect(repo.getMediaUploadStatus("nope"))).rejects.toThrow(NotFoundError);
+    await expect(runEffect(repo.getMediaUploadStatus("nope"))).rejects.toThrow(
+      NotFoundError,
+    );
   });
 });
 
@@ -999,7 +1047,9 @@ describe("UserRepository recordMediaUpload", () => {
   it("throws NotFoundError when user missing", async () => {
     const db = createMockD1(() => ({ results: [] }));
     const repo = new UserRepository(db);
-    await expect(runEffect(repo.recordMediaUpload("nope"))).rejects.toThrow(NotFoundError);
+    await expect(runEffect(repo.recordMediaUpload("nope"))).rejects.toThrow(
+      NotFoundError,
+    );
   });
 });
 
@@ -1023,7 +1073,9 @@ describe("UserRepository media edge cases", () => {
   it("getMedia throws NotFoundError when user missing", async () => {
     const db = createMockD1(() => ({ results: [] }));
     const repo = new UserRepository(db);
-    await expect(runEffect(repo.getMedia("nope"))).rejects.toThrow(NotFoundError);
+    await expect(runEffect(repo.getMedia("nope"))).rejects.toThrow(
+      NotFoundError,
+    );
   });
 
   it("addMedia throws when 3 media items already exist", async () => {
@@ -1094,7 +1146,9 @@ describe("UserRepository media edge cases", () => {
   it("removeMedia throws NotFoundError when user missing", async () => {
     const db = createMockD1(() => ({ results: [] }));
     const repo = new UserRepository(db);
-    await expect(runEffect(repo.removeMedia("nope", "a.jpg"))).rejects.toThrow(NotFoundError);
+    await expect(runEffect(repo.removeMedia("nope", "a.jpg"))).rejects.toThrow(
+      NotFoundError,
+    );
   });
 });
 
@@ -1146,18 +1200,22 @@ describe("UserRepository lifecycle methods", () => {
   });
 
   it("downgradeExpiredSubscriptions returns number of changes", async () => {
-    const db = createMockD1(
-      () => ({ results: [], success: true, meta: { changes: 3 } }),
-    );
+    const db = createMockD1(() => ({
+      results: [],
+      success: true,
+      meta: { changes: 3 },
+    }));
     const repo = new UserRepository(db);
     const result = await runEffect(repo.downgradeExpiredSubscriptions());
     expect(result).toBe(3);
   });
 
   it("downgradeExpiredSubscriptions returns 0 when no changes", async () => {
-    const db = createMockD1(
-      () => ({ results: [], success: true, meta: { changes: 0 } }),
-    );
+    const db = createMockD1(() => ({
+      results: [],
+      success: true,
+      meta: { changes: 0 },
+    }));
     const repo = new UserRepository(db);
     const result = await runEffect(repo.downgradeExpiredSubscriptions());
     expect(result).toBe(0);

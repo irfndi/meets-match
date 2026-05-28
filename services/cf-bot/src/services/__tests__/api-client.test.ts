@@ -793,11 +793,7 @@ describe("unblockUser", () => {
 
 describe("ApiError", () => {
   it("has correct name, message, status, body, and endpoint", () => {
-    const error = new ApiError(
-      404,
-      { error: "not found" },
-      "/users/nope",
-    );
+    const error = new ApiError(404, { error: "not found" }, "/users/nope");
     expect(error.name).toBe("ApiError");
     expect(error.message).toBe("API 404 on /users/nope");
     expect(error.status).toBe(404);
@@ -806,11 +802,7 @@ describe("ApiError", () => {
   });
 
   it("is an instance of Error", () => {
-    const error = new ApiError(
-      500,
-      "server error",
-      "/test",
-    );
+    const error = new ApiError(500, "server error", "/test");
     expect(error).toBeInstanceOf(Error);
   });
 });
@@ -850,7 +842,10 @@ describe("Idempotency-Key header", () => {
   it("is NOT set on non-idempotent PUT requests like updateUser", async () => {
     const fetcher = mockFetcher(ok({ user: { id: "u1" } }));
     const client = new ApiServiceClient(fetcher as any);
-    await client.updateUser({ userId: "u1", user: { id: "u1", displayName: "X" } });
+    await client.updateUser({
+      userId: "u1",
+      user: { id: "u1", displayName: "X" },
+    });
     const req = await getLastRequest(fetcher);
     expect(req.headers["idempotency-key"]).toBeUndefined();
   });

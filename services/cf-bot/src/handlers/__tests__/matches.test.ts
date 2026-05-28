@@ -513,12 +513,8 @@ describe("Matches Handlers", () => {
       await matchesCallbacks(ctx, env);
       const call = (ctx.reply as any).mock.calls[0];
       const kb = (call[1]?.reply_markup as any)?.inline_keyboard?.flat() ?? [];
-      expect(
-        kb.some((b: any) => b.text?.includes("Like back")),
-      ).toBe(true);
-      expect(
-        kb.some((b: any) => b.text?.includes("Pass")),
-      ).toBe(true);
+      expect(kb.some((b: any) => b.text?.includes("Like back"))).toBe(true);
+      expect(kb.some((b: any) => b.text?.includes("Pass"))).toBe(true);
     });
 
     it("should answer with unknown action for unrecognized data", async () => {

@@ -435,9 +435,27 @@ describe("runReengagementJob", () => {
   it("processes multiple candidates in a single run", async () => {
     const env = createEnv({
       candidates: [
-        { id: "u1", first_name: "Alice", gender: "female", location: null, preferences: null },
-        { id: "u2", first_name: "Bob", gender: "male", location: null, preferences: null },
-        { id: "u3", first_name: "Charlie", gender: null, location: null, preferences: null },
+        {
+          id: "u1",
+          first_name: "Alice",
+          gender: "female",
+          location: null,
+          preferences: null,
+        },
+        {
+          id: "u2",
+          first_name: "Bob",
+          gender: "male",
+          location: null,
+          preferences: null,
+        },
+        {
+          id: "u3",
+          first_name: "Charlie",
+          gender: null,
+          location: null,
+          preferences: null,
+        },
       ],
       nearbyCount: 5,
       apiOk: true,
@@ -473,8 +491,20 @@ describe("runReengagementJob", () => {
                 results: isCountQuery
                   ? [{ c: 5 }]
                   : [
-                      { id: "u1", first_name: "A", gender: "female", location: null, preferences: null },
-                      { id: "u2", first_name: "B", gender: "male", location: null, preferences: null },
+                      {
+                        id: "u1",
+                        first_name: "A",
+                        gender: "female",
+                        location: null,
+                        preferences: null,
+                      },
+                      {
+                        id: "u2",
+                        first_name: "B",
+                        gender: "male",
+                        location: null,
+                        preferences: null,
+                      },
                     ],
               })),
               first: vi.fn(async () => ({ c: 5 })),
@@ -483,9 +513,13 @@ describe("runReengagementJob", () => {
           };
         }),
       } as unknown as import("@cloudflare/workers-types").D1Database,
-      API_SERVICE: { fetch: apiFetch } as unknown as import("@cloudflare/workers-types").Fetcher,
+      API_SERVICE: {
+        fetch: apiFetch,
+      } as unknown as import("@cloudflare/workers-types").Fetcher,
       KV: {} as unknown as import("@cloudflare/workers-types").KVNamespace,
-      BOT_SERVICE: { fetch: vi.fn(async () => new Response()) } as unknown as import("@cloudflare/workers-types").Fetcher,
+      BOT_SERVICE: {
+        fetch: vi.fn(async () => new Response()),
+      } as unknown as import("@cloudflare/workers-types").Fetcher,
     };
 
     await expect(runReengagementJob(env)).resolves.toBeUndefined();
@@ -509,7 +543,13 @@ describe("runReengagementJob", () => {
                 results: isCountQuery
                   ? [{ c: 5 }]
                   : [
-                      { id: "u1", first_name: "Alice", gender: "female", location: null, preferences: null },
+                      {
+                        id: "u1",
+                        first_name: "Alice",
+                        gender: "female",
+                        location: null,
+                        preferences: null,
+                      },
                     ],
               })),
               first: vi.fn(async () => ({ c: 5 })),
@@ -519,10 +559,16 @@ describe("runReengagementJob", () => {
         }),
       } as unknown as import("@cloudflare/workers-types").D1Database,
       API_SERVICE: {
-        fetch: vi.fn(async () => ({ ok: true, status: 200, text: async () => "ok" })),
+        fetch: vi.fn(async () => ({
+          ok: true,
+          status: 200,
+          text: async () => "ok",
+        })),
       } as unknown as import("@cloudflare/workers-types").Fetcher,
       KV: {} as unknown as import("@cloudflare/workers-types").KVNamespace,
-      BOT_SERVICE: { fetch: vi.fn(async () => new Response()) } as unknown as import("@cloudflare/workers-types").Fetcher,
+      BOT_SERVICE: {
+        fetch: vi.fn(async () => new Response()),
+      } as unknown as import("@cloudflare/workers-types").Fetcher,
     };
 
     await runReengagementJob(env);
@@ -546,7 +592,13 @@ describe("runReengagementJob", () => {
                 results: isCountQuery
                   ? [{ c: 5 }]
                   : [
-                      { id: "u1", first_name: "Alice", gender: "female", location: null, preferences: null },
+                      {
+                        id: "u1",
+                        first_name: "Alice",
+                        gender: "female",
+                        location: null,
+                        preferences: null,
+                      },
                     ],
               })),
               first: vi.fn(async () => ({ c: 5 })),
@@ -556,10 +608,16 @@ describe("runReengagementJob", () => {
         }),
       } as unknown as import("@cloudflare/workers-types").D1Database,
       API_SERVICE: {
-        fetch: vi.fn(async () => ({ ok: false, status: 500, text: async () => "error" })),
+        fetch: vi.fn(async () => ({
+          ok: false,
+          status: 500,
+          text: async () => "error",
+        })),
       } as unknown as import("@cloudflare/workers-types").Fetcher,
       KV: {} as unknown as import("@cloudflare/workers-types").KVNamespace,
-      BOT_SERVICE: { fetch: vi.fn(async () => new Response()) } as unknown as import("@cloudflare/workers-types").Fetcher,
+      BOT_SERVICE: {
+        fetch: vi.fn(async () => new Response()),
+      } as unknown as import("@cloudflare/workers-types").Fetcher,
     };
 
     await runReengagementJob(env);
@@ -676,7 +734,9 @@ describe("runReengagementJob", () => {
           first_name: "Alex",
           gender: "other",
           location: null,
-          preferences: JSON.stringify({ genderPreference: ["male", "female", "other"] }),
+          preferences: JSON.stringify({
+            genderPreference: ["male", "female", "other"],
+          }),
         },
       ],
       nearbyCount: 8,
@@ -696,7 +756,10 @@ describe("runReengagementJob", () => {
           id: "u1",
           first_name: "Alice",
           gender: "female",
-          location: JSON.stringify({ name: "SomePlace", country: "SomeCountry" }),
+          location: JSON.stringify({
+            name: "SomePlace",
+            country: "SomeCountry",
+          }),
           preferences: null,
         },
       ],
@@ -731,9 +794,18 @@ describe("runReengagementJob", () => {
           return {
             bind: vi.fn(() => ({
               all: vi.fn(async () => ({
-                results: prepareCount === 1
-                  ? [{ id: "u1", first_name: "Alice", gender: "female", location: null, preferences: null }]
-                  : [],
+                results:
+                  prepareCount === 1
+                    ? [
+                        {
+                          id: "u1",
+                          first_name: "Alice",
+                          gender: "female",
+                          location: null,
+                          preferences: null,
+                        },
+                      ]
+                    : [],
               })),
               first: vi.fn(async () => ({ c: 0 })),
               run: vi.fn(async () => ({ success: true })),
@@ -742,10 +814,16 @@ describe("runReengagementJob", () => {
         }),
       } as unknown as import("@cloudflare/workers-types").D1Database,
       API_SERVICE: {
-        fetch: vi.fn(async () => ({ ok: true, status: 200, text: async () => "ok" })),
+        fetch: vi.fn(async () => ({
+          ok: true,
+          status: 200,
+          text: async () => "ok",
+        })),
       } as unknown as import("@cloudflare/workers-types").Fetcher,
       KV: {} as unknown as import("@cloudflare/workers-types").KVNamespace,
-      BOT_SERVICE: { fetch: vi.fn(async () => new Response()) } as unknown as import("@cloudflare/workers-types").Fetcher,
+      BOT_SERVICE: {
+        fetch: vi.fn(async () => new Response()),
+      } as unknown as import("@cloudflare/workers-types").Fetcher,
     };
 
     await expect(runReengagementJob(env)).resolves.toBeUndefined();

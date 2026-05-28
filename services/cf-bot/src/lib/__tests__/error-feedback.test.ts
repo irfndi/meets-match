@@ -265,23 +265,37 @@ describe("Error Feedback", () => {
 
   describe("isPermanentDeliveryError", () => {
     it("detects 'chat not found' as permanent", () => {
-      expect(isPermanentDeliveryError(new Error("CHAT_NOT_FOUND: chat not found"))).toBe(true);
+      expect(
+        isPermanentDeliveryError(new Error("CHAT_NOT_FOUND: chat not found")),
+      ).toBe(true);
     });
 
     it("detects 'bot was blocked by the user' as permanent", () => {
-      expect(isPermanentDeliveryError(new Error("Forbidden: bot was blocked by the user"))).toBe(true);
+      expect(
+        isPermanentDeliveryError(
+          new Error("Forbidden: bot was blocked by the user"),
+        ),
+      ).toBe(true);
     });
 
     it("detects 'user is deactivated' as permanent", () => {
-      expect(isPermanentDeliveryError(new Error("user is deactivated"))).toBe(true);
+      expect(isPermanentDeliveryError(new Error("user is deactivated"))).toBe(
+        true,
+      );
     });
 
     it("detects 'forbidden: bot was blocked' (lowercase) as permanent", () => {
-      expect(isPermanentDeliveryError(new Error("forbidden: bot was blocked"))).toBe(true);
+      expect(
+        isPermanentDeliveryError(new Error("forbidden: bot was blocked")),
+      ).toBe(true);
     });
 
     it("returns false for normal 403: bot blocked error (not permanent)", () => {
-      expect(isPermanentDeliveryError(new Error("403: Forbidden: bot was blocked by the user"))).toBe(true);
+      expect(
+        isPermanentDeliveryError(
+          new Error("403: Forbidden: bot was blocked by the user"),
+        ),
+      ).toBe(true);
     });
 
     it("returns false for non-Error type", () => {
@@ -291,8 +305,12 @@ describe("Error Feedback", () => {
     });
 
     it("returns false for unrelated errors", () => {
-      expect(isPermanentDeliveryError(new Error("Network timeout"))).toBe(false);
-      expect(isPermanentDeliveryError(new Error("Rate limit exceeded"))).toBe(false);
+      expect(isPermanentDeliveryError(new Error("Network timeout"))).toBe(
+        false,
+      );
+      expect(isPermanentDeliveryError(new Error("Rate limit exceeded"))).toBe(
+        false,
+      );
     });
   });
 

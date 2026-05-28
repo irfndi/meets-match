@@ -1311,9 +1311,9 @@ describe("Settings Handlers", () => {
       const replyMarkup = editCall[1]?.reply_markup as any;
       const buttons = (replyMarkup?.inline_keyboard ?? []).flat();
       expect(buttons.length).toBeGreaterThanOrEqual(2); // EN, ID + Back
-      expect(buttons.some((b: any) => b.callback_data === "settings:back")).toBe(
-        true,
-      );
+      expect(
+        buttons.some((b: any) => b.callback_data === "settings:back"),
+      ).toBe(true);
     });
 
     it("shows language picker in Indonesian when user lang is id", async () => {
@@ -1584,7 +1584,8 @@ describe("Settings Handlers", () => {
       env = {
         KV: kv as unknown as KVNamespace,
         API_SERVICE: createMockApiService({
-          "/users/123": () => makeUserResponse({ age: 12, birthDate: undefined }),
+          "/users/123": () =>
+            makeUserResponse({ age: 12, birthDate: undefined }),
         }),
       };
       await handleAgeRangeCallback(ctx, env, "agerange:min:12");
@@ -1594,8 +1595,7 @@ describe("Settings Handlers", () => {
       const buttons = (replyMarkup?.inline_keyboard ?? []).flat();
       // Should have ages 12-27 plus manual button
       const ageButtons = buttons.filter(
-        (b: any) =>
-          b.callback_data && b.callback_data.startsWith("agerange:"),
+        (b: any) => b.callback_data && b.callback_data.startsWith("agerange:"),
       );
       expect(ageButtons.length).toBeGreaterThan(16); // 12-27 = 16 ages + manual
       expect(ageButtons[0].text).toBe("12");
@@ -1614,8 +1614,7 @@ describe("Settings Handlers", () => {
       const replyMarkup = editCall[1]?.reply_markup as any;
       const buttons = (replyMarkup?.inline_keyboard ?? []).flat();
       const ageButtons = buttons.filter(
-        (b: any) =>
-          b.callback_data && b.callback_data.startsWith("agerange:"),
+        (b: any) => b.callback_data && b.callback_data.startsWith("agerange:"),
       );
       // gridStart = max(12, 65-13) = 52, gridEnd = min(80, 65+15) = 80
       expect(ageButtons[0].text).toBe("52");
@@ -1635,7 +1634,8 @@ describe("Settings Handlers", () => {
       env = {
         KV: kv as unknown as KVNamespace,
         API_SERVICE: createMockApiService({
-          "/users/123": () => makeUserResponse({ age: 25, birthDate: undefined }),
+          "/users/123": () =>
+            makeUserResponse({ age: 25, birthDate: undefined }),
         }),
       };
       await handleAgeRangeCallback(ctx, env, "agerange:min:25");
@@ -1661,11 +1661,9 @@ describe("Settings Handlers", () => {
       const editCall = (ctx.editMessageText as any).mock.calls[0];
       const replyMarkup = editCall[1]?.reply_markup as any;
       const buttons = (replyMarkup?.inline_keyboard ?? []).flat();
-      expect(
-        buttons.some(
-          (b: any) => b.text === "✏️ Type manually",
-        ),
-      ).toBe(true);
+      expect(buttons.some((b: any) => b.text === "✏️ Type manually")).toBe(
+        true,
+      );
     });
   });
 
@@ -1681,8 +1679,7 @@ describe("Settings Handlers", () => {
       const replyMarkup = replyCall[1]?.reply_markup as any;
       const buttons = (replyMarkup?.inline_keyboard ?? []).flat();
       const distanceButtons = buttons.filter(
-        (b: any) =>
-          b.callback_data && b.callback_data.startsWith("distance:"),
+        (b: any) => b.callback_data && b.callback_data.startsWith("distance:"),
       );
       expect(distanceButtons).toHaveLength(7); // 6 values + manual
       expect(distanceButtons[0].text).toBe("5 km");

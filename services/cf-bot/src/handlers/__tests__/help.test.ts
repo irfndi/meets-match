@@ -19,13 +19,11 @@ function createMockEnv(responseOverrides: Record<string, unknown> = {}) {
       delete: vi.fn().mockResolvedValue(undefined),
     } as unknown as KVNamespace,
     API_SERVICE: {
-      fetch: vi
-        .fn()
-        .mockResolvedValue(
-          new Response(JSON.stringify(responseOverrides), {
-            status: responseOverrides.user ? 200 : 404,
-          }),
-        ),
+      fetch: vi.fn().mockResolvedValue(
+        new Response(JSON.stringify(responseOverrides), {
+          status: responseOverrides.user ? 200 : 404,
+        }),
+      ),
     },
   };
 }

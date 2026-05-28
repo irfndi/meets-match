@@ -208,9 +208,7 @@ describe("runBirthdayJob", () => {
     vi.setSystemTime(new Date("2026-05-17T09:00:00Z"));
 
     const env = createEnv({
-      dbResults: [
-        { id: "u1", first_name: "Alice", birth_date: "1990-05-17" },
-      ],
+      dbResults: [{ id: "u1", first_name: "Alice", birth_date: "1990-05-17" }],
       matchResults: [],
       apiResponse: { ok: true },
     });
@@ -235,7 +233,11 @@ describe("runBirthdayJob", () => {
             bind: vi.fn((..._params: unknown[]) => ({
               all: vi.fn(async () => {
                 if (isMatchQuery) return { results: [] };
-                return { results: [{ id: "u1", first_name: "Ali", birth_date: "1990-05-17" }] };
+                return {
+                  results: [
+                    { id: "u1", first_name: "Ali", birth_date: "1990-05-17" },
+                  ],
+                };
               }),
               first: vi.fn(async () => ({ c: 1 })),
               run: vi.fn(async () => {
@@ -250,7 +252,12 @@ describe("runBirthdayJob", () => {
         }),
       } as unknown as import("@cloudflare/workers-types").D1Database,
       API_SERVICE: {
-        fetch: vi.fn(async () => ({ ok: true, status: 200, text: async () => "ok", json: async () => ({}) })),
+        fetch: vi.fn(async () => ({
+          ok: true,
+          status: 200,
+          text: async () => "ok",
+          json: async () => ({}),
+        })),
       } as unknown as import("@cloudflare/workers-types").Fetcher,
       KV: {} as unknown as import("@cloudflare/workers-types").KVNamespace,
       BOT_SERVICE: {
@@ -269,9 +276,7 @@ describe("runBirthdayJob", () => {
     vi.setSystemTime(new Date("2026-05-17T09:00:00Z"));
 
     const env = createEnv({
-      dbResults: [
-        { id: "u1", first_name: null, birth_date: "1990-05-17" },
-      ],
+      dbResults: [{ id: "u1", first_name: null, birth_date: "1990-05-17" }],
       matchResults: [{ match_user_id: "match_1" }],
       apiResponse: { ok: true },
     });
@@ -298,7 +303,9 @@ describe("runBirthdayJob", () => {
     await runBirthdayJob(env);
 
     const prepareCalls = (env.DB.prepare as any).mock.calls;
-    const leapQueries = prepareCalls.filter((c: any[]) => c[0].includes("02-29"));
+    const leapQueries = prepareCalls.filter((c: any[]) =>
+      c[0].includes("02-29"),
+    );
     // On May 17, should not trigger leap day query
     expect(leapQueries.length).toBe(0);
     vi.useRealTimers();
@@ -309,10 +316,11 @@ describe("runBirthdayJob", () => {
     vi.setSystemTime(new Date("2026-05-17T09:00:00Z"));
 
     const env = createEnv({
-      dbResults: [
-        { id: "u1", first_name: "Alice", birth_date: "1990-05-17" },
+      dbResults: [{ id: "u1", first_name: "Alice", birth_date: "1990-05-17" }],
+      matchResults: [
+        { match_user_id: "match_1" },
+        { match_user_id: "match_2" },
       ],
-      matchResults: [{ match_user_id: "match_1" }, { match_user_id: "match_2" }],
       apiResponse: { ok: false, status: 500 },
     });
 

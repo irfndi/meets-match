@@ -319,9 +319,7 @@ describe("start handler", () => {
 
       const result = await languageCallback(ctx, env, "lang:id");
       expect(result).toBe(true);
-      expect(ctx.reply).toHaveBeenCalledWith(
-        expect.stringContaining("Maaf"),
-      );
+      expect(ctx.reply).toHaveBeenCalledWith(expect.stringContaining("Maaf"));
     });
 
     it("handles missing user payload after language update", async () => {
@@ -350,9 +348,7 @@ describe("start handler", () => {
 
       const result = await languageCallback(ctx, env, "lang:id");
       expect(result).toBe(true);
-      expect(ctx.reply).toHaveBeenCalledWith(
-        expect.stringContaining("Maaf"),
-      );
+      expect(ctx.reply).toHaveBeenCalledWith(expect.stringContaining("Maaf"));
     });
 
     it("catches unhandled errors and replies with trace ID", async () => {

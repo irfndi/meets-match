@@ -57,7 +57,10 @@ function createMockQueue() {
 }
 
 function createMockR2() {
-  const objects = new Map<string, { body: ReadableStream; httpMetadata?: { contentType?: string } }>();
+  const objects = new Map<
+    string,
+    { body: ReadableStream; httpMetadata?: { contentType?: string } }
+  >();
   return {
     put: vi.fn(
       async (
@@ -65,7 +68,8 @@ function createMockR2() {
         value: ReadableStream | ArrayBuffer,
         opts?: { httpMetadata?: { contentType?: string } },
       ) => {
-        const body = value instanceof ReadableStream ? value : new Blob([value]).stream();
+        const body =
+          value instanceof ReadableStream ? value : new Blob([value]).stream();
         objects.set(key, { body, httpMetadata: opts?.httpMetadata });
       },
     ),
@@ -134,92 +138,130 @@ describe("ApiRouter extended routes", () => {
   let router: ApiRouter;
 
   function createRouter(overrides?: {
-    handler?: (sql: string, values: unknown[]) => { results?: Array<Record<string, unknown>>; success?: boolean; meta?: Record<string, unknown> };
+    handler?: (
+      sql: string,
+      values: unknown[],
+    ) => {
+      results?: Array<Record<string, unknown>>;
+      success?: boolean;
+      meta?: Record<string, unknown>;
+    };
   }) {
-    const db = createMockD1(overrides?.handler ?? ((sql, values) => {
-      if (sql.includes("SELECT * FROM users WHERE id")) {
-        return { results: [makeUserResult(String(values[0]))] };
-      }
-      if (sql.includes("SELECT id FROM users WHERE id")) {
-        return { results: [{ id: values[0] }] };
-      }
-      if (sql.includes("SELECT referral_code FROM users")) {
-        return { results: [{ referral_code: "REF123" }] };
-      }
-      if (sql.includes("SELECT subscription_tier, daily_swipes_used")) {
-        return {
-          results: [{
-            subscription_tier: "free", daily_swipes_used: 3,
-            daily_swipes_reset_at: "2025-06-01T00:00:00.000Z",
-            referral_bonus_swipes: 0,
-          }],
-        };
-      }
-      if (sql.includes("SELECT subscription_tier, daily_likes_used")) {
-        return {
-          results: [{
-            subscription_tier: "free", daily_likes_used: 5,
-            daily_likes_reset_at: "2025-06-01T00:00:00.000Z",
-            daily_dislikes_used: 10,
-            daily_dislikes_reset_at: "2025-06-01T00:00:00.000Z",
-            referral_bonus_swipes: 0,
-          }],
-        };
-      }
-      if (sql.includes("SELECT subscription_tier, daily_dislikes_used")) {
-        return {
-          results: [{
-            subscription_tier: "free", daily_dislikes_used: 10,
-            daily_dislikes_reset_at: "2025-06-01T00:00:00.000Z",
-            referral_bonus_swipes: 0,
-          }],
-        };
-      }
-      if (sql.includes("SELECT subscription_tier, dm_credits FROM users")) {
-        return { results: [{ subscription_tier: "free", dm_credits: 5 }] };
-      }
-      if (sql.includes("SELECT dm_credits FROM users")) {
-        return { results: [{ dm_credits: 5 }] };
-      }
-      if (sql.includes("SELECT subscription_tier, daily_media_used")) {
-        return {
-          results: [{
-            subscription_tier: "free", daily_media_used: 2,
-            daily_media_reset_at: "2025-06-01T00:00:00.000Z",
-          }],
-        };
-      }
-      if (sql.includes("SELECT media_urls FROM users")) {
-        return { results: [{ media_urls: "[]" }] };
-      }
-      if (sql.includes("SELECT blocked_id FROM blocks")) {
-        return { results: [] };
-      }
-      if (sql.includes("SELECT * FROM notifications WHERE id")) {
-        return {
-          results: [{
-            id: "n1", user_id: "u1", type: "NEW_LIKE", channel: "TELEGRAM",
-            status: "pending", attempt_count: 0, max_attempts: 5, created_at: "2026-01-01",
-          }],
-        };
-      }
-      if (sql.includes("COUNT(*)")) {
-        return { results: [{ c: 0 }] };
-      }
-      if (sql.includes("SELECT * FROM matches WHERE id")) {
-        return {
-          results: [{
-            id: values[0], user1_id: "u1", user2_id: "u2", status: "pending",
-            score: "{}", created_at: "2026-01-01", updated_at: "2026-01-01",
-            user1_action: "none", user2_action: "none",
-          }],
-        };
-      }
-      if (sql.includes("SELECT id, reporter_id as reporterId")) {
-        return { results: [] };
-      }
-      return { results: [], success: true, meta: {} };
-    }));
+    const db = createMockD1(
+      overrides?.handler ??
+        ((sql, values) => {
+          if (sql.includes("SELECT * FROM users WHERE id")) {
+            return { results: [makeUserResult(String(values[0]))] };
+          }
+          if (sql.includes("SELECT id FROM users WHERE id")) {
+            return { results: [{ id: values[0] }] };
+          }
+          if (sql.includes("SELECT referral_code FROM users")) {
+            return { results: [{ referral_code: "REF123" }] };
+          }
+          if (sql.includes("SELECT subscription_tier, daily_swipes_used")) {
+            return {
+              results: [
+                {
+                  subscription_tier: "free",
+                  daily_swipes_used: 3,
+                  daily_swipes_reset_at: "2025-06-01T00:00:00.000Z",
+                  referral_bonus_swipes: 0,
+                },
+              ],
+            };
+          }
+          if (sql.includes("SELECT subscription_tier, daily_likes_used")) {
+            return {
+              results: [
+                {
+                  subscription_tier: "free",
+                  daily_likes_used: 5,
+                  daily_likes_reset_at: "2025-06-01T00:00:00.000Z",
+                  daily_dislikes_used: 10,
+                  daily_dislikes_reset_at: "2025-06-01T00:00:00.000Z",
+                  referral_bonus_swipes: 0,
+                },
+              ],
+            };
+          }
+          if (sql.includes("SELECT subscription_tier, daily_dislikes_used")) {
+            return {
+              results: [
+                {
+                  subscription_tier: "free",
+                  daily_dislikes_used: 10,
+                  daily_dislikes_reset_at: "2025-06-01T00:00:00.000Z",
+                  referral_bonus_swipes: 0,
+                },
+              ],
+            };
+          }
+          if (sql.includes("SELECT subscription_tier, dm_credits FROM users")) {
+            return { results: [{ subscription_tier: "free", dm_credits: 5 }] };
+          }
+          if (sql.includes("SELECT dm_credits FROM users")) {
+            return { results: [{ dm_credits: 5 }] };
+          }
+          if (sql.includes("SELECT subscription_tier, daily_media_used")) {
+            return {
+              results: [
+                {
+                  subscription_tier: "free",
+                  daily_media_used: 2,
+                  daily_media_reset_at: "2025-06-01T00:00:00.000Z",
+                },
+              ],
+            };
+          }
+          if (sql.includes("SELECT media_urls FROM users")) {
+            return { results: [{ media_urls: "[]" }] };
+          }
+          if (sql.includes("SELECT blocked_id FROM blocks")) {
+            return { results: [] };
+          }
+          if (sql.includes("SELECT * FROM notifications WHERE id")) {
+            return {
+              results: [
+                {
+                  id: "n1",
+                  user_id: "u1",
+                  type: "NEW_LIKE",
+                  channel: "TELEGRAM",
+                  status: "pending",
+                  attempt_count: 0,
+                  max_attempts: 5,
+                  created_at: "2026-01-01",
+                },
+              ],
+            };
+          }
+          if (sql.includes("COUNT(*)")) {
+            return { results: [{ c: 0 }] };
+          }
+          if (sql.includes("SELECT * FROM matches WHERE id")) {
+            return {
+              results: [
+                {
+                  id: values[0],
+                  user1_id: "u1",
+                  user2_id: "u2",
+                  status: "pending",
+                  score: "{}",
+                  created_at: "2026-01-01",
+                  updated_at: "2026-01-01",
+                  user1_action: "none",
+                  user2_action: "none",
+                },
+              ],
+            };
+          }
+          if (sql.includes("SELECT id, reporter_id as reporterId")) {
+            return { results: [] };
+          }
+          return { results: [], success: true, meta: {} };
+        }),
+    );
 
     return new ApiRouter({
       DB: db,
@@ -249,7 +291,7 @@ describe("ApiRouter extended routes", () => {
         }),
       );
       expect(response.status).toBe(200);
-      const body = await response.json() as Record<string, unknown>;
+      const body = (await response.json()) as Record<string, unknown>;
       expect(body.user).toBeDefined();
     });
   });
@@ -260,7 +302,7 @@ describe("ApiRouter extended routes", () => {
         new Request("http://api/users/u1/swipe-status"),
       );
       expect(response.status).toBe(200);
-      const body = await response.json() as Record<string, unknown>;
+      const body = (await response.json()) as Record<string, unknown>;
       expect(body.remaining).toBeDefined();
       expect(body.total).toBeDefined();
     });
@@ -281,7 +323,7 @@ describe("ApiRouter extended routes", () => {
         new Request("http://api/users/u1/interaction-status"),
       );
       expect(response.status).toBe(200);
-      const body = await response.json() as Record<string, unknown>;
+      const body = (await response.json()) as Record<string, unknown>;
       expect(body.likesRemaining).toBeDefined();
       expect(body.dislikesRemaining).toBeDefined();
     });
@@ -311,7 +353,7 @@ describe("ApiRouter extended routes", () => {
         new Request("http://api/users/u1/dm-status"),
       );
       expect(response.status).toBe(200);
-      const body = await response.json() as Record<string, unknown>;
+      const body = (await response.json()) as Record<string, unknown>;
       expect(body.canSendDM).toBeDefined();
     });
   });
@@ -361,11 +403,25 @@ describe("ApiRouter extended routes", () => {
     it("applies a referral code", async () => {
       const mockRouter = createRouter({
         handler: (sql, values) => {
-          if (sql.includes("SELECT referral_code, referred_by FROM users WHERE id =")) {
-            return { results: [{ referral_code: "MYCODE", referred_by: null }] };
+          if (
+            sql.includes(
+              "SELECT referral_code, referred_by FROM users WHERE id =",
+            )
+          ) {
+            return {
+              results: [{ referral_code: "MYCODE", referred_by: null }],
+            };
           }
-          if (sql.includes("SELECT id, referral_count, referral_bonus_swipes FROM users WHERE referral_code")) {
-            return { results: [{ id: "ref1", referral_count: 2, referral_bonus_swipes: 5 }] };
+          if (
+            sql.includes(
+              "SELECT id, referral_count, referral_bonus_swipes FROM users WHERE referral_code",
+            )
+          ) {
+            return {
+              results: [
+                { id: "ref1", referral_count: 2, referral_bonus_swipes: 5 },
+              ],
+            };
           }
           return { results: [], success: true, meta: {} };
         },
@@ -416,10 +472,13 @@ describe("ApiRouter extended routes", () => {
         handler: (sql) => {
           if (sql.includes("daily_media_used")) {
             return {
-              results: [{
-                subscription_tier: "free", daily_media_used: 10,
-                daily_media_reset_at: "2099-01-01T00:00:00.000Z",
-              }],
+              results: [
+                {
+                  subscription_tier: "free",
+                  daily_media_used: 10,
+                  daily_media_reset_at: "2099-01-01T00:00:00.000Z",
+                },
+              ],
             };
           }
           if (sql.includes("media_urls")) {
@@ -445,21 +504,26 @@ describe("ApiRouter extended routes", () => {
         handler: (sql) => {
           if (sql.includes("SELECT subscription_tier, daily_media_used")) {
             return {
-              results: [{
-                subscription_tier: "free", daily_media_used: 2,
-                daily_media_reset_at: "2025-06-01T00:00:00.000Z",
-              }],
+              results: [
+                {
+                  subscription_tier: "free",
+                  daily_media_used: 2,
+                  daily_media_reset_at: "2025-06-01T00:00:00.000Z",
+                },
+              ],
             };
           }
           if (sql.includes("SELECT media_urls FROM users")) {
             return {
-              results: [{
-                media_urls: JSON.stringify([
-                  { url: "a.jpg", type: "image", uploadedAt: "2025-01-01" },
-                  { url: "b.jpg", type: "image", uploadedAt: "2025-01-02" },
-                  { url: "c.jpg", type: "image", uploadedAt: "2025-01-03" },
-                ]),
-              }],
+              results: [
+                {
+                  media_urls: JSON.stringify([
+                    { url: "a.jpg", type: "image", uploadedAt: "2025-01-01" },
+                    { url: "b.jpg", type: "image", uploadedAt: "2025-01-02" },
+                    { url: "c.jpg", type: "image", uploadedAt: "2025-01-03" },
+                  ]),
+                },
+              ],
             };
           }
           return { results: [], success: true, meta: {} };
@@ -475,7 +539,7 @@ describe("ApiRouter extended routes", () => {
         }),
       );
       expect(response.status).toBe(400);
-      const body = await response.json() as Record<string, unknown>;
+      const body = (await response.json()) as Record<string, unknown>;
       expect(body.error).toContain("Maximum 3");
     });
   });
@@ -486,11 +550,17 @@ describe("ApiRouter extended routes", () => {
         handler: (sql) => {
           if (sql.includes("SELECT media_urls FROM users")) {
             return {
-              results: [{
-                media_urls: JSON.stringify([
-                  { url: "https://example.com/photo.jpg", type: "image", uploadedAt: "2025-01-01" },
-                ]),
-              }],
+              results: [
+                {
+                  media_urls: JSON.stringify([
+                    {
+                      url: "https://example.com/photo.jpg",
+                      type: "image",
+                      uploadedAt: "2025-01-01",
+                    },
+                  ]),
+                },
+              ],
             };
           }
           return { results: [], success: true, meta: {} };
@@ -520,11 +590,17 @@ describe("ApiRouter extended routes", () => {
         handler: (sql) => {
           if (sql.includes("SELECT media_urls FROM users")) {
             return {
-              results: [{
-                media_urls: JSON.stringify([
-                  { url: "https://example.com/other.jpg", type: "image", uploadedAt: "2025-01-01" },
-                ]),
-              }],
+              results: [
+                {
+                  media_urls: JSON.stringify([
+                    {
+                      url: "https://example.com/other.jpg",
+                      type: "image",
+                      uploadedAt: "2025-01-01",
+                    },
+                  ]),
+                },
+              ],
             };
           }
           return { results: [], success: true, meta: {} };
@@ -550,7 +626,7 @@ describe("ApiRouter extended routes", () => {
         new Request("http://api/users/u1/restore-profile", { method: "POST" }),
       );
       expect(response.status).toBe(200);
-      const body = await response.json() as Record<string, unknown>;
+      const body = (await response.json()) as Record<string, unknown>;
       expect(body.success).toBe(true);
     });
   });
@@ -561,7 +637,7 @@ describe("ApiRouter extended routes", () => {
         new Request("http://api/users/u1/last-reminded-at", { method: "POST" }),
       );
       expect(response.status).toBe(200);
-      const body = await response.json() as Record<string, unknown>;
+      const body = (await response.json()) as Record<string, unknown>;
       expect(body.success).toBe(true);
     });
   });
@@ -579,7 +655,7 @@ describe("ApiRouter extended routes", () => {
         }),
       );
       expect(response.status).toBe(200);
-      const body = await response.json() as Record<string, unknown>;
+      const body = (await response.json()) as Record<string, unknown>;
       expect(body.success).toBe(true);
       expect(body.reportId).toBeTruthy();
     });
@@ -617,14 +693,30 @@ describe("ApiRouter extended routes", () => {
         handler: (sql) => {
           if (sql.includes("SELECT id, reporter_id as reporterId")) {
             return {
-              results: [{
-                id: "r1", reporterId: "u1", traceId: null, message: null,
-                journey: null, status: "pending", severity: "low", alertSent: 0,
-                source: null, botVersion: null, apiVersion: null, workerVersion: null,
-                errorStack: null, userLanguage: null, userTier: null,
-                triggerInput: null, kvSession: null, cfMetadata: null,
-                createdAt: "2025-01-01", updatedAt: null,
-              }],
+              results: [
+                {
+                  id: "r1",
+                  reporterId: "u1",
+                  traceId: null,
+                  message: null,
+                  journey: null,
+                  status: "pending",
+                  severity: "low",
+                  alertSent: 0,
+                  source: null,
+                  botVersion: null,
+                  apiVersion: null,
+                  workerVersion: null,
+                  errorStack: null,
+                  userLanguage: null,
+                  userTier: null,
+                  triggerInput: null,
+                  kvSession: null,
+                  cfMetadata: null,
+                  createdAt: "2025-01-01",
+                  updatedAt: null,
+                },
+              ],
             };
           }
           return { results: [], success: true, meta: {} };
@@ -634,7 +726,7 @@ describe("ApiRouter extended routes", () => {
         new Request("http://api/error-reports/mark-sent", { method: "POST" }),
       );
       expect(response.status).toBe(200);
-      const body = await response.json() as Record<string, unknown>;
+      const body = (await response.json()) as Record<string, unknown>;
       expect(body.marked).toBe(1);
     });
   });
@@ -645,11 +737,9 @@ describe("ApiRouter extended routes", () => {
 
   describe("GET /geocode validation", () => {
     it("returns 400 when neither query nor lat/lon provided", async () => {
-      const response = await router.route(
-        new Request("http://api/geocode"),
-      );
+      const response = await router.route(new Request("http://api/geocode"));
       expect(response.status).toBe(400);
-      const body = await response.json() as Record<string, unknown>;
+      const body = (await response.json()) as Record<string, unknown>;
       expect(body.error).toContain("Missing");
     });
 
@@ -711,9 +801,7 @@ describe("ApiRouter extended routes", () => {
 
   describe("match routes additional", () => {
     it("rejects match list without userId", async () => {
-      const response = await router.route(
-        new Request("http://api/matches"),
-      );
+      const response = await router.route(new Request("http://api/matches"));
       expect(response.status).toBe(400);
     });
 

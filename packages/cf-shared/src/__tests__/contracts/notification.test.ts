@@ -273,22 +273,22 @@ describe("Notification Contracts", () => {
 
   describe("GetReengagementCandidatesRequest / GetReengagementCandidatesResponse", () => {
     it("should decode request with all optional fields", () => {
-      const result = Schema.decodeUnknownSync(
-        GetReengagementCandidatesRequest,
-      )({
-        minInactiveDays: 7,
-        maxInactiveDays: 30,
-        limit: 50,
-      });
+      const result = Schema.decodeUnknownSync(GetReengagementCandidatesRequest)(
+        {
+          minInactiveDays: 7,
+          maxInactiveDays: 30,
+          limit: 50,
+        },
+      );
       expect(result.minInactiveDays).toBe(7);
       expect(result.maxInactiveDays).toBe(30);
       expect(result.limit).toBe(50);
     });
 
     it("should decode request with no optional fields", () => {
-      const result = Schema.decodeUnknownSync(
-        GetReengagementCandidatesRequest,
-      )({});
+      const result = Schema.decodeUnknownSync(GetReengagementCandidatesRequest)(
+        {},
+      );
       expect(result.minInactiveDays).toBeUndefined();
       expect(result.limit).toBeUndefined();
     });

@@ -1108,9 +1108,7 @@ describe("MatchRepository.getById", () => {
     const mockD1 = createSequentialMockD1([null]);
 
     const repo = new MatchRepository(mockD1 as unknown as D1Database);
-    const exit = await Effect.runPromiseExit(
-      repo.getById({ matchId: "m1" }),
-    );
+    const exit = await Effect.runPromiseExit(repo.getById({ matchId: "m1" }));
 
     expect(Exit.isFailure(exit)).toBe(true);
     const err = Cause.failureOption(exit.cause);
@@ -1184,9 +1182,7 @@ describe("MatchRepository.create", () => {
   });
 
   it("sorts user IDs so user1Id < user2Id", async () => {
-    const mockD1 = createSequentialMockD1([
-      null,
-    ]);
+    const mockD1 = createSequentialMockD1([null]);
 
     const repo = new MatchRepository(mockD1 as unknown as D1Database);
     const result = await Effect.runPromise(
@@ -1734,9 +1730,7 @@ describe("MatchRepository.getList", () => {
     const mockD1 = createSequentialMockD1WithAll(rows);
 
     const repo = new MatchRepository(mockD1 as unknown as D1Database);
-    const result = await Effect.runPromise(
-      repo.getList({ userId: "user-a" }),
-    );
+    const result = await Effect.runPromise(repo.getList({ userId: "user-a" }));
 
     expect(result).toHaveLength(2);
     expect(result[0].id).toBe("m1");
@@ -1744,9 +1738,7 @@ describe("MatchRepository.getList", () => {
   });
 
   it("filters by status when provided", async () => {
-    const rows = [
-      createMatchRow({ id: "m1", status: "matched" }),
-    ];
+    const rows = [createMatchRow({ id: "m1", status: "matched" })];
     const mockD1 = createSequentialMockD1WithAll(rows);
 
     const repo = new MatchRepository(mockD1 as unknown as D1Database);
@@ -1775,9 +1767,7 @@ describe("MatchRepository.getList", () => {
     const mockD1 = createSequentialMockD1WithAll([]);
 
     const repo = new MatchRepository(mockD1 as unknown as D1Database);
-    await Effect.runPromise(
-      repo.getList({ userId: "user-a" }),
-    );
+    await Effect.runPromise(repo.getList({ userId: "user-a" }));
 
     const sql = mockD1._capturedSql[0];
     expect(sql).toContain("user1_id = ?");
@@ -1789,9 +1779,7 @@ describe("MatchRepository.getList", () => {
     const mockD1 = createSequentialMockD1WithAll([]);
 
     const repo = new MatchRepository(mockD1 as unknown as D1Database);
-    const result = await Effect.runPromise(
-      repo.getList({ userId: "user-a" }),
-    );
+    const result = await Effect.runPromise(repo.getList({ userId: "user-a" }));
 
     expect(result).toHaveLength(0);
   });
@@ -1875,9 +1863,7 @@ describe("MatchRepository.getPendingLikes (extended)", () => {
     const mockD1 = createPendingLikesMockD1([]);
 
     const repo = new MatchRepository(mockD1 as unknown as D1Database);
-    await Effect.runPromise(
-      repo.getPendingLikes({ userId: "user-a" }),
-    );
+    await Effect.runPromise(repo.getPendingLikes({ userId: "user-a" }));
 
     const sql = mockD1._capturedSql[0];
     expect(sql).toContain("m.status = 'pending'");

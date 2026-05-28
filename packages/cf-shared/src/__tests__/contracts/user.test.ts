@@ -252,7 +252,9 @@ describe("User Contracts", () => {
     );
 
     it("should reject invalid tier", () => {
-      expect(() => Schema.decodeUnknownSync(SubscriptionTier)("gold")).toThrow();
+      expect(() =>
+        Schema.decodeUnknownSync(SubscriptionTier)("gold"),
+      ).toThrow();
     });
   });
 

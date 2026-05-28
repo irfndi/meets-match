@@ -180,9 +180,7 @@ describe("NotificationQueueConsumer", () => {
   });
 
   it("skips DLQ notifications", async () => {
-    const { consumer, bot } = createConsumer([
-      { id: "n1", status: "dlq" },
-    ]);
+    const { consumer, bot } = createConsumer([{ id: "n1", status: "dlq" }]);
     const msg = createMessage({
       notificationId: "n1",
       userId: "u1",

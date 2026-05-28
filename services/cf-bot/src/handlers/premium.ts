@@ -28,7 +28,13 @@ async function advanceMatchQueueAfterAdDismiss(
   const value = await env.KV.get(`match_queue:${userId}`);
   if (!value) return;
 
-  let queue: { matches: unknown[]; index: number; tier: string; relaxed: boolean; myLocation?: { latitude: number; longitude: number } };
+  let queue: {
+    matches: unknown[];
+    index: number;
+    tier: string;
+    relaxed: boolean;
+    myLocation?: { latitude: number; longitude: number };
+  };
   try {
     queue = JSON.parse(value) as typeof queue;
   } catch {

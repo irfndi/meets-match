@@ -360,10 +360,7 @@ describe("i18n", () => {
       it(`should have a non-empty English value`, () => {
         const value = t(key, "en");
         expect(value, `EN "${key}" is empty`).toBeTruthy();
-        expect(
-          typeof value,
-          `EN "${key}" is not a string`,
-        ).toBe("string");
+        expect(typeof value, `EN "${key}" is not a string`).toBe("string");
         expect(
           value.trim().length,
           `EN "${key}" is whitespace-only`,
@@ -373,10 +370,7 @@ describe("i18n", () => {
       it(`should have a non-empty Indonesian value`, () => {
         const value = t(key, "id");
         expect(value, `ID "${key}" is empty`).toBeTruthy();
-        expect(
-          typeof value,
-          `ID "${key}" is not a string`,
-        ).toBe("string");
+        expect(typeof value, `ID "${key}" is not a string`).toBe("string");
         expect(
           value.trim().length,
           `ID "${key}" is whitespace-only`,
@@ -467,7 +461,9 @@ describe("i18n", () => {
     });
 
     it("escapes backslash", () => {
-      expect(escapeMd("C:\\path")).toBe("C:\\path".replace(/[_*[\]`\\]/g, "\\$&"));
+      expect(escapeMd("C:\\path")).toBe(
+        "C:\\path".replace(/[_*[\]`\\]/g, "\\$&"),
+      );
     });
 
     it("does not escape parentheses", () => {

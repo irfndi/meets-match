@@ -103,9 +103,7 @@ describe("Journey Tracking", () => {
 
     it("should handle invalid timestamp gracefully", () => {
       const journey = {
-        events: [
-          { ts: "not-a-valid-date", action: "something" },
-        ],
+        events: [{ ts: "not-a-valid-date", action: "something" }],
       };
       const text = formatJourneyForReport(journey);
       expect(text).toContain("invalid time");
@@ -114,9 +112,7 @@ describe("Journey Tracking", () => {
 
     it("should handle empty timestamp string", () => {
       const journey = {
-        events: [
-          { ts: "", action: "empty-ts" },
-        ],
+        events: [{ ts: "", action: "empty-ts" }],
       };
       const text = formatJourneyForReport(journey);
       expect(text).toContain("invalid time");
@@ -200,7 +196,11 @@ describe("Journey Tracking", () => {
       };
 
       await expect(
-        recordJourneyError(failingKv as unknown as KVNamespace, "123", "TRACE001"),
+        recordJourneyError(
+          failingKv as unknown as KVNamespace,
+          "123",
+          "TRACE001",
+        ),
       ).resolves.toBeUndefined();
     });
 
@@ -212,7 +212,11 @@ describe("Journey Tracking", () => {
       };
 
       await expect(
-        recordJourneyError(failingKv as unknown as KVNamespace, "123", "TRACE001"),
+        recordJourneyError(
+          failingKv as unknown as KVNamespace,
+          "123",
+          "TRACE001",
+        ),
       ).resolves.toBeUndefined();
     });
   });

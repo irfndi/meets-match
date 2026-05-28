@@ -127,9 +127,11 @@ describe("buildErrorSource", () => {
 
 describe("sendImmediateAlert", () => {
   beforeEach(() => {
-    (globalThis as any).fetch = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ ok: true }), { status: 200 }),
-    ) as any;
+    (globalThis as any).fetch = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ ok: true }), { status: 200 }),
+      ) as any;
   });
 
   it("does nothing when ADMIN_CHAT_ID is not set", async () => {
@@ -194,9 +196,11 @@ describe("sendImmediateAlert", () => {
   });
 
   it("handles Telegram API error response gracefully", async () => {
-    (globalThis as any).fetch = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ ok: false }), { status: 400 }),
-    );
+    (globalThis as any).fetch = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ ok: false }), { status: 400 }),
+      );
 
     const env = {
       ADMIN_CHAT_ID: "admin123",
@@ -261,9 +265,11 @@ describe("queueAlert", () => {
 
 describe("sendAggregatedAlerts", () => {
   beforeEach(() => {
-    (globalThis as any).fetch = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ ok: true }), { status: 200 }),
-    ) as any;
+    (globalThis as any).fetch = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ ok: true }), { status: 200 }),
+      ) as any;
   });
 
   it("returns early when ADMIN_CHAT_ID is not set", async () => {
@@ -310,7 +316,10 @@ describe("sendAggregatedAlerts", () => {
             JSON.stringify({
               severity: "low",
               count: 5,
-              sources: [{ source: "source_a", count: 3 }, { source: "source_b", count: 2 }],
+              sources: [
+                { source: "source_a", count: 3 },
+                { source: "source_b", count: 2 },
+              ],
               latestAt: "2024-01-01T00:00:00Z",
             }),
             { status: 200 },
@@ -337,8 +346,7 @@ describe("sendAggregatedAlerts", () => {
     const env = {
       ADMIN_CHAT_ID: "admin123",
       API_SERVICE: createMockApiService({
-        "/error-reports/summary": () =>
-          new Response(null, { status: 500 }),
+        "/error-reports/summary": () => new Response(null, { status: 500 }),
       }),
     } as any;
 
@@ -350,8 +358,7 @@ describe("sendAggregatedAlerts", () => {
       ADMIN_CHAT_ID: "admin123",
       BOT_TOKEN: "test-token",
       API_SERVICE: createMockApiService({
-        "/error-reports/mark-sent": () =>
-          new Response(null, { status: 500 }),
+        "/error-reports/mark-sent": () => new Response(null, { status: 500 }),
         "/error-reports/summary": () =>
           new Response(
             JSON.stringify({
