@@ -274,6 +274,7 @@ export async function runReengagementJob(env: Env): Promise<void> {
       `SELECT id, first_name, gender, location, preferences FROM users
        WHERE is_active = 1
        AND is_sleeping = 0
+       AND is_profile_complete = 1
        AND (last_active <= ? OR last_active IS NULL)
        AND (last_reminded_at IS NULL OR last_reminded_at <= ?)
        LIMIT ?`,
