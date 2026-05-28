@@ -93,7 +93,10 @@ describe("runIncompleteProfileReengagementJob", () => {
     expect(env._apiFetch).toHaveBeenCalledTimes(1);
     const call = (env._apiFetch.mock.calls as unknown[][])[0]![0] as Request;
     const body = (await call.json()) as Record<string, unknown>;
-    const payload = JSON.parse(body.payload as string) as Record<string, unknown>;
+    const payload = JSON.parse(body.payload as string) as Record<
+      string,
+      unknown
+    >;
     expect(payload.message).toContain("There");
   });
 
@@ -107,7 +110,10 @@ describe("runIncompleteProfileReengagementJob", () => {
     const calls = env._apiFetch.mock.calls as unknown[][];
     const call = calls[0]![0] as Request;
     const body = (await call.json()) as Record<string, unknown>;
-    const payload = JSON.parse(body.payload as string) as Record<string, unknown>;
+    const payload = JSON.parse(body.payload as string) as Record<
+      string,
+      unknown
+    >;
     expect(payload.message).toContain("Kamu");
   });
 
@@ -121,7 +127,10 @@ describe("runIncompleteProfileReengagementJob", () => {
     const calls = env._apiFetch.mock.calls as unknown[][];
     const call = calls[0]![0] as Request;
     const body = (await call.json()) as Record<string, unknown>;
-    const payload = JSON.parse(body.payload as string) as Record<string, unknown>;
+    const payload = JSON.parse(body.payload as string) as Record<
+      string,
+      unknown
+    >;
     expect(payload.message).toContain("Test\\_Name");
   });
 
