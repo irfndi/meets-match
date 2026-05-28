@@ -76,7 +76,7 @@ export async function runIncompleteProfileReengagementJob(
     for (const user of candidates) {
       const userId = String(user.id);
       const firstName = user.first_name ? String(user.first_name) : null;
-      const lang = (String(user.language || "en") as "en" | "id");
+      const lang = String(user.language || "en") as "en" | "id";
 
       try {
         const variant = pickVariant();

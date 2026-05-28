@@ -47,12 +47,12 @@ describe("runIncompleteProfileReengagementJob", () => {
     expect(env.API_SERVICE.fetch).toHaveBeenCalledTimes(2);
 
     const call1 = env.API_SERVICE.fetch.mock.calls[0][0] as Request;
-    const body1 = await call1.json() as Record<string, unknown>;
+    const body1 = (await call1.json()) as Record<string, unknown>;
     expect(body1.userId).toBe("u1");
     expect(body1.type).toBe("INCOMPLETE_PROFILE");
 
     const call2 = env.API_SERVICE.fetch.mock.calls[1][0] as Request;
-    const body2 = await call2.json() as Record<string, unknown>;
+    const body2 = (await call2.json()) as Record<string, unknown>;
     expect(body2.userId).toBe("u2");
   });
 
@@ -87,8 +87,11 @@ describe("runIncompleteProfileReengagementJob", () => {
 
     expect(env.API_SERVICE.fetch).toHaveBeenCalledTimes(1);
     const call = env.API_SERVICE.fetch.mock.calls[0][0] as Request;
-    const body = await call.json() as Record<string, unknown>;
-    const payload = JSON.parse(body.payload as string) as Record<string, unknown>;
+    const body = (await call.json()) as Record<string, unknown>;
+    const payload = JSON.parse(body.payload as string) as Record<
+      string,
+      unknown
+    >;
     expect(payload.message).toContain("There");
   });
 
@@ -100,8 +103,11 @@ describe("runIncompleteProfileReengagementJob", () => {
     await runIncompleteProfileReengagementJob(env);
 
     const call = env.API_SERVICE.fetch.mock.calls[0][0] as Request;
-    const body = await call.json() as Record<string, unknown>;
-    const payload = JSON.parse(body.payload as string) as Record<string, unknown>;
+    const body = (await call.json()) as Record<string, unknown>;
+    const payload = JSON.parse(body.payload as string) as Record<
+      string,
+      unknown
+    >;
     expect(payload.message).toContain("Kamu");
   });
 
@@ -113,8 +119,11 @@ describe("runIncompleteProfileReengagementJob", () => {
     await runIncompleteProfileReengagementJob(env);
 
     const call = env.API_SERVICE.fetch.mock.calls[0][0] as Request;
-    const body = await call.json() as Record<string, unknown>;
-    const payload = JSON.parse(body.payload as string) as Record<string, unknown>;
+    const body = (await call.json()) as Record<string, unknown>;
+    const payload = JSON.parse(body.payload as string) as Record<
+      string,
+      unknown
+    >;
     expect(payload.message).toContain("Test\\_Name");
   });
 
