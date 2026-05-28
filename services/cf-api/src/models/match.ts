@@ -1,5 +1,18 @@
 import { Effect } from "effect";
 import type { D1Database } from "@cloudflare/workers-types";
+
+/**
+ * Parse a SQLite CURRENT_TIMESTAMP string as UTC.
+ * SQLite stores timestamps as 'YYYY-MM-DD HH:MM:SS' (no 'T' or 'Z'),
+ * which Date.parse treats as local time. Adding 'T' and 'Z' forces UTC.
+ * Also handles ISO 8601 strings that already contain 'T' or 'Z'.
+ */
+function parseSqliteTimestamp(ts: string): number {
+  if (ts.includes("T") || ts.endsWith("Z")) {
+    return Date.parse(ts);
+  }
+  return Date.parse(ts.replace(" ", "T") + "Z");
+}
 import {
   Match,
   MatchStatus,
@@ -508,6 +521,12 @@ export class MatchRepository {
             const matchedAt = row.matched_at ? String(row.matched_at) : null;
             const viewedAt = row.viewed_at ? String(row.viewed_at) : null;
 
+            const matchUpdatedTime = matchUpdatedAt
+              ? parseSqliteTimestamp(matchUpdatedAt)
+              : null;
+            const matchedTime = matchedAt ? parseSqliteTimestamp(matchedAt) : null;
+            const viewedTime = viewedAt ? parseSqliteTimestamp(viewedAt) : null;
+
             // Determine current user's action in this match
             // Use String() to avoid type mismatch (D1 may return numbers for numeric IDs)
             const isUser1InMatch =
@@ -597,7 +616,7 @@ export class MatchRepository {
               matchUpdatedAt
             ) {
               const cooldownMs = 3 * 24 * 60 * 60 * 1000; // 3 days
-              if (nowTime - Date.parse(matchUpdatedAt) < cooldownMs) {
+              if (matchUpdatedTime !== null && nowTime - matchUpdatedTime < cooldownMs) {
                 return null;
               }
             }
@@ -606,7 +625,7 @@ export class MatchRepository {
             if (myAction === "SKIP" && matchUpdatedAt) {
               if (otherAction !== "LIKE") {
                 const cooldownMs = 6 * 60 * 60 * 1000; // 6 hours
-                if (nowTime - Date.parse(matchUpdatedAt) < cooldownMs) {
+                if (matchUpdatedTime !== null && nowTime - matchUpdatedTime < cooldownMs) {
                   return null;
                 }
               }
@@ -621,7 +640,7 @@ export class MatchRepository {
               matchUpdatedAt
             ) {
               const expireMs = 30 * 24 * 60 * 60 * 1000; // 30 days
-              if (nowTime - Date.parse(matchUpdatedAt) < expireMs) {
+              if (matchUpdatedTime !== null && nowTime - matchUpdatedTime < expireMs) {
                 return null;
               }
             }
@@ -630,9 +649,9 @@ export class MatchRepository {
             let baseScore = calculateMatchScore(currentUser, candidate).total;
 
             // Variety: penalize recently shown profiles
-            if (viewedAt) {
+            if (viewedTime !== null) {
               const hoursSinceViewed =
-                (nowTime - Date.parse(viewedAt)) / (1000 * 60 * 60);
+                (nowTime - viewedTime) / (1000 * 60 * 60);
               if (hoursSinceViewed < 24) {
                 baseScore *= 0.1; // Heavily penalize profiles shown in last 24h
               } else if (hoursSinceViewed < 72) {
@@ -641,9 +660,9 @@ export class MatchRepository {
             }
 
             // Matched recycling: recent matches deprioritized, old matches normalize
-            if (matchStatus === "matched" && matchedAt) {
+            if (matchStatus === "matched" && matchedTime !== null) {
               const daysSinceMatched =
-                (nowTime - Date.parse(matchedAt)) / (1000 * 60 * 60 * 24);
+                (nowTime - matchedTime) / (1000 * 60 * 60 * 24);
               if (daysSinceMatched < 14) {
                 baseScore *= 0.05; // Very low priority for fresh matches
               } else if (daysSinceMatched < 30) {
@@ -653,8 +672,8 @@ export class MatchRepository {
 
             // Disliked after cooldown: lower priority, normalizes after 14 days
             if (matchStatus === "rejected" && myAction === "DISLIKE") {
-              const daysSinceDislike = matchUpdatedAt
-                ? (nowTime - Date.parse(matchUpdatedAt)) / (1000 * 60 * 60 * 24)
+              const daysSinceDislike = matchUpdatedTime !== null
+                ? (nowTime - matchUpdatedTime) / (1000 * 60 * 60 * 24)
                 : 999;
               if (daysSinceDislike < 14) {
                 baseScore *= 0.3;
