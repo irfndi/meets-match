@@ -346,6 +346,244 @@ describe("continueOnboarding", () => {
       expect.anything(),
     );
   });
+
+  it("skips location when city is present (skipIfPresent)", async () => {
+    await kv.put("onboarding:seen:123", JSON.stringify(["name"]));
+    const env = createEnvWithUser(kv, {
+      id: "123",
+      displayName: "TestUser",
+      birthDate: "1995-03-15",
+      gender: "male",
+      bio: "Hello",
+      location: { city: "Jakarta" },
+      language: "en",
+    });
+    const ctx = createMockCtx();
+
+    const result = await continueOnboarding(ctx, env, "123", "en");
+    expect(result).toBe(true);
+    const state = await getConversationState(kv as any, "123");
+    expect(state!.field).toBe("media");
+  });
+
+  it("skips location when latitude is present (skipIfPresent)", async () => {
+    await kv.put("onboarding:seen:123", JSON.stringify(["name"]));
+    const env = createEnvWithUser(kv, {
+      id: "123",
+      displayName: "TestUser",
+      birthDate: "1995-03-15",
+      gender: "male",
+      bio: "Hello",
+      location: { latitude: -6.2 },
+      language: "en",
+    });
+    const ctx = createMockCtx();
+
+    const result = await continueOnboarding(ctx, env, "123", "en");
+    expect(result).toBe(true);
+    const state = await getConversationState(kv as any, "123");
+    expect(state!.field).toBe("media");
+  });
+
+  it("does NOT skip media when mediaUrls is empty array", async () => {
+    await kv.put("onboarding:seen:123", JSON.stringify(["name"]));
+    const env = createEnvWithUser(kv, {
+      id: "123",
+      displayName: "TestUser",
+      birthDate: "1995-03-15",
+      gender: "male",
+      bio: "Hello",
+      location: { city: "Jakarta" },
+      mediaUrls: [],
+      language: "en",
+    });
+    const ctx = createMockCtx();
+
+    const result = await continueOnboarding(ctx, env, "123", "en");
+    expect(result).toBe(true);
+    const state = await getConversationState(kv as any, "123");
+    expect(state!.field).toBe("media");
+  });
+
+  it("skips media when mediaUrls has items (skipIfPresent)", async () => {
+    await kv.put("onboarding:seen:123", JSON.stringify(["name"]));
+    const env = createEnvWithUser(kv, {
+      id: "123",
+      displayName: "TestUser",
+      birthDate: "1995-03-15",
+      gender: "male",
+      bio: "Hello",
+      location: { city: "Jakarta" },
+      mediaUrls: [{ url: "test.jpg", type: "image", uploadedAt: "2024-01-01" }],
+      language: "en",
+    });
+    const ctx = createMockCtx();
+
+    const result = await continueOnboarding(ctx, env, "123", "en");
+    expect(result).toBe(true);
+    const state = await getConversationState(kv as any, "123");
+    expect(state!.field).toBe("interests");
+  });
+
+  it("does NOT skip birthdate when birthDate is empty string", async () => {
+    await kv.put("onboarding:seen:123", JSON.stringify(["name"]));
+    const env = createEnvWithUser(kv, {
+      id: "123",
+      displayName: "TestUser",
+      birthDate: "",
+      language: "en",
+    });
+    const ctx = createMockCtx();
+
+    const result = await continueOnboarding(ctx, env, "123", "en");
+    expect(result).toBe(true);
+    const state = await getConversationState(kv as any, "123");
+    expect(state!.field).toBe("birthdate");
+  });
+
+  it("does NOT skip bio when bio is whitespace only", async () => {
+    await kv.put("onboarding:seen:123", JSON.stringify(["name"]));
+    const env = createEnvWithUser(kv, {
+      id: "123",
+      displayName: "TestUser",
+      birthDate: "1995-03-15",
+      gender: "male",
+      bio: "   ",
+      language: "en",
+    });
+    const ctx = createMockCtx();
+
+    const result = await continueOnboarding(ctx, env, "123", "en");
+    expect(result).toBe(true);
+    const state = await getConversationState(kv as any, "123");
+    expect(state!.field).toBe("bio");
+  });
+
+  it("sends gender keyboard with correct buttons", async () => {
+    await kv.put("onboarding:seen:123", JSON.stringify(["name"]));
+    const env = createEnvWithUser(kv, {
+      id: "123",
+      displayName: "TestUser",
+      birthDate: "1995-03-15",
+      language: "en",
+    });
+    const ctx = createMockCtx();
+
+    await continueOnboarding(ctx, env, "123", "en");
+
+    const replyCall = (ctx.reply as any).mock.calls[0];
+    const keyboard = replyCall[1]?.reply_markup?.keyboard;
+    expect(keyboard).toBeDefined();
+    const allTexts = keyboard.flat().map((b: any) => b.text);
+    expect(allTexts).toContain("Male");
+    expect(allTexts).toContain("Female");
+    expect(allTexts).toContain("Cancel");
+  });
+
+  it("sends location keyboard with share and type buttons", async () => {
+    await kv.put("onboarding:seen:123", JSON.stringify(["name"]));
+    const env = createEnvWithUser(kv, {
+      id: "123",
+      displayName: "TestUser",
+      birthDate: "1995-03-15",
+      gender: "male",
+      bio: "Hello",
+      language: "en",
+    });
+    const ctx = createMockCtx();
+
+    await continueOnboarding(ctx, env, "123", "en");
+
+    const replyCall = (ctx.reply as any).mock.calls[0];
+    const keyboard = replyCall[1]?.reply_markup?.keyboard;
+    expect(keyboard).toBeDefined();
+    const allTexts = keyboard.flat().map((b: any) => b.text);
+    expect(allTexts.some((t: string) => t.includes("Share"))).toBe(true);
+    expect(allTexts.some((t: string) => t.includes("Type"))).toBe(true);
+    expect(allTexts).toContain("Cancel");
+  });
+
+  it("sends interests keyboard with skip button", async () => {
+    await kv.put("onboarding:seen:123", JSON.stringify(["name"]));
+    const env = createEnvWithUser(kv, {
+      id: "123",
+      displayName: "TestUser",
+      birthDate: "1995-03-15",
+      gender: "male",
+      bio: "Hello",
+      location: { city: "Jakarta" },
+      mediaUrls: [{ url: "test.jpg", type: "image", uploadedAt: "2024-01-01" }],
+      language: "en",
+    });
+    const ctx = createMockCtx();
+
+    await continueOnboarding(ctx, env, "123", "en");
+
+    const replyCall = (ctx.reply as any).mock.calls[0];
+    const keyboard = replyCall[1]?.reply_markup?.keyboard;
+    expect(keyboard).toBeDefined();
+    const allTexts = keyboard.flat().map((b: any) => b.text);
+    expect(allTexts).toContain("⏭️ Skip");
+    expect(allTexts).toContain("Cancel");
+  });
+
+  it("sends name keyboard with 'Use my Telegram name' button", async () => {
+    const env = createEnvWithUser(kv, {
+      id: "123",
+      displayName: "Existing",
+      language: "en",
+    });
+    const ctx = createMockCtx();
+
+    await continueOnboarding(ctx, env, "123", "en");
+
+    const replyCall = (ctx.reply as any).mock.calls[0];
+    const keyboard = replyCall[1]?.reply_markup?.keyboard;
+    expect(keyboard).toBeDefined();
+    const allTexts = keyboard.flat().map((b: any) => b.text);
+    expect(allTexts.some((t: string) => t.includes("Telegram name"))).toBe(true);
+    expect(allTexts).toContain("Cancel");
+  });
+
+  it("shows interests step first time but skips second time (showOnce)", async () => {
+    await kv.put("onboarding:seen:123", JSON.stringify(["name"]));
+    const env = createEnvWithUser(kv, {
+      id: "123",
+      displayName: "TestUser",
+      birthDate: "1995-03-15",
+      gender: "male",
+      bio: "Hello",
+      location: { city: "Jakarta" },
+      mediaUrls: [{ url: "test.jpg", type: "image", uploadedAt: "2024-01-01" }],
+      interests: ["Hiking"],
+      language: "en",
+    });
+    const ctx = createMockCtx();
+
+    await continueOnboarding(ctx, env, "123", "en");
+    const state1 = await getConversationState(kv as any, "123");
+    expect(state1!.field).toBe("interests");
+  });
+
+  it("skips interests when already seen (showOnce)", async () => {
+    await kv.put("onboarding:seen:123", JSON.stringify(["name", "interests"]));
+    const env = createEnvWithUser(kv, {
+      id: "123",
+      displayName: "TestUser",
+      birthDate: "1995-03-15",
+      gender: "male",
+      bio: "Hello",
+      location: { city: "Jakarta" },
+      mediaUrls: [{ url: "test.jpg", type: "image", uploadedAt: "2024-01-01" }],
+      interests: ["Hiking"],
+      language: "en",
+    });
+    const ctx = createMockCtx();
+
+    await continueOnboarding(ctx, env, "123", "en");
+    const state = await getConversationState(kv as any, "123");
+    expect(state!.field).toBe("phone");
+  });
 });
 
 // ================================================================

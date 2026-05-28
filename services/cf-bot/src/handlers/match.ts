@@ -767,7 +767,7 @@ export const matchCommand = async (ctx: MyContext, env: Env): Promise<void> => {
       const adjustKeyboard = new InlineKeyboard()
         .text(t("matchUpdateSettingsButton", lang), "settings:show")
         .row()
-        .text(t("matchDismissButton", lang), "referral:dismiss");
+        .text(t("matchDismissButton", lang), "relaxed:dismiss");
       await ctx.reply(
         mdv2`🔍 *${t("matchRelaxedSearchTitle", lang)}*\n\n${t("matchRelaxedSearchBody", lang)}`,
         { parse_mode: "MarkdownV2", reply_markup: adjustKeyboard },
@@ -984,6 +984,8 @@ async function handleMatchAction(
         timestamp: new Date().toISOString(),
       });
 
+      let showedAdOrPrompt = false;
+
       try {
         if (queue.index === 2) {
           const referralKeyboard = new InlineKeyboard()
@@ -996,6 +998,7 @@ async function handleMatchAction(
             }),
             { reply_markup: referralKeyboard },
           );
+          showedAdOrPrompt = true;
         }
 
         if (queue.tier === "free") {
@@ -1021,6 +1024,7 @@ async function handleMatchAction(
               parse_mode: "Markdown",
               reply_markup: adKeyboard,
             });
+            showedAdOrPrompt = true;
           }
         }
       } catch {
@@ -1035,9 +1039,16 @@ async function handleMatchAction(
         // Message might be too old or not editable; ignore
       }
 
-      queue.index++;
-      await setMatchQueue(env.KV, userId, queue);
-      await showNextMatch(ctx, env, userId, lang);
+      if (showedAdOrPrompt) {
+        // Don't advance queue yet — the dismiss callback will do it
+        await env.KV.put(`ad_pending:${userId}`, "1", {
+          expirationTtl: 300,
+        });
+      } else {
+        queue.index++;
+        await setMatchQueue(env.KV, userId, queue);
+        await showNextMatch(ctx, env, userId, lang);
+      }
     }
   } catch (error) {
     console.error("Match action error:", error);

@@ -9,7 +9,9 @@ import {
   LikeMatchRequest,
   LikeMatchResponse,
   DislikeMatchRequest,
+  DislikeMatchResponse,
   SkipMatchRequest,
+  SkipMatchResponse,
   GetMatchListRequest,
   GetMatchListResponse,
   GetMatchRequest,
@@ -225,6 +227,123 @@ describe("Match Contracts", () => {
     it("should reject CreateMatchRequest with missing user2Id", () => {
       expect(() =>
         Schema.decodeUnknownSync(CreateMatchRequest)({ user1Id: "u1" }),
+      ).toThrow();
+    });
+  });
+
+  describe("SkipMatchResponse / DislikeMatchResponse", () => {
+    it("should decode SkipMatchRequest", () => {
+      const result = Schema.decodeUnknownSync(SkipMatchRequest)({
+        matchId: "m1",
+        userId: "u1",
+      });
+      expect(result.matchId).toBe("m1");
+    });
+
+    it("should decode DislikeMatchResponse", () => {
+      const result = Schema.decodeUnknownSync(DislikeMatchResponse)({
+        match: validMatch,
+      });
+      expect(result.match.id).toBe("match-1");
+    });
+
+    it("should decode SkipMatchResponse", () => {
+      const result = Schema.decodeUnknownSync(SkipMatchResponse)({
+        match: validMatch,
+      });
+      expect(result.match.id).toBe("match-1");
+    });
+  });
+
+  describe("Match with likeMessage", () => {
+    it("should accept a likeMessage with text", () => {
+      const matchWithMessage = {
+        ...validMatch,
+        likeMessage: {
+          fromUserId: "user-1",
+          text: "Hello!",
+          createdAt: "2025-01-01T00:00:00Z",
+        },
+      };
+      expect(() =>
+        Schema.decodeUnknownSync(Match)(matchWithMessage),
+      ).not.toThrow();
+    });
+
+    it("should accept a likeMessage with mediaUrl", () => {
+      const matchWithMessage = {
+        ...validMatch,
+        likeMessage: {
+          fromUserId: "user-1",
+          mediaUrl: "https://example.com/photo.jpg",
+          createdAt: "2025-01-01T00:00:00Z",
+        },
+      };
+      expect(() =>
+        Schema.decodeUnknownSync(Match)(matchWithMessage),
+      ).not.toThrow();
+    });
+
+    it("should accept a likeMessage with both text and mediaUrl", () => {
+      const matchWithMessage = {
+        ...validMatch,
+        likeMessage: {
+          fromUserId: "user-1",
+          text: "Hey!",
+          mediaUrl: "https://example.com/photo.jpg",
+          createdAt: "2025-01-01T00:00:00Z",
+        },
+      };
+      expect(() =>
+        Schema.decodeUnknownSync(Match)(matchWithMessage),
+      ).not.toThrow();
+    });
+
+    it("should reject likeMessage with missing fromUserId", () => {
+      const invalid = {
+        ...validMatch,
+        likeMessage: {
+          text: "Hello",
+          createdAt: "2025-01-01T00:00:00Z",
+        },
+      };
+      expect(() => Schema.decodeUnknownSync(Match)(invalid)).toThrow();
+    });
+  });
+
+  describe("GetPotentialMatchesResponse", () => {
+    it("should decode response with user array", () => {
+      const validUser = {
+        id: "user-1",
+      };
+      const result = Schema.decodeUnknownSync(GetPotentialMatchesResponse)({
+        potentialMatches: [validUser],
+      });
+      expect(result.potentialMatches).toHaveLength(1);
+      expect(result.potentialMatches[0].id).toBe("user-1");
+    });
+
+    it("should decode response with empty array", () => {
+      const result = Schema.decodeUnknownSync(GetPotentialMatchesResponse)({
+        potentialMatches: [],
+      });
+      expect(result.potentialMatches).toHaveLength(0);
+    });
+  });
+
+  describe("GetMatchListResponse", () => {
+    it("should decode response with empty matches", () => {
+      const result = Schema.decodeUnknownSync(GetMatchListResponse)({
+        matches: [],
+      });
+      expect(result.matches).toHaveLength(0);
+    });
+
+    it("should reject response with non-array matches", () => {
+      expect(() =>
+        Schema.decodeUnknownSync(GetMatchListResponse)({
+          matches: "invalid",
+        }),
       ).toThrow();
     });
   });

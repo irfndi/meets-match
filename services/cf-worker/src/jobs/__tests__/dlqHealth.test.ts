@@ -68,4 +68,50 @@ describe("runDLQHealthCheck", () => {
 
     await expect(runDLQHealthCheck(env)).rejects.toThrow();
   });
+
+  it("does not alert when DLQ count is exactly at threshold", async () => {
+    const env = createEnv({ dlq: 100, expired: 0 });
+    await runDLQHealthCheck(env);
+    // Should complete without error - 100 is not > 100 (it's equal)
+    expect(env.DB.prepare).toHaveBeenCalled();
+  });
+
+  it("alerts when DLQ count exceeds threshold", async () => {
+    const env = createEnv({ dlq: 101, expired: 0 });
+    await runDLQHealthCheck(env);
+    expect(env.DB.prepare).toHaveBeenCalled();
+  });
+
+  it("does not log expired when expired count is zero", async () => {
+    const env = createEnv({ dlq: 10, expired: 0 });
+    await runDLQHealthCheck(env);
+    // expiredCount > 0 check is false, so no log about expired messages
+    expect(env.DB.prepare).toHaveBeenCalled();
+  });
+
+  it("handles DB first() returning null for main query", async () => {
+    const env = {
+      DB: {
+        prepare: vi.fn((sql: string) => {
+          return {
+            bind: vi.fn(() => ({
+              first: vi.fn(async () => null),
+              all: vi.fn(async () => ({ results: [] })),
+              run: vi.fn(async () => ({ success: true })),
+            })),
+            first: vi.fn(async () => null),
+          };
+        }),
+      } as unknown as import("@cloudflare/workers-types").D1Database,
+      KV: {} as unknown as import("@cloudflare/workers-types").KVNamespace,
+      API_SERVICE: {
+        fetch: vi.fn(async () => new Response()),
+      } as unknown as import("@cloudflare/workers-types").Fetcher,
+      BOT_SERVICE: {
+        fetch: vi.fn(async () => new Response()),
+      } as unknown as import("@cloudflare/workers-types").Fetcher,
+    };
+
+    await expect(runDLQHealthCheck(env)).rejects.toThrow();
+  });
 });

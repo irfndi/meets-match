@@ -232,5 +232,225 @@ describe("start handler", () => {
       const result = await languageCallback(ctx, env, "lang:en");
       expect(result).toBe(true);
     });
+
+    it("sets language and shows menu for complete phone-verified user", async () => {
+      const ctx = createCtx({ callbackQuery: { data: "lang:en" } });
+      const env = createEnv({
+        API_SERVICE: {
+          fetch: vi.fn(async (req: Request) => {
+            if (req.url.includes("/users/123") && req.method === "PUT") {
+              return {
+                ok: true,
+                json: async () => ({}),
+                text: async () => "ok",
+              };
+            }
+            if (req.url.includes("/users/123") && req.method === "GET") {
+              return {
+                ok: true,
+                json: async () => ({
+                  user: {
+                    id: "123",
+                    displayName: "Test",
+                    birthDate: "1990-01-01",
+                    gender: "female",
+                    bio: "Hello",
+                    location: {
+                      city: "NYC",
+                      country: "USA",
+                    },
+                    interests: ["music"],
+                    mediaUrls: [
+                      { url: "https://example.com/photo.jpg", type: "image" },
+                    ],
+                    language: "en",
+                    isProfileComplete: true,
+                    phoneNumber: "+1234567890",
+                  },
+                }),
+                text: async () => "ok",
+              };
+            }
+            return { ok: true, json: async () => ({}), text: async () => "ok" };
+          }),
+        },
+      });
+
+      const result = await languageCallback(ctx, env, "lang:en");
+      expect(result).toBe(true);
+      expect(ctx.reply).toHaveBeenCalledWith(
+        expect.stringContaining("Use the menu"),
+        expect.any(Object),
+      );
+    });
+
+    it("falls back to DEFAULT_LANGUAGE for unsupported lang code", async () => {
+      const ctx = createCtx({ callbackQuery: { data: "lang:fr" } });
+      const env = createEnv();
+
+      const result = await languageCallback(ctx, env, "lang:fr");
+      expect(result).toBe(true);
+    });
+
+    it("handles user fetch failure after language set", async () => {
+      const ctx = createCtx({ callbackQuery: { data: "lang:id" } });
+      const env = createEnv({
+        API_SERVICE: {
+          fetch: vi.fn(async (req: Request) => {
+            if (req.url.includes("/users/123") && req.method === "PUT") {
+              return {
+                ok: true,
+                json: async () => ({}),
+                text: async () => "ok",
+              };
+            }
+            if (req.url.includes("/users/123") && req.method === "GET") {
+              return {
+                ok: false,
+                status: 500,
+                json: async () => ({}),
+                text: async () => "error",
+              };
+            }
+            return { ok: true, json: async () => ({}), text: async () => "ok" };
+          }),
+        },
+      });
+
+      const result = await languageCallback(ctx, env, "lang:id");
+      expect(result).toBe(true);
+      expect(ctx.reply).toHaveBeenCalledWith(
+        expect.stringContaining("Maaf"),
+      );
+    });
+
+    it("handles missing user payload after language update", async () => {
+      const ctx = createCtx({ callbackQuery: { data: "lang:id" } });
+      const env = createEnv({
+        API_SERVICE: {
+          fetch: vi.fn(async (req: Request) => {
+            if (req.url.includes("/users/123") && req.method === "PUT") {
+              return {
+                ok: true,
+                json: async () => ({}),
+                text: async () => "ok",
+              };
+            }
+            if (req.url.includes("/users/123") && req.method === "GET") {
+              return {
+                ok: true,
+                json: async () => ({}),
+                text: async () => "ok",
+              };
+            }
+            return { ok: true, json: async () => ({}), text: async () => "ok" };
+          }),
+        },
+      });
+
+      const result = await languageCallback(ctx, env, "lang:id");
+      expect(result).toBe(true);
+      expect(ctx.reply).toHaveBeenCalledWith(
+        expect.stringContaining("Maaf"),
+      );
+    });
+
+    it("catches unhandled errors and replies with trace ID", async () => {
+      const ctx = createCtx({ callbackQuery: { data: "lang:en" } });
+      ctx.reply = vi
+        .fn()
+        .mockRejectedValueOnce(new Error("boom"))
+        .mockResolvedValue(undefined);
+      const env = createEnv();
+
+      const result = await languageCallback(ctx, env, "lang:en");
+      expect(result).toBe(false);
+      expect(ctx.reply).toHaveBeenCalledWith(
+        expect.stringContaining("Trace ID:"),
+        expect.anything(),
+      );
+    });
+  });
+
+  describe("startCommand edge cases", () => {
+    it("prompts phone verification for complete user without phone", async () => {
+      const ctx = createCtx();
+      const env = createEnv({
+        API_SERVICE: {
+          fetch: vi.fn(async () => ({
+            ok: true,
+            status: 200,
+            json: async () => ({
+              user: {
+                id: "123",
+                displayName: "Test",
+                birthDate: "1990-01-01",
+                gender: "female",
+                bio: "Hello",
+                location: {
+                  city: "NYC",
+                  country: "USA",
+                },
+                interests: ["music"],
+                mediaUrls: [
+                  { url: "https://example.com/photo.jpg", type: "image" },
+                ],
+                language: "en",
+                isProfileComplete: true,
+                phoneNumber: "",
+              },
+            }),
+            text: async () => "ok",
+          })),
+        },
+      });
+
+      await startCommand(ctx, env);
+      expect(ctx.reply).toHaveBeenCalledWith(
+        expect.stringContaining("verify your phone"),
+        expect.any(Object),
+      );
+    });
+
+    it("shows language picker for new user without referral", async () => {
+      const ctx = createCtx({ message: { text: "/start" } });
+      const env = createEnv({
+        API_SERVICE: {
+          fetch: vi.fn(async () => ({
+            ok: true,
+            status: 200,
+            json: async () => ({
+              user: {
+                id: "123",
+                displayName: "Test",
+                language: "en",
+                isProfileComplete: false,
+              },
+            }),
+            text: async () => "ok",
+          })),
+        },
+      });
+
+      await startCommand(ctx, env);
+      expect(ctx.reply).toHaveBeenCalledWith(
+        expect.stringContaining("Choose your language"),
+        expect.any(Object),
+      );
+    });
+  });
+
+  describe("buildLanguageKeyboard", () => {
+    it("returns keyboard with supported language options", () => {
+      const keyboard = buildLanguageKeyboard();
+      const kb = keyboard as any;
+      const buttons = (kb.inline_keyboard ?? []).flat();
+      expect(buttons.some((b: any) => b.callback_data === "lang:en")).toBe(
+        true,
+      );
+      expect(buttons.some((b: any) => b.callback_data === "lang:id")).toBe(
+        true,
+      );
+    });
   });
 });

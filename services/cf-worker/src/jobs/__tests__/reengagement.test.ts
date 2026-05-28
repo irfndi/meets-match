@@ -431,4 +431,325 @@ describe("runReengagementJob", () => {
     const payload = JSON.parse(body.payload);
     expect(payload.message.toLowerCase()).toContain("people");
   });
+
+  it("processes multiple candidates in a single run", async () => {
+    const env = createEnv({
+      candidates: [
+        { id: "u1", first_name: "Alice", gender: "female", location: null, preferences: null },
+        { id: "u2", first_name: "Bob", gender: "male", location: null, preferences: null },
+        { id: "u3", first_name: "Charlie", gender: null, location: null, preferences: null },
+      ],
+      nearbyCount: 5,
+      apiOk: true,
+    });
+
+    await runReengagementJob(env);
+    expect(env.API_SERVICE.fetch).toHaveBeenCalledTimes(3);
+
+    const calls = (env.API_SERVICE.fetch as any).mock.calls;
+    const body1 = JSON.parse(await new Response(calls[0][0].body).text());
+    const body2 = JSON.parse(await new Response(calls[1][0].body).text());
+    const body3 = JSON.parse(await new Response(calls[2][0].body).text());
+    expect(body1.userId).toBe("u1");
+    expect(body2.userId).toBe("u2");
+    expect(body3.userId).toBe("u3");
+  });
+
+  it("continues processing other candidates when one fails", async () => {
+    let callCount = 0;
+    const apiFetch = vi.fn(async () => {
+      callCount++;
+      if (callCount === 1) throw new Error("first call fails");
+      return { ok: true, status: 200, text: async () => "ok" };
+    });
+
+    const env = {
+      DB: {
+        prepare: vi.fn((sql: string) => {
+          const isCountQuery = sql.includes("COUNT(*)");
+          return {
+            bind: vi.fn(() => ({
+              all: vi.fn(async () => ({
+                results: isCountQuery
+                  ? [{ c: 5 }]
+                  : [
+                      { id: "u1", first_name: "A", gender: "female", location: null, preferences: null },
+                      { id: "u2", first_name: "B", gender: "male", location: null, preferences: null },
+                    ],
+              })),
+              first: vi.fn(async () => ({ c: 5 })),
+              run: vi.fn(async () => ({ success: true })),
+            })),
+          };
+        }),
+      } as unknown as import("@cloudflare/workers-types").D1Database,
+      API_SERVICE: { fetch: apiFetch } as unknown as import("@cloudflare/workers-types").Fetcher,
+      KV: {} as unknown as import("@cloudflare/workers-types").KVNamespace,
+      BOT_SERVICE: { fetch: vi.fn(async () => new Response()) } as unknown as import("@cloudflare/workers-types").Fetcher,
+    };
+
+    await expect(runReengagementJob(env)).resolves.toBeUndefined();
+    expect(apiFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("updates last_reminded_at after successful notification", async () => {
+    const runSpy = vi.fn(async () => ({ success: true }));
+    const env = {
+      DB: {
+        prepare: vi.fn((sql: string) => {
+          const isCountQuery = sql.includes("COUNT(*)");
+          if (sql.includes("UPDATE users SET last_reminded_at")) {
+            return {
+              bind: vi.fn(() => ({ run: runSpy })),
+            };
+          }
+          return {
+            bind: vi.fn(() => ({
+              all: vi.fn(async () => ({
+                results: isCountQuery
+                  ? [{ c: 5 }]
+                  : [
+                      { id: "u1", first_name: "Alice", gender: "female", location: null, preferences: null },
+                    ],
+              })),
+              first: vi.fn(async () => ({ c: 5 })),
+              run: vi.fn(async () => ({ success: true })),
+            })),
+          };
+        }),
+      } as unknown as import("@cloudflare/workers-types").D1Database,
+      API_SERVICE: {
+        fetch: vi.fn(async () => ({ ok: true, status: 200, text: async () => "ok" })),
+      } as unknown as import("@cloudflare/workers-types").Fetcher,
+      KV: {} as unknown as import("@cloudflare/workers-types").KVNamespace,
+      BOT_SERVICE: { fetch: vi.fn(async () => new Response()) } as unknown as import("@cloudflare/workers-types").Fetcher,
+    };
+
+    await runReengagementJob(env);
+    expect(runSpy).toHaveBeenCalled();
+  });
+
+  it("does not update last_reminded_at when API call fails", async () => {
+    const updateRun = vi.fn(async () => ({ success: true }));
+    const env = {
+      DB: {
+        prepare: vi.fn((sql: string) => {
+          const isCountQuery = sql.includes("COUNT(*)");
+          if (sql.includes("UPDATE users SET last_reminded_at")) {
+            return {
+              bind: vi.fn(() => ({ run: updateRun })),
+            };
+          }
+          return {
+            bind: vi.fn(() => ({
+              all: vi.fn(async () => ({
+                results: isCountQuery
+                  ? [{ c: 5 }]
+                  : [
+                      { id: "u1", first_name: "Alice", gender: "female", location: null, preferences: null },
+                    ],
+              })),
+              first: vi.fn(async () => ({ c: 5 })),
+              run: vi.fn(async () => ({ success: true })),
+            })),
+          };
+        }),
+      } as unknown as import("@cloudflare/workers-types").D1Database,
+      API_SERVICE: {
+        fetch: vi.fn(async () => ({ ok: false, status: 500, text: async () => "error" })),
+      } as unknown as import("@cloudflare/workers-types").Fetcher,
+      KV: {} as unknown as import("@cloudflare/workers-types").KVNamespace,
+      BOT_SERVICE: { fetch: vi.fn(async () => new Response()) } as unknown as import("@cloudflare/workers-types").Fetcher,
+    };
+
+    await runReengagementJob(env);
+    expect(updateRun).not.toHaveBeenCalled();
+  });
+
+  it("uses 'man and woman' singular label for single gender preference", async () => {
+    const env = createEnv({
+      candidates: [
+        {
+          id: "u1",
+          first_name: "Alex",
+          gender: "other",
+          location: null,
+          preferences: JSON.stringify({ genderPreference: ["male"] }),
+        },
+      ],
+      nearbyCount: 5,
+      apiOk: true,
+    });
+
+    // Force variant 0 which uses label.plural
+    const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0);
+    await runReengagementJob(env);
+    randomSpy.mockRestore();
+
+    const req = (env.API_SERVICE.fetch as any).mock.calls[0][0] as Request;
+    const body = JSON.parse(await new Response(req.body).text());
+    const payload = JSON.parse(body.payload);
+    expect(payload.message.toLowerCase()).toContain("men");
+  });
+
+  it("uses 'men and women' label for male+female preference", async () => {
+    const env = createEnv({
+      candidates: [
+        {
+          id: "u1",
+          first_name: "Alex",
+          gender: "other",
+          location: null,
+          preferences: JSON.stringify({ genderPreference: ["male", "female"] }),
+        },
+      ],
+      nearbyCount: 5,
+      apiOk: true,
+    });
+
+    // Force variant 0
+    const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0);
+    await runReengagementJob(env);
+    randomSpy.mockRestore();
+
+    const req = (env.API_SERVICE.fetch as any).mock.calls[0][0] as Request;
+    const body = JSON.parse(await new Response(req.body).text());
+    const payload = JSON.parse(body.payload);
+    expect(payload.message.toLowerCase()).toContain("men and women");
+  });
+
+  it("handles invalid JSON in preferences gracefully", async () => {
+    const env = createEnv({
+      candidates: [
+        {
+          id: "u1",
+          first_name: "Alex",
+          gender: "female",
+          location: null,
+          preferences: "{invalid",
+        },
+      ],
+      nearbyCount: 5,
+      apiOk: true,
+    });
+
+    await runReengagementJob(env);
+    // Should fall back to opposite gender since preferences failed to parse
+    expect(env.API_SERVICE.fetch).toHaveBeenCalledTimes(1);
+    const req = (env.API_SERVICE.fetch as any).mock.calls[0][0] as Request;
+    const body = JSON.parse(await new Response(req.body).text());
+    const payload = JSON.parse(body.payload);
+    expect(payload.message).toBeTruthy();
+  });
+
+  it("handles null first_name by defaulting to 'there'", async () => {
+    const env = createEnv({
+      candidates: [
+        {
+          id: "u1",
+          first_name: null,
+          gender: "female",
+          location: null,
+          preferences: null,
+        },
+      ],
+      nearbyCount: 5,
+      apiOk: true,
+    });
+
+    // Force variant 3 which includes the name directly
+    const randomSpy = vi.spyOn(Math, "random").mockReturnValue(3 / 14);
+    await runReengagementJob(env);
+    randomSpy.mockRestore();
+
+    const req = (env.API_SERVICE.fetch as any).mock.calls[0][0] as Request;
+    const body = JSON.parse(await new Response(req.body).text());
+    const payload = JSON.parse(body.payload);
+    expect(payload.message).toContain("there");
+  });
+
+  it("counts all users when gender preference includes three or more non-standard genders", async () => {
+    const env = createEnv({
+      candidates: [
+        {
+          id: "u1",
+          first_name: "Alex",
+          gender: "other",
+          location: null,
+          preferences: JSON.stringify({ genderPreference: ["male", "female", "other"] }),
+        },
+      ],
+      nearbyCount: 8,
+    });
+    await runReengagementJob(env);
+    const countCall = (env.DB.prepare as any).mock.calls.find((c: [string]) =>
+      c[0].includes("gender IN"),
+    );
+    expect(countCall).toBeDefined();
+    expect(countCall[0]).toContain("gender IN (?,?,?)");
+  });
+
+  it("handles location JSON with name field instead of city", async () => {
+    const env = createEnv({
+      candidates: [
+        {
+          id: "u1",
+          first_name: "Alice",
+          gender: "female",
+          location: JSON.stringify({ name: "SomePlace", country: "SomeCountry" }),
+          preferences: null,
+        },
+      ],
+      nearbyCount: 5,
+      apiOk: true,
+    });
+
+    const randomSpy = vi.spyOn(Math, "random").mockReturnValue(6 / 14);
+    await runReengagementJob(env);
+    randomSpy.mockRestore();
+
+    const req = (env.API_SERVICE.fetch as any).mock.calls[0][0] as Request;
+    const body = JSON.parse(await new Response(req.body).text());
+    const payload = JSON.parse(body.payload);
+    expect(payload.message).toContain("SomePlace");
+  });
+
+  it("countNearbyUsers returns 0 on DB error without crashing job", async () => {
+    let prepareCount = 0;
+    const env = {
+      DB: {
+        prepare: vi.fn((sql: string) => {
+          prepareCount++;
+          // Make the COUNT(*) query fail
+          if (prepareCount > 1 && sql.includes("COUNT(*)")) {
+            return {
+              bind: vi.fn(() => {
+                throw new Error("COUNT DB error");
+              }),
+            };
+          }
+          return {
+            bind: vi.fn(() => ({
+              all: vi.fn(async () => ({
+                results: prepareCount === 1
+                  ? [{ id: "u1", first_name: "Alice", gender: "female", location: null, preferences: null }]
+                  : [],
+              })),
+              first: vi.fn(async () => ({ c: 0 })),
+              run: vi.fn(async () => ({ success: true })),
+            })),
+          };
+        }),
+      } as unknown as import("@cloudflare/workers-types").D1Database,
+      API_SERVICE: {
+        fetch: vi.fn(async () => ({ ok: true, status: 200, text: async () => "ok" })),
+      } as unknown as import("@cloudflare/workers-types").Fetcher,
+      KV: {} as unknown as import("@cloudflare/workers-types").KVNamespace,
+      BOT_SERVICE: { fetch: vi.fn(async () => new Response()) } as unknown as import("@cloudflare/workers-types").Fetcher,
+    };
+
+    await expect(runReengagementJob(env)).resolves.toBeUndefined();
+    // Job should still complete - countNearbyUsers returns 0 on error
+    expect(env.API_SERVICE.fetch).toHaveBeenCalled();
+  });
 });

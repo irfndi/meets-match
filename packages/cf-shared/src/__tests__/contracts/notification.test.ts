@@ -15,6 +15,12 @@ import {
   ReplayDLQResponse,
   GetQueueStatsRequest,
   GetQueueStatsResponse,
+  SendNotificationRequest,
+  SendNotificationResponse,
+  GetReengagementCandidatesRequest,
+  GetReengagementCandidatesResponse,
+  LogNotificationResultRequest,
+  LogNotificationResultResponse,
 } from "../../contracts/notification.js";
 
 const validNotification = {
@@ -224,6 +230,113 @@ describe("Notification Contracts", () => {
       });
       expect(result.pendingCount).toBe(10);
       expect(result.failedCount).toBe(3);
+    });
+  });
+
+  describe("SendNotificationRequest / SendNotificationResponse", () => {
+    it("should decode SendNotificationRequest with all fields", () => {
+      const result = Schema.decodeUnknownSync(SendNotificationRequest)({
+        userId: "u1",
+        type: "MUTUAL_MATCH",
+        title: "Match!",
+        body: "You matched",
+        payload: "{}",
+      });
+      expect(result.userId).toBe("u1");
+      expect(result.type).toBe("MUTUAL_MATCH");
+      expect(result.title).toBe("Match!");
+    });
+
+    it("should decode SendNotificationRequest with only required fields", () => {
+      const result = Schema.decodeUnknownSync(SendNotificationRequest)({
+        userId: "u1",
+        type: "WELCOME",
+      });
+      expect(result.title).toBeUndefined();
+      expect(result.body).toBeUndefined();
+    });
+
+    it("should decode SendNotificationResponse with success=true", () => {
+      const result = Schema.decodeUnknownSync(SendNotificationResponse)({
+        success: true,
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it("should decode SendNotificationResponse with success=false", () => {
+      const result = Schema.decodeUnknownSync(SendNotificationResponse)({
+        success: false,
+      });
+      expect(result.success).toBe(false);
+    });
+  });
+
+  describe("GetReengagementCandidatesRequest / GetReengagementCandidatesResponse", () => {
+    it("should decode request with all optional fields", () => {
+      const result = Schema.decodeUnknownSync(
+        GetReengagementCandidatesRequest,
+      )({
+        minInactiveDays: 7,
+        maxInactiveDays: 30,
+        limit: 50,
+      });
+      expect(result.minInactiveDays).toBe(7);
+      expect(result.maxInactiveDays).toBe(30);
+      expect(result.limit).toBe(50);
+    });
+
+    it("should decode request with no optional fields", () => {
+      const result = Schema.decodeUnknownSync(
+        GetReengagementCandidatesRequest,
+      )({});
+      expect(result.minInactiveDays).toBeUndefined();
+      expect(result.limit).toBeUndefined();
+    });
+
+    it("should decode response with userIds array", () => {
+      const result = Schema.decodeUnknownSync(
+        GetReengagementCandidatesResponse,
+      )({
+        userIds: ["user-1", "user-2"],
+      });
+      expect(result.userIds).toEqual(["user-1", "user-2"]);
+    });
+
+    it("should decode response with empty userIds", () => {
+      const result = Schema.decodeUnknownSync(
+        GetReengagementCandidatesResponse,
+      )({
+        userIds: [],
+      });
+      expect(result.userIds).toHaveLength(0);
+    });
+  });
+
+  describe("LogNotificationResultRequest / LogNotificationResultResponse", () => {
+    it("should decode request with all fields", () => {
+      const result = Schema.decodeUnknownSync(LogNotificationResultRequest)({
+        notificationId: "notif-1",
+        status: "DELIVERED",
+        errorMessage: "some error",
+      });
+      expect(result.notificationId).toBe("notif-1");
+      expect(result.status).toBe("DELIVERED");
+      expect(result.errorMessage).toBe("some error");
+    });
+
+    it("should decode request without errorMessage", () => {
+      const result = Schema.decodeUnknownSync(LogNotificationResultRequest)({
+        notificationId: "notif-2",
+        status: "FAILED",
+      });
+      expect(result.errorMessage).toBeUndefined();
+    });
+
+    it("should decode response with success=true", () => {
+      const result = Schema.decodeUnknownSync(LogNotificationResultResponse)({
+        success: true,
+      });
+      expect(result.success).toBe(true);
     });
   });
 });

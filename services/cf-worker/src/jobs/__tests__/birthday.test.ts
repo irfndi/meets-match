@@ -182,4 +182,143 @@ describe("runBirthdayJob", () => {
 
     vi.useRealTimers();
   });
+
+  it("processes multiple birthday users", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-17T09:00:00Z"));
+
+    const env = createEnv({
+      dbResults: [
+        { id: "u1", first_name: "Alice", birth_date: "1990-05-17" },
+        { id: "u2", first_name: "Bob", birth_date: "1995-05-17" },
+      ],
+      matchResults: [{ match_user_id: "match_1" }],
+      apiResponse: { ok: true },
+    });
+
+    await runBirthdayJob(env);
+
+    // Each birthday user has one match → 2 API calls total
+    expect(env.API_SERVICE.fetch).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
+  });
+
+  it("does not notify when birthday user has no mutual matches", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-17T09:00:00Z"));
+
+    const env = createEnv({
+      dbResults: [
+        { id: "u1", first_name: "Alice", birth_date: "1990-05-17" },
+      ],
+      matchResults: [],
+      apiResponse: { ok: true },
+    });
+
+    await runBirthdayJob(env);
+
+    expect(env.API_SERVICE.fetch).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
+  it("handles age update failure gracefully for individual users", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-17T09:00:00Z"));
+
+    let updateCallCount = 0;
+    const env = {
+      DB: {
+        prepare: vi.fn((sql: string) => {
+          const isAgeUpdate = sql.includes("UPDATE users SET age");
+          const isMatchQuery = sql.includes("FROM matches m");
+          return {
+            bind: vi.fn((..._params: unknown[]) => ({
+              all: vi.fn(async () => {
+                if (isMatchQuery) return { results: [] };
+                return { results: [{ id: "u1", first_name: "Ali", birth_date: "1990-05-17" }] };
+              }),
+              first: vi.fn(async () => ({ c: 1 })),
+              run: vi.fn(async () => {
+                if (isAgeUpdate) {
+                  updateCallCount++;
+                  throw new Error("age update failed");
+                }
+                return { success: true };
+              }),
+            })),
+          };
+        }),
+      } as unknown as import("@cloudflare/workers-types").D1Database,
+      API_SERVICE: {
+        fetch: vi.fn(async () => ({ ok: true, status: 200, text: async () => "ok", json: async () => ({}) })),
+      } as unknown as import("@cloudflare/workers-types").Fetcher,
+      KV: {} as unknown as import("@cloudflare/workers-types").KVNamespace,
+      BOT_SERVICE: {
+        fetch: vi.fn(async () => new Response()),
+      } as unknown as import("@cloudflare/workers-types").Fetcher,
+    };
+
+    await runBirthdayJob(env);
+    // Age update failed but job completed
+    expect(updateCallCount).toBeGreaterThanOrEqual(1);
+    vi.useRealTimers();
+  });
+
+  it("defaults to 'Someone' when first_name is null", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-17T09:00:00Z"));
+
+    const env = createEnv({
+      dbResults: [
+        { id: "u1", first_name: null, birth_date: "1990-05-17" },
+      ],
+      matchResults: [{ match_user_id: "match_1" }],
+      apiResponse: { ok: true },
+    });
+
+    await runBirthdayJob(env);
+
+    const req = (env.API_SERVICE.fetch as any).mock.calls[0][0] as Request;
+    const body = JSON.parse(await new Response(req.body).text());
+    const payload = JSON.parse(body.payload);
+    expect(payload.message).toContain("Someone");
+    vi.useRealTimers();
+  });
+
+  it("does not query for leap-day users when not Feb 28", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-17T09:00:00Z"));
+
+    const env = createEnv({
+      dbResults: [],
+      matchResults: [],
+      leapResults: [],
+    });
+
+    await runBirthdayJob(env);
+
+    const prepareCalls = (env.DB.prepare as any).mock.calls;
+    const leapQueries = prepareCalls.filter((c: any[]) => c[0].includes("02-29"));
+    // On May 17, should not trigger leap day query
+    expect(leapQueries.length).toBe(0);
+    vi.useRealTimers();
+  });
+
+  it("handles notification failure for individual match gracefully", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-17T09:00:00Z"));
+
+    const env = createEnv({
+      dbResults: [
+        { id: "u1", first_name: "Alice", birth_date: "1990-05-17" },
+      ],
+      matchResults: [{ match_user_id: "match_1" }, { match_user_id: "match_2" }],
+      apiResponse: { ok: false, status: 500 },
+    });
+
+    await expect(runBirthdayJob(env)).resolves.toBeUndefined();
+    // Both attempts were made even though both failed
+    expect(env.API_SERVICE.fetch).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
+  });
 });

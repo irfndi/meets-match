@@ -7,11 +7,44 @@ import { ApiServiceClient } from "../services/api-client.js";
 import { createLogger } from "@meetsmatch/cf-shared";
 import { replyWithError } from "../lib/error-feedback.js";
 import { t, type Language } from "../lib/i18n.js";
+import { showNextMatch, fetchUserLang } from "./match.js";
 
 const log = createLogger("cf-bot");
 
 const PREMIUM_STARS = 500;
 const PREMIUM_PLUS_STARS = 1000;
+
+async function advanceMatchQueueAfterAdDismiss(
+  ctx: MyContext,
+  env: Env,
+): Promise<void> {
+  if (!ctx.from) return;
+  const userId = String(ctx.from.id);
+  const pendingAd = await env.KV.get(`ad_pending:${userId}`);
+  if (!pendingAd) return;
+
+  await env.KV.delete(`ad_pending:${userId}`);
+
+  const value = await env.KV.get(`match_queue:${userId}`);
+  if (!value) return;
+
+  let queue: { matches: unknown[]; index: number; tier: string; relaxed: boolean; myLocation?: { latitude: number; longitude: number } };
+  try {
+    queue = JSON.parse(value) as typeof queue;
+  } catch {
+    return;
+  }
+
+  if (!Array.isArray(queue.matches) || typeof queue.index !== "number") return;
+
+  queue.index++;
+  await env.KV.put(`match_queue:${userId}`, JSON.stringify(queue), {
+    expirationTtl: 600,
+  });
+
+  const lang = await fetchUserLang(env, userId);
+  await showNextMatch(ctx, env, userId, lang);
+}
 
 async function getInteractionStatus(
   env: Env,
@@ -335,12 +368,14 @@ export const premiumCallbacks = async (
 
     if (data === "referral:close" || data === "referral:dismiss") {
       await ctx.deleteMessage().catch(() => {});
+      await advanceMatchQueueAfterAdDismiss(ctx, env);
       await ctx.answerCallbackQuery().catch(() => {});
       return;
     }
 
     if (data === "premium_ad:dismiss") {
       await ctx.deleteMessage().catch(() => {});
+      await advanceMatchQueueAfterAdDismiss(ctx, env);
       await ctx.answerCallbackQuery().catch(() => {});
       return;
     }
