@@ -988,9 +988,7 @@ async function handleMatchAction(
             { reply_markup: referralKeyboard },
           );
           showedAdOrPrompt = true;
-        }
-
-        if (queue.tier === "free") {
+        } else if (queue.tier === "free") {
           const adKey = `ad_last_shown:${userId}`;
           const adLastShown = await env.KV.get(adKey);
           const lastIndex = adLastShown ? Number(adLastShown) : -999;

@@ -1262,12 +1262,12 @@ describe("UserRepository toUser conversion", () => {
     expect(user.subscriptionTier).toBe("free");
     expect(user.referralCode).toBe("REF123");
     expect(user.referredBy).toBeUndefined();
-    // 0 is falsy in toUser ternary → undefined
-    expect(user.referralCount).toBeUndefined();
-    expect(user.referralBonusSwipes).toBeUndefined();
+    // 0 is now correctly handled by != null check
+    expect(user.referralCount).toBe(0);
+    expect(user.referralBonusSwipes).toBe(0);
     expect(user.dmCredits).toBe(5);
-    // hidden_from_matches: 0 is falsy → undefined
-    expect(user.hiddenFromMatches).toBeUndefined();
+    // hidden_from_matches: 0 is now correctly handled by != null check
+    expect(user.hiddenFromMatches).toBe(false);
     expect(user.dailySwipesUsed).toBe(3);
     expect(user.dailyLikesUsed).toBe(5);
     expect(user.dailyDislikesUsed).toBe(10);
@@ -1284,8 +1284,8 @@ describe("UserRepository toUser conversion", () => {
     const repo = new UserRepository(db);
     const user = await runEffect(repo.getById({ userId: "u2" }));
     expect(user.id).toBe("u2");
-    // is_active: 0 is falsy in JS, so falls to default `true` in ternary
-    expect(user.isActive).toBe(true);
+    // is_active: 0 is now correctly handled by != null check
+    expect(user.isActive).toBe(false);
     expect(user.isSleeping).toBe(true);
     expect(user.isProfileComplete).toBe(false);
     expect(user.interests).toEqual([]);

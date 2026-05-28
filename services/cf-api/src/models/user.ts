@@ -880,9 +880,9 @@ export class UserRepository {
         : undefined,
       location: row.location ? JSON.parse(String(row.location)) : undefined,
       preferences: row.preferences ? JSON.parse(String(row.preferences)) : {},
-      isActive: row.is_active ? Number(row.is_active) === 1 : true,
-      isSleeping: row.is_sleeping ? Number(row.is_sleeping) === 1 : false,
-      isProfileComplete: row.is_profile_complete
+      isActive: row.is_active != null ? Number(row.is_active) === 1 : true,
+      isSleeping: row.is_sleeping != null ? Number(row.is_sleeping) === 1 : false,
+      isProfileComplete: row.is_profile_complete != null
         ? Number(row.is_profile_complete) === 1
         : false,
       phoneNumber: row.phone_number ? String(row.phone_number) : undefined,
@@ -893,25 +893,25 @@ export class UserRepository {
       subscriptionExpiresAt: row.subscription_expires_at
         ? String(row.subscription_expires_at)
         : undefined,
-      dailySwipesUsed: row.daily_swipes_used
+      dailySwipesUsed: row.daily_swipes_used != null
         ? Number(row.daily_swipes_used)
         : undefined,
       dailySwipesResetAt: row.daily_swipes_reset_at
         ? String(row.daily_swipes_reset_at)
         : undefined,
-      dailyLikesUsed: row.daily_likes_used
+      dailyLikesUsed: row.daily_likes_used != null
         ? Number(row.daily_likes_used)
         : undefined,
       dailyLikesResetAt: row.daily_likes_reset_at
         ? String(row.daily_likes_reset_at)
         : undefined,
-      dailyDislikesUsed: row.daily_dislikes_used
+      dailyDislikesUsed: row.daily_dislikes_used != null
         ? Number(row.daily_dislikes_used)
         : undefined,
       dailyDislikesResetAt: row.daily_dislikes_reset_at
         ? String(row.daily_dislikes_reset_at)
         : undefined,
-      dailyMediaUsed: row.daily_media_used
+      dailyMediaUsed: row.daily_media_used != null
         ? Number(row.daily_media_used)
         : undefined,
       dailyMediaResetAt: row.daily_media_reset_at
@@ -919,14 +919,14 @@ export class UserRepository {
         : undefined,
       referralCode: row.referral_code ? String(row.referral_code) : undefined,
       referredBy: row.referred_by ? String(row.referred_by) : undefined,
-      referralCount: row.referral_count
+      referralCount: row.referral_count != null
         ? Number(row.referral_count)
         : undefined,
-      referralBonusSwipes: row.referral_bonus_swipes
+      referralBonusSwipes: row.referral_bonus_swipes != null
         ? Number(row.referral_bonus_swipes)
         : undefined,
-      dmCredits: row.dm_credits ? Number(row.dm_credits) : undefined,
-      hiddenFromMatches: row.hidden_from_matches
+      dmCredits: row.dm_credits != null ? Number(row.dm_credits) : undefined,
+      hiddenFromMatches: row.hidden_from_matches != null
         ? Number(row.hidden_from_matches) === 1
         : undefined,
       mediaDeletedAt: row.media_deleted_at
