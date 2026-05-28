@@ -524,7 +524,9 @@ export class MatchRepository {
             const matchUpdatedTime = matchUpdatedAt
               ? parseSqliteTimestamp(matchUpdatedAt)
               : null;
-            const matchedTime = matchedAt ? parseSqliteTimestamp(matchedAt) : null;
+            const matchedTime = matchedAt
+              ? parseSqliteTimestamp(matchedAt)
+              : null;
             const viewedTime = viewedAt ? parseSqliteTimestamp(viewedAt) : null;
 
             // Determine current user's action in this match
@@ -616,7 +618,10 @@ export class MatchRepository {
               matchUpdatedAt
             ) {
               const cooldownMs = 3 * 24 * 60 * 60 * 1000; // 3 days
-              if (matchUpdatedTime !== null && nowTime - matchUpdatedTime < cooldownMs) {
+              if (
+                matchUpdatedTime !== null &&
+                nowTime - matchUpdatedTime < cooldownMs
+              ) {
                 return null;
               }
             }
@@ -625,7 +630,10 @@ export class MatchRepository {
             if (myAction === "SKIP" && matchUpdatedAt) {
               if (otherAction !== "LIKE") {
                 const cooldownMs = 6 * 60 * 60 * 1000; // 6 hours
-                if (matchUpdatedTime !== null && nowTime - matchUpdatedTime < cooldownMs) {
+                if (
+                  matchUpdatedTime !== null &&
+                  nowTime - matchUpdatedTime < cooldownMs
+                ) {
                   return null;
                 }
               }
@@ -640,7 +648,10 @@ export class MatchRepository {
               matchUpdatedAt
             ) {
               const expireMs = 30 * 24 * 60 * 60 * 1000; // 30 days
-              if (matchUpdatedTime !== null && nowTime - matchUpdatedTime < expireMs) {
+              if (
+                matchUpdatedTime !== null &&
+                nowTime - matchUpdatedTime < expireMs
+              ) {
                 return null;
               }
             }
@@ -672,9 +683,10 @@ export class MatchRepository {
 
             // Disliked after cooldown: lower priority, normalizes after 14 days
             if (matchStatus === "rejected" && myAction === "DISLIKE") {
-              const daysSinceDislike = matchUpdatedTime !== null
-                ? (nowTime - matchUpdatedTime) / (1000 * 60 * 60 * 24)
-                : 999;
+              const daysSinceDislike =
+                matchUpdatedTime !== null
+                  ? (nowTime - matchUpdatedTime) / (1000 * 60 * 60 * 24)
+                  : 999;
               if (daysSinceDislike < 14) {
                 baseScore *= 0.3;
               } // 14-30 days stays at 0.3, >30 normalizes
