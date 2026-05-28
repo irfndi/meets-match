@@ -1,0 +1,37 @@
+name = "meetsmatch-tail"
+main = "src/index.ts"
+compatibility_date = "2026-05-01"
+compatibility_flags = ["nodejs_compat"]
+
+[[analytics_engine_datasets]]
+binding = "ANALYTICS"
+dataset = "bot_metrics"
+
+[env.dev]
+name = "meetsmatch-tail-dev"
+
+[[env.dev.analytics_engine_datasets]]
+binding = "ANALYTICS"
+dataset = "bot_metrics"
+
+[env.production]
+name = "meetsmatch-tail"
+
+[[env.production.analytics_engine_datasets]]
+binding = "ANALYTICS"
+dataset = "bot_metrics"
+
+[observability]
+enabled = false
+head_sampling_rate = 1
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+persist = true
+invocation_logs = true
+
+[observability.traces]
+enabled = true
+persist = true
+head_sampling_rate = 1

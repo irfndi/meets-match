@@ -24,6 +24,7 @@
     { "path": "packages/cf-shared" },
     { "path": "services/cf-api" },
     { "path": "services/cf-bot" },
+    { "path": "services/cf-tail" },
     { "path": "services/cf-worker" }
   ]
 }

@@ -61,6 +61,22 @@ bucket_name = "meetsmatch-media"
 binding = "MEDIA_BUCKET"
 bucket_name = "meetsmatch-media"
 
+# Analytics Engine for error metrics
+[[analytics_engine_datasets]]
+binding = "ERROR_ANALYTICS"
+dataset = "bot_errors"
+
+[[env.dev.analytics_engine_datasets]]
+binding = "ERROR_ANALYTICS"
+dataset = "bot_errors"
+
+# Tail Worker consumer (not inherited by environments)
+[[tail_consumers]]
+service = "meetsmatch-tail"
+
+[[env.dev.tail_consumers]]
+service = "meetsmatch-tail-dev"
+
 # ── Production environment (deploy on release tag) ──
 [env.production]
 name = "meetsmatch-bot"
@@ -84,6 +100,13 @@ service = "meetsmatch-api"
 [[env.production.r2_buckets]]
 binding = "MEDIA_BUCKET"
 bucket_name = "meetsmatch-media"
+
+[[env.production.analytics_engine_datasets]]
+binding = "ERROR_ANALYTICS"
+dataset = "bot_errors"
+
+[[env.production.tail_consumers]]
+service = "meetsmatch-tail"
 
 [triggers]
 crons = ["0 */6 * * *"]

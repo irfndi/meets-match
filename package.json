@@ -10,9 +10,11 @@
   "scripts": {
     "dev:api": "cd services/cf-api && pnpm run dev",
     "dev:bot": "cd services/cf-bot && pnpm run dev",
+    "dev:tail": "cd services/cf-tail && pnpm run dev",
     "dev:worker": "cd services/cf-worker && pnpm run dev",
     "deploy:api": "cd services/cf-api && pnpm run deploy",
     "deploy:bot": "cd services/cf-bot && pnpm run deploy",
+    "deploy:tail": "cd services/cf-tail && pnpm run deploy:dev",
     "deploy:worker": "cd services/cf-worker && pnpm run deploy",
     "postinstall": "tsx scripts/generate-version.ts",
     "pretest": "tsx scripts/generate-version.ts",
