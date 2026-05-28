@@ -70,9 +70,12 @@ dataset = "bot_metrics"
 binding = "ANALYTICS"
 dataset = "bot_metrics"
 
-# Tail Worker consumer
+# Tail Worker consumer (not inherited by environments)
 [[tail_consumers]]
 service = "meetsmatch-tail"
+
+[[env.dev.tail_consumers]]
+service = "meetsmatch-tail-dev"
 
 # ── Production environment (deploy on release tag) ──
 [env.production]
