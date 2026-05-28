@@ -1109,7 +1109,9 @@ describe("MatchRepository.getById", () => {
     const mockD1 = createSequentialMockD1([null]);
 
     const repo = new MatchRepository(mockD1 as unknown as D1Database);
-    await expect(runEffect(repo.getById({ matchId: "m1" }))).rejects.toThrow(NotFoundError);
+    await expect(runEffect(repo.getById({ matchId: "m1" }))).rejects.toThrow(
+      NotFoundError,
+    );
   });
 
   it("queries by matchId in the SQL", async () => {
@@ -1311,14 +1313,18 @@ describe("MatchRepository.like", () => {
     const mockD1 = createSequentialMockD1([row]);
 
     const repo = new MatchRepository(mockD1 as unknown as D1Database);
-    await expect(runEffect(repo.like({ matchId: "match-1", userId: "user-c" }))).rejects.toThrow(ValidationError);
+    await expect(
+      runEffect(repo.like({ matchId: "match-1", userId: "user-c" })),
+    ).rejects.toThrow(ValidationError);
   });
 
   it("throws NotFoundError when match does not exist", async () => {
     const mockD1 = createSequentialMockD1([null]);
 
     const repo = new MatchRepository(mockD1 as unknown as D1Database);
-    await expect(runEffect(repo.like({ matchId: "match-1", userId: "user-a" }))).rejects.toThrow(NotFoundError);
+    await expect(
+      runEffect(repo.like({ matchId: "match-1", userId: "user-a" })),
+    ).rejects.toThrow(NotFoundError);
   });
 
   it("like as user2 works correctly", async () => {
@@ -1420,14 +1426,18 @@ describe("MatchRepository.dislike", () => {
     const mockD1 = createSequentialMockD1([row]);
 
     const repo = new MatchRepository(mockD1 as unknown as D1Database);
-    await expect(runEffect(repo.dislike({ matchId: "match-1", userId: "user-c" }))).rejects.toThrow(ValidationError);
+    await expect(
+      runEffect(repo.dislike({ matchId: "match-1", userId: "user-c" })),
+    ).rejects.toThrow(ValidationError);
   });
 
   it("throws NotFoundError when match does not exist", async () => {
     const mockD1 = createSequentialMockD1([null]);
 
     const repo = new MatchRepository(mockD1 as unknown as D1Database);
-    await expect(runEffect(repo.dislike({ matchId: "match-1", userId: "user-a" }))).rejects.toThrow(NotFoundError);
+    await expect(
+      runEffect(repo.dislike({ matchId: "match-1", userId: "user-a" })),
+    ).rejects.toThrow(NotFoundError);
   });
 });
 
@@ -1486,14 +1496,18 @@ describe("MatchRepository.skip", () => {
     const mockD1 = createSequentialMockD1([row]);
 
     const repo = new MatchRepository(mockD1 as unknown as D1Database);
-    await expect(runEffect(repo.skip({ matchId: "match-1", userId: "user-c" }))).rejects.toThrow(ValidationError);
+    await expect(
+      runEffect(repo.skip({ matchId: "match-1", userId: "user-c" })),
+    ).rejects.toThrow(ValidationError);
   });
 
   it("throws NotFoundError when match does not exist", async () => {
     const mockD1 = createSequentialMockD1([null]);
 
     const repo = new MatchRepository(mockD1 as unknown as D1Database);
-    await expect(runEffect(repo.skip({ matchId: "match-1", userId: "user-a" }))).rejects.toThrow(NotFoundError);
+    await expect(
+      runEffect(repo.skip({ matchId: "match-1", userId: "user-a" })),
+    ).rejects.toThrow(NotFoundError);
   });
 });
 
@@ -1619,14 +1633,18 @@ describe("MatchRepository.undo", () => {
     const mockD1 = createSequentialMockD1([row]);
 
     const repo = new MatchRepository(mockD1 as unknown as D1Database);
-    await expect(runEffect(repo.undo({ matchId: "match-1", userId: "user-c" }))).rejects.toThrow(ValidationError);
+    await expect(
+      runEffect(repo.undo({ matchId: "match-1", userId: "user-c" })),
+    ).rejects.toThrow(ValidationError);
   });
 
   it("throws NotFoundError when match does not exist", async () => {
     const mockD1 = createSequentialMockD1([null]);
 
     const repo = new MatchRepository(mockD1 as unknown as D1Database);
-    await expect(runEffect(repo.undo({ matchId: "match-1", userId: "user-a" }))).rejects.toThrow(NotFoundError);
+    await expect(
+      runEffect(repo.undo({ matchId: "match-1", userId: "user-a" })),
+    ).rejects.toThrow(NotFoundError);
   });
 });
 
