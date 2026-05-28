@@ -1,18 +1,5 @@
 import { Effect } from "effect";
 import type { D1Database } from "@cloudflare/workers-types";
-
-/**
- * Parse a SQLite CURRENT_TIMESTAMP string as UTC.
- * SQLite stores timestamps as 'YYYY-MM-DD HH:MM:SS' (no 'T' or 'Z'),
- * which Date.parse treats as local time. Adding 'T' and 'Z' forces UTC.
- * Also handles ISO 8601 strings that already contain 'T' or 'Z'.
- */
-function parseSqliteTimestamp(ts: string): number {
-  if (ts.includes("T") || ts.endsWith("Z")) {
-    return Date.parse(ts);
-  }
-  return Date.parse(ts.replace(" ", "T") + "Z");
-}
 import {
   Match,
   MatchStatus,
@@ -35,6 +22,19 @@ import {
 } from "@meetsmatch/cf-shared";
 import { UserRepository } from "./user.js";
 import { BlockRepository } from "./block.js";
+
+/**
+ * Parse a SQLite CURRENT_TIMESTAMP string as UTC.
+ * SQLite stores timestamps as 'YYYY-MM-DD HH:MM:SS' (no 'T' or 'Z'),
+ * which Date.parse treats as local time. Adding 'T' and 'Z' forces UTC.
+ * Also handles ISO 8601 strings that already contain 'T' or 'Z'.
+ */
+function parseSqliteTimestamp(ts: string): number {
+  if (ts.includes("T") || ts.endsWith("Z")) {
+    return Date.parse(ts);
+  }
+  return Date.parse(ts.replace(" ", "T") + "Z");
+}
 
 export class MatchRepository {
   constructor(
