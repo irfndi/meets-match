@@ -291,9 +291,9 @@ describe("start handler", () => {
       const result = await languageCallback(ctx, env, "lang:fr");
       expect(result).toBe(true);
 
-      const putCall = (env.API_SERVICE.fetch as ReturnType<typeof vi.fn>).mock.calls.find(
-        (c: unknown[]) => (c[0] as Request)?.method === "PUT",
-      );
+      const putCall = (
+        env.API_SERVICE.fetch as ReturnType<typeof vi.fn>
+      ).mock.calls.find((c: unknown[]) => (c[0] as Request)?.method === "PUT");
       expect(putCall).toBeDefined();
       const body = JSON.parse(await (putCall![0] as Request).text());
       expect(["en", "id"]).toContain(body.user.language);
