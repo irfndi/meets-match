@@ -22,9 +22,6 @@ id = "d1c3b0d80d3743708f441f39034a308f"
 binding = "API_SERVICE"
 service = "meetsmatch-api"
 
-[vars]
-ENVIRONMENT = "development"
-
 # Secrets (set via wrangler secret put or .dev.vars):
 # BOT_TOKEN
 # TELEGRAM_WEBHOOK_SECRET

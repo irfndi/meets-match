@@ -22,9 +22,6 @@ queue = "notification-queue"
 # Service Binding — this service is exported as "api"
 # Other services import it via [[services]] in their wrangler.toml
 
-[vars]
-ENVIRONMENT = "development"
-
 # Cron triggers are handled by cf-worker, not cf-api
 
 # Observability: configure OTLP destinations in Cloudflare dashboard
