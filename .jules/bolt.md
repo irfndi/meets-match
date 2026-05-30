@@ -9,3 +9,12 @@
 
 **Learning:** When calculating time differences for multiple items inside a hot loop (like checking candidate timestamps in match scoring), using `new Date(dateString).getTime()` causes significant unnecessary memory allocation and garbage collection for full Date objects.
 **Action:** Use the much faster `Date.parse(dateString)` instead of `new Date(dateString).getTime()`. Also, hoist constant time evaluations like `new Date().getTime()` to a `nowTime` variable outside the loop to avoid redundant calls.
+
+## 2026-05-30 - Haversine Distance and Set Allocation Optimization in Hot Loop
+
+**Learning:** Within the hot loop `getPotentialMatches` scoring logic, `haversine` distance was calculated multiple times (up to 3 times per candidate) due to duplicate coordinate checks across strict and soft constraint filtering, as well as final scoring. Furthermore, a new `Set` was being instantiated inside `calculateMatchScore` for the current user's interests during _every_ candidate evaluation. Additionally, `Math.PI / 180.0` was calculated dynamically in `haversine`.
+**Action:**
+
+1. Precompute `currentUserInterestsSet` outside the loop and pass it in as an option to `calculateMatchScore`.
+2. Precompute the `haversine` distance for the candidate once, avoiding duplicate calculations.
+3. Replace dynamic calculation of `Math.PI / 180.0` with a pre-computed `TO_RAD` constant outside `haversine`.

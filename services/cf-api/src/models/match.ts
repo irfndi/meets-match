@@ -503,6 +503,12 @@ export class MatchRepository {
 
         // 3. Filter and score candidates
         const nowTime = Date.now();
+
+        const currentUserInterestsSet =
+          currentUser.interests && currentUser.interests.length > 0
+            ? new Set(currentUser.interests)
+            : undefined;
+
         const scored = rows
           .map((row) => {
             const candidate = this.rowToUser(row);
@@ -536,6 +542,24 @@ export class MatchRepository {
             const myAction = isUser1InMatch ? user1Action : user2Action;
             const otherAction = isUser1InMatch ? user2Action : user1Action;
 
+            // --- Precompute Distance ---
+            let precomputedDistance: number | undefined;
+            if (
+              currentUser.location?.latitude != null &&
+              currentUser.location?.longitude != null &&
+              candidate.location?.latitude != null &&
+              candidate.location?.longitude != null &&
+              currentUser.location.source !== "geocoded" &&
+              candidate.location.source !== "geocoded"
+            ) {
+              precomputedDistance = haversine(
+                currentUser.location.latitude,
+                currentUser.location.longitude,
+                candidate.location.latitude,
+                candidate.location.longitude,
+              );
+            }
+
             // --- Bidirectional preference check ---
             // In strict mode: hard-filter candidates whose preferences don't
             // include the current user. In relaxed mode: skip these checks so
@@ -568,45 +592,21 @@ export class MatchRepository {
               // Distance from candidate's perspective
               // Skip when either user has geocoded (imprecise) coordinates.
               if (
-                candidate.location?.latitude != null &&
-                candidate.location?.longitude != null &&
-                currentUser.location?.latitude != null &&
-                currentUser.location?.longitude != null &&
-                candidate.location.source !== "geocoded" &&
-                currentUser.location.source !== "geocoded" &&
+                precomputedDistance !== undefined &&
                 candidatePrefs?.maxDistance
               ) {
-                const dist = haversine(
-                  candidate.location.latitude,
-                  candidate.location.longitude,
-                  currentUser.location.latitude,
-                  currentUser.location.longitude,
-                );
-                if (dist > candidatePrefs.maxDistance) return null;
+                if (precomputedDistance > candidatePrefs.maxDistance)
+                  return null;
               }
             }
 
             // --- Current user's distance hard constraint ---
             // Skip when either user has geocoded (imprecise) coordinates.
-            if (
-              currentUser.location?.latitude != null &&
-              currentUser.location?.longitude != null &&
-              candidate.location?.latitude != null &&
-              candidate.location?.longitude != null &&
-              currentUser.location.source !== "geocoded" &&
-              candidate.location.source !== "geocoded" &&
-              prefs?.maxDistance
-            ) {
-              const dist = haversine(
-                currentUser.location.latitude,
-                currentUser.location.longitude,
-                candidate.location.latitude,
-                candidate.location.longitude,
-              );
+            if (precomputedDistance !== undefined && prefs?.maxDistance) {
               const effectiveMaxDist = relaxFilters
                 ? Math.min(500, prefs.maxDistance * 2)
                 : prefs.maxDistance;
-              if (dist > effectiveMaxDist) return null;
+              if (precomputedDistance > effectiveMaxDist) return null;
             }
 
             // --- Cooldown filtering ---
@@ -657,7 +657,10 @@ export class MatchRepository {
             }
 
             // --- Calculate base score ---
-            let baseScore = calculateMatchScore(currentUser, candidate).total;
+            let baseScore = calculateMatchScore(currentUser, candidate, {
+              precomputedDistance,
+              user1InterestsSet: currentUserInterestsSet,
+            }).total;
 
             // Variety: penalize recently shown profiles
             if (viewedTime !== null) {
@@ -842,6 +845,8 @@ export class MatchRepository {
   }
 }
 
+const TO_RAD = Math.PI / 180.0;
+
 export function haversine(
   lat1: number,
   lon1: number,
@@ -849,10 +854,10 @@ export function haversine(
   lon2: number,
 ): number {
   const R = 6371; // Earth radius in km
-  const dLat = (lat2 - lat1) * (Math.PI / 180.0);
-  const dLon = (lon2 - lon1) * (Math.PI / 180.0);
-  const lat1Rad = lat1 * (Math.PI / 180.0);
-  const lat2Rad = lat2 * (Math.PI / 180.0);
+  const dLat = (lat2 - lat1) * TO_RAD;
+  const dLon = (lon2 - lon1) * TO_RAD;
+  const lat1Rad = lat1 * TO_RAD;
+  const lat2Rad = lat2 * TO_RAD;
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.sin(dLon / 2) *
@@ -873,6 +878,10 @@ interface MatchScore {
 export function calculateMatchScore(
   user1: typeof User.Type,
   user2: typeof User.Type,
+  options?: {
+    precomputedDistance?: number;
+    user1InterestsSet?: Set<string>;
+  },
 ): MatchScore {
   const score: MatchScore = {
     location: 0,
@@ -886,7 +895,12 @@ export function calculateMatchScore(
   // which are imprecise and would give misleading scores.
   // Old data without a source field is treated as potentially GPS for
   // backward compatibility.
-  if (
+  if (options?.precomputedDistance !== undefined) {
+    const maxDist = user1.preferences?.maxDistance ?? 20.0;
+    if (options.precomputedDistance <= maxDist) {
+      score.location = 1.0 - options.precomputedDistance / maxDist;
+    }
+  } else if (
     user1.location?.latitude != null &&
     user1.location?.longitude != null &&
     user2.location?.latitude != null &&
@@ -916,7 +930,7 @@ export function calculateMatchScore(
     let intersectionSize = 0;
     let unionSize = 0;
 
-    const set1 = new Set(user1.interests);
+    const set1 = options?.user1InterestsSet ?? new Set(user1.interests);
     const set2 = new Set(user2.interests);
 
     const [smaller, larger] =
