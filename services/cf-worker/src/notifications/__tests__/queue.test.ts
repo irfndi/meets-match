@@ -1,3 +1,4 @@
+import { Cause, Effect, Exit } from "effect";
 import { describe, it, expect, vi } from "vitest";
 import type { Queue, Fetcher, Message } from "@cloudflare/workers-types";
 import {
@@ -30,10 +31,7 @@ function createMockD1(
   } as unknown as import("@cloudflare/workers-types").D1Database;
 }
 
-async function runEffect<A, E>(
-  effect: import("effect").Effect.Effect<A, E, never>,
-): Promise<A> {
-  const { Effect, Exit, Cause } = await import("effect");
+async function runEffect<A, E>(effect: Effect.Effect<A, E, never>): Promise<A> {
   const exit = await Effect.runPromiseExit(effect);
   if (Exit.isSuccess(exit)) return exit.value;
   const failure = Cause.failureOption(exit.cause);
@@ -125,7 +123,7 @@ describe("NotificationQueueConsumer", () => {
     expect(msg.ack).toHaveBeenCalled();
   });
 
-  it("marks failed when bot service returns error", async () => {
+  it("retries when bot service returns transient error (non-410)", async () => {
     const { consumer, bot } = createConsumer(
       [{ id: "n1", status: "pending" }],
       { ok: false, text: "bot error" },
@@ -137,7 +135,34 @@ describe("NotificationQueueConsumer", () => {
     });
     await consumer.processBatch({ messages: [msg] } as any);
     expect(bot.fetch).toHaveBeenCalledTimes(1);
+    expect(msg.retry).toHaveBeenCalled();
+    expect(msg.ack).not.toHaveBeenCalled();
+  });
+
+  it("acks and marks failed when bot service returns 410 (permanent)", async () => {
+    const botFetch = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ error: "chat not found" }), {
+          status: 410,
+        }),
+    );
+    const db = createMockD1((sql) => {
+      if (sql.includes("SELECT * FROM notifications WHERE id")) {
+        return { results: [{ id: "n1", status: "pending" }] };
+      }
+      return { results: [] };
+    });
+    const consumer = new NotificationQueueConsumer(db, {
+      fetch: botFetch,
+    } as unknown as Fetcher);
+    const msg = createMessage({
+      notificationId: "n1",
+      userId: "u1",
+      type: "LIKE",
+    });
+    await consumer.processBatch({ messages: [msg] } as any);
     expect(msg.ack).toHaveBeenCalled();
+    expect(msg.retry).not.toHaveBeenCalled();
   });
 
   it("retries on unexpected error", async () => {
@@ -191,8 +216,8 @@ describe("NotificationQueueConsumer", () => {
     expect(msg.ack).toHaveBeenCalled();
   });
 
-  it("handles bot service fetch throwing in processMessage", async () => {
-    const db = createMockD1((sql, values) => {
+  it("retries when bot service fetch throws", async () => {
+    const db = createMockD1((sql) => {
       if (sql.includes("SELECT * FROM notifications WHERE id")) {
         return { results: [{ id: "n1", status: "pending" }] };
       }
@@ -213,9 +238,8 @@ describe("NotificationQueueConsumer", () => {
     });
     await consumer.processBatch({ messages: [msg] } as any);
 
-    // processMessage catches the fetch error internally, marks as failed, returns.
-    // processBatch then acks the message since processMessage did not throw.
-    expect(msg.ack).toHaveBeenCalled();
-    expect(msg.retry).not.toHaveBeenCalled();
+    // Network/transport errors should trigger a retry, not an ack.
+    expect(msg.retry).toHaveBeenCalled();
+    expect(msg.ack).not.toHaveBeenCalled();
   });
 });

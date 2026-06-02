@@ -820,7 +820,29 @@ export default {
           keyboard = new InlineKeyboard()
             .text("💕 View Matches", "matches")
             .row();
+        } else if (type === "REENGAGEMENT_GENTLE") {
+          message =
+            escapeMd(payload.message as string) ||
+            `We miss you on MeetMatch! Come back and find your next match! 💕`;
+          keyboard = new InlineKeyboard()
+            .text("💘 Find Matches", "find_match")
+            .row();
+        } else if (type === "REENGAGEMENT_URGENT") {
+          message =
+            escapeMd(payload.message as string) ||
+            `🔥 New ${payload.label ?? "people"} joined near you! Don't miss out.`;
+          keyboard = new InlineKeyboard()
+            .text("🔥 See Who's New", "find_match")
+            .row();
+        } else if (type === "REENGAGEMENT_LAST_CHANCE") {
+          message =
+            escapeMd(payload.message as string) ||
+            `🚨 Last call! Your matches are about to expire. Tap to see who's waiting.`;
+          keyboard = new InlineKeyboard()
+            .text("⚡ Reactivate Now", "find_match")
+            .row();
         } else if (type === "REENGAGEMENT") {
+          // Back-compat for legacy "REENGAGEMENT" payloads already in the queue.
           message =
             escapeMd(payload.message as string) ||
             `We miss you on MeetMatch! Come back and find your next match! 💘`;
@@ -830,6 +852,37 @@ export default {
               .text("🔍 Find Matches", "find_match")
               .row();
           }
+        } else if (
+          type === "INCOMPLETE_PROFILE" ||
+          type === "INCOMPLETE_PROFILE_GENTLE" ||
+          type === "INCOMPLETE_PROFILE_URGENT" ||
+          type === "INCOMPLETE_PROFILE_LAST_CHANCE"
+        ) {
+          message =
+            escapeMd(payload.message as string) ||
+            `Your profile is almost ready. Finish it up to start finding matches! 💕`;
+          keyboard = new InlineKeyboard()
+            .text("✨ Complete Profile", "profile:media")
+            .row();
+        } else if (type === "DAILY_LIKES_REMINDER") {
+          message =
+            escapeMd(payload.message as string) ||
+            `You've got new likes! Tap to see who's waiting. 💕`;
+          keyboard = new InlineKeyboard()
+            .text("💕 View My Likes", "matches")
+            .row();
+        } else if (type === "DAILY_EXPLORE_PROMPT") {
+          message =
+            escapeMd(payload.message as string) ||
+            `Fresh matches are waiting today! Take a quick look. ✨`;
+          keyboard = new InlineKeyboard()
+            .text("✨ See New Matches", "find_match")
+            .row();
+        } else if (type === "DAILY_ACTIVE_HAPPY") {
+          message =
+            escapeMd(payload.message as string) ||
+            `Good to see you active! Keep the streak going 💪`;
+          // No keyboard — passive nudge.
         } else if (type === "CLEANUP_MEDIA_DELETED") {
           message =
             payload.message ||

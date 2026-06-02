@@ -27,6 +27,9 @@ function mockEnv(
   return {
     DB: mockD1(dlqCount, candidates),
     KV: {} as KVNamespace,
+    NOTIFICATION_QUEUE: {
+      send: vi.fn().mockResolvedValue(undefined),
+    } as unknown as Queue,
     API_SERVICE: {
       fetch: vi.fn().mockResolvedValue(
         new Response(JSON.stringify({ ok: true }), {
@@ -40,6 +43,7 @@ function mockEnv(
     ENVIRONMENT: "test",
     REENGAGEMENT_SCHEDULE: "0 10 * * *",
     DLQ_PROCESSOR_SCHEDULE: "*/5 * * * *",
+    DAILY_ACTIVE_STATES_SCHEDULE: "0 8 * * *",
     WORKER_CONCURRENCY: "10",
   };
 }
@@ -53,22 +57,44 @@ describe("Cron Jobs", () => {
 
   it("runReengagementJob sends variant messages with nearby counts", async () => {
     const { runReengagementJob } = await import("../jobs/reengagement.js");
+    const daysAgo = (n: number) => {
+      const d = new Date();
+      d.setDate(d.getDate() - n);
+      return d.toISOString();
+    };
     const candidates = [
-      { id: "123", first_name: "Alice", gender: "female", location: null },
-      { id: "456", first_name: "Bob", gender: "male", location: null },
+      {
+        id: "123",
+        first_name: "Alice",
+        gender: "female",
+        location: null,
+        last_active: daysAgo(8),
+        last_reengagement_stage: 0,
+        last_reengagement_at: null,
+      },
+      {
+        id: "456",
+        first_name: "Bob",
+        gender: "male",
+        location: null,
+        last_active: daysAgo(20),
+        last_reengagement_stage: 0,
+        last_reengagement_at: null,
+      },
     ];
     const env = mockEnv(0, candidates);
     await runReengagementJob(env as any);
 
-    const calls = (env.API_SERVICE.fetch as ReturnType<typeof vi.fn>).mock
+    const calls = (env.NOTIFICATION_QUEUE.send as ReturnType<typeof vi.fn>).mock
       .calls;
     expect(calls.length).toBe(2);
 
     for (const call of calls) {
-      const req = call[0] as Request;
-      const body = JSON.parse(await req.text());
-      expect(body.type).toBe("REENGAGEMENT");
-      expect(body.channel).toBe("TELEGRAM");
+      const sent = call[0] as string;
+      const body = JSON.parse(sent);
+      expect(["REENGAGEMENT_GENTLE", "REENGAGEMENT_URGENT"]).toContain(
+        body.type,
+      );
       const payload = JSON.parse(body.payload);
       expect(payload.message).toBeTruthy();
       expect(payload.action).toBe("find_match");
@@ -103,5 +129,40 @@ describe("Cron Jobs", () => {
       API_SERVICE: {},
     };
     await expect(runDLQHealthCheck(env as any)).rejects.toThrow();
+  });
+
+  it("runDailyActiveStatesJob processes candidates without error", async () => {
+    const { runDailyActiveStatesJob } =
+      await import("../jobs/dailyActiveStates.js");
+    const daysAgo = (n: number) => {
+      const d = new Date();
+      d.setDate(d.getDate() - n);
+      return d.toISOString();
+    };
+    const candidates = [
+      {
+        id: "u1",
+        first_name: "Active",
+        language: "en",
+        last_active: daysAgo(0),
+        last_daily_message_at: null,
+        last_daily_message_type: null,
+      },
+    ];
+    const env = {
+      DB: mockD1(0, candidates),
+      KV: {} as KVNamespace,
+      NOTIFICATION_QUEUE: {
+        send: vi.fn().mockResolvedValue(undefined),
+      } as unknown as Queue,
+      API_SERVICE: {
+        fetch: vi
+          .fn()
+          .mockResolvedValue(
+            new Response(JSON.stringify({ pendingLikes: [] }), { status: 200 }),
+          ),
+      } as unknown as Fetcher,
+    };
+    await expect(runDailyActiveStatesJob(env as any)).resolves.toBeUndefined();
   });
 });

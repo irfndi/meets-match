@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Cause, Effect, Exit } from "effect";
 import type { Queue, Fetcher } from "@cloudflare/workers-types";
 
 export interface NotificationMessage {
@@ -22,82 +22,236 @@ export class NotificationQueueProducer {
   }
 }
 
+type Db = D1Database;
+
+const dbRun = (
+  db: Db,
+  sql: string,
+  ...params: unknown[]
+): Effect.Effect<void, Error, never> =>
+  Effect.tryPromise({
+    try: async () => {
+      await db
+        .prepare(sql)
+        .bind(...params)
+        .run();
+    },
+    catch: (error) =>
+      new Error(`${sql.split("\n")[0]?.trim() ?? "sql"}: ${String(error)}`),
+  });
+
+const dbFirst = <T = Record<string, unknown>>(
+  db: Db,
+  sql: string,
+  ...params: unknown[]
+): Effect.Effect<T | null, Error, never> =>
+  Effect.tryPromise({
+    try: async () => {
+      const row = await db
+        .prepare(sql)
+        .bind(...params)
+        .first<T>();
+      return row ?? null;
+    },
+    catch: (error) =>
+      new Error(`${sql.split("\n")[0]?.trim() ?? "sql"}: ${String(error)}`),
+  });
+
+const logWarn = (msg: string): Effect.Effect<void, never, never> =>
+  Effect.sync(() => {
+    console.warn(msg);
+  });
+
+const logError = (msg: string): Effect.Effect<void, never, never> =>
+  Effect.sync(() => {
+    console.error(msg);
+  });
+
+const ack = (message: Message): Effect.Effect<void, never, never> =>
+  Effect.sync(() => {
+    message.ack();
+  });
+
+const retry = (message: Message): Effect.Effect<void, never, never> =>
+  Effect.sync(() => {
+    message.retry();
+  });
+
 export class NotificationQueueConsumer {
   constructor(
-    private readonly db: D1Database,
+    private readonly db: Db,
     private readonly botService: Fetcher,
   ) {}
 
   async processBatch(batch: MessageBatch): Promise<void> {
     for (const message of batch.messages) {
-      try {
-        const body = JSON.parse(message.body as string) as NotificationMessage;
-        await this.processMessage(body);
-        message.ack();
-      } catch (error) {
-        const errorMessage =
-          error instanceof Error ? error.message : String(error);
-        console.error(`Failed to process notification:`, errorMessage);
-        message.retry();
-      }
+      const exit = await Effect.runPromiseExit(this.processOne(message));
+      if (Exit.isSuccess(exit)) continue;
+      const failure = Cause.failureOption(exit.cause);
+      const detail =
+        failure._tag === "Some" ? String(failure.value) : String(exit.cause);
+      console.error(`[queue] defect processing message: ${detail}`);
+      message.retry();
     }
   }
 
-  private async processMessage(msg: NotificationMessage): Promise<void> {
-    const notification = await this.db
-      .prepare("SELECT * FROM notifications WHERE id = ?")
-      .bind(msg.notificationId)
-      .first();
-    if (!notification) return;
+  private processOne(message: Message): Effect.Effect<void, Error, never> {
+    const db = this.db;
+    const botService = this.botService;
+    return Effect.gen(function* () {
+      const raw = typeof message.body === "string" ? message.body : "{}";
+      let body: NotificationMessage;
+      try {
+        body = JSON.parse(raw) as NotificationMessage;
+      } catch {
+        // Defect (unparseable body): bubble up so the caller retries.
+        return yield* Effect.fail(new Error("invalid json"));
+      }
+      const notificationId = String(body.notificationId);
 
-    const status = String((notification as Record<string, unknown>).status);
-    if (status === "delivered" || status === "dlq") return;
-
-    await this.db
-      .prepare(
-        "UPDATE notifications SET status = 'processing', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-      )
-      .bind(msg.notificationId)
-      .run();
-
-    try {
-      const response = await this.botService.fetch(
-        new Request("http://bot/send-notification", {
-          method: "POST",
-          body: JSON.stringify({
-            userId: msg.userId,
-            type: msg.type,
-            payload: msg.payload,
-          }),
-          headers: { "Content-Type": "application/json" },
-        }),
+      const notification = yield* dbFirst<Record<string, unknown>>(
+        db,
+        "SELECT * FROM notifications WHERE id = ?",
+        notificationId,
       );
 
-      if (response.ok) {
-        await this.db
-          .prepare(
-            "UPDATE notifications SET status = 'delivered', delivered_at = CURRENT_TIMESTAMP WHERE id = ?",
-          )
-          .bind(msg.notificationId)
-          .run();
-      } else {
-        const errorText = await response.text();
-        await this.db
-          .prepare(
-            "UPDATE notifications SET status = 'failed', last_error = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-          )
-          .bind(errorText, msg.notificationId)
-          .run();
+      if (!notification) {
+        yield* logWarn(`[queue] Notification ${notificationId} not found`);
+        return yield* ack(message);
       }
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
-      await this.db
-        .prepare(
-          "UPDATE notifications SET status = 'failed', last_error = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-        )
-        .bind(errorMessage, msg.notificationId)
-        .run();
-    }
+
+      const status = String(notification.status);
+      if (status === "delivered" || status === "dlq") {
+        return yield* ack(message);
+      }
+
+      const result = yield* Effect.either(
+        deliverOrMarkFailed(db, botService, body, notificationId),
+      );
+
+      if (result._tag === "Right") {
+        return yield* ack(message);
+      }
+
+      yield* logError(
+        `[queue] delivery failed for ${notificationId}: ${result.left.message}`,
+      );
+      return yield* retry(message);
+    });
   }
+}
+
+function deliverOrMarkFailed(
+  db: Db,
+  botService: Fetcher,
+  body: NotificationMessage,
+  notificationId: string,
+): Effect.Effect<void, Error, never> {
+  return Effect.gen(function* () {
+    yield* dbRun(
+      db,
+      "UPDATE notifications SET status = 'processing', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+      notificationId,
+    );
+
+    const startTime = Date.now();
+    const response = yield* Effect.tryPromise({
+      try: () =>
+        botService.fetch(
+          new Request("http://bot/send-notification", {
+            method: "POST",
+            body: JSON.stringify({
+              userId: body.userId,
+              type: body.type,
+              payload: body.payload,
+            }),
+            headers: { "Content-Type": "application/json" },
+          }),
+        ),
+      catch: (error) => new Error(String(error)),
+    });
+
+    const durationMs = Date.now() - startTime;
+    const errorText: string | null = response.ok
+      ? null
+      : yield* Effect.tryPromise({
+          try: () => response.text(),
+          catch: (e) => new Error(String(e)),
+        });
+
+    if (response.ok) {
+      yield* Effect.all(
+        [
+          dbRun(
+            db,
+            "UPDATE notifications SET status = 'delivered', delivered_at = CURRENT_TIMESTAMP WHERE id = ?",
+            notificationId,
+          ),
+          dbRun(
+            db,
+            `INSERT INTO notification_delivery_attempts (notification_id, status, duration_ms)
+             VALUES (?, 'success', ?)`,
+            notificationId,
+            durationMs,
+          ),
+        ],
+        { concurrency: "unbounded" },
+      );
+      console.log(`[queue] Delivered ${notificationId} in ${durationMs}ms`);
+      return;
+    }
+
+    if (response.status === 410) {
+      yield* Effect.all(
+        [
+          dbRun(
+            db,
+            "UPDATE notifications SET status = 'failed', last_error = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            errorText ?? "permanent failure",
+            notificationId,
+          ),
+          dbRun(
+            db,
+            `INSERT INTO notification_delivery_attempts (notification_id, status, error_message, duration_ms)
+             VALUES (?, 'failed', ?, ?)`,
+            notificationId,
+            errorText ?? "permanent failure",
+            durationMs,
+          ),
+        ],
+        { concurrency: "unbounded" },
+      );
+      console.warn(
+        `[queue] Permanent failure ${notificationId}: ${errorText ?? ""}`,
+      );
+      return;
+    }
+
+    // Transient failure: mark failed and bubble up so the caller retries.
+    yield* Effect.all(
+      [
+        dbRun(
+          db,
+          "UPDATE notifications SET status = 'failed', last_error = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+          errorText ?? "transient failure",
+          notificationId,
+        ),
+        dbRun(
+          db,
+          `INSERT INTO notification_delivery_attempts (notification_id, status, error_message, duration_ms)
+           VALUES (?, 'failed', ?, ?)`,
+          notificationId,
+          errorText ?? "transient failure",
+          durationMs,
+        ),
+      ],
+      { concurrency: "unbounded" },
+    );
+    console.error(
+      `[queue] Failed ${notificationId}: ${errorText ?? "unknown"}`,
+    );
+    return yield* Effect.fail(
+      new Error(errorText ?? `bot returned ${response.status}`),
+    );
+  });
 }

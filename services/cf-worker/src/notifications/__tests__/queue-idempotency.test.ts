@@ -155,7 +155,8 @@ describe("NotificationQueueConsumer idempotency", () => {
     expect(botFetch).toHaveBeenCalledTimes(2); // n1 and n3 (n2 skipped)
     expect(msgs[0].ack).toHaveBeenCalled(); // n1 succeeded
     expect(msgs[1].ack).toHaveBeenCalled(); // n2 was already delivered
-    expect(msgs[2].ack).toHaveBeenCalled(); // n3 failed but acked (code acks on failure too)
+    expect(msgs[2].retry).toHaveBeenCalled(); // n3 failed transiently -> retry, not ack
+    expect(msgs[2].ack).not.toHaveBeenCalled();
   });
 
   it("documents race when two workers process the same pending notification", async () => {

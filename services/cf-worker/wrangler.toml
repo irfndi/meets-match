@@ -14,7 +14,11 @@ database_id = "99d50fd1-a134-4bc6-8c2f-92cba3e437ea"
 binding = "KV"
 id = "d1c3b0d80d3743708f441f39034a308f"
 
-# Queue consumers
+# Queue producer + consumer
+[[queues.producers]]
+binding = "NOTIFICATION_QUEUE"
+queue = "notification-queue"
+
 [[queues.consumers]]
 queue = "notification-queue"
 max_batch_size = 10
@@ -38,7 +42,7 @@ service = "meetsmatch-bot"
 
 # Cron Triggers
 [triggers]
-crons = ["0 9 * * *", "0 10 * * *", "0 11 * * *", "0 12 * * *", "*/5 * * * *", "0 0 * * *"]
+crons = ["0 8 * * *", "0 9 * * *", "0 10 * * *", "0 11 * * *", "0 12 * * *", "*/5 * * * *", "0 0 * * *"]
 
 # Secrets (set via wrangler secret put or .dev.vars):
 # (none required — observability uses Cloudflare dashboard OTLP destinations)
@@ -65,6 +69,9 @@ database_id = "ee59fbbe-3cb1-4afc-9933-521783d08cde"
 [[env.dev.kv_namespaces]]
 binding = "KV"
 id = "a0d31ccf20fd44b794e3d4e4298efc4e"
+[[env.dev.queues.producers]]
+binding = "NOTIFICATION_QUEUE"
+queue = "notification-queue-dev"
 [[env.dev.queues.consumers]]
 queue = "notification-queue-dev"
 max_batch_size = 10
@@ -101,6 +108,7 @@ DLQ_PROCESSOR_SCHEDULE = "*/5 * * * *"
 BIRTHDAY_SCHEDULE = "0 9 * * *"
 SUBSCRIPTION_EXPIRY_SCHEDULE = "0 0 * * *"
 INCOMPLETE_PROFILE_SCHEDULE = "0 12 * * *"
+DAILY_ACTIVE_STATES_SCHEDULE = "0 8 * * *"
 WORKER_CONCURRENCY = "10"
 
 [[env.production.d1_databases]]
@@ -111,6 +119,10 @@ database_id = "99d50fd1-a134-4bc6-8c2f-92cba3e437ea"
 [[env.production.kv_namespaces]]
 binding = "KV"
 id = "d1c3b0d80d3743708f441f39034a308f"
+
+[[env.production.queues.producers]]
+binding = "NOTIFICATION_QUEUE"
+queue = "notification-queue"
 
 [[env.production.queues.consumers]]
 queue = "notification-queue"
@@ -137,7 +149,7 @@ binding = "MEDIA_BUCKET"
 bucket_name = "meetsmatch-media"
 
 [env.production.triggers]
-crons = ["0 9 * * *", "0 10 * * *", "0 11 * * *", "0 12 * * *", "*/5 * * * *", "0 0 * * *"]
+crons = ["0 8 * * *", "0 9 * * *", "0 10 * * *", "0 11 * * *", "0 12 * * *", "*/5 * * * *", "0 0 * * *"]
 
 [observability]
 enabled = false

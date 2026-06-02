@@ -61,6 +61,9 @@ describe("runCleanupJob", () => {
       DB: db as unknown as D1Database,
       API_SERVICE: mockApiService() as unknown as Fetcher,
       BOT_SERVICE: mockBotService() as unknown as Fetcher,
+      NOTIFICATION_QUEUE: {
+        send: vi.fn(async () => {}),
+      } as unknown as Queue,
       KV: {} as KVNamespace,
     };
 
@@ -94,6 +97,9 @@ describe("runCleanupJob", () => {
       DB: db as unknown as D1Database,
       API_SERVICE: apiService as unknown as Fetcher,
       BOT_SERVICE: botService as unknown as Fetcher,
+      NOTIFICATION_QUEUE: {
+        send: vi.fn(async () => {}),
+      } as unknown as Queue,
       KV: {} as KVNamespace,
     };
 
@@ -101,8 +107,12 @@ describe("runCleanupJob", () => {
 
     // Should call API to delete media
     expect(apiService.fetch).toHaveBeenCalled();
-    // Should notify user
-    expect(botService.fetch).toHaveBeenCalled();
+    // Should notify user via queue
+    expect(env.NOTIFICATION_QUEUE.send).toHaveBeenCalled();
+    const sent = (env.NOTIFICATION_QUEUE.send as any).mock
+      .calls[0][0] as string;
+    const body = JSON.parse(sent);
+    expect(body.type).toBe("CLEANUP_MEDIA_DELETED");
   });
 
   it("skips DB update when R2 deletion fails with non-404 error", async () => {
@@ -132,12 +142,15 @@ describe("runCleanupJob", () => {
       DB: db as unknown as D1Database,
       API_SERVICE: apiService as unknown as Fetcher,
       BOT_SERVICE: botService as unknown as Fetcher,
+      NOTIFICATION_QUEUE: {
+        send: vi.fn(async () => {}),
+      } as unknown as Queue,
       KV: {} as KVNamespace,
     };
 
     await expect(runCleanupJob(env)).rejects.toThrow();
-    // Bot should NOT be called since DB update was skipped
-    expect(botService.fetch).not.toHaveBeenCalled();
+    // Queue should NOT be called since DB update was skipped
+    expect(env.NOTIFICATION_QUEUE.send).not.toHaveBeenCalled();
   });
 
   it("skips DB update when R2 deletion throws an exception", async () => {
@@ -167,11 +180,14 @@ describe("runCleanupJob", () => {
       DB: db as unknown as D1Database,
       API_SERVICE: apiService as unknown as Fetcher,
       BOT_SERVICE: botService as unknown as Fetcher,
+      NOTIFICATION_QUEUE: {
+        send: vi.fn(async () => {}),
+      } as unknown as Queue,
       KV: {} as KVNamespace,
     };
 
     await expect(runCleanupJob(env)).rejects.toThrow();
-    expect(botService.fetch).not.toHaveBeenCalled();
+    expect(env.NOTIFICATION_QUEUE.send).not.toHaveBeenCalled();
   });
 
   it("cleans multiple users with media in a single run", async () => {
@@ -206,12 +222,15 @@ describe("runCleanupJob", () => {
       DB: db as unknown as D1Database,
       API_SERVICE: apiService as unknown as Fetcher,
       BOT_SERVICE: botService as unknown as Fetcher,
+      NOTIFICATION_QUEUE: {
+        send: vi.fn(async () => {}),
+      } as unknown as Queue,
       KV: {} as KVNamespace,
     };
 
     await runCleanupJob(env);
     expect(apiService.fetch).toHaveBeenCalledTimes(2);
-    expect(botService.fetch).toHaveBeenCalledTimes(2);
+    expect(env.NOTIFICATION_QUEUE.send).toHaveBeenCalledTimes(2);
   });
 
   it("handles invalid JSON in media_urls gracefully", async () => {
@@ -234,6 +253,9 @@ describe("runCleanupJob", () => {
       DB: db as unknown as D1Database,
       API_SERVICE: apiService as unknown as Fetcher,
       BOT_SERVICE: botService as unknown as Fetcher,
+      NOTIFICATION_QUEUE: {
+        send: vi.fn(async () => {}),
+      } as unknown as Queue,
       KV: {} as KVNamespace,
     };
 
