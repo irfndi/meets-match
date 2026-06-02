@@ -120,8 +120,11 @@ export async function runIncompleteProfileReengagementJob(
 
   const now = new Date();
   const shortestMin = Math.min(...STAGES.map((s) => s.accountAgeDaysMin));
-  const cutoff = new Date(now);
-  cutoff.setDate(cutoff.getDate() - shortestMin);
+  const longestMax = Math.max(...STAGES.map((s) => s.accountAgeDaysMax));
+  const lowerCutoff = new Date(now);
+  lowerCutoff.setDate(lowerCutoff.getDate() - shortestMin);
+  const upperCutoff = new Date(now);
+  upperCutoff.setDate(upperCutoff.getDate() - longestMax);
 
   const effect = pipe(
     Effect.tryPromise({
@@ -134,9 +137,14 @@ export async function runIncompleteProfileReengagementJob(
              AND is_sleeping = 0
              AND is_profile_complete = 0
              AND created_at <= ?
+             AND created_at >= ?
            LIMIT ?`,
         )
-          .bind(cutoff.toISOString(), BATCH_SIZE)
+          .bind(
+            lowerCutoff.toISOString(),
+            upperCutoff.toISOString(),
+            BATCH_SIZE,
+          )
           .all();
         return (results ?? []) as Array<Record<string, unknown>>;
       },

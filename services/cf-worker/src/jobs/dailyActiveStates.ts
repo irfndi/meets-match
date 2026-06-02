@@ -102,12 +102,12 @@ export async function runDailyActiveStatesJob(env: Env): Promise<void> {
   log.info("dailyActiveStates", "Starting job");
 
   const now = new Date();
-  const oneDayAgo = new Date(now.getTime() - ONE_DAY_MS);
-  const oneDayAgoIso = oneDayAgo.toISOString();
 
   const effect = pipe(
     Effect.tryPromise({
       try: async () => {
+        // `last_active` is SQLite CURRENT_TIMESTAMP ('YYYY-MM-DD HH:MM:SS'),
+        // not a JS ISO string — compare via datetime() so both sides match.
         const { results } = await env.DB.prepare(
           `SELECT id, first_name, language, last_active,
                   last_daily_message_at, last_daily_message_type,
@@ -116,11 +116,12 @@ export async function runDailyActiveStatesJob(env: Env): Promise<void> {
            WHERE is_active = 1
              AND is_sleeping = 0
              AND is_profile_complete = 1
-             AND last_active >= ?
-             AND (last_daily_message_at IS NULL OR last_daily_message_at <= ?)
+             AND datetime(last_active) >= datetime('now', '-1 day')
+             AND (last_daily_message_at IS NULL
+                  OR datetime(last_daily_message_at) <= datetime('now', '-1 day'))
            LIMIT ?`,
         )
-          .bind(oneDayAgoIso, oneDayAgoIso, BATCH_SIZE)
+          .bind(BATCH_SIZE)
           .all();
         return (results ?? []) as Array<Record<string, unknown>>;
       },

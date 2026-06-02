@@ -102,6 +102,17 @@ export function createRacingMockD1(options: {
         if (sql.includes("UPDATE notifications SET")) {
           const id = values[values.length - 1] as string;
           const row = store.get(id) ?? {};
+          const whereClause = sql.match(/WHERE(.+)$/i)?.[1] ?? "";
+          const inList = whereClause.match(/status\s+IN\s*\(([^)]+)\)/i);
+          const allowedStatuses = inList
+            ? Array.from(inList[1].matchAll(/'(\w+)'/g)).map((m) => m[1])
+            : null;
+          if (
+            allowedStatuses &&
+            !allowedStatuses.includes(String(row.status))
+          ) {
+            return { success: true, meta: { changes: 0 } };
+          }
           const setClause =
             sql.match(/UPDATE notifications SET (.+?) WHERE/i)?.[1] ?? "";
           const assignments = setClause.split(",").map((s) => s.trim());
@@ -120,7 +131,7 @@ export function createRacingMockD1(options: {
           }
           store.set(id, row);
         }
-        return { success: true };
+        return { success: true, meta: { changes: 1 } };
       }),
       first: vi.fn(async () => {
         captured.push({ sql, values });

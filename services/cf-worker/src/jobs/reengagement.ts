@@ -316,11 +316,14 @@ export async function runReengagementJob(env: Env): Promise<void> {
 
   const now = new Date();
 
-  // Use the shortest minimum inactivity threshold so we select every user
-  // that could be eligible for *any* stage; stageFor() filters to the right one.
+  // Bound the query to [shortestMinDays, longestMaxDays] so stale rows
+  // outside the stage window can't fill the batch and starve eligible users.
   const shortestMinDays = Math.min(...STAGES.map((s) => s.inactiveDaysMin));
-  const cutoff = new Date(now);
-  cutoff.setDate(cutoff.getDate() - shortestMinDays);
+  const longestMaxDays = Math.max(...STAGES.map((s) => s.inactiveDaysMax));
+  const lowerCutoff = new Date(now);
+  lowerCutoff.setDate(lowerCutoff.getDate() - shortestMinDays);
+  const upperCutoff = new Date(now);
+  upperCutoff.setDate(upperCutoff.getDate() - longestMaxDays);
 
   const effect = pipe(
     Effect.tryPromise({
@@ -332,10 +335,16 @@ export async function runReengagementJob(env: Env): Promise<void> {
            WHERE is_active = 1
              AND is_sleeping = 0
              AND is_profile_complete = 1
-             AND (last_active IS NULL OR last_active <= ?)
+             AND last_active IS NOT NULL
+             AND last_active <= ?
+             AND last_active >= ?
            LIMIT ?`,
         )
-          .bind(cutoff.toISOString(), BATCH_SIZE)
+          .bind(
+            lowerCutoff.toISOString(),
+            upperCutoff.toISOString(),
+            BATCH_SIZE,
+          )
           .all();
         return (results ?? []) as Array<Record<string, unknown>>;
       },

@@ -43,6 +43,25 @@ const dbRun = (
       new Error(`${sql.split("\n")[0]?.trim() ?? "sql"}: ${String(error)}`),
   });
 
+/** Like dbRun but returns `meta.changes` so the caller can gate on a successful
+ *  atomic claim (e.g. `WHERE status IN (...)` for "pending" / "failed" rows). */
+const dbRunWithChanges = (
+  db: Db,
+  sql: string,
+  ...params: unknown[]
+): Effect.Effect<{ changes: number }, Error, never> =>
+  Effect.tryPromise({
+    try: async () => {
+      const result = await db
+        .prepare(sql)
+        .bind(...params)
+        .run<{ changes: number }>();
+      return { changes: Number(result.meta?.changes ?? 0) };
+    },
+    catch: (error) =>
+      new Error(`${sql.split("\n")[0]?.trim() ?? "sql"}: ${String(error)}`),
+  });
+
 const dbFirst = <T = Record<string, unknown>>(
   db: Db,
   sql: string,
@@ -94,7 +113,35 @@ export function persistAndEnqueue(
       catch: (error) => new Error(`persistNotification: ${String(error)}`),
     });
 
-    yield* producer.enqueue(message);
+    // If enqueue fails the persisted row would be orphaned (status='pending'
+    // forever with no queue message left to drive delivery). Compensate by
+    // deleting the row so a future enqueue can recreate it cleanly.
+    const enqueueResult = yield* producer.enqueue(message).pipe(Effect.either);
+
+    if (enqueueResult._tag === "Left") {
+      yield* Effect.tryPromise({
+        try: () =>
+          db
+            .prepare("DELETE FROM notifications WHERE id = ?")
+            .bind(message.notificationId)
+            .run(),
+        catch: (error) =>
+          new Error(`rollbackPersistedNotification: ${String(error)}`),
+      }).pipe(
+        Effect.tapError((err) =>
+          Effect.sync(() =>
+            log.error(
+              "persistAndEnqueue",
+              `Failed to rollback orphaned notification ${message.notificationId}`,
+              { userId: message.userId },
+              err,
+            ),
+          ),
+        ),
+        Effect.orElse(() => Effect.void),
+      );
+      return yield* Effect.fail(enqueueResult.left);
+    }
   });
 }
 
@@ -170,11 +217,24 @@ function deliverOrMarkFailed(
   notificationId: string,
 ): Effect.Effect<void, Error, never> {
   return Effect.gen(function* () {
-    yield* dbRun(
+    // Atomic claim: only one consumer can transition a row from a retryable
+    // status ('pending' or 'failed') into 'processing'. Any concurrent
+    // consumer sees zero rows affected and bails out.
+    const claim = yield* dbRunWithChanges(
       db,
-      "UPDATE notifications SET status = 'processing', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+      "UPDATE notifications SET status = 'processing', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status IN ('pending', 'failed')",
       notificationId,
     );
+
+    if (claim.changes === 0) {
+      // Another consumer has already claimed this row, or it's no longer in a
+      // retryable state. Acknowledge the duplicate delivery so it isn't retried.
+      log.info(
+        "deliverOrMarkFailed",
+        `Skipping ${notificationId} — already claimed by another consumer`,
+      );
+      return;
+    }
 
     const startTime = Date.now();
     const response = yield* Effect.tryPromise({
@@ -227,18 +287,20 @@ function deliverOrMarkFailed(
     }
 
     if (response.status === 410) {
+      // Terminal: 'dlq' (not 'failed') so processOne's delivered|dlq short-circuit
+      // stops redelivery on subsequent redeliveries of the same message.
       yield* Effect.all(
         [
           dbRun(
             db,
-            "UPDATE notifications SET status = 'failed', last_error = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            "UPDATE notifications SET status = 'dlq', last_error = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
             errorText ?? "permanent failure",
             notificationId,
           ),
           dbRun(
             db,
             `INSERT INTO notification_delivery_attempts (notification_id, status, error_message, duration_ms)
-             VALUES (?, 'failed', ?, ?)`,
+             VALUES (?, 'dlq', ?, ?)`,
             notificationId,
             errorText ?? "permanent failure",
             durationMs,

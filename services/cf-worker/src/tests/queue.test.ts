@@ -8,7 +8,7 @@ function createMockD1(notification: Record<string, unknown> | null = null) {
       bind: vi.fn((...values: unknown[]) => {
         queries.push({ sql, values });
         return {
-          run: vi.fn(async () => ({ success: true })),
+          run: vi.fn(async () => ({ success: true, meta: { changes: 1 } })),
           first: vi.fn(async () => notification),
           all: vi.fn(async () => ({ results: [] })),
         };
