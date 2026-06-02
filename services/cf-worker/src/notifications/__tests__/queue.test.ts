@@ -338,5 +338,12 @@ describe("NotificationQueueConsumer", () => {
     // Network/transport errors should trigger a retry, not an ack.
     expect(msg.retry).toHaveBeenCalled();
     expect(msg.ack).not.toHaveBeenCalled();
+
+    const failedUpdate = (
+      db.prepare as ReturnType<typeof vi.fn>
+    ).mock.calls.find(
+      (c) => typeof c[0] === "string" && c[0].includes("status = 'failed'"),
+    );
+    expect(failedUpdate).toBeDefined();
   });
 });

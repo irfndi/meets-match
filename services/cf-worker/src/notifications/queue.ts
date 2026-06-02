@@ -237,6 +237,9 @@ function deliverOrMarkFailed(
     }
 
     const startTime = Date.now();
+
+    // Transport errors leave the row in 'processing'; reset to 'failed' so
+    // the retry can reclaim it via the atomic claim.
     const response = yield* Effect.tryPromise({
       try: () =>
         botService.fetch(
@@ -251,7 +254,27 @@ function deliverOrMarkFailed(
           }),
         ),
       catch: (error) => new Error(String(error)),
-    });
+    }).pipe(
+      Effect.catchAll((err) =>
+        Effect.gen(function* () {
+          yield* dbRun(
+            db,
+            "UPDATE notifications SET status = 'failed', last_error = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            `transport: ${err.message}`,
+            notificationId,
+          );
+          yield* dbRun(
+            db,
+            `INSERT INTO notification_delivery_attempts (notification_id, status, error_message, duration_ms)
+             VALUES (?, 'failed', ?, ?)`,
+            notificationId,
+            `transport: ${err.message}`,
+            Date.now() - startTime,
+          );
+          return yield* Effect.fail(err);
+        }),
+      ),
+    );
 
     const durationMs = Date.now() - startTime;
     const errorText: string | null = response.ok

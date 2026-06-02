@@ -336,8 +336,8 @@ export async function runReengagementJob(env: Env): Promise<void> {
              AND is_sleeping = 0
              AND is_profile_complete = 1
              AND last_active IS NOT NULL
-             AND last_active <= ?
-             AND last_active >= ?
+             AND datetime(last_active) <= datetime(?)
+             AND datetime(last_active) >= datetime(?)
            LIMIT ?`,
         )
           .bind(

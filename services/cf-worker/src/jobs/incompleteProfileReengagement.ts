@@ -136,8 +136,8 @@ export async function runIncompleteProfileReengagementJob(
            WHERE is_active = 1
              AND is_sleeping = 0
              AND is_profile_complete = 0
-             AND created_at <= ?
-             AND created_at >= ?
+             AND datetime(created_at) <= datetime(?)
+             AND datetime(created_at) >= datetime(?)
            LIMIT ?`,
         )
           .bind(
