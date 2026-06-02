@@ -246,16 +246,12 @@ function processIncompleteCandidate(
       stage: stage.stage,
     };
 
-    const enqueueResult = yield* persistAndEnqueue(
-      env.DB,
-      producer,
-      {
-        notificationId,
-        userId: id,
-        type: stage.type,
-        payload: JSON.stringify(payload),
-      },
-    ).pipe(Effect.either);
+    const enqueueResult = yield* persistAndEnqueue(env.DB, producer, {
+      notificationId,
+      userId: id,
+      type: stage.type,
+      payload: JSON.stringify(payload),
+    }).pipe(Effect.either);
 
     if (enqueueResult._tag === "Left") {
       log.error(
