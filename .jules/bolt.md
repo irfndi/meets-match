@@ -17,4 +17,4 @@
 
 1. Precompute `currentUserInterestsSet` outside the loop and pass it in as an option to `calculateMatchScore`.
 2. Precompute the `haversine` distance for the candidate once, avoiding duplicate calculations.
-3. Replace dynamic calculation of `Math.PI / 180.0` with a pre-computed `TO_RAD` constant outside `haversine`.
+3. Replace dynamic calculation of `Math.PI / 180.0` with a precomputed `TO_RAD` constant outside `haversine`.

@@ -544,19 +544,23 @@ export class MatchRepository {
 
             // --- Precompute Distance ---
             let precomputedDistance: number | undefined;
+            const loc1 = currentUser.location;
+            const loc2 = candidate.location;
             if (
-              currentUser.location?.latitude != null &&
-              currentUser.location?.longitude != null &&
-              candidate.location?.latitude != null &&
-              candidate.location?.longitude != null &&
-              currentUser.location.source !== "geocoded" &&
-              candidate.location.source !== "geocoded"
+              loc1 &&
+              loc2 &&
+              loc1.latitude != null &&
+              loc1.longitude != null &&
+              loc2.latitude != null &&
+              loc2.longitude != null &&
+              loc1.source !== "geocoded" &&
+              loc2.source !== "geocoded"
             ) {
               precomputedDistance = haversine(
-                currentUser.location.latitude,
-                currentUser.location.longitude,
-                candidate.location.latitude,
-                candidate.location.longitude,
+                loc1.latitude,
+                loc1.longitude,
+                loc2.latitude,
+                loc2.longitude,
               );
             }
 
