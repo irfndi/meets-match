@@ -41,6 +41,9 @@ describe("runBirthdayJob", () => {
         })),
       } as unknown as import("@cloudflare/workers-types").Fetcher,
       KV: {} as unknown as import("@cloudflare/workers-types").KVNamespace,
+      NOTIFICATION_QUEUE: {
+        send: vi.fn(async () => {}),
+      } as unknown as Queue,
       BOT_SERVICE: {
         fetch: vi.fn(async () => new Response()),
       } as unknown as import("@cloudflare/workers-types").Fetcher,
@@ -69,9 +72,12 @@ describe("runBirthdayJob", () => {
 
     await runBirthdayJob(env);
 
-    expect(env.API_SERVICE.fetch).toHaveBeenCalledTimes(2);
-    const calls = (env.API_SERVICE.fetch as any).mock.calls;
-    expect(calls[0][0].url).toBe("http://api/notifications");
+    expect(env.NOTIFICATION_QUEUE.send).toHaveBeenCalledTimes(2);
+    const sent = (env.NOTIFICATION_QUEUE.send as any).mock
+      .calls[0][0] as string;
+    const body = JSON.parse(sent);
+    expect(body.userId).toBe("match_1");
+    expect(body.type).toBe("BIRTHDAY");
   });
 
   it("updates age column for birthday users", async () => {
@@ -104,13 +110,17 @@ describe("runBirthdayJob", () => {
     vi.useRealTimers();
   });
 
-  it("handles API failure gracefully", async () => {
+  it("handles queue send failure gracefully", async () => {
     const env = createEnv({
       dbResults: [
         { id: "user_1", first_name: "Bob", birth_date: "1990-05-17" },
       ],
       matchResults: [{ match_user_id: "match_1" }],
       apiResponse: { ok: false, status: 500 },
+    });
+    // Override the queue to throw — the job should still complete.
+    (env.NOTIFICATION_QUEUE as any).send = vi.fn(async () => {
+      throw new Error("queue down");
     });
 
     await expect(runBirthdayJob(env)).resolves.toBeUndefined();
@@ -131,6 +141,9 @@ describe("runBirthdayJob", () => {
         fetch: vi.fn(),
       } as unknown as import("@cloudflare/workers-types").Fetcher,
       KV: {} as unknown as import("@cloudflare/workers-types").KVNamespace,
+      NOTIFICATION_QUEUE: {
+        send: vi.fn(async () => {}),
+      } as unknown as Queue,
       BOT_SERVICE: {
         fetch: vi.fn(async () => new Response()),
       } as unknown as import("@cloudflare/workers-types").Fetcher,
@@ -149,8 +162,9 @@ describe("runBirthdayJob", () => {
     });
 
     await runBirthdayJob(env);
-    const req = (env.API_SERVICE.fetch as any).mock.calls[0][0] as Request;
-    const body = JSON.parse(await new Response(req.body).text());
+    const sent = (env.NOTIFICATION_QUEUE.send as any).mock
+      .calls[0][0] as string;
+    const body = JSON.parse(sent);
     const payload = JSON.parse(body.payload);
     expect(payload.message).toContain("Alice\\*Bob");
   });
@@ -178,7 +192,7 @@ describe("runBirthdayJob", () => {
       call[0].includes("UPDATE users SET age"),
     );
     expect(ageUpdateCall).toBeDefined();
-    expect(env.API_SERVICE.fetch).not.toHaveBeenCalled();
+    expect(env.NOTIFICATION_QUEUE.send).not.toHaveBeenCalled();
 
     vi.useRealTimers();
   });
@@ -198,8 +212,8 @@ describe("runBirthdayJob", () => {
 
     await runBirthdayJob(env);
 
-    // Each birthday user has one match → 2 API calls total
-    expect(env.API_SERVICE.fetch).toHaveBeenCalledTimes(2);
+    // Each birthday user has one match → 2 queue sends total
+    expect(env.NOTIFICATION_QUEUE.send).toHaveBeenCalledTimes(2);
     vi.useRealTimers();
   });
 
@@ -215,7 +229,7 @@ describe("runBirthdayJob", () => {
 
     await runBirthdayJob(env);
 
-    expect(env.API_SERVICE.fetch).not.toHaveBeenCalled();
+    expect(env.NOTIFICATION_QUEUE.send).not.toHaveBeenCalled();
     vi.useRealTimers();
   });
 
@@ -260,6 +274,9 @@ describe("runBirthdayJob", () => {
         })),
       } as unknown as import("@cloudflare/workers-types").Fetcher,
       KV: {} as unknown as import("@cloudflare/workers-types").KVNamespace,
+      NOTIFICATION_QUEUE: {
+        send: vi.fn(async () => {}),
+      } as unknown as Queue,
       BOT_SERVICE: {
         fetch: vi.fn(async () => new Response()),
       } as unknown as import("@cloudflare/workers-types").Fetcher,
@@ -283,8 +300,9 @@ describe("runBirthdayJob", () => {
 
     await runBirthdayJob(env);
 
-    const req = (env.API_SERVICE.fetch as any).mock.calls[0][0] as Request;
-    const body = JSON.parse(await new Response(req.body).text());
+    const sent = (env.NOTIFICATION_QUEUE.send as any).mock
+      .calls[0][0] as string;
+    const body = JSON.parse(sent);
     const payload = JSON.parse(body.payload);
     expect(payload.message).toContain("Someone");
     vi.useRealTimers();
@@ -323,10 +341,15 @@ describe("runBirthdayJob", () => {
       ],
       apiResponse: { ok: false, status: 500 },
     });
+    // Override the queue to throw — the job should still complete for all
+    // matches and not propagate the failure.
+    (env.NOTIFICATION_QUEUE as any).send = vi.fn(async () => {
+      throw new Error("queue down");
+    });
 
     await expect(runBirthdayJob(env)).resolves.toBeUndefined();
     // Both attempts were made even though both failed
-    expect(env.API_SERVICE.fetch).toHaveBeenCalledTimes(2);
+    expect(env.NOTIFICATION_QUEUE.send).toHaveBeenCalledTimes(2);
     vi.useRealTimers();
   });
 });

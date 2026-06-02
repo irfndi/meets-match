@@ -1,15 +1,24 @@
 import { describe, it, expect, vi } from "vitest";
 import { runIncompleteProfileReengagementJob } from "../incompleteProfileReengagement.js";
 
+function daysAgo(n: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return d.toISOString();
+}
+
 function createEnv(overrides?: {
   candidates?: Array<Record<string, unknown>>;
-  apiOk?: boolean;
+  queueOk?: boolean;
 }) {
   const candidates = overrides?.candidates ?? [];
-  const apiOk = overrides?.apiOk ?? true;
+  const queueOk = overrides?.queueOk ?? true;
 
   const runMock = vi.fn(async () => ({ success: true }));
   const allMock = vi.fn(async () => ({ results: candidates }));
+  const sendMock = vi.fn(async () => {
+    if (!queueOk) throw new Error("queue down");
+  });
 
   const db = {
     prepare: vi.fn((sql: string) => ({
@@ -20,17 +29,13 @@ function createEnv(overrides?: {
     })),
   };
 
-  const apiFetch = vi.fn(async () => {
-    if (!apiOk) return new Response("error", { status: 500 });
-    return new Response(JSON.stringify({}), { status: 200 });
-  });
-
   return {
     DB: db as unknown as D1Database,
     KV: {} as KVNamespace,
-    API_SERVICE: { fetch: apiFetch } as unknown as Fetcher,
+    NOTIFICATION_QUEUE: { send: sendMock } as unknown as Queue,
+    API_SERVICE: { fetch: vi.fn() } as unknown as Fetcher,
     BOT_SERVICE: {} as unknown as Fetcher,
-    _apiFetch: apiFetch,
+    _send: sendMock,
     _runMock: runMock,
   };
 }
@@ -39,23 +44,29 @@ describe("runIncompleteProfileReengagementJob", () => {
   it("sends notification to each candidate", async () => {
     const env = createEnv({
       candidates: [
-        { id: "u1", first_name: "Alice", language: "en" },
-        { id: "u2", first_name: "Bob", language: "id" },
+        {
+          id: "u1",
+          first_name: "Alice",
+          language: "en",
+          created_at: daysAgo(4),
+        },
+        { id: "u2", first_name: "Bob", language: "id", created_at: daysAgo(8) },
       ],
     });
 
     await runIncompleteProfileReengagementJob(env);
 
-    expect(env._apiFetch).toHaveBeenCalledTimes(2);
+    expect(env._send).toHaveBeenCalledTimes(2);
 
-    const call1 = (env._apiFetch.mock.calls as unknown[][])[0]![0] as Request;
-    const body1 = (await call1.json()) as Record<string, unknown>;
+    const call1 = (env._send.mock.calls as unknown[][])[0]![0] as string;
+    const body1 = JSON.parse(call1) as Record<string, unknown>;
     expect(body1.userId).toBe("u1");
-    expect(body1.type).toBe("INCOMPLETE_PROFILE");
+    expect(body1.type).toBe("INCOMPLETE_PROFILE_GENTLE");
 
-    const call2 = (env._apiFetch.mock.calls as unknown[][])[1]![0] as Request;
-    const body2 = (await call2.json()) as Record<string, unknown>;
+    const call2 = (env._send.mock.calls as unknown[][])[1]![0] as string;
+    const body2 = JSON.parse(call2) as Record<string, unknown>;
     expect(body2.userId).toBe("u2");
+    expect(body2.type).toBe("INCOMPLETE_PROFILE_URGENT");
   });
 
   it("does nothing when no candidates found", async () => {
@@ -63,36 +74,41 @@ describe("runIncompleteProfileReengagementJob", () => {
 
     await runIncompleteProfileReengagementJob(env);
 
-    expect(env._apiFetch).not.toHaveBeenCalled();
+    expect(env._send).not.toHaveBeenCalled();
   });
 
   it("continues processing when one candidate fails", async () => {
     let callCount = 0;
-    const failingFetch = vi.fn(async () => {
+    const sendMock = vi.fn(async () => {
       callCount++;
       if (callCount === 1) throw new Error("Network error");
-      return new Response(JSON.stringify({}), { status: 200 });
     });
-    const env = createEnv({ candidates: [{ id: "u1" }, { id: "u2" }] });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (env.API_SERVICE as any).fetch = failingFetch;
-    env._apiFetch = failingFetch;
+    const env = createEnv({
+      candidates: [
+        { id: "u1", first_name: "A", language: "en", created_at: daysAgo(4) },
+        { id: "u2", first_name: "B", language: "en", created_at: daysAgo(4) },
+      ],
+    });
+    (env.NOTIFICATION_QUEUE as any).send = sendMock;
+    (env as any)._send = sendMock;
 
     await runIncompleteProfileReengagementJob(env);
 
-    expect(failingFetch).toHaveBeenCalledTimes(2);
+    expect(sendMock).toHaveBeenCalledTimes(2);
   });
 
   it("uses default name when first_name is null", async () => {
     const env = createEnv({
-      candidates: [{ id: "u1", first_name: null, language: "en" }],
+      candidates: [
+        { id: "u1", first_name: null, language: "en", created_at: daysAgo(4) },
+      ],
     });
 
     await runIncompleteProfileReengagementJob(env);
 
-    expect(env._apiFetch).toHaveBeenCalledTimes(1);
-    const call = (env._apiFetch.mock.calls as unknown[][])[0]![0] as Request;
-    const body = (await call.json()) as Record<string, unknown>;
+    expect(env._send).toHaveBeenCalledTimes(1);
+    const call = (env._send.mock.calls as unknown[][])[0]![0] as string;
+    const body = JSON.parse(call) as Record<string, unknown>;
     const payload = JSON.parse(body.payload as string) as Record<
       string,
       unknown
@@ -102,14 +118,16 @@ describe("runIncompleteProfileReengagementJob", () => {
 
   it("uses Indonesian default name when language is id", async () => {
     const env = createEnv({
-      candidates: [{ id: "u1", first_name: null, language: "id" }],
+      candidates: [
+        { id: "u1", first_name: null, language: "id", created_at: daysAgo(4) },
+      ],
     });
 
     await runIncompleteProfileReengagementJob(env);
 
-    const calls = env._apiFetch.mock.calls as unknown[][];
-    const call = calls[0]![0] as Request;
-    const body = (await call.json()) as Record<string, unknown>;
+    const calls = env._send.mock.calls as unknown[][];
+    const call = calls[0]![0] as string;
+    const body = JSON.parse(call) as Record<string, unknown>;
     const payload = JSON.parse(body.payload as string) as Record<
       string,
       unknown
@@ -119,14 +137,21 @@ describe("runIncompleteProfileReengagementJob", () => {
 
   it("escapes markdown in first name", async () => {
     const env = createEnv({
-      candidates: [{ id: "u1", first_name: "Test_Name", language: "en" }],
+      candidates: [
+        {
+          id: "u1",
+          first_name: "Test_Name",
+          language: "en",
+          created_at: daysAgo(4),
+        },
+      ],
     });
 
     await runIncompleteProfileReengagementJob(env);
 
-    const calls = env._apiFetch.mock.calls as unknown[][];
-    const call = calls[0]![0] as Request;
-    const body = (await call.json()) as Record<string, unknown>;
+    const calls = env._send.mock.calls as unknown[][];
+    const call = calls[0]![0] as string;
+    const body = JSON.parse(call) as Record<string, unknown>;
     const payload = JSON.parse(body.payload as string) as Record<
       string,
       unknown
@@ -134,13 +159,47 @@ describe("runIncompleteProfileReengagementJob", () => {
     expect(payload.message).toContain("Test\\_Name");
   });
 
-  it("updates last_reminded_at after successful send", async () => {
+  it("updates last_reengagement_at after successful send", async () => {
     const env = createEnv({
-      candidates: [{ id: "u1", first_name: "Alice", language: "en" }],
+      candidates: [
+        {
+          id: "u1",
+          first_name: "Alice",
+          language: "en",
+          created_at: daysAgo(4),
+        },
+      ],
     });
 
     await runIncompleteProfileReengagementJob(env);
 
     expect(env._runMock).toHaveBeenCalled();
+  });
+
+  it("sends INCOMPLETE_PROFILE_LAST_CHANCE for accounts 14+ days old", async () => {
+    const env = createEnv({
+      candidates: [
+        {
+          id: "u1",
+          first_name: "Old",
+          language: "en",
+          created_at: daysAgo(20),
+        },
+      ],
+    });
+    await runIncompleteProfileReengagementJob(env);
+    const call = (env._send.mock.calls as unknown[][])[0]![0] as string;
+    const body = JSON.parse(call) as Record<string, unknown>;
+    expect(body.type).toBe("INCOMPLETE_PROFILE_LAST_CHANCE");
+  });
+
+  it("skips accounts less than 3 days old", async () => {
+    const env = createEnv({
+      candidates: [
+        { id: "u1", first_name: "New", language: "en", created_at: daysAgo(1) },
+      ],
+    });
+    await runIncompleteProfileReengagementJob(env);
+    expect(env._send).not.toHaveBeenCalled();
   });
 });

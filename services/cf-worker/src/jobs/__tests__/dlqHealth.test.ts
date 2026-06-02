@@ -18,6 +18,9 @@ describe("runDLQHealthCheck", () => {
       }),
     } as unknown as import("@cloudflare/workers-types").D1Database,
     KV: {} as unknown as import("@cloudflare/workers-types").KVNamespace,
+    NOTIFICATION_QUEUE: {
+      send: vi.fn(async () => {}),
+    } as unknown as Queue,
     API_SERVICE: {
       fetch: vi.fn(async () => new Response()),
     } as unknown as import("@cloudflare/workers-types").Fetcher,
@@ -58,6 +61,9 @@ describe("runDLQHealthCheck", () => {
         dump: vi.fn(),
       },
       KV: {} as unknown as import("@cloudflare/workers-types").KVNamespace,
+      NOTIFICATION_QUEUE: {
+        send: vi.fn(async () => {}),
+      } as unknown as Queue,
       API_SERVICE: {
         fetch: vi.fn(async () => new Response()),
       } as unknown as import("@cloudflare/workers-types").Fetcher,
@@ -104,6 +110,9 @@ describe("runDLQHealthCheck", () => {
         }),
       } as unknown as import("@cloudflare/workers-types").D1Database,
       KV: {} as unknown as import("@cloudflare/workers-types").KVNamespace,
+      NOTIFICATION_QUEUE: {
+        send: vi.fn(async () => {}),
+      } as unknown as Queue,
       API_SERVICE: {
         fetch: vi.fn(async () => new Response()),
       } as unknown as import("@cloudflare/workers-types").Fetcher,

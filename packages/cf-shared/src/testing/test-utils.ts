@@ -1,3 +1,4 @@
+import { Cause, Effect, Exit } from "effect";
 import { vi } from "vitest";
 
 /**
@@ -125,9 +126,8 @@ export function createMockQueue() {
  * Run an Effect and unwrap the result, throwing on failure.
  */
 export async function runEffect<A, E>(
-  effect: import("effect").Effect.Effect<A, E, never>,
+  effect: Effect.Effect<A, E, never>,
 ): Promise<A> {
-  const { Effect, Exit, Cause } = await import("effect");
   const exit = await Effect.runPromiseExit(effect);
   if (Exit.isSuccess(exit)) return exit.value;
   const failure = Cause.failureOption(exit.cause);

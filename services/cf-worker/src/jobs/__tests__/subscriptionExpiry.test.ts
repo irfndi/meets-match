@@ -17,6 +17,9 @@ describe("runSubscriptionExpiryJob", () => {
       connect: vi.fn(),
     } as unknown as import("@cloudflare/workers-types").Fetcher,
     KV: {} as unknown as import("@cloudflare/workers-types").KVNamespace,
+    NOTIFICATION_QUEUE: {
+      send: vi.fn(async () => {}),
+    } as unknown as Queue,
     BOT_SERVICE: {
       fetch: vi.fn(async () => new Response()),
       connect: vi.fn(),
@@ -45,6 +48,9 @@ describe("runSubscriptionExpiryJob", () => {
         connect: vi.fn(),
       } as unknown as import("@cloudflare/workers-types").Fetcher,
       KV: {} as unknown as import("@cloudflare/workers-types").KVNamespace,
+      NOTIFICATION_QUEUE: {
+        send: vi.fn(async () => {}),
+      } as unknown as Queue,
       BOT_SERVICE: {
         fetch: vi.fn(async () => new Response()),
         connect: vi.fn(),

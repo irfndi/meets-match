@@ -155,13 +155,11 @@ describe("NotificationQueueConsumer idempotency", () => {
     expect(botFetch).toHaveBeenCalledTimes(2); // n1 and n3 (n2 skipped)
     expect(msgs[0].ack).toHaveBeenCalled(); // n1 succeeded
     expect(msgs[1].ack).toHaveBeenCalled(); // n2 was already delivered
-    expect(msgs[2].ack).toHaveBeenCalled(); // n3 failed but acked (code acks on failure too)
+    expect(msgs[2].retry).toHaveBeenCalled(); // n3 failed transiently -> retry, not ack
+    expect(msgs[2].ack).not.toHaveBeenCalled();
   });
 
-  it("documents race when two workers process the same pending notification", async () => {
-    // Simulates: Worker A reads notification as "pending", starts bot fetch.
-    // Worker B reads same notification as "pending", also starts bot fetch.
-    // Both deliver the same notification twice.
+  it("atomic claim prevents double delivery when two workers race on the same notification", async () => {
     const barrier = createRaceBarrier();
 
     const store = new Map<string, Record<string, unknown>>([
@@ -180,8 +178,6 @@ describe("NotificationQueueConsumer idempotency", () => {
     const db = createRacingMockD1({
       initialRows: store,
       pauseBeforeRun: (sql) => {
-        // Pause Worker A at the UPDATE to 'processing' so Worker B can
-        // also read "pending" and process before A resumes.
         if (
           sql.includes("UPDATE notifications SET status = 'processing'") &&
           updateCount === 0
@@ -207,15 +203,12 @@ describe("NotificationQueueConsumer idempotency", () => {
       type: "LIKE",
     });
 
-    // Start Worker A — pauses at SELECT
     const p1 = consumer.processBatch({ messages: [msg] } as any);
-    // Wait until Worker A is actually paused at the UPDATE.
     for (let i = 0; i < 100 && updateCount === 0; i++) {
       await Promise.resolve();
     }
     expect(updateCount).toBe(1);
 
-    // Worker B processes same message — reads "pending" because A hasn't updated yet
     const msg2 = createMessage({
       notificationId: "n1",
       userId: "u1",
@@ -223,12 +216,10 @@ describe("NotificationQueueConsumer idempotency", () => {
     });
     await consumer.processBatch({ messages: [msg2] } as any);
 
-    // Release Worker A
     barrier.resolve();
     await p1;
 
-    // BUG: bot service was called twice for the same notification
-    expect(botFetch).toHaveBeenCalledTimes(2);
+    expect(botFetch).toHaveBeenCalledTimes(1);
     expect(msg.ack).toHaveBeenCalled();
     expect(msg2.ack).toHaveBeenCalled();
   });

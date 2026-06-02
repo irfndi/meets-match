@@ -4,11 +4,14 @@ import { runBirthdayJob } from "./jobs/birthday.js";
 import { runCleanupJob } from "./jobs/cleanup.js";
 import { runSubscriptionExpiryJob } from "./jobs/subscriptionExpiry.js";
 import { runIncompleteProfileReengagementJob } from "./jobs/incompleteProfileReengagement.js";
+import { runDailyActiveStatesJob } from "./jobs/dailyActiveStates.js";
+import { NotificationQueueConsumer } from "./notifications/queue.js";
 import { getVersionInfo } from "./lib/version.js";
 
 export interface Env {
   DB: D1Database;
   KV: KVNamespace;
+  NOTIFICATION_QUEUE: Queue;
   API_SERVICE: Fetcher;
   BOT_SERVICE: Fetcher;
   REENGAGEMENT_SCHEDULE?: string;
@@ -17,6 +20,7 @@ export interface Env {
   CLEANUP_SCHEDULE?: string;
   SUBSCRIPTION_EXPIRY_SCHEDULE?: string;
   INCOMPLETE_PROFILE_SCHEDULE?: string;
+  DAILY_ACTIVE_STATES_SCHEDULE?: string;
 }
 
 export default {
@@ -44,47 +48,25 @@ export default {
     ctx: ExecutionContext,
   ): Promise<void> {
     const isDLQ = batch.queue.startsWith("dlq");
-
-    for (const message of batch.messages) {
-      try {
-        const body = JSON.parse(message.body as string) as Record<
-          string,
-          unknown
-        >;
-        const notificationId = String(body.notificationId);
-
-        const notification = await env.DB.prepare(
-          "SELECT * FROM notifications WHERE id = ?",
-        )
-          .bind(notificationId)
-          .first();
-
-        if (!notification) {
-          console.warn(`[queue] Notification ${notificationId} not found`);
-          message.ack();
-          continue;
-        }
-
-        const status = String((notification as Record<string, unknown>).status);
-        if (status === "delivered" || status === "dlq") {
-          message.ack();
-          continue;
-        }
-
-        if (isDLQ) {
+    if (isDLQ) {
+      // DLQ messages: just mark them in DB and ack; no further delivery attempts.
+      for (const message of batch.messages) {
+        try {
+          const body = JSON.parse(message.body as string) as Record<
+            string,
+            unknown
+          >;
+          const notificationId = String(body.notificationId);
           await processDLQMessage(env, notificationId, message);
-        } else {
-          await processNotificationMessage(env, body, notificationId, message);
-        }
-      } catch (error) {
-        console.error("[queue] Failed to process message:", error);
-        if (isDLQ) {
+        } catch (error) {
+          console.error("[queue] Failed to process DLQ message:", error);
           message.ack();
-        } else {
-          message.retry();
         }
       }
+      return;
     }
+    const consumer = new NotificationQueueConsumer(env.DB, env.BOT_SERVICE);
+    await consumer.processBatch(batch);
   },
 
   async scheduled(
@@ -100,6 +82,8 @@ export default {
       env.SUBSCRIPTION_EXPIRY_SCHEDULE || "0 0 * * *";
     const incompleteProfileSchedule =
       env.INCOMPLETE_PROFILE_SCHEDULE || "0 12 * * *";
+    const dailyActiveStatesSchedule =
+      env.DAILY_ACTIVE_STATES_SCHEDULE || "0 8 * * *";
 
     if (event.cron === reengagementSchedule) {
       await runReengagementJob(env);
@@ -113,103 +97,13 @@ export default {
       await runSubscriptionExpiryJob(env);
     } else if (event.cron === incompleteProfileSchedule) {
       await runIncompleteProfileReengagementJob(env);
+    } else if (event.cron === dailyActiveStatesSchedule) {
+      await runDailyActiveStatesJob(env);
     } else {
       console.log(`[scheduled] Unknown cron: ${event.cron}`);
     }
   },
 };
-
-async function processNotificationMessage(
-  env: Env,
-  body: Record<string, unknown>,
-  notificationId: string,
-  message: Message,
-): Promise<void> {
-  const userId = String(body.userId);
-  const type = String(body.type);
-  const payload = body.payload ? String(body.payload) : undefined;
-
-  await env.DB.prepare(
-    "UPDATE notifications SET status = 'processing', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-  )
-    .bind(notificationId)
-    .run();
-
-  const startTime = Date.now();
-  try {
-    const response = await env.BOT_SERVICE.fetch(
-      new Request("http://bot/send-notification", {
-        method: "POST",
-        body: JSON.stringify({ userId, type, payload }),
-        headers: { "Content-Type": "application/json" },
-      }),
-    );
-
-    const durationMs = Date.now() - startTime;
-
-    if (response.ok) {
-      await env.DB.prepare(
-        "UPDATE notifications SET status = 'delivered', delivered_at = CURRENT_TIMESTAMP WHERE id = ?",
-      )
-        .bind(notificationId)
-        .run();
-      await env.DB.prepare(
-        `INSERT INTO notification_delivery_attempts (notification_id, status, duration_ms)
-         VALUES (?, 'success', ?)`,
-      )
-        .bind(notificationId, durationMs)
-        .run();
-      console.log(`[queue] Delivered ${notificationId} in ${durationMs}ms`);
-      message.ack();
-    } else if (response.status === 410) {
-      const errorText = await response.text();
-      await env.DB.prepare(
-        "UPDATE notifications SET status = 'failed', last_error = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-      )
-        .bind(errorText, notificationId)
-        .run();
-      await env.DB.prepare(
-        `INSERT INTO notification_delivery_attempts (notification_id, status, error_message, duration_ms)
-         VALUES (?, 'failed', ?, ?)`,
-      )
-        .bind(notificationId, errorText, durationMs)
-        .run();
-      console.warn(`[queue] Permanent failure ${notificationId}: ${errorText}`);
-      message.ack();
-    } else {
-      const errorText = await response.text();
-      await env.DB.prepare(
-        "UPDATE notifications SET status = 'failed', last_error = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-      )
-        .bind(errorText, notificationId)
-        .run();
-      await env.DB.prepare(
-        `INSERT INTO notification_delivery_attempts (notification_id, status, error_message, duration_ms)
-         VALUES (?, 'failed', ?, ?)`,
-      )
-        .bind(notificationId, errorText, durationMs)
-        .run();
-      console.error(`[queue] Failed ${notificationId}: ${errorText}`);
-      message.retry();
-    }
-  } catch (error) {
-    const durationMs = Date.now() - startTime;
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    await env.DB.prepare(
-      "UPDATE notifications SET status = 'failed', last_error = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-    )
-      .bind(errorMessage, notificationId)
-      .run();
-    await env.DB.prepare(
-      `INSERT INTO notification_delivery_attempts (notification_id, status, error_message, duration_ms)
-       VALUES (?, 'failed', ?, ?)`,
-    )
-      .bind(notificationId, errorMessage, durationMs)
-      .run();
-    console.error(`[queue] Error ${notificationId}:`, errorMessage);
-    message.retry();
-  }
-}
 
 async function processDLQMessage(
   env: Env,
