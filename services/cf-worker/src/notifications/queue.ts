@@ -323,7 +323,7 @@ function deliverOrMarkFailed(
           dbRun(
             db,
             `INSERT INTO notification_delivery_attempts (notification_id, status, error_message, duration_ms)
-             VALUES (?, 'dlq', ?, ?)`,
+             VALUES (?, 'failed', ?, ?)`,
             notificationId,
             errorText ?? "permanent failure",
             durationMs,
