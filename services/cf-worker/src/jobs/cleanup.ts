@@ -1,7 +1,10 @@
 import { Cause, Effect, Exit } from "effect";
 import type { Env } from "../index.js";
 import { createLogger } from "@meetsmatch/cf-shared";
-import { NotificationQueueProducer } from "../notifications/queue.js";
+import {
+  NotificationQueueProducer,
+  persistAndEnqueue,
+} from "../notifications/queue.js";
 
 const log = createLogger("cf-worker.cleanup");
 
@@ -287,7 +290,7 @@ function cleanUserMedia(
     }).pipe(Effect.orElse(() => Effect.void));
 
     yield* Effect.either(
-      producer.enqueue({
+      persistAndEnqueue(env.DB, producer, {
         notificationId: crypto.randomUUID(),
         userId: row.id,
         type: "CLEANUP_MEDIA_DELETED",

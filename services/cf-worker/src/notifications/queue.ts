@@ -77,6 +77,34 @@ const retry = (message: Message): Effect.Effect<void, never, never> =>
     message.retry();
   });
 
+export function persistAndEnqueue(
+  db: D1Database,
+  producer: NotificationQueueProducer,
+  message: NotificationMessage,
+): Effect.Effect<void, Error, never> {
+  return Effect.gen(function* () {
+    yield* Effect.tryPromise({
+      try: () =>
+        db
+          .prepare(
+            `INSERT INTO notifications (id, user_id, type, channel, payload, status, priority, attempt_count, max_attempts, created_at)
+             VALUES (?, ?, ?, ?, ?, 'pending', 0, 0, 5, CURRENT_TIMESTAMP)`,
+          )
+          .bind(
+            message.notificationId,
+            message.userId,
+            message.type,
+            "TELEGRAM",
+            message.payload ?? "{}",
+          )
+          .run(),
+      catch: (error) => new Error(`persistNotification: ${String(error)}`),
+    });
+
+    yield* producer.enqueue(message);
+  });
+}
+
 export class NotificationQueueConsumer {
   constructor(
     private readonly db: Db,

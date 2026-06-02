@@ -1,7 +1,10 @@
 import { Cause, Effect, Exit, pipe } from "effect";
 import type { Env } from "../index.js";
 import { createLogger } from "@meetsmatch/cf-shared";
-import { NotificationQueueProducer } from "../notifications/queue.js";
+import {
+  NotificationQueueProducer,
+  persistAndEnqueue,
+} from "../notifications/queue.js";
 
 const log = createLogger("cf-worker.incompleteProfileReengagement");
 
@@ -116,9 +119,9 @@ export async function runIncompleteProfileReengagementJob(
   log.info("incompleteProfileReengagement", "Starting job");
 
   const now = new Date();
-  const longestMax = Math.max(...STAGES.map((s) => s.accountAgeDaysMax));
+  const shortestMin = Math.min(...STAGES.map((s) => s.accountAgeDaysMin));
   const cutoff = new Date(now);
-  cutoff.setDate(cutoff.getDate() - longestMax);
+  cutoff.setDate(cutoff.getDate() - shortestMin);
 
   const effect = pipe(
     Effect.tryPromise({
@@ -243,14 +246,16 @@ function processIncompleteCandidate(
       stage: stage.stage,
     };
 
-    const enqueueResult = yield* producer
-      .enqueue({
+    const enqueueResult = yield* persistAndEnqueue(
+      env.DB,
+      producer,
+      {
         notificationId,
         userId: id,
         type: stage.type,
         payload: JSON.stringify(payload),
-      })
-      .pipe(Effect.either);
+      },
+    ).pipe(Effect.either);
 
     if (enqueueResult._tag === "Left") {
       log.error(

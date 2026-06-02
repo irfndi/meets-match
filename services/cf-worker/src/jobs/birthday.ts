@@ -1,7 +1,10 @@
 import { Cause, Effect, Exit } from "effect";
 import type { Env } from "../index.js";
 import { computeAgeFromBirthDate, createLogger } from "@meetsmatch/cf-shared";
-import { NotificationQueueProducer } from "../notifications/queue.js";
+import {
+  NotificationQueueProducer,
+  persistAndEnqueue,
+} from "../notifications/queue.js";
 
 const log = createLogger("cf-worker.birthday");
 
@@ -178,7 +181,7 @@ function notifyMatches(
       (matchUserId) =>
         Effect.gen(function* () {
           const exit = yield* Effect.either(
-            producer.enqueue({
+            persistAndEnqueue(env.DB, producer, {
               notificationId: crypto.randomUUID(),
               userId: matchUserId,
               type: "BIRTHDAY",

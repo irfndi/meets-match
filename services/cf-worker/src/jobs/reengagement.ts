@@ -1,7 +1,10 @@
 import { Cause, Effect, Exit, pipe } from "effect";
 import type { Env } from "../index.js";
 import { createLogger } from "@meetsmatch/cf-shared";
-import { NotificationQueueProducer } from "../notifications/queue.js";
+import {
+  NotificationQueueProducer,
+  persistAndEnqueue,
+} from "../notifications/queue.js";
 
 const log = createLogger("cf-worker.reengagement");
 
@@ -292,13 +295,14 @@ async function countNearbyUsers(
 
 /** Send a single reengagement notification. Effect-wrapped for typed errors. */
 function enqueueReengagement(
+  db: D1Database,
   producer: NotificationQueueProducer,
   notificationId: string,
   userId: string,
   type: ReengagementStage["type"],
   payload: Record<string, unknown>,
 ): Effect.Effect<void, Error, never> {
-  return producer.enqueue({
+  return persistAndEnqueue(db, producer, {
     notificationId,
     userId,
     type,
@@ -312,10 +316,11 @@ export async function runReengagementJob(env: Env): Promise<void> {
 
   const now = new Date();
 
-  // Find the most aggressive stage's max inactivity so we don't miss anyone.
-  const longestMaxDays = Math.max(...STAGES.map((s) => s.inactiveDaysMax));
-  const maxCutoff = new Date(now);
-  maxCutoff.setDate(maxCutoff.getDate() - longestMaxDays);
+  // Use the shortest minimum inactivity threshold so we select every user
+  // that could be eligible for *any* stage; stageFor() filters to the right one.
+  const shortestMinDays = Math.min(...STAGES.map((s) => s.inactiveDaysMin));
+  const cutoff = new Date(now);
+  cutoff.setDate(cutoff.getDate() - shortestMinDays);
 
   const effect = pipe(
     Effect.tryPromise({
@@ -330,7 +335,7 @@ export async function runReengagementJob(env: Env): Promise<void> {
              AND (last_active IS NULL OR last_active <= ?)
            LIMIT ?`,
         )
-          .bind(maxCutoff.toISOString(), BATCH_SIZE)
+          .bind(cutoff.toISOString(), BATCH_SIZE)
           .all();
         return (results ?? []) as Array<Record<string, unknown>>;
       },
@@ -449,6 +454,7 @@ function processCandidate(
     };
 
     const enqueueResult = yield* enqueueReengagement(
+      env.DB,
       producer,
       notificationId,
       id,

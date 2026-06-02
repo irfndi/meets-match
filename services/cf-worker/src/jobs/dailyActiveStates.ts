@@ -1,7 +1,10 @@
 import { Cause, Effect, Exit, pipe } from "effect";
 import type { Env } from "../index.js";
 import { createLogger } from "@meetsmatch/cf-shared";
-import { NotificationQueueProducer } from "../notifications/queue.js";
+import {
+  NotificationQueueProducer,
+  persistAndEnqueue,
+} from "../notifications/queue.js";
 
 const log = createLogger("cf-worker.dailyActiveStates");
 
@@ -215,14 +218,16 @@ function processDailyCandidate(
       state: type,
     };
 
-    const enqueueResult = yield* producer
-      .enqueue({
+    const enqueueResult = yield* persistAndEnqueue(
+      env.DB,
+      producer,
+      {
         notificationId,
         userId: id,
         type,
         payload: JSON.stringify(payload),
-      })
-      .pipe(Effect.either);
+      },
+    ).pipe(Effect.either);
 
     if (enqueueResult._tag === "Left") {
       log.error(
