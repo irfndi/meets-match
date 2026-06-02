@@ -69,7 +69,7 @@ describe("NotificationQueueConsumer", () => {
     expect(msg.ack).toHaveBeenCalled();
   });
 
-  it("should retry on malformed JSON payload", async () => {
+  it("should ack malformed JSON payload (retry won't fix bad JSON)", async () => {
     const db = mockD1(false);
     const botService = { fetch: vi.fn() } as unknown as Fetcher;
     const consumer = new NotificationQueueConsumer(db, botService);
@@ -83,8 +83,8 @@ describe("NotificationQueueConsumer", () => {
       retry: vi.fn(),
     });
 
-    expect(retry).toHaveBeenCalled();
-    expect(ack).not.toHaveBeenCalled();
+    expect(ack).toHaveBeenCalled();
+    expect(retry).not.toHaveBeenCalled();
   });
 
   it("should process all messages in batch independently", async () => {

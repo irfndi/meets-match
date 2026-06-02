@@ -1,5 +1,8 @@
 import { Cause, Effect, Exit } from "effect";
 import type { Queue, Fetcher } from "@cloudflare/workers-types";
+import { createLogger } from "@meetsmatch/cf-shared";
+
+const log = createLogger("cf-worker.queue-consumer");
 
 export interface NotificationMessage {
   notificationId: string;
@@ -57,16 +60,6 @@ const dbFirst = <T = Record<string, unknown>>(
       new Error(`${sql.split("\n")[0]?.trim() ?? "sql"}: ${String(error)}`),
   });
 
-const logWarn = (msg: string): Effect.Effect<void, never, never> =>
-  Effect.sync(() => {
-    console.warn(msg);
-  });
-
-const logError = (msg: string): Effect.Effect<void, never, never> =>
-  Effect.sync(() => {
-    console.error(msg);
-  });
-
 const ack = (message: Message): Effect.Effect<void, never, never> =>
   Effect.sync(() => {
     message.ack();
@@ -118,7 +111,7 @@ export class NotificationQueueConsumer {
       const failure = Cause.failureOption(exit.cause);
       const detail =
         failure._tag === "Some" ? String(failure.value) : String(exit.cause);
-      console.error(`[queue] defect processing message: ${detail}`);
+      log.error("processBatch", `defect processing message: ${detail}`);
       message.retry();
     }
   }
@@ -132,8 +125,8 @@ export class NotificationQueueConsumer {
       try {
         body = JSON.parse(raw) as NotificationMessage;
       } catch {
-        // Defect (unparseable body): bubble up so the caller retries.
-        return yield* Effect.fail(new Error("invalid json"));
+        log.warn("processOne", "Invalid JSON in message body, discarding");
+        return yield* ack(message);
       }
       const notificationId = String(body.notificationId);
 
@@ -144,7 +137,7 @@ export class NotificationQueueConsumer {
       );
 
       if (!notification) {
-        yield* logWarn(`[queue] Notification ${notificationId} not found`);
+        log.warn("processOne", `Notification ${notificationId} not found`);
         return yield* ack(message);
       }
 
@@ -161,8 +154,9 @@ export class NotificationQueueConsumer {
         return yield* ack(message);
       }
 
-      yield* logError(
-        `[queue] delivery failed for ${notificationId}: ${result.left.message}`,
+      log.error(
+        "processOne",
+        `delivery failed for ${notificationId}: ${result.left.message}`,
       );
       return yield* retry(message);
     });
@@ -225,7 +219,10 @@ function deliverOrMarkFailed(
         ],
         { concurrency: "unbounded" },
       );
-      console.log(`[queue] Delivered ${notificationId} in ${durationMs}ms`);
+      log.info(
+        "deliverOrMarkFailed",
+        `Delivered ${notificationId} in ${durationMs}ms`,
+      );
       return;
     }
 
@@ -249,8 +246,9 @@ function deliverOrMarkFailed(
         ],
         { concurrency: "unbounded" },
       );
-      console.warn(
-        `[queue] Permanent failure ${notificationId}: ${errorText ?? ""}`,
+      log.warn(
+        "deliverOrMarkFailed",
+        `Permanent failure ${notificationId}: ${errorText ?? ""}`,
       );
       return;
     }
@@ -275,8 +273,9 @@ function deliverOrMarkFailed(
       ],
       { concurrency: "unbounded" },
     );
-    console.error(
-      `[queue] Failed ${notificationId}: ${errorText ?? "unknown"}`,
+    log.error(
+      "deliverOrMarkFailed",
+      `Failed ${notificationId}: ${errorText ?? "unknown"}`,
     );
     return yield* Effect.fail(
       new Error(errorText ?? `bot returned ${response.status}`),

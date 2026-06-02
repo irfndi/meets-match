@@ -22,7 +22,7 @@ function escapeMarkdown(text: string): string {
 
 const LIKES_REMINDER_VARIANTS: ReadonlyArray<(name: string) => string> = [
   (name) =>
-    `${name}, ${`\${count}`} people are waiting for you to like them back! 💕 Tap My Matches to see who.`,
+    `${name}, people are waiting for you to like them back! 💕 Tap My Matches to see who.`,
   (name) =>
     `Hey ${name} — you've got new likes! Check them out before they expire ⏰`,
   (name) =>
@@ -68,30 +68,24 @@ interface ActiveUser {
 
 interface ApiStateSnapshot {
   hasPendingLikes: boolean;
-  swipesUsedToday: number;
 }
 
 async function fetchUserState(
   env: Env,
   userId: string,
 ): Promise<ApiStateSnapshot> {
-  const defaultState: ApiStateSnapshot = {
-    hasPendingLikes: false,
-    swipesUsedToday: 0,
-  };
   try {
     const res = await env.API_SERVICE.fetch(
       new Request(
         `http://api/users/${encodeURIComponent(userId)}/pending-likes`,
       ),
     );
-    if (!res.ok) return defaultState;
+    if (!res.ok) return { hasPendingLikes: false };
     const data = (await res.json()) as { pendingLikes?: unknown[] };
     return {
       hasPendingLikes: Array.isArray(data.pendingLikes)
         ? data.pendingLikes.length > 0
         : false,
-      swipesUsedToday: 0, // pending-likes endpoint doesn't expose this
     };
   } catch (error) {
     log.error(
@@ -100,7 +94,7 @@ async function fetchUserState(
       undefined,
       error,
     );
-    return defaultState;
+    return { hasPendingLikes: false };
   }
 }
 
@@ -168,7 +162,10 @@ export async function runDailyActiveStatesJob(env: Env): Promise<void> {
   log.info("dailyActiveStates", "Job complete");
 }
 
-function pickType(state: ApiStateSnapshot): {
+function pickType(
+  state: ApiStateSnapshot,
+  dailySwipesUsed: number,
+): {
   type: "DAILY_LIKES_REMINDER" | "DAILY_EXPLORE_PROMPT" | "DAILY_ACTIVE_HAPPY";
   message: (name: string) => string;
 } {
@@ -178,7 +175,7 @@ function pickType(state: ApiStateSnapshot): {
       message: pickVariant(LIKES_REMINDER_VARIANTS),
     };
   }
-  if (state.swipesUsedToday === 0) {
+  if (dailySwipesUsed === 0) {
     return {
       type: "DAILY_EXPLORE_PROMPT",
       message: pickVariant(EXPLORE_PROMPT_VARIANTS),
@@ -200,8 +197,10 @@ function processDailyCandidate(
     const firstName = user.first_name ? String(user.first_name) : null;
     const lang = String(user.language || "en") as "en" | "id";
 
+    const dailySwipesUsed =
+      user.daily_swipes_used != null ? Number(user.daily_swipes_used) : 0;
     const state = yield* Effect.promise(() => fetchUserState(env, id));
-    const { type, message: variant } = pickType(state);
+    const { type, message: variant } = pickType(state, dailySwipesUsed);
 
     const displayName = firstName
       ? escapeMarkdown(firstName)

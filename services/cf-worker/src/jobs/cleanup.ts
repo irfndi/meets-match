@@ -277,17 +277,29 @@ function cleanUserMedia(
       return false;
     }
 
-    yield* Effect.tryPromise({
-      try: () =>
-        env.DB.prepare(
-          `UPDATE users
-           SET media_urls = '[]', media_deleted_at = CURRENT_TIMESTAMP, is_profile_complete = 0
-           WHERE id = ?`,
-        )
-          .bind(row.id)
-          .run(),
-      catch: (error) => new Error(String(error)),
-    }).pipe(Effect.orElse(() => Effect.void));
+    const dbExit = yield* Effect.either(
+      Effect.tryPromise({
+        try: () =>
+          env.DB.prepare(
+            `UPDATE users
+             SET media_urls = '[]', media_deleted_at = CURRENT_TIMESTAMP, is_profile_complete = 0
+             WHERE id = ?`,
+          )
+            .bind(row.id)
+            .run(),
+        catch: (error) => new Error(String(error)),
+      }),
+    );
+
+    if (dbExit._tag === "Left") {
+      log.error(
+        "cleanUserMedia",
+        "DB update failed after R2 deletion",
+        { userId: row.id },
+        dbExit.left,
+      );
+      return false;
+    }
 
     yield* Effect.either(
       persistAndEnqueue(env.DB, producer, {

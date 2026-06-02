@@ -486,7 +486,19 @@ function processCandidate(
           .run();
       },
       catch: (error) => new Error(`updateLastReminded: ${String(error)}`),
-    }).pipe(Effect.orElse(() => Effect.void));
+    }).pipe(
+      Effect.tapError((err) =>
+        Effect.sync(() =>
+          log.error(
+            "processCandidate",
+            "Failed to update stage progress",
+            { id, stage: stage.stage },
+            err,
+          ),
+        ),
+      ),
+      Effect.orElse(() => Effect.void),
+    );
 
     log.info(
       "processCandidate",

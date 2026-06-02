@@ -181,7 +181,7 @@ describe("NotificationQueueConsumer", () => {
     expect(msg.retry).toHaveBeenCalled();
   });
 
-  it("handles invalid JSON gracefully", async () => {
+  it("acks invalid JSON (retry won't fix bad JSON)", async () => {
     const { consumer } = createConsumer();
     const msg = {
       body: "not-json",
@@ -189,7 +189,8 @@ describe("NotificationQueueConsumer", () => {
       retry: vi.fn(),
     } as unknown as Message;
     await consumer.processBatch({ messages: [msg] } as any);
-    expect(msg.retry).toHaveBeenCalled();
+    expect(msg.ack).toHaveBeenCalled();
+    expect(msg.retry).not.toHaveBeenCalled();
   });
 
   it("returns early when notification not found in DB", async () => {
