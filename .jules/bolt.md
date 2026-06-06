@@ -20,5 +20,6 @@
 3. Replace dynamic calculation of `Math.PI / 180.0` with a precomputed `TO_RAD` constant outside `haversine`.
 
 ## 2026-06-06 - Date Parsing in Hot Loops
+
 **Learning:** Creating a full `Date` object just to extract its timestamp (e.g., `new Date(isoString).getTime()`) adds unnecessary memory allocation and garbage collection overhead, which can add up in job worker loops.
 **Action:** Use `Date.parse(isoString)` instead when you only need the timestamp number, as it bypasses the object allocation while remaining functionally identical (including returning `NaN` for invalid dates).
