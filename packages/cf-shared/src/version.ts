@@ -7,7 +7,9 @@ export interface VersionInfo {
 }
 
 export function formatDuration(isoDate: string): string {
-  const then = new Date(isoDate).getTime();
+  // ⚡ Bolt Optimization: Use Date.parse() instead of new Date().getTime()
+  // to avoid allocating a full Date object, reducing GC overhead and improving speed.
+  const then = Date.parse(isoDate);
   if (Number.isNaN(then)) return "unknown";
   const now = Date.now();
   const diff = Math.max(0, now - then);

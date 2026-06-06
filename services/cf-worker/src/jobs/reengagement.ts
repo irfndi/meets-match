@@ -209,9 +209,11 @@ function pickVariant(
 
 /** Compute days since `lastActiveIso` relative to `now`. */
 function daysSince(lastActiveIso: string, now: Date): number {
-  const last = new Date(lastActiveIso);
-  if (Number.isNaN(last.getTime())) return 0;
-  const diffMs = now.getTime() - last.getTime();
+  // ⚡ Bolt Optimization: Use Date.parse() instead of new Date().getTime()
+  // to avoid allocating a full Date object, reducing memory allocation.
+  const lastTime = Date.parse(lastActiveIso);
+  if (Number.isNaN(lastTime)) return 0;
+  const diffMs = now.getTime() - lastTime;
   return Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
 }
 
@@ -413,7 +415,8 @@ function processCandidate(
 
     // Cooldown: skip if same stage fired within its cooldown window
     if (lastStage === stage.stage && lastAt) {
-      const sinceLastMs = now.getTime() - new Date(lastAt).getTime();
+      // ⚡ Bolt Optimization: Avoid unnecessary Date object allocation here as well.
+      const sinceLastMs = now.getTime() - Date.parse(lastAt);
       const cooldownMs = stage.cooldownDays * 24 * 60 * 60 * 1000;
       if (sinceLastMs < cooldownMs) {
         return;

@@ -89,9 +89,11 @@ function pickVariant(
 }
 
 function daysSince(iso: string, now: Date): number {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return 0;
-  return Math.max(0, Math.floor((now.getTime() - d.getTime()) / 86_400_000));
+  // ⚡ Bolt Optimization: Use Date.parse() instead of new Date().getTime()
+  // to avoid allocating a full Date object, reducing memory allocation.
+  const dTime = Date.parse(iso);
+  if (Number.isNaN(dTime)) return 0;
+  return Math.max(0, Math.floor((now.getTime() - dTime) / 86_400_000));
 }
 
 function stageFor(ageDays: number): IncompleteStage | null {
@@ -223,7 +225,8 @@ function processIncompleteCandidate(
 
     // Cooldown: skip if same stage fired within its cooldown window
     if (lastStage === stage.stage && lastAt) {
-      const sinceMs = now.getTime() - new Date(lastAt).getTime();
+      // ⚡ Bolt Optimization: Avoid unnecessary Date object allocation here as well.
+      const sinceMs = now.getTime() - Date.parse(lastAt);
       const cooldownMs = stage.cooldownDays * 86_400_000;
       if (sinceMs < cooldownMs) {
         return;
