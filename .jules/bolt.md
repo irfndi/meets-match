@@ -18,3 +18,8 @@
 1. Precompute `currentUserInterestsSet` outside the loop and pass it in as an option to `calculateMatchScore`.
 2. Precompute the `haversine` distance for the candidate once, avoiding duplicate calculations.
 3. Replace dynamic calculation of `Math.PI / 180.0` with a precomputed `TO_RAD` constant outside `haversine`.
+
+## 2026-06-13 - Deferred Parsing in getPotentialMatches
+
+**Learning:** Within the hot loop of `getPotentialMatches`, fully parsing every candidate using `this.rowToUser(row)` (which decodes `JSON.parse` for interests, media_urls, etc.) and executing strict timestamp parsing before preliminary filtering causes significant overhead. Many profiles are filtered out by basic checks (distance, age, gender) and cooldowns, making the parsing work redundant.
+**Action:** Extract minimal candidate data directly from the row for hard constraints (location, preferences, age, gender) and defer full parsing (`this.rowToUser`) and timestamp parsing (`parseSqliteTimestamp`) until all hard exclusions and cooldowns have passed. This ensures only surviving candidates are fully instantiated for scoring.

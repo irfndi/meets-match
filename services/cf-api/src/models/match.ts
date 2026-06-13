@@ -511,7 +511,10 @@ export class MatchRepository {
 
         const scored = rows
           .map((row) => {
-            const candidate = this.rowToUser(row);
+            // Wait to parse full candidate user until after strict filters pass.
+            // In a large candidate pool, parsing interests, media_urls, etc.
+            // for every candidate is a huge performance hit.
+
             const matchStatus = row.match_status
               ? String(row.match_status)
               : null;
@@ -527,13 +530,34 @@ export class MatchRepository {
             const matchedAt = row.matched_at ? String(row.matched_at) : null;
             const viewedAt = row.viewed_at ? String(row.viewed_at) : null;
 
-            const matchUpdatedTime = matchUpdatedAt
-              ? parseSqliteTimestamp(matchUpdatedAt)
-              : null;
-            const matchedTime = matchedAt
-              ? parseSqliteTimestamp(matchedAt)
-              : null;
-            const viewedTime = viewedAt ? parseSqliteTimestamp(viewedAt) : null;
+            // Defer parsing timestamps until they are actually needed in the cooldown checks
+            let _matchUpdatedTime: number | null | undefined;
+            const getMatchUpdatedTime = () => {
+              if (_matchUpdatedTime === undefined) {
+                _matchUpdatedTime = matchUpdatedAt
+                  ? parseSqliteTimestamp(matchUpdatedAt)
+                  : null;
+              }
+              return _matchUpdatedTime;
+            };
+
+            let _matchedTime: number | null | undefined;
+            const getMatchedTime = () => {
+              if (_matchedTime === undefined) {
+                _matchedTime = matchedAt
+                  ? parseSqliteTimestamp(matchedAt)
+                  : null;
+              }
+              return _matchedTime;
+            };
+
+            let _viewedTime: number | null | undefined;
+            const getViewedTime = () => {
+              if (_viewedTime === undefined) {
+                _viewedTime = viewedAt ? parseSqliteTimestamp(viewedAt) : null;
+              }
+              return _viewedTime;
+            };
 
             // Determine current user's action in this match
             // Use String() to avoid type mismatch (D1 may return numbers for numeric IDs)
@@ -542,10 +566,22 @@ export class MatchRepository {
             const myAction = isUser1InMatch ? user1Action : user2Action;
             const otherAction = isUser1InMatch ? user2Action : user1Action;
 
+            // --- Quick Parse Minimal Candidate Data ---
+            const candidateLocation = row.location
+              ? JSON.parse(String(row.location))
+              : undefined;
+            const candidatePrefs = row.preferences
+              ? JSON.parse(String(row.preferences))
+              : {};
+            const candidateAge = row.age ? Number(row.age) : undefined;
+            const candidateGender = row.gender
+              ? (String(row.gender) as any)
+              : undefined;
+
             // --- Precompute Distance ---
             let precomputedDistance: number | undefined;
             const loc1 = currentUser.location;
-            const loc2 = candidate.location;
+            const loc2 = candidateLocation;
             if (
               loc1 &&
               loc2 &&
@@ -569,7 +605,6 @@ export class MatchRepository {
             // include the current user. In relaxed mode: skip these checks so
             // small user bases still surface matches.
             if (!relaxFilters) {
-              const candidatePrefs = candidate.preferences;
               if (
                 candidatePrefs?.genderPreference &&
                 candidatePrefs.genderPreference.length > 0 &&
@@ -622,6 +657,7 @@ export class MatchRepository {
               matchUpdatedAt
             ) {
               const cooldownMs = 3 * 24 * 60 * 60 * 1000; // 3 days
+              const matchUpdatedTime = getMatchUpdatedTime();
               if (
                 matchUpdatedTime !== null &&
                 nowTime - matchUpdatedTime < cooldownMs
@@ -634,6 +670,7 @@ export class MatchRepository {
             if (myAction === "SKIP" && matchUpdatedAt) {
               if (otherAction !== "LIKE") {
                 const cooldownMs = 6 * 60 * 60 * 1000; // 6 hours
+                const matchUpdatedTime = getMatchUpdatedTime();
                 if (
                   matchUpdatedTime !== null &&
                   nowTime - matchUpdatedTime < cooldownMs
@@ -652,6 +689,7 @@ export class MatchRepository {
               matchUpdatedAt
             ) {
               const expireMs = 30 * 24 * 60 * 60 * 1000; // 30 days
+              const matchUpdatedTime = getMatchUpdatedTime();
               if (
                 matchUpdatedTime !== null &&
                 nowTime - matchUpdatedTime < expireMs
@@ -660,6 +698,10 @@ export class MatchRepository {
               }
             }
 
+            // All hard constraints passed. Now we can fully parse the candidate row
+            // for scoring purposes (which needs interests, tier, etc.)
+            const candidate = this.rowToUser(row);
+
             // --- Calculate base score ---
             let baseScore = calculateMatchScore(currentUser, candidate, {
               precomputedDistance,
@@ -667,6 +709,7 @@ export class MatchRepository {
             }).total;
 
             // Variety: penalize recently shown profiles
+            const viewedTime = getViewedTime();
             if (viewedTime !== null) {
               const hoursSinceViewed =
                 (nowTime - viewedTime) / (1000 * 60 * 60);
@@ -678,6 +721,7 @@ export class MatchRepository {
             }
 
             // Matched recycling: recent matches deprioritized, old matches normalize
+            const matchedTime = getMatchedTime();
             if (matchStatus === "matched" && matchedTime !== null) {
               const daysSinceMatched =
                 (nowTime - matchedTime) / (1000 * 60 * 60 * 24);
@@ -690,6 +734,7 @@ export class MatchRepository {
 
             // Disliked after cooldown: lower priority, normalizes after 14 days
             if (matchStatus === "rejected" && myAction === "DISLIKE") {
+              const matchUpdatedTime = getMatchUpdatedTime();
               const daysSinceDislike =
                 matchUpdatedTime !== null
                   ? (nowTime - matchUpdatedTime) / (1000 * 60 * 60 * 24)
