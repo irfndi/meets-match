@@ -12,6 +12,8 @@ const log = createLogger("cf-worker.incompleteProfileReengagement");
 // Stage triggers are based on days since account creation; cooldowns prevent
 // the same stage from firing too often.
 
+const MS_PER_DAY = 86_400_000;
+
 interface IncompleteStage {
   readonly stage: 1 | 2 | 3;
   readonly type:
@@ -93,7 +95,7 @@ function daysSince(iso: string, now: Date): number {
   // to avoid allocating a full Date object, reducing memory allocation.
   const dTime = Date.parse(iso);
   if (Number.isNaN(dTime)) return 0;
-  return Math.max(0, Math.floor((now.getTime() - dTime) / 86_400_000));
+  return Math.max(0, Math.floor((now.getTime() - dTime) / MS_PER_DAY));
 }
 
 function stageFor(ageDays: number): IncompleteStage | null {
@@ -225,9 +227,17 @@ function processIncompleteCandidate(
 
     // Cooldown: skip if same stage fired within its cooldown window
     if (lastStage === stage.stage && lastAt) {
-      // ⚡ Bolt Optimization: Avoid unnecessary Date object allocation here as well.
-      const sinceMs = now.getTime() - Date.parse(lastAt);
-      const cooldownMs = stage.cooldownDays * 86_400_000;
+      const lastAtTime = Date.parse(lastAt);
+      if (Number.isNaN(lastAtTime)) {
+        log.warn(
+          "incompleteProfileReengagement",
+          "skipping user with malformed last_reengagement_at",
+          { id },
+        );
+        return;
+      }
+      const sinceMs = now.getTime() - lastAtTime;
+      const cooldownMs = stage.cooldownDays * MS_PER_DAY;
       if (sinceMs < cooldownMs) {
         return;
       }

@@ -202,4 +202,38 @@ describe("runIncompleteProfileReengagementJob", () => {
     await runIncompleteProfileReengagementJob(env);
     expect(env._send).not.toHaveBeenCalled();
   });
+
+  it("respects stage cooldown (no re-send within cooldown window)", async () => {
+    const env = createEnv({
+      candidates: [
+        {
+          id: "u1",
+          first_name: "Alice",
+          language: "en",
+          created_at: daysAgo(4),
+          last_reengagement_stage: 1,
+          last_reengagement_at: daysAgo(1), // within GENTLE cooldown of 2 days
+        },
+      ],
+    });
+    await runIncompleteProfileReengagementJob(env);
+    expect(env._send).not.toHaveBeenCalled();
+  });
+
+  it("skips candidates with malformed last_reengagement_at (fail closed)", async () => {
+    const env = createEnv({
+      candidates: [
+        {
+          id: "u1",
+          first_name: "Alice",
+          language: "en",
+          created_at: daysAgo(4),
+          last_reengagement_stage: 1,
+          last_reengagement_at: "not-a-valid-date",
+        },
+      ],
+    });
+    await runIncompleteProfileReengagementJob(env);
+    expect(env._send).not.toHaveBeenCalled();
+  });
 });
