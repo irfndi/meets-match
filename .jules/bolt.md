@@ -23,3 +23,16 @@
 
 **Learning:** Creating a full `Date` object just to extract its timestamp (e.g., `new Date(isoString).getTime()`) adds unnecessary memory allocation and garbage collection overhead, which can add up in job worker loops.
 **Action:** Use `Date.parse(isoString)` instead when you only need the timestamp number, as it bypasses the object allocation while remaining functionally identical (including returning `NaN` for invalid dates).
+
+## 2026-06-13 - Deferred Parsing in getPotentialMatches
+
+**Learning:** Within the hot loop of `getPotentialMatches`, fully parsing every candidate using `this.rowToUser(row)` (which decodes `JSON.parse` for interests, media_urls, etc.) and executing strict timestamp parsing before preliminary filtering causes significant overhead. Many profiles are filtered out by basic checks (distance, age, gender) and cooldowns, making the parsing work redundant.
+**Action:** Defer all per-candidate JSON parsing and timestamp parsing until after the hard exclusion / cooldown checks have passed, so only surviving candidates pay the parsing cost.
+
+**Refinement (2026-06-15, PR review):** The first attempt introduced three per-row closure helpers (`getMatchUpdatedTime`, `getMatchedTime`, `getViewedTime`) and parsed `candidateLocation` / `candidatePrefs` / `candidateAge` / `candidateGender` eagerly. Both added measurable overhead in the hot `.map` loop. The follow-up changes:
+
+1. **No closure allocation in the hot loop.** `matchUpdatedTime` is a single lazy `let` shared across its 4 cooldown/expiry use sites; first use initializes it via `if (matchUpdatedTime === undefined) { matchUpdatedTime = ... }`, subsequent uses just check `!== null`. `matchedTime` and `viewedTime` are used in a single branch each, so they're parsed inline at the use site (no lazy state at all).
+2. **Remove dead code.** `candidateAge` and `candidateGender` were parsed for every row but never read; SQL already filters on age/gender. Removed.
+3. **Defer `candidateLocation` parsing.** Only `JSON.parse(row.location)` when `currentUser.location` is valid for a distance check; otherwise skip the parse entirely.
+4. **Defer `candidatePrefs` parsing.** Only `JSON.parse(row.preferences)` inside the `if (!relaxFilters)` bidirectional preference block — when `relaxFilters` is true the JSON.parse is skipped entirely.
+5. **Avoid double-parsing in `rowToUser`.** `rowToUser` now accepts optional pre-parsed `location` and `preferences`; the hot loop passes the values it already parsed during filtering, so surviving candidates are parsed exactly once for those two fields.

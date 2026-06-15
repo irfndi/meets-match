@@ -511,7 +511,10 @@ export class MatchRepository {
 
         const scored = rows
           .map((row) => {
-            const candidate = this.rowToUser(row);
+            // Wait to parse full candidate user until after strict filters pass.
+            // In a large candidate pool, parsing interests, media_urls, etc.
+            // for every candidate is a huge performance hit.
+
             const matchStatus = row.match_status
               ? String(row.match_status)
               : null;
@@ -527,13 +530,13 @@ export class MatchRepository {
             const matchedAt = row.matched_at ? String(row.matched_at) : null;
             const viewedAt = row.viewed_at ? String(row.viewed_at) : null;
 
-            const matchUpdatedTime = matchUpdatedAt
-              ? parseSqliteTimestamp(matchUpdatedAt)
-              : null;
-            const matchedTime = matchedAt
-              ? parseSqliteTimestamp(matchedAt)
-              : null;
-            const viewedTime = viewedAt ? parseSqliteTimestamp(viewedAt) : null;
+            // Defer timestamp parsing until actually needed in cooldown checks.
+            // matchUpdatedTime is used in 4 cooldown/expiry branches and is
+            // memoized via lazy `let` init on first use (avoids closure
+            // allocation overhead in the hot per-row `.map`). matchedTime and
+            // viewedTime are only used in a single branch each, so they are
+            // parsed inline at the use site.
+            let matchUpdatedTime: number | null | undefined;
 
             // Determine current user's action in this match
             // Use String() to avoid type mismatch (D1 may return numbers for numeric IDs)
@@ -542,34 +545,50 @@ export class MatchRepository {
             const myAction = isUser1InMatch ? user1Action : user2Action;
             const otherAction = isUser1InMatch ? user2Action : user1Action;
 
+            // --- Quick Parse Minimal Candidate Data (deferred) ---
+            // Defer JSON.parse of candidateLocation to when the current user's
+            // location is valid for distance checks. candidatePrefs is deferred
+            // to inside the `if (!relaxFilters)` bidirectional preference block
+            // (only used in strict mode for filtering). Both values are also
+            // reused below in `rowToUser` to avoid double-parsing.
+            let candidateLocation: typeof User.Type.location;
+
             // --- Precompute Distance ---
             let precomputedDistance: number | undefined;
             const loc1 = currentUser.location;
-            const loc2 = candidate.location;
             if (
               loc1 &&
-              loc2 &&
               loc1.latitude != null &&
               loc1.longitude != null &&
-              loc2.latitude != null &&
-              loc2.longitude != null &&
               loc1.source !== "geocoded" &&
-              loc2.source !== "geocoded"
+              row.location
             ) {
-              precomputedDistance = haversine(
-                loc1.latitude,
-                loc1.longitude,
-                loc2.latitude,
-                loc2.longitude,
-              );
+              const loc2 = JSON.parse(String(row.location));
+              candidateLocation = loc2;
+              if (
+                loc2 &&
+                loc2.latitude != null &&
+                loc2.longitude != null &&
+                loc2.source !== "geocoded"
+              ) {
+                precomputedDistance = haversine(
+                  loc1.latitude,
+                  loc1.longitude,
+                  loc2.latitude,
+                  loc2.longitude,
+                );
+              }
             }
 
             // --- Bidirectional preference check ---
             // In strict mode: hard-filter candidates whose preferences don't
             // include the current user. In relaxed mode: skip these checks so
             // small user bases still surface matches.
+            let candidatePrefs: typeof User.Type.preferences | undefined;
             if (!relaxFilters) {
-              const candidatePrefs = candidate.preferences;
+              candidatePrefs = row.preferences
+                ? JSON.parse(String(row.preferences))
+                : {};
               if (
                 candidatePrefs?.genderPreference &&
                 candidatePrefs.genderPreference.length > 0 &&
@@ -622,6 +641,11 @@ export class MatchRepository {
               matchUpdatedAt
             ) {
               const cooldownMs = 3 * 24 * 60 * 60 * 1000; // 3 days
+              if (matchUpdatedTime === undefined) {
+                matchUpdatedTime = matchUpdatedAt
+                  ? parseSqliteTimestamp(matchUpdatedAt)
+                  : null;
+              }
               if (
                 matchUpdatedTime !== null &&
                 nowTime - matchUpdatedTime < cooldownMs
@@ -634,6 +658,11 @@ export class MatchRepository {
             if (myAction === "SKIP" && matchUpdatedAt) {
               if (otherAction !== "LIKE") {
                 const cooldownMs = 6 * 60 * 60 * 1000; // 6 hours
+                if (matchUpdatedTime === undefined) {
+                  matchUpdatedTime = matchUpdatedAt
+                    ? parseSqliteTimestamp(matchUpdatedAt)
+                    : null;
+                }
                 if (
                   matchUpdatedTime !== null &&
                   nowTime - matchUpdatedTime < cooldownMs
@@ -652,6 +681,11 @@ export class MatchRepository {
               matchUpdatedAt
             ) {
               const expireMs = 30 * 24 * 60 * 60 * 1000; // 30 days
+              if (matchUpdatedTime === undefined) {
+                matchUpdatedTime = matchUpdatedAt
+                  ? parseSqliteTimestamp(matchUpdatedAt)
+                  : null;
+              }
               if (
                 matchUpdatedTime !== null &&
                 nowTime - matchUpdatedTime < expireMs
@@ -660,6 +694,17 @@ export class MatchRepository {
               }
             }
 
+            // All hard constraints passed. Now we can fully parse the candidate row
+            // for scoring purposes (which needs interests, tier, etc.)
+            // Pass the pre-parsed `candidateLocation` and `candidatePrefs` to
+            // avoid re-parsing inside `rowToUser` (Sourcery review concern).
+            const candidate = this.rowToUser(row, {
+              location: candidateLocation,
+              preferences:
+                candidatePrefs ??
+                (row.preferences ? JSON.parse(String(row.preferences)) : {}),
+            });
+
             // --- Calculate base score ---
             let baseScore = calculateMatchScore(currentUser, candidate, {
               precomputedDistance,
@@ -667,29 +712,40 @@ export class MatchRepository {
             }).total;
 
             // Variety: penalize recently shown profiles
-            if (viewedTime !== null) {
-              const hoursSinceViewed =
-                (nowTime - viewedTime) / (1000 * 60 * 60);
-              if (hoursSinceViewed < 24) {
-                baseScore *= 0.1; // Heavily penalize profiles shown in last 24h
-              } else if (hoursSinceViewed < 72) {
-                baseScore *= 0.5;
+            if (viewedAt) {
+              const viewedTime = parseSqliteTimestamp(viewedAt);
+              if (viewedTime !== null) {
+                const hoursSinceViewed =
+                  (nowTime - viewedTime) / (1000 * 60 * 60);
+                if (hoursSinceViewed < 24) {
+                  baseScore *= 0.1; // Heavily penalize profiles shown in last 24h
+                } else if (hoursSinceViewed < 72) {
+                  baseScore *= 0.5;
+                }
               }
             }
 
             // Matched recycling: recent matches deprioritized, old matches normalize
-            if (matchStatus === "matched" && matchedTime !== null) {
-              const daysSinceMatched =
-                (nowTime - matchedTime) / (1000 * 60 * 60 * 24);
-              if (daysSinceMatched < 14) {
-                baseScore *= 0.05; // Very low priority for fresh matches
-              } else if (daysSinceMatched < 30) {
-                baseScore *= 0.3; // Medium priority for 14-30 day matches
-              } // >30 days: normal priority (allow rematch)
+            if (matchStatus === "matched" && matchedAt) {
+              const matchedTime = parseSqliteTimestamp(matchedAt);
+              if (matchedTime !== null) {
+                const daysSinceMatched =
+                  (nowTime - matchedTime) / (1000 * 60 * 60 * 24);
+                if (daysSinceMatched < 14) {
+                  baseScore *= 0.05; // Very low priority for fresh matches
+                } else if (daysSinceMatched < 30) {
+                  baseScore *= 0.3; // Medium priority for 14-30 day matches
+                } // >30 days: normal priority (allow rematch)
+              }
             }
 
             // Disliked after cooldown: lower priority, normalizes after 14 days
             if (matchStatus === "rejected" && myAction === "DISLIKE") {
+              if (matchUpdatedTime === undefined) {
+                matchUpdatedTime = matchUpdatedAt
+                  ? parseSqliteTimestamp(matchUpdatedAt)
+                  : null;
+              }
               const daysSinceDislike =
                 matchUpdatedTime !== null
                   ? (nowTime - matchUpdatedTime) / (1000 * 60 * 60 * 24)
@@ -819,7 +875,13 @@ export class MatchRepository {
     };
   }
 
-  private rowToUser(row: Record<string, unknown>): typeof User.Type {
+  private rowToUser(
+    row: Record<string, unknown>,
+    preParsed?: {
+      location?: typeof User.Type.location;
+      preferences?: typeof User.Type.preferences;
+    },
+  ): typeof User.Type {
     return {
       id: String(row.id),
       username: row.username ? String(row.username) : undefined,
@@ -835,8 +897,12 @@ export class MatchRepository {
         : undefined,
       interests: row.interests ? JSON.parse(String(row.interests)) : [],
       mediaUrls: row.media_urls ? JSON.parse(String(row.media_urls)) : [],
-      location: row.location ? JSON.parse(String(row.location)) : undefined,
-      preferences: row.preferences ? JSON.parse(String(row.preferences)) : {},
+      location:
+        preParsed?.location ??
+        (row.location ? JSON.parse(String(row.location)) : undefined),
+      preferences:
+        preParsed?.preferences ??
+        (row.preferences ? JSON.parse(String(row.preferences)) : {}),
       isActive: row.is_active ? Number(row.is_active) === 1 : true,
       isSleeping: row.is_sleeping ? Number(row.is_sleeping) === 1 : false,
       subscriptionTier: row.subscription_tier
