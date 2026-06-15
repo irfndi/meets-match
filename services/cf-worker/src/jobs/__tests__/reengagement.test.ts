@@ -161,6 +161,25 @@ describe("runReengagementJob", () => {
     expect(env._send).not.toHaveBeenCalled();
   });
 
+  it("skips candidates with malformed last_reengagement_at (fail closed)", async () => {
+    const env = createEnv({
+      candidates: [
+        {
+          id: "user_5b",
+          first_name: "Eve",
+          gender: "female",
+          location: null,
+          preferences: null,
+          last_active: daysAgo(8),
+          last_reengagement_stage: 1,
+          last_reengagement_at: "not-a-valid-date",
+        },
+      ],
+    });
+    await runReengagementJob(env);
+    expect(env._send).not.toHaveBeenCalled();
+  });
+
   it("handles queue failure gracefully", async () => {
     const env = createEnv({
       candidates: [

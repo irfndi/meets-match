@@ -12,6 +12,8 @@ const log = createLogger("cf-worker.reengagement");
 // Each stage has a minimum inactivity period (cutoff), a cooldown before the
 // same stage can fire again, and a NotificationType to send.
 
+const MS_PER_DAY = 86_400_000;
+
 interface ReengagementStage {
   readonly stage: 1 | 2 | 3;
   readonly type:
@@ -209,10 +211,12 @@ function pickVariant(
 
 /** Compute days since `lastActiveIso` relative to `now`. */
 function daysSince(lastActiveIso: string, now: Date): number {
-  const last = new Date(lastActiveIso);
-  if (Number.isNaN(last.getTime())) return 0;
-  const diffMs = now.getTime() - last.getTime();
-  return Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+  // ⚡ Bolt Optimization: Use Date.parse() instead of new Date().getTime()
+  // to avoid allocating a full Date object, reducing memory allocation.
+  const lastTime = Date.parse(lastActiveIso);
+  if (Number.isNaN(lastTime)) return 0;
+  const diffMs = now.getTime() - lastTime;
+  return Math.max(0, Math.floor(diffMs / MS_PER_DAY));
 }
 
 /** Decide which stage (1/2/3) applies for a user based on inactivity. */
@@ -413,8 +417,17 @@ function processCandidate(
 
     // Cooldown: skip if same stage fired within its cooldown window
     if (lastStage === stage.stage && lastAt) {
-      const sinceLastMs = now.getTime() - new Date(lastAt).getTime();
-      const cooldownMs = stage.cooldownDays * 24 * 60 * 60 * 1000;
+      const lastAtTime = Date.parse(lastAt);
+      if (Number.isNaN(lastAtTime)) {
+        log.warn(
+          "processCandidate",
+          "skipping user with malformed last_reengagement_at",
+          { id },
+        );
+        return;
+      }
+      const sinceLastMs = now.getTime() - lastAtTime;
+      const cooldownMs = stage.cooldownDays * MS_PER_DAY;
       if (sinceLastMs < cooldownMs) {
         return;
       }
