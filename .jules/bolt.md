@@ -36,3 +36,8 @@
 3. **Defer `candidateLocation` parsing.** Only `JSON.parse(row.location)` when `currentUser.location` is valid for a distance check; otherwise skip the parse entirely.
 4. **Defer `candidatePrefs` parsing.** Only `JSON.parse(row.preferences)` inside the `if (!relaxFilters)` bidirectional preference block — when `relaxFilters` is true the JSON.parse is skipped entirely.
 5. **Avoid double-parsing in `rowToUser`.** `rowToUser` now accepts optional pre-parsed `location` and `preferences`; the hot loop passes the values it already parsed during filtering, so surviving candidates are parsed exactly once for those two fields.
+
+## 2026-06-21 - Optimize haversine calculation in frontend match bot
+
+**Learning:** `Math.PI / 180` and coordinate conversions to radians were redundantly calculated multiple times per `haversine` distance calculation in the UI match card generation logic in `cf-bot`, wasting CPU cycles.
+**Action:** Extract `Math.PI / 180.0` into a precomputed module-level constant `TO_RAD` and cache coordinate radians in variables to optimize the arithmetic overhead, mirroring the back-end optimization already in `cf-api`.
