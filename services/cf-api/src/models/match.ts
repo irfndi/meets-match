@@ -30,6 +30,11 @@ import { BlockRepository } from "./block.js";
  * Also handles ISO 8601 strings that already contain 'T' or 'Z'.
  */
 function parseSqliteTimestamp(ts: string): number {
+  // Fast path for strictly formatted SQLite timestamps "YYYY-MM-DD HH:MM:SS"
+  // Avoids RegExp/replace allocation overhead in hot loops
+  if (ts.length === 19 && ts[10] === " ") {
+    return Date.parse(ts.substring(0, 10) + "T" + ts.substring(11) + "Z");
+  }
   if (ts.includes("T") || ts.endsWith("Z")) {
     return Date.parse(ts);
   }
