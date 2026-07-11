@@ -435,18 +435,24 @@ function processCandidate(
 
     const producer = new NotificationQueueProducer(env.NOTIFICATION_QUEUE);
 
+    // ⚡ Bolt Optimization: Parse preferences once and cache locally
+    // to prevent redundant JSON.parse operations in both countNearbyUsers and getGenderLabel.
+    const parsedPrefs = parsePreferences(
+      user.preferences ? String(user.preferences) : null,
+    );
+
     const nearbyCount = yield* Effect.promise(() =>
       countNearbyUsers(
         env.DB,
         id,
         gender,
-        parsePreferences(user.preferences ? String(user.preferences) : null),
+        parsedPrefs,
       ),
     );
     const marketingCount = getMarketingCount(nearbyCount);
     const genderLabel = getGenderLabel(
       gender,
-      parsePreferences(user.preferences ? String(user.preferences) : null),
+      parsedPrefs,
     );
     const safeName = escapeMarkdown(firstName);
     const city = extractCity(user.location ? String(user.location) : null);

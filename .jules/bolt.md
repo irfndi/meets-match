@@ -36,3 +36,8 @@
 3. **Defer `candidateLocation` parsing.** Only `JSON.parse(row.location)` when `currentUser.location` is valid for a distance check; otherwise skip the parse entirely.
 4. **Defer `candidatePrefs` parsing.** Only `JSON.parse(row.preferences)` inside the `if (!relaxFilters)` bidirectional preference block — when `relaxFilters` is true the JSON.parse is skipped entirely.
 5. **Avoid double-parsing in `rowToUser`.** `rowToUser` now accepts optional pre-parsed `location` and `preferences`; the hot loop passes the values it already parsed during filtering, so surviving candidates are parsed exactly once for those two fields.
+
+## 2026-06-20 - Redundant JSON Parsing in Worker Loops
+
+**Learning:** Within background worker jobs (e.g., re-engagement emails processing candidate loops), entity fields like user preferences are sometimes repeatedly parsed from JSON for different helper functions (e.g., `countNearbyUsers` and `getGenderLabel` sequentially). This causes unnecessary object allocation and parsing overhead that scales linearly with loop iterations.
+**Action:** Always parse JSON fields once per iteration, cache the result locally (`const parsedPrefs = parsePreferences(...)`), and pass the typed object explicitly to downstream helpers to prevent redundant `JSON.parse` executions.
