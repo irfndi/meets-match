@@ -718,6 +718,27 @@ describe("runReengagementJob", () => {
     expect(updateRun).not.toHaveBeenCalled();
   });
 
+  it('does not crash when preferences is the string "null"', async () => {
+    const env = createEnv({
+      candidates: [
+        {
+          id: "u1",
+          first_name: "Alex",
+          gender: "female",
+          location: null,
+          preferences: "null",
+          last_active: daysAgo(8),
+          last_reengagement_stage: 0,
+          last_reengagement_at: null,
+        },
+      ],
+      nearbyCount: 5,
+    });
+
+    await runReengagementJob(env);
+    expect(env._send).toHaveBeenCalledTimes(1);
+  });
+
   it("handles invalid JSON in preferences gracefully", async () => {
     const env = createEnv({
       candidates: [

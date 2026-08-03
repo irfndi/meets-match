@@ -36,3 +36,8 @@
 3. **Defer `candidateLocation` parsing.** Only `JSON.parse(row.location)` when `currentUser.location` is valid for a distance check; otherwise skip the parse entirely.
 4. **Defer `candidatePrefs` parsing.** Only `JSON.parse(row.preferences)` inside the `if (!relaxFilters)` bidirectional preference block — when `relaxFilters` is true the JSON.parse is skipped entirely.
 5. **Avoid double-parsing in `rowToUser`.** `rowToUser` now accepts optional pre-parsed `location` and `preferences`; the hot loop passes the values it already parsed during filtering, so surviving candidates are parsed exactly once for those two fields.
+
+## 2026-06-27 - Redundant JSON parsing in Job Worker Loops
+
+**Learning:** Calling `JSON.parse` multiple times for the same data (like `user.preferences`) inside a worker job loop (`processCandidate` in `reengagement.ts`) causes redundant string-to-object conversions and memory allocations for every candidate.
+**Action:** Always parse JSON fields once per entity iteration, cache the result in a local variable, and reuse it across helper functions.
