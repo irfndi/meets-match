@@ -39,5 +39,5 @@
 
 ## 2026-06-20 - Redundant JSON Parsing in Worker Loops
 
-**Learning:** Within background worker jobs (e.g., re-engagement emails processing candidate loops), entity fields like user preferences are sometimes repeatedly parsed from JSON for different helper functions (e.g., `countNearbyUsers` and `getGenderLabel` sequentially). This causes unnecessary object allocation and parsing overhead that scales linearly with loop iterations.
+**Learning:** Within background worker jobs (e.g., re-engagement email jobs that process candidate loops), entity fields like user preferences are sometimes repeatedly parsed from JSON for different helper functions (e.g., `countNearbyUsers` and `getGenderLabel` sequentially). This causes unnecessary object allocation and parsing overhead that scales linearly with loop iterations.
 **Action:** Always parse JSON fields once per iteration, cache the result locally (`const parsedPrefs = parsePreferences(...)`), and pass the typed object explicitly to downstream helpers to prevent redundant `JSON.parse` executions.
