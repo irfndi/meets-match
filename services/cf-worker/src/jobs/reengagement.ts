@@ -114,7 +114,7 @@ function extractCity(locationJson: string | null): string | null {
 }
 
 interface ParsedPreferences {
-  readonly genderPreference?: readonly string[];
+  genderPreference?: string[];
 }
 
 function parsePreferences(preferencesJson: string | null): ParsedPreferences {
@@ -444,6 +444,8 @@ function processCandidate(
 
     const producer = new NotificationQueueProducer(env.NOTIFICATION_QUEUE);
 
+    // ⚡ Bolt Optimization: Parse preferences once per candidate to avoid redundant
+    // JSON.parse operations, which reduce unnecessary CPU cycles and memory allocations.
     const parsedPrefs = parsePreferences(
       user.preferences ? String(user.preferences) : null,
     );
