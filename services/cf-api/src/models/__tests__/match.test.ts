@@ -1,6 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
 import { Effect } from "effect";
-import { MatchRepository, calculateMatchScore, haversine, parseSqliteTimestamp } from "../match.js";
+import {
+  MatchRepository,
+  calculateMatchScore,
+  haversine,
+  parseSqliteTimestamp,
+} from "../match.js";
 import { UserRepository } from "../user.js";
 import {
   computeDefaultPreferences,
