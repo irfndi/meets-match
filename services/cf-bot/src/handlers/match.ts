@@ -461,12 +461,17 @@ function haversine(
   const dLon = (lon2 - lon1) * TO_RAD;
   const lat1Rad = lat1 * TO_RAD;
   const lat2Rad = lat2 * TO_RAD;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.sin(dLon / 2) *
-      Math.sin(dLon / 2) *
-      Math.cos(lat1Rad) *
-      Math.cos(lat2Rad);
+  const a = Math.min(
+    1,
+    Math.max(
+      0,
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.sin(dLon / 2) *
+          Math.sin(dLon / 2) *
+          Math.cos(lat1Rad) *
+          Math.cos(lat2Rad),
+    ),
+  );
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
