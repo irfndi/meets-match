@@ -68,4 +68,4 @@
 **Action:** Extract `Math.PI / 180.0` into a precomputed module-level constant `TO_RAD` and cache coordinate radians in variables to optimize the arithmetic overhead, mirroring the back-end optimization already in `cf-api`.
 
 > > > > > > > origin/main
->>>>>>> origin/main
+> > > > > > > origin/main

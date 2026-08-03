@@ -444,7 +444,7 @@ function processCandidate(
 
     const producer = new NotificationQueueProducer(env.NOTIFICATION_QUEUE);
 
-const parsedPrefs = parsePreferences(
+    const parsedPrefs = parsePreferences(
       user.preferences ? String(user.preferences) : null,
     );
 
