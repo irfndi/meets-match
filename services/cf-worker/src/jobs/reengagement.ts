@@ -120,7 +120,12 @@ interface ParsedPreferences {
 function parsePreferences(preferencesJson: string | null): ParsedPreferences {
   if (!preferencesJson) return {};
   try {
-    return JSON.parse(preferencesJson) as ParsedPreferences;
+    const parsed = JSON.parse(preferencesJson) as unknown;
+    // JSON.parse("null") returns null; guard so helpers never see null.
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return {};
+    }
+    return parsed as ParsedPreferences;
   } catch {
     return {};
   }
@@ -435,8 +440,7 @@ function processCandidate(
 
     const producer = new NotificationQueueProducer(env.NOTIFICATION_QUEUE);
 
-    // ⚡ Bolt Optimization: Parse preferences once per candidate to avoid redundant
-    // JSON.parse operations, which reduce unnecessary CPU cycles and memory allocations.
+    // Parse user.preferences once and reuse it in both helpers below.
     const parsedPrefs = parsePreferences(
       user.preferences ? String(user.preferences) : null,
     );
