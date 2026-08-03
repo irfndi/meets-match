@@ -1,6 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
 import { Effect } from "effect";
-import { MatchRepository, calculateMatchScore, haversine } from "../match.js";
+import {
+  MatchRepository,
+  calculateMatchScore,
+  haversine,
+  parseSqliteTimestamp,
+} from "../match.js";
 import { UserRepository } from "../user.js";
 import {
   computeDefaultPreferences,
@@ -122,6 +127,29 @@ describe("haversine", () => {
 
   it("returns 0 for same point", () => {
     expect(haversine(10, 20, 10, 20)).toBe(0);
+  });
+});
+
+describe("parseSqliteTimestamp", () => {
+  it("fast path matches fallback for valid YYYY-MM-DD HH:MM:SS", () => {
+    const ts = "2026-06-20 12:34:56";
+    const fastPath = parseSqliteTimestamp(ts);
+    const fallback = Date.parse(ts.replace(" ", "T") + "Z");
+    expect(fastPath).toBe(fallback);
+    expect(Number.isNaN(fastPath)).toBe(false);
+  });
+
+  it("degrades to NaN for malformed-but-shaped 19-char input", () => {
+    const ts = "2026-06-20 12:34:xx";
+    expect(ts.length).toBe(19);
+    expect(ts[10]).toBe(" ");
+    expect(Number.isNaN(parseSqliteTimestamp(ts))).toBe(true);
+  });
+
+  it("handles ISO 8601 strings with T or Z unchanged", () => {
+    expect(parseSqliteTimestamp("2026-06-20T12:34:56Z")).toBe(
+      Date.parse("2026-06-20T12:34:56Z"),
+    );
   });
 });
 

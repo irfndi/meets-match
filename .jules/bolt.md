@@ -37,6 +37,11 @@
 4. **Defer `candidatePrefs` parsing.** Only `JSON.parse(row.preferences)` inside the `if (!relaxFilters)` bidirectional preference block — when `relaxFilters` is true the JSON.parse is skipped entirely.
 5. **Avoid double-parsing in `rowToUser`.** `rowToUser` now accepts optional pre-parsed `location` and `preferences`; the hot loop passes the values it already parsed during filtering, so surviving candidates are parsed exactly once for those two fields.
 
+## 2026-07-04 - Fast-Path SQLite Timestamp Parsing
+
+**Learning:** In extremely hot loops (like processing hundreds of potential matches per request), simple string manipulations like `String.replace()` allocating new regex/string objects can become a bottleneck. Direct substring parsing with strict character verification is much faster.
+**Action:** When dealing with strictly formatted database timestamps in hot loops, use direct string indexing and substrings to minimize allocation overhead.
+
 ## 2026-06-20 - Optimize haversine calculation in frontend match bot
 
 **Learning:** `Math.PI / 180` and coordinate conversions to radians were redundantly calculated multiple times per `haversine` distance calculation in the UI match card generation logic in `cf-bot`, wasting CPU cycles.
