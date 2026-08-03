@@ -83,7 +83,7 @@ describe("runReengagementJob", () => {
     expect(body.type).toBe("REENGAGEMENT_GENTLE");
   });
 
-  it("does not crash when preferences is the string \"null\"", async () => {
+  it('does not crash when preferences is the string "null"', async () => {
     const env = createEnv({
       candidates: [
         {
