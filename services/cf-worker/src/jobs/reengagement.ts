@@ -122,7 +122,11 @@ function parsePreferences(preferencesJson: string | null): ParsedPreferences {
   try {
     const parsed = JSON.parse(preferencesJson) as unknown;
     // JSON.parse("null") returns null; guard so helpers never see null.
-    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    if (
+      parsed === null ||
+      typeof parsed !== "object" ||
+      Array.isArray(parsed)
+    ) {
       return {};
     }
     return parsed as ParsedPreferences;
