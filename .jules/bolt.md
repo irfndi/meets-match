@@ -37,6 +37,11 @@
 4. **Defer `candidatePrefs` parsing.** Only `JSON.parse(row.preferences)` inside the `if (!relaxFilters)` bidirectional preference block — when `relaxFilters` is true the JSON.parse is skipped entirely.
 5. **Avoid double-parsing in `rowToUser`.** `rowToUser` now accepts optional pre-parsed `location` and `preferences`; the hot loop passes the values it already parsed during filtering, so surviving candidates are parsed exactly once for those two fields.
 
+## 2026-07-25 - Redundant JSON Parsing in Iterative Processing
+
+**Learning:** In worker job loops (e.g., `services/cf-worker/src/jobs/reengagement.ts`), redundant `JSON.parse` operations on entity fields (like `user.preferences`) inside iterative functions such as `processCandidate` create unnecessary parsing overhead. This occurs when the same field is parsed multiple times by different helper functions.
+**Action:** Parse the JSON data once per iteration, store the result in a local variable, and pass the parsed object to the helper functions to avoid redundant parsing.
+
 ## 2026-06-20 - Redundant JSON Parsing in Worker Loops
 
 **Learning:** Within background worker jobs (e.g., re-engagement email jobs that process candidate loops), entity fields like user preferences are sometimes repeatedly parsed from JSON for different helper functions (e.g., `countNearbyUsers` and `getGenderLabel` sequentially). This causes unnecessary object allocation and parsing overhead that scales linearly with loop iterations.
@@ -56,3 +61,5 @@
 
 **Learning:** `Math.PI / 180` and coordinate conversions to radians were redundantly calculated multiple times per `haversine` distance calculation in the UI match card generation logic in `cf-bot`, wasting CPU cycles.
 **Action:** Extract `Math.PI / 180.0` into a precomputed module-level constant `TO_RAD` and cache coordinate radians in variables to optimize the arithmetic overhead, mirroring the back-end optimization already in `cf-api`.
+
+> > > > > > > origin/main
