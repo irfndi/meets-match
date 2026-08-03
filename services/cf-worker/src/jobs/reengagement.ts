@@ -444,7 +444,8 @@ function processCandidate(
 
     const producer = new NotificationQueueProducer(env.NOTIFICATION_QUEUE);
 
-    // Parse user.preferences once and reuse it in both helpers below.
+    // ⚡ Bolt Optimization: Parse preferences once per candidate to avoid redundant
+    // JSON.parse operations, which reduce unnecessary CPU cycles and memory allocations.
     const parsedPrefs = parsePreferences(
       user.preferences ? String(user.preferences) : null,
     );
