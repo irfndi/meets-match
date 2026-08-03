@@ -36,6 +36,10 @@ node_modules/
 !.clawpatch/config.json
 !.clawpatch/project.json
 
+# Local tooling workspace (deepsec security tool, omo agent state)
+.deepsec/
+.omo/
+
 # Auto-generated version files
 services/*/src/lib/version.ts
 coverage/
