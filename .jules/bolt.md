@@ -41,3 +41,31 @@
 
 **Learning:** In worker jobs like `reengagement`, passing the result of `JSON.parse` directly into multiple function calls (e.g., `countNearbyUsers` and `getGenderLabel`) without caching the result causes redundant parses of the same JSON string, leading to unnecessary CPU and memory overhead during batch processing.
 **Action:** Parse fields like `user.preferences` once per candidate, store the parsed object in a local variable, and reuse it across multiple helper functions to avoid redundant parsing.
+
+## 2026-07-25 - Redundant JSON Parsing in Iterative Processing
+
+**Learning:** In worker job loops (e.g., `services/cf-worker/src/jobs/reengagement.ts`), redundant `JSON.parse` operations on entity fields (like `user.preferences`) inside iterative functions such as `processCandidate` create unnecessary parsing overhead. This occurs when the same field is parsed multiple times by different helper functions.
+**Action:** Parse the JSON data once per iteration, store the result in a local variable, and pass the parsed object to the helper functions to avoid redundant parsing.
+
+## 2026-06-20 - Redundant JSON Parsing in Worker Loops
+
+**Learning:** Within background worker jobs (e.g., re-engagement email jobs that process candidate loops), entity fields like user preferences are sometimes repeatedly parsed from JSON for different helper functions (e.g., `countNearbyUsers` and `getGenderLabel` sequentially). This causes unnecessary object allocation and parsing overhead that scales linearly with loop iterations.
+**Action:** Always parse JSON fields once per iteration, cache the result locally (`const parsedPrefs = parsePreferences(...)`), and pass the typed object explicitly to downstream helpers to prevent redundant `JSON.parse` executions.
+
+## 2026-06-27 - Redundant JSON parsing in Job Worker Loops
+
+**Learning:** Calling `JSON.parse` multiple times for the same data (like `user.preferences`) inside a worker job loop (`processCandidate` in `reengagement.ts`) causes redundant string-to-object conversions and memory allocations for every candidate.
+**Action:** Always parse JSON fields once per entity iteration, cache the result in a local variable, and reuse it across helper functions.
+
+## 2026-07-04 - Fast-Path SQLite Timestamp Parsing
+
+**Learning:** In extremely hot loops (like processing hundreds of potential matches per request), simple string manipulations like `String.replace()` allocating new regex/string objects can become a bottleneck. Direct substring parsing with strict character verification is much faster.
+**Action:** When dealing with strictly formatted database timestamps in hot loops, use direct string indexing and substrings to minimize allocation overhead.
+
+## 2026-06-20 - Optimize haversine calculation in frontend match bot
+
+**Learning:** `Math.PI / 180` and coordinate conversions to radians were redundantly calculated multiple times per `haversine` distance calculation in the UI match card generation logic in `cf-bot`, wasting CPU cycles.
+**Action:** Extract `Math.PI / 180.0` into a precomputed module-level constant `TO_RAD` and cache coordinate radians in variables to optimize the arithmetic overhead, mirroring the back-end optimization already in `cf-api`.
+
+> > > > > > > origin/main
+>>>>>>> origin/main

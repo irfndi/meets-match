@@ -83,6 +83,27 @@ describe("runReengagementJob", () => {
     expect(body.type).toBe("REENGAGEMENT_GENTLE");
   });
 
+  it('does not crash when preferences is the string "null"', async () => {
+    const env = createEnv({
+      candidates: [
+        {
+          id: "user_null_prefs",
+          first_name: "Dana",
+          gender: "female",
+          location: null,
+          preferences: "null",
+          last_active: daysAgo(8),
+          last_reengagement_stage: 0,
+          last_reengagement_at: null,
+        },
+      ],
+      nearbyCount: 2,
+    });
+
+    await expect(runReengagementJob(env)).resolves.toBeUndefined();
+    expect(env._send).toHaveBeenCalledTimes(1);
+  });
+
   it("sends REENGAGEMENT_URGENT for users inactive 14-29 days", async () => {
     const env = createEnv({
       candidates: [

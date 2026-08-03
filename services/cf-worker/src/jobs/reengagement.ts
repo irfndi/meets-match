@@ -114,7 +114,7 @@ function extractCity(locationJson: string | null): string | null {
 }
 
 interface ParsedPreferences {
-  genderPreference?: string[];
+  readonly genderPreference?: readonly string[];
 }
 
 function parsePreferences(preferencesJson: string | null): ParsedPreferences {
@@ -444,8 +444,7 @@ function processCandidate(
 
     const producer = new NotificationQueueProducer(env.NOTIFICATION_QUEUE);
 
-    // Parse user.preferences once and reuse it in both helpers below.
-    const parsedPrefs = parsePreferences(
+const parsedPrefs = parsePreferences(
       user.preferences ? String(user.preferences) : null,
     );
 
