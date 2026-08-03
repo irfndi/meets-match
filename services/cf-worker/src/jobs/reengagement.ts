@@ -120,16 +120,7 @@ interface ParsedPreferences {
 function parsePreferences(preferencesJson: string | null): ParsedPreferences {
   if (!preferencesJson) return {};
   try {
-    const parsed = JSON.parse(preferencesJson) as unknown;
-    // JSON.parse("null") returns null; guard so helpers never see null.
-    if (
-      parsed === null ||
-      typeof parsed !== "object" ||
-      Array.isArray(parsed)
-    ) {
-      return {};
-    }
-    return parsed as ParsedPreferences;
+    return JSON.parse(preferencesJson) as ParsedPreferences;
   } catch {
     return {};
   }
