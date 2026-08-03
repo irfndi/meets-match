@@ -37,6 +37,11 @@
 4. **Defer `candidatePrefs` parsing.** Only `JSON.parse(row.preferences)` inside the `if (!relaxFilters)` bidirectional preference block — when `relaxFilters` is true the JSON.parse is skipped entirely.
 5. **Avoid double-parsing in `rowToUser`.** `rowToUser` now accepts optional pre-parsed `location` and `preferences`; the hot loop passes the values it already parsed during filtering, so surviving candidates are parsed exactly once for those two fields.
 
+## 2026-06-27 - Redundant JSON parsing in Job Worker Loops
+
+**Learning:** Calling `JSON.parse` multiple times for the same data (like `user.preferences`) inside a worker job loop (`processCandidate` in `reengagement.ts`) causes redundant string-to-object conversions and memory allocations for every candidate.
+**Action:** Always parse JSON fields once per entity iteration, cache the result in a local variable, and reuse it across helper functions.
+
 ## 2026-07-04 - Fast-Path SQLite Timestamp Parsing
 
 **Learning:** In extremely hot loops (like processing hundreds of potential matches per request), simple string manipulations like `String.replace()` allocating new regex/string objects can become a bottleneck. Direct substring parsing with strict character verification is much faster.

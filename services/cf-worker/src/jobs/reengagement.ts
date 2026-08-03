@@ -120,7 +120,16 @@ interface ParsedPreferences {
 function parsePreferences(preferencesJson: string | null): ParsedPreferences {
   if (!preferencesJson) return {};
   try {
-    return JSON.parse(preferencesJson) as ParsedPreferences;
+    const parsed = JSON.parse(preferencesJson) as unknown;
+    // JSON.parse("null") returns null; guard so helpers never see null.
+    if (
+      parsed === null ||
+      typeof parsed !== "object" ||
+      Array.isArray(parsed)
+    ) {
+      return {};
+    }
+    return parsed as ParsedPreferences;
   } catch {
     return {};
   }
@@ -435,16 +444,15 @@ function processCandidate(
 
     const producer = new NotificationQueueProducer(env.NOTIFICATION_QUEUE);
 
-    // ⚡ Bolt Optimization: Parse preferences once per candidate to avoid duplicate JSON.parse overhead
-    const parsedPreferences = parsePreferences(
+    const parsedPrefs = parsePreferences(
       user.preferences ? String(user.preferences) : null,
     );
 
     const nearbyCount = yield* Effect.promise(() =>
-      countNearbyUsers(env.DB, id, gender, parsedPreferences),
+      countNearbyUsers(env.DB, id, gender, parsedPrefs),
     );
     const marketingCount = getMarketingCount(nearbyCount);
-    const genderLabel = getGenderLabel(gender, parsedPreferences);
+    const genderLabel = getGenderLabel(gender, parsedPrefs);
     const safeName = escapeMarkdown(firstName);
     const city = extractCity(user.location ? String(user.location) : null);
     const safeCity = city ? escapeMarkdown(city) : null;
