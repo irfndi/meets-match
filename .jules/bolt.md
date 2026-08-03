@@ -41,3 +41,13 @@
 
 **Learning:** Calling `JSON.parse` multiple times for the same data (like `user.preferences`) inside a worker job loop (`processCandidate` in `reengagement.ts`) causes redundant string-to-object conversions and memory allocations for every candidate.
 **Action:** Always parse JSON fields once per entity iteration, cache the result in a local variable, and reuse it across helper functions.
+
+## 2026-07-04 - Fast-Path SQLite Timestamp Parsing
+
+**Learning:** In extremely hot loops (like processing hundreds of potential matches per request), simple string manipulations like `String.replace()` allocating new regex/string objects can become a bottleneck. Direct substring parsing with strict character verification is much faster.
+**Action:** When dealing with strictly formatted database timestamps in hot loops, use direct string indexing and substrings to minimize allocation overhead.
+
+## 2026-06-20 - Optimize haversine calculation in frontend match bot
+
+**Learning:** `Math.PI / 180` and coordinate conversions to radians were redundantly calculated multiple times per `haversine` distance calculation in the UI match card generation logic in `cf-bot`, wasting CPU cycles.
+**Action:** Extract `Math.PI / 180.0` into a precomputed module-level constant `TO_RAD` and cache coordinate radians in variables to optimize the arithmetic overhead, mirroring the back-end optimization already in `cf-api`.
