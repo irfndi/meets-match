@@ -114,7 +114,7 @@ function extractCity(locationJson: string | null): string | null {
 }
 
 interface ParsedPreferences {
-  genderPreference?: string[];
+  readonly genderPreference?: readonly string[];
 }
 
 function parsePreferences(preferencesJson: string | null): ParsedPreferences {
