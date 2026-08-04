@@ -108,7 +108,22 @@ export class UserRepository {
     return Effect.tryPromise({
       try: async () => {
         const user = req.user;
-        const maskSet = req.updateMask ? new Set(req.updateMask) : undefined;
+        // Validate updateMask before building the Set: a non-array value
+        // (e.g. an object) would throw inside `new Set`, and a string would
+        // silently produce a per-character mask. Require an array of strings.
+        let maskSet: Set<string> | undefined;
+        if (req.updateMask !== undefined) {
+          if (
+            !Array.isArray(req.updateMask) ||
+            !req.updateMask.every((field) => typeof field === "string")
+          ) {
+            throw new ValidationError(
+              "updateMask",
+              "updateMask must be an array of strings",
+            );
+          }
+          maskSet = new Set(req.updateMask);
+        }
 
         // Privileged fields are only writable when explicitly listed in
         // updateMask (e.g. by an internal service or cron), never by a
@@ -119,6 +134,7 @@ export class UserRepository {
           "dmCredits",
           "referralBonusSwipes",
           "dailySwipesUsed",
+          "dailySwipesResetAt",
         ]);
         const shouldWrite = (field: string): boolean => {
           if (PRIVILEGED_FIELDS.has(field)) {
@@ -187,13 +203,22 @@ export class UserRepository {
           values.push(JSON.stringify(user.interests));
         }
         if (user.mediaUrls !== undefined && shouldWrite("mediaUrls")) {
+          // Accept the same shape addMedia stores / toUser returns
+          // ({ url, type, uploadedAt }) plus plain strings for backward
+          // compatibility with older stored data.
+          const isValidMediaItem = (item: unknown): boolean =>
+            typeof item === "string" ||
+            (typeof item === "object" &&
+              item !== null &&
+              typeof (item as { url?: unknown }).url === "string" &&
+              typeof (item as { type?: unknown }).type === "string");
           if (
             !Array.isArray(user.mediaUrls) ||
-            !user.mediaUrls.every((u) => typeof u === "string")
+            !user.mediaUrls.every((item) => isValidMediaItem(item))
           ) {
             throw new ValidationError(
               "mediaUrls",
-              "mediaUrls must be an array of strings",
+              "mediaUrls must be an array of strings or media objects",
             );
           }
           fields.push("media_urls = ?");

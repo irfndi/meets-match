@@ -35,7 +35,10 @@ async function enqueueNotification(
     await env.API_SERVICE.fetch(
       new Request("http://api/notifications", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(env.API_SECRET ? { "x-api-secret": env.API_SECRET } : {}),
+        },
         body: JSON.stringify({
           userId,
           type,
@@ -60,6 +63,9 @@ async function getInteractionStatus(
     const res = await env.API_SERVICE.fetch(
       new Request(`http://api/users/${userId}/interaction-status`, {
         method: "GET",
+        headers: env.API_SECRET
+          ? { "x-api-secret": env.API_SECRET }
+          : undefined,
       }),
     );
     if (!res.ok) return null;
@@ -89,7 +95,12 @@ export async function fetchUserLang(
 ): Promise<Language> {
   try {
     const res = await env.API_SERVICE.fetch(
-      new Request(`http://api/users/${userId}`, { method: "GET" }),
+      new Request(`http://api/users/${userId}`, {
+        method: "GET",
+        headers: env.API_SECRET
+          ? { "x-api-secret": env.API_SECRET }
+          : undefined,
+      }),
     );
     if (!res.ok) return "en";
     const data = (await res.json()) as { user?: Record<string, unknown> };
@@ -125,7 +136,12 @@ async function ensureDefaultPreferences(
   let freshPrefs: Record<string, unknown> = {};
   try {
     const res = await env.API_SERVICE.fetch(
-      new Request(`http://api/users/${userId}`, { method: "GET" }),
+      new Request(`http://api/users/${userId}`, {
+        method: "GET",
+        headers: env.API_SECRET
+          ? { "x-api-secret": env.API_SECRET }
+          : undefined,
+      }),
     );
     if (res.ok) {
       const data = (await res.json()) as { user?: Record<string, unknown> };
@@ -160,7 +176,10 @@ async function ensureDefaultPreferences(
         body: JSON.stringify({
           user: { preferences: defaults },
         }),
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(env.API_SECRET ? { "x-api-secret": env.API_SECRET } : {}),
+        },
       }),
     );
     if (!res.ok) {
@@ -188,6 +207,12 @@ async function fetchPotentialMatches(
     const res = await env.API_SERVICE.fetch(
       new Request(
         `http://api/users/${userId}/potential-matches?limit=${limit}`,
+        {
+          method: "GET",
+          headers: env.API_SECRET
+            ? { "x-api-secret": env.API_SECRET }
+            : undefined,
+        },
       ),
     );
     if (!res.ok) return { matches: [], relaxed: false };
@@ -804,7 +829,7 @@ async function handleMatchAction(
   const myName = ctx.from.first_name ?? "Someone";
 
   try {
-    const client = new ApiServiceClient(env.API_SERVICE);
+    const client = new ApiServiceClient(env.API_SERVICE, env.API_SECRET);
 
     // Fetch current user profile for media URL to include in notifications
     let myMediaUrl: string | undefined;
@@ -928,7 +953,10 @@ async function handleMatchAction(
       const dislikeRes = await env.API_SERVICE.fetch(
         new Request(`http://api/matches/${matchId}/dislike`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...(env.API_SECRET ? { "x-api-secret": env.API_SECRET } : {}),
+          },
           body: JSON.stringify({ userId }),
         }),
       );
@@ -939,7 +967,10 @@ async function handleMatchAction(
       await env.API_SERVICE.fetch(
         new Request(`http://api/matches/${matchId}/skip`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...(env.API_SECRET ? { "x-api-secret": env.API_SECRET } : {}),
+          },
           body: JSON.stringify({ userId }),
         }),
       );
@@ -1069,7 +1100,7 @@ async function handleSendDM(ctx: MyContext, env: Env, targetUserId: string) {
   const lang = await fetchUserLang(env, userId);
 
   try {
-    const client = new ApiServiceClient(env.API_SERVICE);
+    const client = new ApiServiceClient(env.API_SERVICE, env.API_SECRET);
     const dmStatus = await client.getDMStatus(userId);
 
     // Premium+: 100 DM bypass per day
@@ -1199,7 +1230,7 @@ export async function handleReportConversation(
   const targetUserId = String(state.data.targetUserId);
 
   try {
-    const client = new ApiServiceClient(env.API_SERVICE);
+    const client = new ApiServiceClient(env.API_SERVICE, env.API_SECRET);
     await client.reportUser(targetUserId, userId, text);
     await ctx.reply(t("reportSubmitted", lang), {
       reply_markup: getMainMenuKeyboard(),
@@ -1225,7 +1256,7 @@ async function handleRollback(ctx: MyContext, env: Env): Promise<void> {
 
   try {
     // Check tier
-    const client = new ApiServiceClient(env.API_SERVICE);
+    const client = new ApiServiceClient(env.API_SERVICE, env.API_SECRET);
     const userRes = await client.getUser({ userId });
     const tier = (userRes.user?.subscriptionTier as string) ?? "free";
 
@@ -1371,7 +1402,7 @@ export async function handleLikeMessageConversation(
   }
 
   try {
-    const client = new ApiServiceClient(env.API_SERVICE);
+    const client = new ApiServiceClient(env.API_SERVICE, env.API_SECRET);
 
     // Fetch current user profile for media URL to include in notifications
     let myMediaUrl: string | undefined;
@@ -1505,7 +1536,7 @@ export async function handleLikeMessageMedia(
   }
 
   try {
-    const client = new ApiServiceClient(env.API_SERVICE);
+    const client = new ApiServiceClient(env.API_SERVICE, env.API_SECRET);
 
     // Fetch current user profile for media URL to include in notifications
     let myMediaUrl: string | undefined;
@@ -1746,7 +1777,7 @@ export async function handleGiftPayment(
 
   try {
     // Get sender name
-    const client = new ApiServiceClient(env.API_SERVICE);
+    const client = new ApiServiceClient(env.API_SERVICE, env.API_SECRET);
     const senderRes = await client.getUser({ userId: senderId });
     const senderName = (senderRes.user?.displayName ?? "Someone") as string;
 
@@ -1919,7 +1950,7 @@ export async function handleGiftPremiumPayment(
   }
 
   try {
-    const client = new ApiServiceClient(env.API_SERVICE);
+    const client = new ApiServiceClient(env.API_SERVICE, env.API_SECRET);
 
     // Get buyer and target user names
     const [buyerRes, targetRes] = await Promise.all([
@@ -1982,7 +2013,7 @@ export async function handleGiftPremiumPayment(
   // Notify target user — isolated from activation so KV failures don't
   // contradict the success message already sent to the buyer.
   try {
-    const client = new ApiServiceClient(env.API_SERVICE);
+    const client = new ApiServiceClient(env.API_SERVICE, env.API_SECRET);
     const [buyerRes] = await Promise.all([client.getUser({ userId: buyerId })]);
     const buyerName = (buyerRes.user?.displayName ?? "Someone") as string;
     await addNotification(env, targetUserId, {
@@ -2160,7 +2191,7 @@ async function handleBlock(
   try {
     // Step 1: Call API first. If this fails, nothing else should happen.
     try {
-      const client = new ApiServiceClient(env.API_SERVICE);
+      const client = new ApiServiceClient(env.API_SERVICE, env.API_SECRET);
       await client.blockUser(userId, targetUserId);
     } catch (error) {
       log.error(

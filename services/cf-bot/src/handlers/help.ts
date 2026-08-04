@@ -12,7 +12,12 @@ export const helpCommand = async (ctx: MyContext, env: Env): Promise<void> => {
     if (ctx.from) {
       try {
         const res = await env.API_SERVICE.fetch(
-          new Request(`http://api/users/${ctx.from.id}`, { method: "GET" }),
+          new Request(`http://api/users/${ctx.from.id}`, {
+            method: "GET",
+            headers: env.API_SECRET
+              ? { "x-api-secret": env.API_SECRET }
+              : undefined,
+          }),
         );
         if (res.ok) {
           const data = (await res.json()) as { user?: { language?: string } };
@@ -47,7 +52,12 @@ export const aboutCommand = async (ctx: MyContext, env: Env): Promise<void> => {
     if (ctx.from) {
       try {
         const res = await env.API_SERVICE.fetch(
-          new Request(`http://api/users/${ctx.from.id}`, { method: "GET" }),
+          new Request(`http://api/users/${ctx.from.id}`, {
+            method: "GET",
+            headers: env.API_SECRET
+              ? { "x-api-secret": env.API_SECRET }
+              : undefined,
+          }),
         );
         if (res.ok) {
           const data = (await res.json()) as { user?: { language?: string } };

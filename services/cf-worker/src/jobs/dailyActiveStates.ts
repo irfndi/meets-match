@@ -16,13 +16,6 @@ const log = createLogger("cf-worker.dailyActiveStates");
 const BATCH_SIZE = 100;
 const ONE_DAY_MS = 86_400_000;
 
-/** Escape legacy Markdown special characters in a string. Matches the bot's
- *  escapeMd set (`_ * [ ] \` and backtick) so names are not double-escaped
- *  when the bot re-escapes the whole message with the same narrow set. */
-function escapeMarkdown(text: string): string {
-  return text.replace(/[_*\[\]`\\]/g, "\\$&");
-}
-
 const LIKES_REMINDER_VARIANTS: ReadonlyArray<(name: string) => string> = [
   (name) =>
     `${name}, people are waiting for you to like them back! 💕 Tap My Matches to see who.`,
@@ -81,6 +74,11 @@ async function fetchUserState(
     const res = await env.API_SERVICE.fetch(
       new Request(
         `http://api/users/${encodeURIComponent(userId)}/pending-likes`,
+        {
+          headers: env.API_SECRET
+            ? { "x-api-secret": env.API_SECRET }
+            : undefined,
+        },
       ),
     );
     if (!res.ok) return { hasPendingLikes: false };
@@ -207,7 +205,7 @@ function processDailyCandidate(
     const { type, message: variant } = pickType(state, dailySwipesUsed);
 
     const displayName = firstName
-      ? escapeMarkdown(firstName)
+      ? firstName
       : lang === "id"
         ? "Kamu"
         : "There";

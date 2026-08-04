@@ -206,12 +206,18 @@ function cleanUserMedia(
     if (row.media_urls) {
       try {
         const parsed = JSON.parse(row.media_urls) as unknown;
-        // Guard against JSON values that are valid JSON but not an array
-        // (e.g. "null", "{}", or a quoted string) so we never iterate over a
-        // non-iterable and crash the whole cleanup job.
-        mediaUrls = Array.isArray(parsed)
-          ? (parsed as Array<{ url: string; type: string }>)
-          : [];
+        if (!Array.isArray(parsed)) {
+          // Valid JSON but not an array (e.g. "null", "{}", or a quoted
+          // string) is invalid stored data — flag it for repair and skip the
+          // DB update / notification for this user.
+          log.error(
+            "cleanUserMedia",
+            "media_urls is not an array; skipping user",
+            { userId: row.id, mediaUrls: row.media_urls },
+          );
+          return false;
+        }
+        mediaUrls = parsed as Array<{ url: string; type: string }>;
       } catch (error) {
         log.error(
           "cleanUserMedia",
@@ -236,7 +242,12 @@ function cleanUserMedia(
                   new Request(`http://api/users/${row.id}/media`, {
                     method: "DELETE",
                     body: JSON.stringify({ url: media.url }),
-                    headers: { "Content-Type": "application/json" },
+                    headers: {
+                      "Content-Type": "application/json",
+                      ...(env.API_SECRET
+                        ? { "x-api-secret": env.API_SECRET }
+                        : {}),
+                    },
                   }),
                 ),
               catch: (error) => new Error(String(error)),
@@ -300,6 +311,17 @@ function cleanUserMedia(
         "DB update failed after R2 deletion",
         { userId: row.id },
         dbExit.left,
+      );
+      return false;
+    }
+
+    if ((dbExit.right.meta?.changes ?? 0) === 0) {
+      // Another request changed media_urls concurrently, so this row was
+      // already cleaned up. Skip the notification to avoid a duplicate.
+      log.info(
+        "cleanUserMedia",
+        "Skipping notification — media_urls changed concurrently",
+        { userId: row.id },
       );
       return false;
     }

@@ -1,4 +1,4 @@
-.PHONY: help dev test lint format deploy deploy-api deploy-bot deploy-worker clean clean-state db-check
+.PHONY: help dev test lint typecheck format deploy deploy-api deploy-bot deploy-worker clean clean-state db-check
 
 # Default target
 help:
@@ -9,6 +9,7 @@ help:
 	@echo "  make dev-worker     Run cf-worker Worker locally"
 	@echo "  make test           Run all tests (vitest)"
 	@echo "  make lint           Lint / format-check all packages (prettier)"
+	@echo "  make typecheck      Type-check the entire monorepo (tsc)"
 	@echo "  make format         Format all code (prettier)"
 	@echo "  make deploy         Deploy all 3 Workers"
 	@echo "  make deploy-api     Deploy cf-api Worker"
@@ -16,6 +17,7 @@ help:
 	@echo "  make deploy-worker  Deploy cf-worker Worker"
 	@echo "  make db-check       Check D1 local connectivity"
 	@echo "  make clean          Remove build artifacts and dependencies"
+	@echo "  make clean-state    Remove local Wrangler state"
 
 # --- Development ---
 
@@ -45,13 +47,23 @@ lint:
 	@echo "Linting all packages (prettier)..."
 	pnpm lint
 
+typecheck:
+	@echo "Type-checking the entire monorepo..."
+	pnpm typecheck:safe
+
 format:
 	@echo "Formatting code..."
 	pnpm format
 
 # --- Deploy ---
 
-deploy: test lint deploy-api deploy-bot deploy-worker
+# Run quality gates serially before deploying so `make -j deploy` cannot
+# start a deploy before checks finish.
+deploy:
+	@$(MAKE) test
+	@$(MAKE) lint
+	@$(MAKE) typecheck
+	@$(MAKE) deploy-api deploy-bot deploy-worker
 
 deploy-api:
 	@echo "Deploying cf-api Worker..."

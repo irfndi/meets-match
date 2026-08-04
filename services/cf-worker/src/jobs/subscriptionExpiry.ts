@@ -7,6 +7,9 @@ export async function runSubscriptionExpiryJob(env: Env): Promise<void> {
     const response = await env.API_SERVICE.fetch(
       new Request("http://api/cron/downgrade-expired-subscriptions", {
         method: "POST",
+        headers: env.API_SECRET
+          ? { "x-api-secret": env.API_SECRET }
+          : undefined,
       }),
     );
 

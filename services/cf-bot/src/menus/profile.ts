@@ -33,7 +33,12 @@ export async function handleProfileCallback(
 
   try {
     const userRes = await env.API_SERVICE.fetch(
-      new Request(`http://api/users/${userId}`, { method: "GET" }),
+      new Request(`http://api/users/${userId}`, {
+        method: "GET",
+        headers: env.API_SECRET
+          ? { "x-api-secret": env.API_SECRET }
+          : undefined,
+      }),
     );
     let lang: Language = "en";
     if (userRes.ok) {
@@ -129,7 +134,12 @@ export async function handleProfileCallback(
       }
       case "profile:media": {
         const mediaUserRes = await env.API_SERVICE.fetch(
-          new Request(`http://api/users/${userId}`, { method: "GET" }),
+          new Request(`http://api/users/${userId}`, {
+        method: "GET",
+        headers: env.API_SECRET
+          ? { "x-api-secret": env.API_SECRET }
+          : undefined,
+      }),
         );
         const mediaUserData = mediaUserRes.ok
           ? ((await mediaUserRes.json()) as { user?: UserProfile })
@@ -211,7 +221,12 @@ export async function handleMediaCallback(
   try {
     // Fetch user for language and current media
     const userRes = await env.API_SERVICE.fetch(
-      new Request(`http://api/users/${userId}`, { method: "GET" }),
+      new Request(`http://api/users/${userId}`, {
+        method: "GET",
+        headers: env.API_SECRET
+          ? { "x-api-secret": env.API_SECRET }
+          : undefined,
+      }),
     );
     let lang: Language = "en";
     let media: Array<{ url: string; type: string; uploadedAt: string }> = [];
@@ -248,7 +263,10 @@ export async function handleMediaCallback(
         new Request(`http://api/users/${userId}/media`, {
           method: "DELETE",
           body: JSON.stringify({ url: item.url }),
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...(env.API_SECRET ? { "x-api-secret": env.API_SECRET } : {}),
+          },
         }),
       );
 
@@ -261,7 +279,12 @@ export async function handleMediaCallback(
 
       // Refresh media list from API
       const freshRes = await env.API_SERVICE.fetch(
-        new Request(`http://api/users/${userId}`, { method: "GET" }),
+        new Request(`http://api/users/${userId}`, {
+        method: "GET",
+        headers: env.API_SECRET
+          ? { "x-api-secret": env.API_SECRET }
+          : undefined,
+      }),
       );
       let freshMedia: Array<{ url: string; type: string }> = [];
       if (freshRes.ok) {

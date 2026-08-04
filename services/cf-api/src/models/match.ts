@@ -111,6 +111,10 @@ export class MatchRepository {
         // Normalize pair ordering to prevent duplicates
         const [u1, u2] = [req.user1Id, req.user2Id].sort();
 
+        // TOCTOU: this pre-check is not atomic with the INSERT below — a
+        // block created between the check and the write could slip through.
+        // Folding the no-block condition into the SQL would require schema
+        // changes, so the pre-check is kept as the established pattern.
         if (this.blockRepo) {
           const blocked = await Effect.runPromise(
             this.blockRepo.isBlocked({ userId: u1, otherUserId: u2 }),
@@ -177,6 +181,9 @@ export class MatchRepository {
         const actionCol = isUser1 ? "user1_action" : "user2_action";
         const otherAction = isUser1 ? row.user2Action : row.user1Action;
 
+        // TOCTOU: pre-check is not atomic with the UPDATE below; a block
+        // created in between could slip through. Atomic SQL would require
+        // schema changes, so the pre-check is kept as the established pattern.
         if (this.blockRepo) {
           const otherId = isUser1 ? row.user2Id : row.user1Id;
           const blocked = await Effect.runPromise(
@@ -260,6 +267,9 @@ export class MatchRepository {
         }
         const isUser1 = row.user1Id === req.userId;
         const actionCol = isUser1 ? "user1_action" : "user2_action";
+        // TOCTOU: pre-check is not atomic with the UPDATE below; a block
+        // created in between could slip through. Atomic SQL would require
+        // schema changes, so the pre-check is kept as the established pattern.
         if (this.blockRepo) {
           const otherId = isUser1 ? row.user2Id : row.user1Id;
           const blocked = await Effect.runPromise(
@@ -314,6 +324,9 @@ export class MatchRepository {
         }
         const isUser1 = row.user1Id === req.userId;
         const actionCol = isUser1 ? "user1_action" : "user2_action";
+        // TOCTOU: pre-check is not atomic with the UPDATE below; a block
+        // created in between could slip through. Atomic SQL would require
+        // schema changes, so the pre-check is kept as the established pattern.
         if (this.blockRepo) {
           const otherId = isUser1 ? row.user2Id : row.user1Id;
           const blocked = await Effect.runPromise(
@@ -371,6 +384,9 @@ export class MatchRepository {
         const actionCol = isUser1 ? "user1_action" : "user2_action";
         const myAction = isUser1 ? row.user1Action : row.user2Action;
 
+        // TOCTOU: pre-check is not atomic with the UPDATE below; a block
+        // created in between could slip through. Atomic SQL would require
+        // schema changes, so the pre-check is kept as the established pattern.
         if (this.blockRepo) {
           const otherId = isUser1 ? row.user2Id : row.user1Id;
           const blocked = await Effect.runPromise(

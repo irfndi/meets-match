@@ -72,7 +72,7 @@ export interface Env {
   ERROR_ANALYTICS?: AnalyticsEngineDataset;
   BOT_TOKEN: string;
   TELEGRAM_WEBHOOK_SECRET?: string;
-  INTERNAL_SECRET?: string;
+  API_SECRET?: string;
   ENVIRONMENT?: string;
   ADMIN_CHAT_ID?: string;
 }
@@ -160,7 +160,7 @@ function createBot(env: Env): Bot<MyContext> {
     if (hasMutual || hasLikes) {
       let lang: Language = "en";
       try {
-        const client = new ApiServiceClient(env.API_SERVICE);
+        const client = new ApiServiceClient(env.API_SERVICE, env.API_SECRET);
         const userRes = await client.getUser({ userId });
         lang = (userRes.user?.language as Language) ?? "en";
       } catch {
@@ -469,7 +469,7 @@ function createBot(env: Env): Bot<MyContext> {
       }
 
       try {
-        const client = new ApiServiceClient(env.API_SERVICE);
+        const client = new ApiServiceClient(env.API_SERVICE, env.API_SECRET);
         const result = await client.purchaseDMCredits(userId, amount);
         const lang = await fetchUserLang(env, userId);
         await ctx.reply(
@@ -507,7 +507,7 @@ function createBot(env: Env): Bot<MyContext> {
       }
 
       try {
-        const client = new ApiServiceClient(env.API_SERVICE);
+        const client = new ApiServiceClient(env.API_SERVICE, env.API_SECRET);
         const expiresAt = new Date();
         expiresAt.setDate(expiresAt.getDate() + 30);
         await client.updateUser({
@@ -536,7 +536,7 @@ function createBot(env: Env): Bot<MyContext> {
     // Resolve user language early so it's available in catch blocks too
     let lang: Language = "en";
     try {
-      const client = new ApiServiceClient(env.API_SERVICE);
+      const client = new ApiServiceClient(env.API_SERVICE, env.API_SECRET);
       const userRes = await client.getUser({
         userId: String(ctx.from?.id ?? ""),
       });
@@ -782,12 +782,12 @@ export default {
 
     if (url.pathname === "/send-notification" && request.method === "POST") {
       // This route is only meant to be called by sibling workers (cf-api,
-      // cf-worker) via their service binding. Fail closed when an internal
-      // secret is configured: require the matching x-internal-secret header
-      // so the public URL cannot be used to spam/impersonate.
-      if (env.INTERNAL_SECRET) {
+      // cf-worker) via their service binding. Fail closed when the shared
+      // API_SECRET is configured: require the matching x-internal-secret
+      // header so the public URL cannot be used to spam/impersonate.
+      if (env.API_SECRET) {
         const internalSecret = request.headers.get("x-internal-secret");
-        if (internalSecret !== env.INTERNAL_SECRET) {
+        if (internalSecret !== env.API_SECRET) {
           return new Response(JSON.stringify({ error: "Unauthorized" }), {
             status: 401,
             headers: { "Content-Type": "application/json" },

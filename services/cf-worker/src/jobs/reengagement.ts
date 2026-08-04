@@ -94,13 +94,6 @@ function getMarketingCount(realCount: number): number {
   return Math.ceil(realCount / 100) * 100;
 }
 
-/** Escape legacy Markdown special characters in a string. Matches the bot's
- *  escapeMd set (`_ * [ ] \` and backtick) so names are not double-escaped
- *  when the bot re-escapes the whole message with the same narrow set. */
-function escapeMarkdown(text: string): string {
-  return text.replace(/[_*\[\]`\\]/g, "\\$&");
-}
-
 function extractCity(locationJson: string | null): string | null {
   if (!locationJson) return null;
   try {
@@ -458,9 +451,8 @@ function processCandidate(
     );
     const marketingCount = getMarketingCount(nearbyCount);
     const genderLabel = getGenderLabel(gender, parsedPrefs);
-    const safeName = escapeMarkdown(firstName);
+    const name = firstName;
     const city = extractCity(user.location ? String(user.location) : null);
-    const safeCity = city ? escapeMarkdown(city) : null;
 
     const variant = pickVariant(
       stage.stage === 1
@@ -470,10 +462,10 @@ function processCandidate(
           : LAST_CHANCE_VARIANTS,
     );
     const message = variant(
-      safeName,
+      name,
       marketingCount,
       genderLabel.plural,
-      safeCity,
+      city,
     );
 
     const notificationId = crypto.randomUUID();

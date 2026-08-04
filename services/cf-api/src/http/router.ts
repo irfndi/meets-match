@@ -411,7 +411,7 @@ export class ApiRouter {
     const matchId = path.replace("/matches/", "");
     const requesterId = searchParams.get("userId");
     if (!requesterId) {
-      return jsonResponse({ error: "user_id is required" }, 400);
+      return jsonResponse({ error: "userId is required" }, 400);
     }
     try {
       const result = await runEffect(

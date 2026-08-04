@@ -37,7 +37,10 @@ function generateIdempotencyKey(): string {
 }
 
 export class ApiServiceClient implements IUserService {
-  constructor(private readonly binding: Fetcher) {}
+  constructor(
+    private readonly binding: Fetcher,
+    private readonly apiSecret?: string,
+  ) {}
 
   private async request<T>(
     endpoint: string,
@@ -46,6 +49,9 @@ export class ApiServiceClient implements IUserService {
     const headers = new Headers(init.headers);
     if (init.idempotent) {
       headers.set("Idempotency-Key", generateIdempotencyKey());
+    }
+    if (this.apiSecret) {
+      headers.set("x-api-secret", this.apiSecret);
     }
 
     const response = await this.binding.fetch(

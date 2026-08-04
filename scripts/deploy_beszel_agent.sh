@@ -24,14 +24,18 @@ case "$BESZEL_PORT" in
         exit 1
         ;;
 esac
+if [ "$BESZEL_PORT" -lt 1 ] || [ "$BESZEL_PORT" -gt 65535 ]; then
+    echo "Error: BESZEL_PORT must be between 1 and 65535, got '$BESZEL_PORT'" >&2
+    exit 1
+fi
 
 # Validate the SSH public key: it must start with an ssh-* algorithm tag
 # and contain no characters that could break out of the remote shell
 # command (double quotes, dollar signs, backticks, backslashes, newlines).
 case "$KEY" in
-    ssh-rsa*|ssh-ed25519*|ssh-ecdsa*|ssh-dss*) ;;
+    ssh-rsa\ *|ssh-ed25519\ *|ssh-ecdsa\ *|ssh-dss\ *|ecdsa-sha2-nistp256\ *|ecdsa-sha2-nistp384\ *|ecdsa-sha2-nistp521\ *) ;;
     *)
-        echo "Error: KEY must be an SSH public key (ssh-rsa/ssh-ed25519/ssh-ecdsa/ssh-dss)" >&2
+        echo "Error: KEY must be an SSH public key (ssh-rsa/ssh-ed25519/ssh-ecdsa/ecdsa-sha2-*)" >&2
         exit 1
         ;;
 esac
@@ -39,7 +43,7 @@ esac
 # Reject any key containing a character that could break out of the
 # double-quoted remote command (double quote, dollar, backtick, backslash,
 # newline, or any other control character).
-if printf '%s' "$KEY" | grep -q '["`$\\[:cntrl:]]'; then
+if printf '%s' "$KEY" | grep -q '["`$\\]' || printf '%s' "$KEY" | grep -q '[[:cntrl:]]'; then
     echo "Error: KEY contains shell metacharacters (quotes, \$, backticks, backslashes, or newlines)" >&2
     exit 1
 fi

@@ -51,13 +51,6 @@ const STAGES: ReadonlyArray<IncompleteStage> = [
 
 const BATCH_SIZE = 100;
 
-/** Escape legacy Markdown special characters in a string. Matches the bot's
- *  escapeMd set (`_ * [ ] \` and backtick) so names are not double-escaped
- *  when the bot re-escapes the whole message with the same narrow set. */
-function escapeMarkdown(text: string): string {
-  return text.replace(/[_*\[\]`\\]/g, "\\$&");
-}
-
 const GENTLE_VARIANTS: ReadonlyArray<(name: string) => string> = [
   (name) =>
     `Hey ${name}! Your profile is almost ready. Finish it up to start finding matches! 💕`,
@@ -248,7 +241,7 @@ function processIncompleteCandidate(
     }
 
     const displayName = firstName
-      ? escapeMarkdown(firstName)
+      ? firstName
       : lang === "id"
         ? "Kamu"
         : "There";

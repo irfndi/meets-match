@@ -337,7 +337,12 @@ export async function checkMandatoryUpdates(
   const userId = String(ctx.from.id);
   try {
     const response = await env.API_SERVICE.fetch(
-      new Request(`http://api/users/${userId}`, { method: "GET" }),
+      new Request(`http://api/users/${userId}`, {
+        method: "GET",
+        headers: env.API_SECRET
+          ? { "x-api-secret": env.API_SECRET }
+          : undefined,
+      }),
     );
     if (!response.ok) return false;
     const data = (await response.json()) as { user?: UserProfile };
@@ -390,7 +395,10 @@ async function updateUser(
       new Request(`http://api/users/${userId}`, {
         method: "PUT",
         body: JSON.stringify({ user: updates }),
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(env.API_SECRET ? { "x-api-secret": env.API_SECRET } : {}),
+        },
       }),
     );
     return response.ok;
@@ -403,7 +411,12 @@ async function updateUser(
 async function getUser(env: Env, userId: string): Promise<UserProfile | null> {
   try {
     const response = await env.API_SERVICE.fetch(
-      new Request(`http://api/users/${userId}`, { method: "GET" }),
+      new Request(`http://api/users/${userId}`, {
+        method: "GET",
+        headers: env.API_SECRET
+          ? { "x-api-secret": env.API_SECRET }
+          : undefined,
+      }),
     );
     if (!response.ok) return null;
     const data = (await response.json()) as { user?: Record<string, unknown> };
@@ -630,7 +643,12 @@ async function reverseGeocodeLocation(
 ): Promise<{ city?: string; country?: string } | null> {
   try {
     const res = await env.API_SERVICE.fetch(
-      new Request(`http://api/geocode?lat=${latitude}&lon=${longitude}`),
+      new Request(`http://api/geocode?lat=${latitude}&lon=${longitude}`, {
+        method: "GET",
+        headers: env.API_SECRET
+          ? { "x-api-secret": env.API_SECRET }
+          : undefined,
+      }),
     );
     if (!res.ok) return null;
     const data = (await res.json()) as {
@@ -808,7 +826,10 @@ export async function handleMediaMessage(
       new Request(`http://api/users/${userId}/media`, {
         method: "POST",
         body: JSON.stringify({ url: publicUrl, type: fileType }),
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(env.API_SECRET ? { "x-api-secret": env.API_SECRET } : {}),
+        },
       }),
     );
 
@@ -1135,6 +1156,8 @@ async function handleLocationTextConversation(
       );
       const continued = await continueOnboarding(ctx, env, state.userId, lang);
       if (!continued) {
+        // city/country are escaped exactly once by t() (escapeMd) for
+        // parse_mode "Markdown" — do not pre-escape them here.
         await ctx.reply(
           t("conversationLocationSaved", lang, {
             city,
@@ -1172,6 +1195,7 @@ async function handleLocationTextConversation(
     );
     const continued = await continueOnboarding(ctx, env, state.userId, lang);
     if (!continued) {
+      // Same single-escaping rule as above: t() escapes the location values.
       await ctx.reply(
         t("conversationLocationVerified", lang, {
           city: normalizedCity,
@@ -1388,7 +1412,10 @@ export async function handleFeedbackConversation(
     const response = await env.API_SERVICE.fetch(
       new Request("http://api/feedback", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(env.API_SECRET ? { "x-api-secret": env.API_SECRET } : {}),
+        },
         body: JSON.stringify({ userId, message: text }),
       }),
     );

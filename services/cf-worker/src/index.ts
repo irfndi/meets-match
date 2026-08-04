@@ -14,7 +14,7 @@ export interface Env {
   NOTIFICATION_QUEUE: Queue;
   API_SERVICE: Fetcher;
   BOT_SERVICE: Fetcher;
-  INTERNAL_SECRET?: string;
+  API_SECRET?: string;
   REENGAGEMENT_SCHEDULE?: string;
   DLQ_PROCESSOR_SCHEDULE?: string;
   BIRTHDAY_SCHEDULE?: string;
@@ -69,7 +69,7 @@ export default {
     const consumer = new NotificationQueueConsumer(
       env.DB,
       env.BOT_SERVICE,
-      env.INTERNAL_SECRET,
+      env.API_SECRET,
     );
     await consumer.processBatch(batch);
   },

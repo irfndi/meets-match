@@ -198,7 +198,12 @@ export const settingsCallbacks = async (
   try {
     // Fetch user once for language and defaults
     const userRes = await env.API_SERVICE.fetch(
-      new Request(`http://api/users/${userId}`, { method: "GET" }),
+      new Request(`http://api/users/${userId}`, {
+        method: "GET",
+        headers: env.API_SECRET
+          ? { "x-api-secret": env.API_SECRET }
+          : undefined,
+      }),
     );
     let userData: Record<string, unknown> | undefined;
     let userAge = 25;
@@ -276,7 +281,12 @@ export async function handleAgeRangeCallback(
   try {
     // Fetch user age for dynamic grid
     const userRes = await env.API_SERVICE.fetch(
-      new Request(`http://api/users/${userId}`, { method: "GET" }),
+      new Request(`http://api/users/${userId}`, {
+        method: "GET",
+        headers: env.API_SECRET
+          ? { "x-api-secret": env.API_SECRET }
+          : undefined,
+      }),
     );
     let userAge = 25;
     let lang: Language = "en";
@@ -402,7 +412,12 @@ export async function handleDistanceCallback(
 
   try {
     const userRes = await env.API_SERVICE.fetch(
-      new Request(`http://api/users/${userId}`, { method: "GET" }),
+      new Request(`http://api/users/${userId}`, {
+        method: "GET",
+        headers: env.API_SECRET
+          ? { "x-api-secret": env.API_SECRET }
+          : undefined,
+      }),
     );
     let lang: Language = "en";
     let userData: { user?: Record<string, unknown> } | undefined;
@@ -473,7 +488,12 @@ export async function handleGenderPrefCallback(
 
   try {
     const userRes = await env.API_SERVICE.fetch(
-      new Request(`http://api/users/${userId}`, { method: "GET" }),
+      new Request(`http://api/users/${userId}`, {
+        method: "GET",
+        headers: env.API_SECRET
+          ? { "x-api-secret": env.API_SECRET }
+          : undefined,
+      }),
     );
     let lang: Language = "en";
     let existing: Record<string, unknown> | undefined;
@@ -555,7 +575,10 @@ export async function handleSettingsLanguageCallback(
     const res = await env.API_SERVICE.fetch(
       new Request(`http://api/users/${userId}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(env.API_SECRET ? { "x-api-secret": env.API_SECRET } : {}),
+        },
         body: JSON.stringify({ user: { language: selectedLang } }),
       }),
     );
@@ -598,7 +621,12 @@ async function fetchUserPreferences(
 ): Promise<Record<string, unknown> | null> {
   try {
     const response = await env.API_SERVICE.fetch(
-      new Request(`http://api/users/${userId}`, { method: "GET" }),
+      new Request(`http://api/users/${userId}`, {
+        method: "GET",
+        headers: env.API_SECRET
+          ? { "x-api-secret": env.API_SECRET }
+          : undefined,
+      }),
     );
     if (!response.ok) return null;
     const data = (await response.json()) as { user?: Record<string, unknown> };
@@ -626,7 +654,10 @@ async function updateUserPreferences(
       new Request(`http://api/users/${userId}`, {
         method: "PUT",
         body: JSON.stringify({ user: { preferences: prefs } }),
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(env.API_SECRET ? { "x-api-secret": env.API_SECRET } : {}),
+        },
       }),
     );
     return response.ok;
