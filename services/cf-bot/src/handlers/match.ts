@@ -1923,6 +1923,7 @@ export async function handleGiftPremiumPayment(
   ctx: MyContext,
   env: Env,
   payload: string,
+  chargeId?: string,
 ): Promise<void> {
   if (!ctx.from) return;
   const buyerId = String(ctx.from.id);
@@ -1984,6 +1985,17 @@ export async function handleGiftPremiumPayment(
     }
     const expiresAt = new Date(baseDate);
     expiresAt.setDate(expiresAt.getDate() + 30);
+
+    // Dedup by Telegram charge ID: a replayed successful_payment webhook
+    // must not extend the target's premium twice. Same key pattern as
+    // claimPaymentCharge in index.ts. If no chargeId is provided (legacy
+    // callers), skip dedup to preserve existing behavior.
+    if (chargeId) {
+      const chargeKey = `payment:charge:${targetUserId}:${chargeId}`;
+      const existing = await env.KV.get(chargeKey);
+      if (existing !== null) return; // already granted for this charge
+      await env.KV.put(chargeKey, "1", { expirationTtl: 30 * 86_400 });
+    }
 
     await client.updateUser({
       userId: targetUserId,

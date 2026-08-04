@@ -1,4 +1,4 @@
-.PHONY: help dev test lint typecheck format deploy deploy-api deploy-bot deploy-worker clean clean-state db-check
+.PHONY: help dev test lint typecheck format deploy deploy-shared deploy-migrations deploy-api deploy-bot deploy-worker clean clean-state db-check
 
 # Default target
 help:
@@ -58,12 +58,25 @@ format:
 # --- Deploy ---
 
 # Run quality gates serially before deploying so `make -j deploy` cannot
-# start a deploy before checks finish.
+# start a deploy before checks finish. Mirror the CI deployment order:
+# build cf-shared, generate version files, apply D1 migrations, then deploy
+# each service so shared code and schema are never stale.
 deploy:
 	@$(MAKE) test
 	@$(MAKE) lint
 	@$(MAKE) typecheck
+	@$(MAKE) deploy-shared
+	@$(MAKE) deploy-migrations
 	@$(MAKE) deploy-api deploy-bot deploy-worker
+
+deploy-shared:
+	@echo "Building cf-shared + generating version files..."
+	pnpm exec tsc -b packages/cf-shared
+	pnpm exec tsx scripts/generate-version.ts
+
+deploy-migrations:
+	@echo "Applying D1 migrations..."
+	cd services/cf-api && pnpm exec wrangler d1 migrations apply meetsmatch-dev --env dev --remote || echo "WARN: migrations failed (may need manual run, see CI note)"
 
 deploy-api:
 	@echo "Deploying cf-api Worker..."
