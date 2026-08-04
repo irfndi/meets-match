@@ -299,7 +299,10 @@ export async function handleErrorReportCallback(
       new Request("http://api/error-reports", {
         method: "POST",
         body: JSON.stringify(payload),
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(env.API_SECRET ? { "x-api-secret": env.API_SECRET } : {}),
+        },
       }),
     );
 

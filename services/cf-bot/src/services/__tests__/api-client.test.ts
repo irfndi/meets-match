@@ -513,24 +513,59 @@ describe("sendDM", () => {
 // --------------------------------------------------------------------------
 
 describe("purchaseDMCredits", () => {
-  const response = { dmCredits: 10 };
+  const response = { granted: true, dmCredits: 10 };
 
-  it("sends POST with amount in body and returns parsed JSON", async () => {
+  it("sends POST with amount and chargeId in body and returns parsed JSON", async () => {
     const { client, fetcher } = createClient(ok(response));
-    const result = await client.purchaseDMCredits("u1", 5);
+    const result = await client.purchaseDMCredits("u1", 5, "charge_1");
     expect(result).toEqual(response);
     const req = await getLastRequest(fetcher);
     expect(req.method).toBe("POST");
     expect(req.url).toBe("http://api/users/u1/purchase-dm-credits");
     expect(req.headers["content-type"]).toBe("application/json");
-    expect(req.body).toEqual({ amount: 5 });
+    expect(req.body).toEqual({ amount: 5, chargeId: "charge_1" });
   });
 
   it("throws Error with status code on failure", async () => {
     const { client } = createClient(err(400));
-    await expect(client.purchaseDMCredits("u1", 5)).rejects.toThrow(
+    await expect(client.purchaseDMCredits("u1", 5, "charge_1")).rejects.toThrow(
       "API 400 on /users/u1/purchase-dm-credits",
     );
+  });
+});
+
+// --------------------------------------------------------------------------
+// grantPremium
+// --------------------------------------------------------------------------
+
+describe("grantPremium", () => {
+  const response = { granted: true };
+
+  it("sends POST with tier, expiresAt and chargeId in body", async () => {
+    const { client, fetcher } = createClient(ok(response));
+    const result = await client.grantPremium(
+      "u1",
+      "premium",
+      "2026-09-01T00:00:00.000Z",
+      "charge_prem_1",
+    );
+    expect(result).toEqual(response);
+    const req = await getLastRequest(fetcher);
+    expect(req.method).toBe("POST");
+    expect(req.url).toBe("http://api/users/u1/grant-premium");
+    expect(req.headers["content-type"]).toBe("application/json");
+    expect(req.body).toEqual({
+      tier: "premium",
+      expiresAt: "2026-09-01T00:00:00.000Z",
+      chargeId: "charge_prem_1",
+    });
+  });
+
+  it("throws Error with status code on failure", async () => {
+    const { client } = createClient(err(500));
+    await expect(
+      client.grantPremium("u1", "premium", "2026-09-01", "charge_prem_2"),
+    ).rejects.toThrow("API 500 on /users/u1/grant-premium");
   });
 });
 

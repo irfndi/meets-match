@@ -51,10 +51,6 @@ const STAGES: ReadonlyArray<IncompleteStage> = [
 
 const BATCH_SIZE = 100;
 
-function escapeMarkdown(text: string): string {
-  return text.replace(/[_*\[\]`\.!#+\-={}|~()><\\]/g, "\\$&");
-}
-
 const GENTLE_VARIANTS: ReadonlyArray<(name: string) => string> = [
   (name) =>
     `Hey ${name}! Your profile is almost ready. Finish it up to start finding matches! 💕`,
@@ -142,6 +138,7 @@ export async function runIncompleteProfileReengagementJob(
              AND is_profile_complete = 0
              AND datetime(created_at) <= datetime(?)
              AND datetime(created_at) >= datetime(?)
+           ORDER BY created_at DESC
            LIMIT ?`,
         )
           .bind(
@@ -244,7 +241,7 @@ function processIncompleteCandidate(
     }
 
     const displayName = firstName
-      ? escapeMarkdown(firstName)
+      ? firstName
       : lang === "id"
         ? "Kamu"
         : "There";

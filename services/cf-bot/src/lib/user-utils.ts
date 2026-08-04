@@ -153,7 +153,7 @@ export async function ensureUserExists(
 ): Promise<{ user: UserProfile; created: boolean } | null> {
   if (!ctx.from) return null;
 
-  const client = new ApiServiceClient(env.API_SERVICE);
+  const client = new ApiServiceClient(env.API_SERVICE, env.API_SECRET);
   const userId = String(ctx.from.id);
 
   // Try to fetch existing user
@@ -203,7 +203,10 @@ export async function updateUserProfileComplete(
       new Request(`http://api/users/${userId}`, {
         method: "PUT",
         body: JSON.stringify({ user: { isProfileComplete: isComplete } }),
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(env.API_SECRET ? { "x-api-secret": env.API_SECRET } : {}),
+        },
       }),
     );
     return response.ok;

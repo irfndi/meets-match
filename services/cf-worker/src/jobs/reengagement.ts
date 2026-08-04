@@ -94,11 +94,6 @@ function getMarketingCount(realCount: number): number {
   return Math.ceil(realCount / 100) * 100;
 }
 
-/** Escape MarkdownV2 special characters in a string. */
-function escapeMarkdown(text: string): string {
-  return text.replace(/[_*\[\]`\.!#+\-={}|~()><\\]/g, "\\$&");
-}
-
 function extractCity(locationJson: string | null): string | null {
   if (!locationJson) return null;
   try {
@@ -351,6 +346,7 @@ export async function runReengagementJob(env: Env): Promise<void> {
              AND last_active IS NOT NULL
              AND datetime(last_active) <= datetime(?)
              AND datetime(last_active) >= datetime(?)
+           ORDER BY last_active DESC
            LIMIT ?`,
         )
           .bind(
@@ -455,9 +451,8 @@ function processCandidate(
     );
     const marketingCount = getMarketingCount(nearbyCount);
     const genderLabel = getGenderLabel(gender, parsedPrefs);
-    const safeName = escapeMarkdown(firstName);
+    const name = firstName;
     const city = extractCity(user.location ? String(user.location) : null);
-    const safeCity = city ? escapeMarkdown(city) : null;
 
     const variant = pickVariant(
       stage.stage === 1
@@ -466,12 +461,7 @@ function processCandidate(
           ? URGENT_VARIANTS
           : LAST_CHANCE_VARIANTS,
     );
-    const message = variant(
-      safeName,
-      marketingCount,
-      genderLabel.plural,
-      safeCity,
-    );
+    const message = variant(name, marketingCount, genderLabel.plural, city);
 
     const notificationId = crypto.randomUUID();
     const payload: Record<string, unknown> = {

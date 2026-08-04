@@ -21,7 +21,10 @@ import {
 } from "@meetsmatch/cf-shared";
 
 export class BotServiceClient implements INotificationService {
-  constructor(private readonly binding: Fetcher) {}
+  constructor(
+    private readonly binding: Fetcher,
+    private readonly internalSecret?: string,
+  ) {}
 
   async sendNotification(
     req: SendNotificationRequest,
@@ -30,7 +33,12 @@ export class BotServiceClient implements INotificationService {
       new Request("http://bot/send-notification", {
         method: "POST",
         body: JSON.stringify(req),
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(this.internalSecret
+            ? { "x-internal-secret": this.internalSecret }
+            : {}),
+        },
       }),
     );
 

@@ -52,6 +52,12 @@ async function fetchMutualMatches(env: Env, userId: string) {
     const res = await env.API_SERVICE.fetch(
       new Request(
         `http://api/matches?userId=${userId}&status=MATCHED&limit=50`,
+        {
+          method: "GET",
+          headers: env.API_SECRET
+            ? { "x-api-secret": env.API_SECRET }
+            : undefined,
+        },
       ),
     );
     if (!res.ok) return [];
@@ -73,7 +79,12 @@ async function fetchMutualMatches(env: Env, userId: string) {
 async function fetchPendingLikes(env: Env, userId: string) {
   try {
     const res = await env.API_SERVICE.fetch(
-      new Request(`http://api/users/${userId}/pending-likes`),
+      new Request(`http://api/users/${userId}/pending-likes`, {
+        method: "GET",
+        headers: env.API_SECRET
+          ? { "x-api-secret": env.API_SECRET }
+          : undefined,
+      }),
     );
     if (!res.ok) return [];
     const data = (await res.json()) as {
@@ -205,7 +216,7 @@ export const matchesCommand = async (
         const otherUserId =
           match.user1Id === userId ? match.user2Id : match.user1Id;
         try {
-          const client = new ApiServiceClient(env.API_SERVICE);
+          const client = new ApiServiceClient(env.API_SERVICE, env.API_SECRET);
           const userRes = await client.getUser({ userId: String(otherUserId) });
           const otherUser = userRes.user as Record<string, unknown>;
           const msg = formatMatch(otherUser, lang);
@@ -279,7 +290,7 @@ export const matchesCallbacks = async (
   // Resolve language
   let lang: Language = "en";
   try {
-    const client = new ApiServiceClient(env.API_SERVICE);
+    const client = new ApiServiceClient(env.API_SERVICE, env.API_SECRET);
     const userRes = await client.getUser({ userId });
     lang = (userRes.user?.language as Language) ?? "en";
   } catch {
@@ -309,7 +320,7 @@ export const matchesCallbacks = async (
         .catch(() => {});
 
       try {
-        const client = new ApiServiceClient(env.API_SERVICE);
+        const client = new ApiServiceClient(env.API_SERVICE, env.API_SECRET);
         const userRes = await client.getUser({ userId: targetUserId });
         const targetUser = userRes.user as Record<string, unknown>;
         const name = (targetUser.displayName ??

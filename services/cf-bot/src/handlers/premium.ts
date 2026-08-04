@@ -66,6 +66,9 @@ async function getInteractionStatus(
     const res = await env.API_SERVICE.fetch(
       new Request(`http://api/users/${userId}/interaction-status`, {
         method: "GET",
+        headers: env.API_SECRET
+          ? { "x-api-secret": env.API_SECRET }
+          : undefined,
       }),
     );
     if (!res.ok) return null;
@@ -93,7 +96,12 @@ async function getReferralInfo(
 ): Promise<{ code: string | null; count: number; bonus: number } | null> {
   try {
     const res = await env.API_SERVICE.fetch(
-      new Request(`http://api/users/${userId}`, { method: "GET" }),
+      new Request(`http://api/users/${userId}`, {
+        method: "GET",
+        headers: env.API_SECRET
+          ? { "x-api-secret": env.API_SECRET }
+          : undefined,
+      }),
     );
     if (!res.ok) return null;
     const data = (await res.json()) as { user?: Record<string, unknown> };
@@ -103,7 +111,7 @@ async function getReferralInfo(
     let code = (user.referralCode as string | undefined) ?? null;
     if (!code) {
       try {
-        const client = new ApiServiceClient(env.API_SERVICE);
+        const client = new ApiServiceClient(env.API_SERVICE, env.API_SECRET);
         const referralRes = await client.getReferralCode(userId);
         code = referralRes.code;
       } catch (error) {
@@ -166,7 +174,7 @@ export const premiumCommand = async (
     let expiryLine = "";
     if (tier !== "free") {
       try {
-        const client = new ApiServiceClient(env.API_SERVICE);
+        const client = new ApiServiceClient(env.API_SERVICE, env.API_SECRET);
         const userRes = await client.getUser({ userId });
         const expiresAt = userRes.user?.subscriptionExpiresAt;
         if (expiresAt) {

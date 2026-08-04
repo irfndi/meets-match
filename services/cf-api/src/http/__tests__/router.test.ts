@@ -227,7 +227,9 @@ describe("ApiRouter", () => {
     });
 
     it("routes GET /matches/:id", async () => {
-      const response = await router.route(new Request("http://api/matches/m1"));
+      const response = await router.route(
+        new Request("http://api/matches/m1?userId=u1"),
+      );
       expect(response.status).toBe(200);
     });
 
@@ -575,7 +577,7 @@ describe("ApiRouter", () => {
         MEDIA_BUCKET: createMockR2(),
       });
       const response = await router.route(
-        new Request("http://api/matches/m999"),
+        new Request("http://api/matches/m999?userId=u1"),
       );
       expect(response.status).toBe(404);
     });

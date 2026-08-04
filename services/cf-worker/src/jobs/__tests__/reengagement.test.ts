@@ -351,7 +351,7 @@ describe("runReengagementJob", () => {
     expect(countCall).toBeDefined();
   });
 
-  it("escapes special characters in names", async () => {
+  it("sends raw names without producer-side escaping", async () => {
     const env = createEnv({
       candidates: [
         {
@@ -372,7 +372,7 @@ describe("runReengagementJob", () => {
     const body = JSON.parse(sent);
     const payload = JSON.parse(body.payload);
     // GENTLE variant 0 starts with "Hey {name}, we miss you"
-    expect(payload.message).toContain("Alice\\*");
+    expect(payload.message).toContain("Alice*");
   });
 
   it("handles DB failure gracefully", async () => {
