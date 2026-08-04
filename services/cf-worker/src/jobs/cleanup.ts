@@ -205,10 +205,19 @@ function cleanUserMedia(
     let mediaUrls: Array<{ url: string; type: string }> = [];
     if (row.media_urls) {
       try {
-        mediaUrls = JSON.parse(row.media_urls) as Array<{
-          url: string;
-          type: string;
-        }>;
+        const parsed = JSON.parse(row.media_urls) as unknown;
+        if (!Array.isArray(parsed)) {
+          // Valid JSON but not an array (e.g. "null", "{}", or a quoted
+          // string) is invalid stored data — flag it for repair and skip the
+          // DB update / notification for this user.
+          log.error(
+            "cleanUserMedia",
+            "media_urls is not an array; skipping user",
+            { userId: row.id, mediaUrls: row.media_urls },
+          );
+          return false;
+        }
+        mediaUrls = parsed as Array<{ url: string; type: string }>;
       } catch (error) {
         log.error(
           "cleanUserMedia",
@@ -233,7 +242,12 @@ function cleanUserMedia(
                   new Request(`http://api/users/${row.id}/media`, {
                     method: "DELETE",
                     body: JSON.stringify({ url: media.url }),
-                    headers: { "Content-Type": "application/json" },
+                    headers: {
+                      "Content-Type": "application/json",
+                      ...(env.API_SECRET
+                        ? { "x-api-secret": env.API_SECRET }
+                        : {}),
+                    },
                   }),
                 ),
               catch: (error) => new Error(String(error)),
@@ -283,9 +297,9 @@ function cleanUserMedia(
           env.DB.prepare(
             `UPDATE users
              SET media_urls = '[]', media_deleted_at = CURRENT_TIMESTAMP, is_profile_complete = 0
-             WHERE id = ?`,
+             WHERE id = ? AND media_urls = ?`,
           )
-            .bind(row.id)
+            .bind(row.id, row.media_urls)
             .run(),
         catch: (error) => new Error(String(error)),
       }),
@@ -301,7 +315,18 @@ function cleanUserMedia(
       return false;
     }
 
-    yield* Effect.either(
+    if ((dbExit.right.meta?.changes ?? 0) === 0) {
+      // Another request changed media_urls concurrently, so this row was
+      // already cleaned up. Skip the notification to avoid a duplicate.
+      log.info(
+        "cleanUserMedia",
+        "Skipping notification — media_urls changed concurrently",
+        { userId: row.id },
+      );
+      return false;
+    }
+
+    const enqueueExit = yield* Effect.either(
       persistAndEnqueue(env.DB, producer, {
         notificationId: crypto.randomUUID(),
         userId: row.id,
@@ -312,6 +337,14 @@ function cleanUserMedia(
         }),
       }),
     );
+    if (enqueueExit._tag === "Left") {
+      log.error(
+        "cleanUserMedia",
+        "Failed to enqueue cleanup notification",
+        { userId: row.id },
+        enqueueExit.left,
+      );
+    }
     return true;
   });
 }

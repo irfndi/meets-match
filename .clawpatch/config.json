@@ -15,7 +15,7 @@
   ],
   "provider": {
     "name": "acpx",
-    "model": "kimi"
+    "model": "claude:claude-deepseek-v4-flash"
   },
   "commands": {
     "typecheck": "pnpm typecheck:safe",

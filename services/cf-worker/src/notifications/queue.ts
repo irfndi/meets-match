@@ -149,6 +149,7 @@ export class NotificationQueueConsumer {
   constructor(
     private readonly db: Db,
     private readonly botService: Fetcher,
+    private readonly internalSecret?: string,
   ) {}
 
   async processBatch(batch: MessageBatch): Promise<void> {
@@ -166,6 +167,7 @@ export class NotificationQueueConsumer {
   private processOne(message: Message): Effect.Effect<void, Error, never> {
     const db = this.db;
     const botService = this.botService;
+    const internalSecret = this.internalSecret;
     return Effect.gen(function* () {
       const raw = typeof message.body === "string" ? message.body : "{}";
       let body: NotificationMessage;
@@ -194,7 +196,13 @@ export class NotificationQueueConsumer {
       }
 
       const result = yield* Effect.either(
-        deliverOrMarkFailed(db, botService, body, notificationId),
+        deliverOrMarkFailed(
+          db,
+          botService,
+          internalSecret,
+          body,
+          notificationId,
+        ),
       );
 
       if (result._tag === "Right") {
@@ -213,6 +221,7 @@ export class NotificationQueueConsumer {
 function deliverOrMarkFailed(
   db: Db,
   botService: Fetcher,
+  internalSecret: string | undefined,
   body: NotificationMessage,
   notificationId: string,
 ): Effect.Effect<void, Error, never> {
@@ -250,7 +259,12 @@ function deliverOrMarkFailed(
               type: body.type,
               payload: body.payload,
             }),
-            headers: { "Content-Type": "application/json" },
+            headers: {
+              "Content-Type": "application/json",
+              ...(internalSecret
+                ? { "x-internal-secret": internalSecret }
+                : {}),
+            },
           }),
         ),
       catch: (error) => new Error(String(error)),

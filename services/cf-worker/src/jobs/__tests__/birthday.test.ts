@@ -152,7 +152,7 @@ describe("runBirthdayJob", () => {
     await expect(runBirthdayJob(env)).resolves.toBeUndefined();
   });
 
-  it("escapes special characters in names", async () => {
+  it("sends raw names without producer-side escaping", async () => {
     const env = createEnv({
       dbResults: [
         { id: "user_1", first_name: "Alice*Bob", birth_date: "1990-05-17" },
@@ -166,7 +166,7 @@ describe("runBirthdayJob", () => {
       .calls[0][0] as string;
     const body = JSON.parse(sent);
     const payload = JSON.parse(body.payload);
-    expect(payload.message).toContain("Alice\\*Bob");
+    expect(payload.message).toContain("Alice*Bob");
   });
 
   it("refreshes leap-day user ages on Feb 28 of non-leap years", async () => {

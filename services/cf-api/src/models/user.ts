@@ -8,7 +8,11 @@ import {
   type UpdateLastActiveRequest,
   type UpdateLastRemindedAtRequest,
 } from "@meetsmatch/cf-shared";
-import { NotFoundError, DatabaseError } from "@meetsmatch/cf-shared";
+import {
+  NotFoundError,
+  DatabaseError,
+  ValidationError,
+} from "@meetsmatch/cf-shared";
 
 export class UserRepository {
   constructor(private readonly db: D1Database) {}
@@ -96,10 +100,48 @@ export class UserRepository {
 
   update(
     req: UpdateUserRequest,
-  ): Effect.Effect<typeof User.Type, NotFoundError | DatabaseError, never> {
+  ): Effect.Effect<
+    typeof User.Type,
+    NotFoundError | DatabaseError | ValidationError,
+    never
+  > {
     return Effect.tryPromise({
       try: async () => {
         const user = req.user;
+        // Validate updateMask before building the Set: a non-array value
+        // (e.g. an object) would throw inside `new Set`, and a string would
+        // silently produce a per-character mask. Require an array of strings.
+        let maskSet: Set<string> | undefined;
+        if (req.updateMask !== undefined) {
+          if (
+            !Array.isArray(req.updateMask) ||
+            !req.updateMask.every((field) => typeof field === "string")
+          ) {
+            throw new ValidationError(
+              "updateMask",
+              "updateMask must be an array of strings",
+            );
+          }
+          maskSet = new Set(req.updateMask);
+        }
+
+        // Privileged fields are only writable when explicitly listed in
+        // updateMask (e.g. by an internal service or cron), never by a
+        // generic caller.
+        const PRIVILEGED_FIELDS = new Set([
+          "subscriptionTier",
+          "subscriptionExpiresAt",
+          "dmCredits",
+          "referralBonusSwipes",
+          "dailySwipesUsed",
+          "dailySwipesResetAt",
+        ]);
+        const shouldWrite = (field: string): boolean => {
+          if (PRIVILEGED_FIELDS.has(field)) {
+            return maskSet ? maskSet.has(field) : false;
+          }
+          return maskSet ? maskSet.has(field) : true;
+        };
 
         // Ensure user exists (upsert — create if missing)
         const existing = await this.db
@@ -116,23 +158,23 @@ export class UserRepository {
         const fields: string[] = [];
         const values: unknown[] = [];
 
-        if (user.username !== undefined) {
+        if (user.username !== undefined && shouldWrite("username")) {
           fields.push("username = ?");
           values.push(user.username);
         }
-        if (user.displayName !== undefined) {
+        if (user.displayName !== undefined && shouldWrite("displayName")) {
           fields.push("first_name = ?");
           values.push(user.displayName);
         }
-        if (user.lastName !== undefined) {
+        if (user.lastName !== undefined && shouldWrite("lastName")) {
           fields.push("last_name = ?");
           values.push(user.lastName);
         }
-        if (user.bio !== undefined) {
+        if (user.bio !== undefined && shouldWrite("bio")) {
           fields.push("bio = ?");
           values.push(user.bio);
         }
-        if (user.birthDate !== undefined) {
+        if (user.birthDate !== undefined && shouldWrite("birthDate")) {
           fields.push("birth_date = ?");
           values.push(user.birthDate);
           // Auto-compute age from birth_date
@@ -148,27 +190,45 @@ export class UserRepository {
             values.push(age);
           }
         }
-        if (user.age !== undefined) {
+        if (user.age !== undefined && shouldWrite("age")) {
           fields.push("age = ?");
           values.push(user.age);
         }
-        if (user.gender !== undefined) {
+        if (user.gender !== undefined && shouldWrite("gender")) {
           fields.push("gender = ?");
           values.push(user.gender);
         }
-        if (user.interests !== undefined) {
+        if (user.interests !== undefined && shouldWrite("interests")) {
           fields.push("interests = ?");
           values.push(JSON.stringify(user.interests));
         }
-        if (user.mediaUrls !== undefined) {
+        if (user.mediaUrls !== undefined && shouldWrite("mediaUrls")) {
+          // Accept the same shape addMedia stores / toUser returns
+          // ({ url, type, uploadedAt }) plus plain strings for backward
+          // compatibility with older stored data.
+          const isValidMediaItem = (item: unknown): boolean =>
+            typeof item === "string" ||
+            (typeof item === "object" &&
+              item !== null &&
+              typeof (item as { url?: unknown }).url === "string" &&
+              typeof (item as { type?: unknown }).type === "string");
+          if (
+            !Array.isArray(user.mediaUrls) ||
+            !user.mediaUrls.every((item) => isValidMediaItem(item))
+          ) {
+            throw new ValidationError(
+              "mediaUrls",
+              "mediaUrls must be an array of strings or media objects",
+            );
+          }
           fields.push("media_urls = ?");
           values.push(JSON.stringify(user.mediaUrls));
         }
-        if (user.location !== undefined) {
+        if (user.location !== undefined && shouldWrite("location")) {
           fields.push("location = ?");
           values.push(JSON.stringify(user.location));
         }
-        if (user.preferences !== undefined) {
+        if (user.preferences !== undefined && shouldWrite("preferences")) {
           const existingPrefsRow = await this.db
             .prepare("SELECT preferences FROM users WHERE id = ?")
             .bind(req.userId)
@@ -185,55 +245,73 @@ export class UserRepository {
           fields.push("preferences = ?");
           values.push(JSON.stringify(merged));
         }
-        if (user.isActive !== undefined) {
+        if (user.isActive !== undefined && shouldWrite("isActive")) {
           fields.push("is_active = ?");
           values.push(user.isActive ? 1 : 0);
         }
-        if (user.isSleeping !== undefined) {
+        if (user.isSleeping !== undefined && shouldWrite("isSleeping")) {
           fields.push("is_sleeping = ?");
           values.push(user.isSleeping ? 1 : 0);
         }
-        if (user.isProfileComplete !== undefined) {
+        if (
+          user.isProfileComplete !== undefined &&
+          shouldWrite("isProfileComplete")
+        ) {
           fields.push("is_profile_complete = ?");
           values.push(user.isProfileComplete ? 1 : 0);
         }
-        if (user.phoneNumber !== undefined) {
+        if (user.phoneNumber !== undefined && shouldWrite("phoneNumber")) {
           fields.push("phone_number = ?");
           values.push(user.phoneNumber);
         }
-        if (user.language !== undefined) {
+        if (user.language !== undefined && shouldWrite("language")) {
           fields.push("language = ?");
           values.push(user.language);
         }
-        if (user.subscriptionTier !== undefined) {
+        if (
+          user.subscriptionTier !== undefined &&
+          shouldWrite("subscriptionTier")
+        ) {
           fields.push("subscription_tier = ?");
           values.push(user.subscriptionTier);
         }
-        if (user.subscriptionExpiresAt !== undefined) {
+        if (
+          user.subscriptionExpiresAt !== undefined &&
+          shouldWrite("subscriptionExpiresAt")
+        ) {
           fields.push("subscription_expires_at = ?");
           values.push(user.subscriptionExpiresAt);
         }
-        if (user.dailySwipesUsed !== undefined) {
+        if (
+          user.dailySwipesUsed !== undefined &&
+          shouldWrite("dailySwipesUsed")
+        ) {
           fields.push("daily_swipes_used = ?");
           values.push(user.dailySwipesUsed);
         }
-        if (user.dailySwipesResetAt !== undefined) {
+        if (
+          user.dailySwipesResetAt !== undefined &&
+          shouldWrite("dailySwipesResetAt")
+        ) {
           fields.push("daily_swipes_reset_at = ?");
           values.push(user.dailySwipesResetAt);
         }
-        if (user.referralCode !== undefined) {
+        if (user.referralCode !== undefined && shouldWrite("referralCode")) {
           fields.push("referral_code = ?");
           values.push(user.referralCode);
         }
-        if (user.referredBy !== undefined) {
+        if (user.referredBy !== undefined && shouldWrite("referredBy")) {
           fields.push("referred_by = ?");
           values.push(user.referredBy);
         }
-        if (user.referralCount !== undefined) {
+        if (user.referralCount !== undefined && shouldWrite("referralCount")) {
           fields.push("referral_count = ?");
           values.push(user.referralCount);
         }
-        if (user.referralBonusSwipes !== undefined) {
+        if (
+          user.referralBonusSwipes !== undefined &&
+          shouldWrite("referralBonusSwipes")
+        ) {
           fields.push("referral_bonus_swipes = ?");
           values.push(user.referralBonusSwipes);
         }
@@ -263,6 +341,7 @@ export class UserRepository {
       },
       catch: (error) => {
         if (error instanceof NotFoundError) return error;
+        if (error instanceof ValidationError) return error;
         return new DatabaseError("update", error);
       },
     });
@@ -828,35 +907,119 @@ export class UserRepository {
     });
   }
 
-  addDMCredits(
+  /**
+   * Atomically claim a Telegram payment charge and add DM credits in a single
+   * D1 batch. The entitlement UPDATE is gated on the charge not yet being
+   * claimed (`NOT EXISTS`), and the claim is recorded with `INSERT OR IGNORE`
+   * on the unique `charge_id`, so a replayed `successful_payment` delivery
+   * with the same charge id cannot double-grant. Because both run in one
+   * transaction, a failed mutation rolls back the claim and a retry may
+   * re-attempt the grant. `granted` reflects whether the entitlement row was
+   * actually updated.
+   */
+  grantDMCredits(
     userId: string,
     amount: number,
+    chargeId: string,
   ): Effect.Effect<
-    { dmCredits: number },
+    { granted: boolean; dmCredits: number },
     DatabaseError | NotFoundError,
     never
   > {
     return Effect.tryPromise({
       try: async () => {
         const row = await this.db
-          .prepare("SELECT dm_credits FROM users WHERE id = ?")
+          .prepare("SELECT id FROM users WHERE id = ?")
           .bind(userId)
           .first();
         if (!row) throw new NotFoundError("User", userId);
-        const current = Number(
-          (row as Record<string, unknown>).dm_credits ?? 0,
+
+        const results = await this.db.batch([
+          this.db
+            .prepare(
+              `UPDATE users SET dm_credits = dm_credits + ?
+               WHERE id = ? AND NOT EXISTS (
+                 SELECT 1 FROM payment_charges WHERE charge_id = ?
+               )`,
+            )
+            .bind(amount, userId, chargeId),
+          this.db
+            .prepare(
+              `INSERT OR IGNORE INTO payment_charges (user_id, charge_id, kind)
+               VALUES (?, ?, 'dm_credit')`,
+            )
+            .bind(userId, chargeId),
+          this.db
+            .prepare("SELECT dm_credits FROM users WHERE id = ?")
+            .bind(userId),
+        ]);
+
+        const granted =
+          ((results[0] as { meta?: { changes?: number } }).meta?.changes ??
+            0) === 1;
+        const dmCredits = Number(
+          (results[2] as { results?: Array<Record<string, unknown>> })
+            .results?.[0]?.dm_credits ?? 0,
         );
-        const dmCredits = current + amount;
-        await this.db
-          .prepare("UPDATE users SET dm_credits = ? WHERE id = ?")
-          .bind(dmCredits, userId)
-          .run();
-        return { dmCredits };
+        return { granted, dmCredits };
       },
       catch: (error) =>
         error instanceof NotFoundError
           ? error
-          : new DatabaseError("addDMCredits", error),
+          : new DatabaseError("grantDMCredits", error),
+    });
+  }
+
+  /**
+   * Atomically claim a Telegram payment charge and apply a premium
+   * subscription in a single D1 batch, mirroring `grantDMCredits`. Used by
+   * both the self-purchase premium flow and the gift-premium flow (which
+   * passes `kind: 'gift_premium'`). A replayed webhook delivery with the same
+   * charge id is ignored (`granted: false`) without downgrading or extending
+   * the subscription twice. `granted` reflects whether the entitlement row was
+   * actually updated.
+   */
+  grantPremium(
+    userId: string,
+    tier: string,
+    expiresAt: string,
+    chargeId: string,
+    kind: "premium" | "gift_premium" = "premium",
+  ): Effect.Effect<{ granted: boolean }, DatabaseError | NotFoundError, never> {
+    return Effect.tryPromise({
+      try: async () => {
+        const row = await this.db
+          .prepare("SELECT id FROM users WHERE id = ?")
+          .bind(userId)
+          .first();
+        if (!row) throw new NotFoundError("User", userId);
+
+        const results = await this.db.batch([
+          this.db
+            .prepare(
+              `UPDATE users SET subscription_tier = ?, subscription_expires_at = ?
+               WHERE id = ? AND NOT EXISTS (
+                 SELECT 1 FROM payment_charges WHERE charge_id = ?
+               )`,
+            )
+            .bind(tier, expiresAt, userId, chargeId),
+          this.db
+            .prepare(
+              `INSERT OR IGNORE INTO payment_charges (user_id, charge_id, kind)
+               VALUES (?, ?, ?)`,
+            )
+            .bind(userId, chargeId, kind),
+        ]);
+
+        const granted =
+          ((results[0] as { meta?: { changes?: number } }).meta?.changes ??
+            0) === 1;
+        return { granted };
+      },
+      catch: (error) =>
+        error instanceof NotFoundError
+          ? error
+          : new DatabaseError("grantPremium", error),
     });
   }
 

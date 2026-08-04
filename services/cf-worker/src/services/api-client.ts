@@ -17,11 +17,21 @@ import {
 } from "@meetsmatch/cf-shared";
 
 export class ApiServiceClient implements IUserService {
-  constructor(private readonly binding: Fetcher) {}
+  constructor(
+    private readonly binding: Fetcher,
+    private readonly apiSecret?: string,
+  ) {}
+
+  private authHeaders(): Record<string, string> {
+    return this.apiSecret ? { "x-api-secret": this.apiSecret } : {};
+  }
 
   async getUser(req: GetUserRequest): Promise<GetUserResponse> {
     const response = await this.binding.fetch(
-      new Request(`http://api/users/${req.userId}`, { method: "GET" }),
+      new Request(`http://api/users/${req.userId}`, {
+        method: "GET",
+        headers: this.authHeaders(),
+      }),
     );
     if (!response.ok) throw new Error(`API error: ${response.status}`);
     return (await response.json()) as GetUserResponse;
@@ -39,6 +49,7 @@ export class ApiServiceClient implements IUserService {
     const response = await this.binding.fetch(
       new Request(`http://api/users/reengagement?${params.toString()}`, {
         method: "GET",
+        headers: this.authHeaders(),
       }),
     );
     if (!response.ok) throw new Error(`API error: ${response.status}`);
@@ -50,7 +61,7 @@ export class ApiServiceClient implements IUserService {
       new Request("http://api/users", {
         method: "POST",
         body: JSON.stringify(req),
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...this.authHeaders() },
       }),
     );
     if (!response.ok) throw new Error(`API error: ${response.status}`);
@@ -62,7 +73,7 @@ export class ApiServiceClient implements IUserService {
       new Request(`http://api/users/${req.userId}`, {
         method: "PUT",
         body: JSON.stringify(req),
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...this.authHeaders() },
       }),
     );
     if (!response.ok) throw new Error(`API error: ${response.status}`);
@@ -75,6 +86,7 @@ export class ApiServiceClient implements IUserService {
     const response = await this.binding.fetch(
       new Request(`http://api/users/${req.userId}/last-active`, {
         method: "POST",
+        headers: this.authHeaders(),
       }),
     );
     if (!response.ok) throw new Error(`API error: ${response.status}`);
@@ -87,6 +99,7 @@ export class ApiServiceClient implements IUserService {
     const response = await this.binding.fetch(
       new Request(`http://api/users/${req.userId}/last-reminded-at`, {
         method: "POST",
+        headers: this.authHeaders(),
       }),
     );
     if (!response.ok) throw new Error(`API error: ${response.status}`);

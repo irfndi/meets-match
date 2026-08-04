@@ -15,6 +15,8 @@ function createMockD1(
 ) {
   function makeStmt(sql: string, values: unknown[]) {
     return {
+      _sql: sql,
+      _values: values,
       run: vi.fn(async () => {
         const result = await handler(sql, values);
         return { success: result.success ?? true, meta: result.meta ?? {} };
@@ -33,7 +35,18 @@ function createMockD1(
 
   return {
     prepare: vi.fn((sql: string) => makeStmt(sql, [])),
-    batch: vi.fn(async () => ({ success: true })),
+    batch: vi.fn(async (statements: any[]) => {
+      const results = [];
+      for (const stmt of statements) {
+        const result = await handler(stmt._sql, stmt._values);
+        results.push({
+          success: result.success ?? true,
+          meta: result.meta ?? {},
+          results: result.results ?? [],
+        });
+      }
+      return results;
+    }),
   } as unknown as import("@cloudflare/workers-types").D1Database;
 }
 
@@ -372,7 +385,7 @@ describe("ApiRouter extended routes", () => {
       const response = await router.route(
         new Request("http://api/users/u1/purchase-dm-credits", {
           method: "POST",
-          body: JSON.stringify({ amount: 10 }),
+          body: JSON.stringify({ amount: 10, chargeId: "charge_1" }),
         }),
       );
       expect(response.status).toBe(200);
@@ -382,7 +395,7 @@ describe("ApiRouter extended routes", () => {
       const response = await router.route(
         new Request("http://api/users/u1/purchase-dm-credits", {
           method: "POST",
-          body: JSON.stringify({ amount: 0 }),
+          body: JSON.stringify({ amount: 0, chargeId: "charge_1" }),
         }),
       );
       expect(response.status).toBe(400);
@@ -392,7 +405,60 @@ describe("ApiRouter extended routes", () => {
       const response = await router.route(
         new Request("http://api/users/u1/purchase-dm-credits", {
           method: "POST",
-          body: JSON.stringify({ amount: "invalid" }),
+          body: JSON.stringify({ amount: "invalid", chargeId: "charge_1" }),
+        }),
+      );
+      expect(response.status).toBe(400);
+    });
+
+    it("rejects missing chargeId", async () => {
+      const response = await router.route(
+        new Request("http://api/users/u1/purchase-dm-credits", {
+          method: "POST",
+          body: JSON.stringify({ amount: 10 }),
+        }),
+      );
+      expect(response.status).toBe(400);
+    });
+  });
+
+  describe("POST /users/:id/grant-premium", () => {
+    it("grants premium with valid payload", async () => {
+      const response = await router.route(
+        new Request("http://api/users/u1/grant-premium", {
+          method: "POST",
+          body: JSON.stringify({
+            tier: "premium",
+            expiresAt: "2026-09-01T00:00:00.000Z",
+            chargeId: "charge_prem_1",
+          }),
+        }),
+      );
+      expect(response.status).toBe(200);
+    });
+
+    it("rejects invalid tier", async () => {
+      const response = await router.route(
+        new Request("http://api/users/u1/grant-premium", {
+          method: "POST",
+          body: JSON.stringify({
+            tier: "gold",
+            expiresAt: "2026-09-01T00:00:00.000Z",
+            chargeId: "charge_prem_2",
+          }),
+        }),
+      );
+      expect(response.status).toBe(400);
+    });
+
+    it("rejects missing chargeId", async () => {
+      const response = await router.route(
+        new Request("http://api/users/u1/grant-premium", {
+          method: "POST",
+          body: JSON.stringify({
+            tier: "premium",
+            expiresAt: "2026-09-01T00:00:00.000Z",
+          }),
         }),
       );
       expect(response.status).toBe(400);
@@ -446,7 +512,7 @@ describe("ApiRouter extended routes", () => {
         new Request("http://api/users/u1/media", {
           method: "POST",
           body: JSON.stringify({
-            url: "https://example.com/photo.jpg",
+            url: "https://pub-15c733bf3c734c6ea7fc120d0becd3ed.r2.dev/u1/photo.jpg",
             type: "image",
           }),
         }),

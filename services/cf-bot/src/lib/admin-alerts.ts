@@ -96,7 +96,10 @@ export async function queueAlert(
     await env.API_SERVICE.fetch(
       new Request("http://api/error-reports", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(env.API_SECRET ? { "x-api-secret": env.API_SECRET } : {}),
+        },
         body: JSON.stringify({
           reporterId: payload.userId,
           traceId: payload.traceId,
@@ -129,6 +132,9 @@ export async function sendAggregatedAlerts(env: Env): Promise<void> {
     const res = await env.API_SERVICE.fetch(
       new Request("http://api/error-reports/summary?hours=6", {
         method: "GET",
+        headers: env.API_SECRET
+          ? { "x-api-secret": env.API_SECRET }
+          : undefined,
       }),
     );
     if (!res.ok) {
@@ -172,6 +178,9 @@ export async function sendAggregatedAlerts(env: Env): Promise<void> {
     const markRes = await env.API_SERVICE.fetch(
       new Request("http://api/error-reports/mark-sent", {
         method: "POST",
+        headers: env.API_SECRET
+          ? { "x-api-secret": env.API_SECRET }
+          : undefined,
       }),
     );
     if (!markRes.ok) {

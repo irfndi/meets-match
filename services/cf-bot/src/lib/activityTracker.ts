@@ -25,7 +25,7 @@ export function activityTrackerMiddleware(env: Env): MiddlewareFn<MyContext> {
         lastActiveCache.set(userId, now);
 
         try {
-          const client = new ApiServiceClient(env.API_SERVICE);
+          const client = new ApiServiceClient(env.API_SERVICE, env.API_SECRET);
           await client.updateLastActive({ userId });
         } catch (error) {
           log.error(

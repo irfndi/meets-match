@@ -135,7 +135,7 @@ describe("runIncompleteProfileReengagementJob", () => {
     expect(payload.message).toContain("Kamu");
   });
 
-  it("escapes markdown in first name", async () => {
+  it("sends raw first name without producer-side escaping", async () => {
     const env = createEnv({
       candidates: [
         {
@@ -156,7 +156,7 @@ describe("runIncompleteProfileReengagementJob", () => {
       string,
       unknown
     >;
-    expect(payload.message).toContain("Test\\_Name");
+    expect(payload.message).toContain("Test_Name");
   });
 
   it("updates last_reengagement_at after successful send", async () => {

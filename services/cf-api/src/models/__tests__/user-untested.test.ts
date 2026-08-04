@@ -843,40 +843,123 @@ describe("UserRepository useDMCredit", () => {
 });
 
 // ---------------------------------------------------------------------------
-// addDMCredits
+// grantDMCredits (atomic charge claim + credit grant)
 // ---------------------------------------------------------------------------
 
-describe("UserRepository addDMCredits", () => {
-  it("adds credits to existing balance", async () => {
-    const db = createMockD1((sql) => {
-      if (sql.includes("SELECT dm_credits FROM users")) {
-        return { results: [{ dm_credits: 5 }] };
+describe("UserRepository grantDMCredits", () => {
+  function grantHandler(updateChanges: number) {
+    return createMockD1((sql) => {
+      if (sql.includes("SELECT id FROM users WHERE id =")) {
+        return { results: [{ id: "u1" }] };
       }
-      return { results: [], success: true };
+      if (sql.includes("UPDATE users SET dm_credits")) {
+        return { success: true, meta: { changes: updateChanges } };
+      }
+      if (sql.includes("INSERT OR IGNORE INTO payment_charges")) {
+        return { success: true, meta: { changes: 1 } };
+      }
+      if (sql.includes("SELECT dm_credits FROM users")) {
+        return { results: [{ dm_credits: 15 }] };
+      }
+      return { results: [], success: true, meta: {} };
     });
-    const repo = new UserRepository(db);
-    const result = await runEffect(repo.addDMCredits("u1", 10));
+  }
+
+  it("grants credits and returns granted true when charge newly claimed", async () => {
+    const repo = new UserRepository(grantHandler(1));
+    const result = await runEffect(repo.grantDMCredits("u1", 10, "charge_1"));
+    expect(result.granted).toBe(true);
     expect(result.dmCredits).toBe(15);
   });
 
-  it("adds credits from zero", async () => {
-    const db = createMockD1((sql) => {
-      if (sql.includes("SELECT dm_credits FROM users")) {
-        return { results: [{ dm_credits: 0 }] };
-      }
-      return { results: [], success: true };
-    });
-    const repo = new UserRepository(db);
-    const result = await runEffect(repo.addDMCredits("u1", 3));
-    expect(result.dmCredits).toBe(3);
+  it("returns granted false (no double grant) when charge already claimed", async () => {
+    const repo = new UserRepository(grantHandler(0));
+    const result = await runEffect(repo.grantDMCredits("u1", 10, "charge_1"));
+    expect(result.granted).toBe(false);
   });
 
   it("throws NotFoundError when user missing", async () => {
     const db = createMockD1(() => ({ results: [] }));
     const repo = new UserRepository(db);
-    await expect(runEffect(repo.addDMCredits("nope", 5))).rejects.toThrow(
-      NotFoundError,
+    await expect(
+      runEffect(repo.grantDMCredits("nope", 10, "charge_1")),
+    ).rejects.toThrow(NotFoundError);
+  });
+
+  it("is a single atomic batch (grant + claim + readback)", async () => {
+    const db = grantHandler(1);
+    const r = new UserRepository(db);
+    await runEffect(r.grantDMCredits("u1", 10, "charge_1"));
+    expect(db.batch).toHaveBeenCalledTimes(1);
+    const statements = (db.batch as any).mock.calls[0][0];
+    expect(statements.length).toBe(3);
+    expect(statements[0]._sql).toContain("UPDATE users SET dm_credits");
+    expect(statements[0]._sql).toContain("NOT EXISTS");
+    expect(statements[1]._sql).toContain(
+      "INSERT OR IGNORE INTO payment_charges",
     );
+    expect(statements[2]._sql).toContain("SELECT dm_credits");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// grantPremium (atomic charge claim + subscription grant)
+// ---------------------------------------------------------------------------
+
+describe("UserRepository grantPremium", () => {
+  function premiumHandler(updateChanges: number) {
+    return createMockD1((sql) => {
+      if (sql.includes("SELECT id FROM users WHERE id =")) {
+        return { results: [{ id: "u1" }] };
+      }
+      if (sql.includes("UPDATE users SET subscription_tier")) {
+        return { success: true, meta: { changes: updateChanges } };
+      }
+      if (sql.includes("INSERT OR IGNORE INTO payment_charges")) {
+        return { success: true, meta: { changes: 1 } };
+      }
+      return { results: [], success: true, meta: {} };
+    });
+  }
+
+  it("grants premium and returns granted true when charge newly claimed", async () => {
+    const repo = new UserRepository(premiumHandler(1));
+    const result = await runEffect(
+      repo.grantPremium("u1", "premium", "2026-09-01T00:00:00.000Z", "chg_p"),
+    );
+    expect(result.granted).toBe(true);
+  });
+
+  it("returns granted false (no double grant) when charge already claimed", async () => {
+    const repo = new UserRepository(premiumHandler(0));
+    const result = await runEffect(
+      repo.grantPremium("u1", "premium", "2026-09-01T00:00:00.000Z", "chg_p"),
+    );
+    expect(result.granted).toBe(false);
+  });
+
+  it("records gift_premium kind for gift flow", async () => {
+    const db = premiumHandler(1);
+    const r = new UserRepository(db);
+    await runEffect(
+      r.grantPremium(
+        "u1",
+        "premium",
+        "2026-09-01T00:00:00.000Z",
+        "chg_gift",
+        "gift_premium",
+      ),
+    );
+    const statements = (db.batch as any).mock.calls[0][0];
+    expect(statements[1]._values).toContain("gift_premium");
+  });
+
+  it("throws NotFoundError when user missing", async () => {
+    const db = createMockD1(() => ({ results: [] }));
+    const repo = new UserRepository(db);
+    await expect(
+      runEffect(repo.grantPremium("nope", "premium", "2026-09-01", "chg_p")),
+    ).rejects.toThrow(NotFoundError);
   });
 });
 

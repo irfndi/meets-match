@@ -46,7 +46,10 @@ async function setUserLanguage(
     const res = await env.API_SERVICE.fetch(
       new Request(`http://api/users/${userId}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(env.API_SECRET ? { "x-api-secret": env.API_SECRET } : {}),
+        },
         body: JSON.stringify({ user: { language } }),
       }),
     );
@@ -94,7 +97,10 @@ export const startCommand = async (ctx: MyContext, env: Env): Promise<void> => {
       const applyRes = await env.API_SERVICE.fetch(
         new Request(`http://api/users/${ctx.from.id}/apply-referral`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...(env.API_SECRET ? { "x-api-secret": env.API_SECRET } : {}),
+          },
           body: JSON.stringify({ code }),
         }),
       );
@@ -170,7 +176,12 @@ export const languageCallback = async (
 
     // Fetch updated user profile to check completeness
     const userRes = await env.API_SERVICE.fetch(
-      new Request(`http://api/users/${userId}`, { method: "GET" }),
+      new Request(`http://api/users/${userId}`, {
+        method: "GET",
+        headers: env.API_SECRET
+          ? { "x-api-secret": env.API_SECRET }
+          : undefined,
+      }),
     );
     if (!userRes.ok) {
       log.warn(
