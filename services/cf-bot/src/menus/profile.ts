@@ -135,11 +135,11 @@ export async function handleProfileCallback(
       case "profile:media": {
         const mediaUserRes = await env.API_SERVICE.fetch(
           new Request(`http://api/users/${userId}`, {
-        method: "GET",
-        headers: env.API_SECRET
-          ? { "x-api-secret": env.API_SECRET }
-          : undefined,
-      }),
+            method: "GET",
+            headers: env.API_SECRET
+              ? { "x-api-secret": env.API_SECRET }
+              : undefined,
+          }),
         );
         const mediaUserData = mediaUserRes.ok
           ? ((await mediaUserRes.json()) as { user?: UserProfile })
@@ -280,11 +280,11 @@ export async function handleMediaCallback(
       // Refresh media list from API
       const freshRes = await env.API_SERVICE.fetch(
         new Request(`http://api/users/${userId}`, {
-        method: "GET",
-        headers: env.API_SECRET
-          ? { "x-api-secret": env.API_SECRET }
-          : undefined,
-      }),
+          method: "GET",
+          headers: env.API_SECRET
+            ? { "x-api-secret": env.API_SECRET }
+            : undefined,
+        }),
       );
       let freshMedia: Array<{ url: string; type: string }> = [];
       if (freshRes.ok) {

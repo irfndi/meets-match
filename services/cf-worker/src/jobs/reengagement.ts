@@ -461,12 +461,7 @@ function processCandidate(
           ? URGENT_VARIANTS
           : LAST_CHANCE_VARIANTS,
     );
-    const message = variant(
-      name,
-      marketingCount,
-      genderLabel.plural,
-      city,
-    );
+    const message = variant(name, marketingCount, genderLabel.plural, city);
 
     const notificationId = crypto.randomUUID();
     const payload: Record<string, unknown> = {
