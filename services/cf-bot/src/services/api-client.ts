@@ -216,14 +216,31 @@ export class ApiServiceClient implements IUserService {
   async purchaseDMCredits(
     userId: string,
     amount: number,
-  ): Promise<{ dmCredits: number }> {
-    return this.request<{ dmCredits: number }>(
+    chargeId: string,
+  ): Promise<{ granted: boolean; dmCredits: number }> {
+    return this.request<{ granted: boolean; dmCredits: number }>(
       `/users/${userId}/purchase-dm-credits`,
       {
         method: "POST",
-        body: JSON.stringify({ amount }),
+        body: JSON.stringify({ amount, chargeId }),
         headers: { "Content-Type": "application/json" },
         idempotent: true,
+      },
+    );
+  }
+
+  async grantPremium(
+    userId: string,
+    tier: string,
+    expiresAt: string,
+    chargeId: string,
+  ): Promise<{ granted: boolean }> {
+    return this.request<{ granted: boolean }>(
+      `/users/${userId}/grant-premium`,
+      {
+        method: "POST",
+        body: JSON.stringify({ tier, expiresAt, chargeId }),
+        headers: { "Content-Type": "application/json" },
       },
     );
   }

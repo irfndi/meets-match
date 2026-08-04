@@ -907,35 +907,113 @@ export class UserRepository {
     });
   }
 
-  addDMCredits(
+  /**
+   * Atomically claim a Telegram payment charge and add DM credits in a single
+   * D1 batch. `INSERT OR IGNORE` on `payment_charges.charge_id` makes the
+   * claim exclusive; the credit UPDATE is gated on `changes()` reporting the
+   * INSERT as the most recent statement, so a replayed `successful_payment`
+   * delivery with the same charge id cannot double-grant. Because both run in
+   * one transaction, a failed mutation rolls back the claim and a retry may
+   * re-attempt the grant.
+   */
+  grantDMCredits(
     userId: string,
     amount: number,
+    chargeId: string,
   ): Effect.Effect<
-    { dmCredits: number },
+    { granted: boolean; dmCredits: number },
     DatabaseError | NotFoundError,
     never
   > {
     return Effect.tryPromise({
       try: async () => {
         const row = await this.db
-          .prepare("SELECT dm_credits FROM users WHERE id = ?")
+          .prepare("SELECT id FROM users WHERE id = ?")
           .bind(userId)
           .first();
         if (!row) throw new NotFoundError("User", userId);
-        const current = Number(
-          (row as Record<string, unknown>).dm_credits ?? 0,
+
+        const results = await this.db.batch([
+          this.db
+            .prepare(
+              `INSERT OR IGNORE INTO payment_charges (user_id, charge_id, kind)
+               VALUES (?, ?, 'dm_credit')`,
+            )
+            .bind(userId, chargeId),
+          this.db
+            .prepare(
+              `UPDATE users SET dm_credits = dm_credits + ?
+               WHERE id = ? AND (SELECT changes()) = 1`,
+            )
+            .bind(amount, userId),
+          this.db
+            .prepare("SELECT dm_credits FROM users WHERE id = ?")
+            .bind(userId),
+        ]);
+
+        const claimInserted =
+          ((results[0] as { meta?: { changes?: number } }).meta?.changes ??
+            0) === 1;
+        const dmCredits = Number(
+          (results[2] as { results?: Array<Record<string, unknown>> })
+            .results?.[0]?.dm_credits ?? 0,
         );
-        const dmCredits = current + amount;
-        await this.db
-          .prepare("UPDATE users SET dm_credits = ? WHERE id = ?")
-          .bind(dmCredits, userId)
-          .run();
-        return { dmCredits };
+        return { granted: claimInserted, dmCredits };
       },
       catch: (error) =>
         error instanceof NotFoundError
           ? error
-          : new DatabaseError("addDMCredits", error),
+          : new DatabaseError("grantDMCredits", error),
+    });
+  }
+
+  /**
+   * Atomically claim a Telegram payment charge and apply a premium
+   * subscription in a single D1 batch, mirroring `grantDMCredits`. Used by
+   * both the self-purchase premium flow and the gift-premium flow (which
+   * passes `kind: 'gift_premium'`). A replayed webhook delivery with the same
+   * charge id is ignored (`granted: false`) without downgrading or extending
+   * the subscription twice.
+   */
+  grantPremium(
+    userId: string,
+    tier: string,
+    expiresAt: string,
+    chargeId: string,
+    kind: "premium" | "gift_premium" = "premium",
+  ): Effect.Effect<{ granted: boolean }, DatabaseError | NotFoundError, never> {
+    return Effect.tryPromise({
+      try: async () => {
+        const row = await this.db
+          .prepare("SELECT id FROM users WHERE id = ?")
+          .bind(userId)
+          .first();
+        if (!row) throw new NotFoundError("User", userId);
+
+        const results = await this.db.batch([
+          this.db
+            .prepare(
+              `INSERT OR IGNORE INTO payment_charges (user_id, charge_id, kind)
+               VALUES (?, ?, ?)`,
+            )
+            .bind(userId, chargeId, kind),
+          this.db
+            .prepare(
+              `UPDATE users SET subscription_tier = ?, subscription_expires_at = ?
+               WHERE id = ? AND (SELECT changes()) = 1`,
+            )
+            .bind(tier, expiresAt, userId),
+        ]);
+
+        const claimInserted =
+          ((results[0] as { meta?: { changes?: number } }).meta?.changes ??
+            0) === 1;
+        return { granted: claimInserted };
+      },
+      catch: (error) =>
+        error instanceof NotFoundError
+          ? error
+          : new DatabaseError("grantPremium", error),
     });
   }
 

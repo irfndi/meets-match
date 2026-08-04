@@ -136,24 +136,32 @@ describe("Gift Premium", () => {
             }),
             { status: 200 },
           ),
+        "/users/456/grant-premium": () =>
+          new Response(JSON.stringify({ granted: true }), { status: 200 }),
       });
 
-      await handleGiftPremiumPayment(ctx, env, "gift_premium_123_456_premium");
+      await handleGiftPremiumPayment(
+        ctx,
+        env,
+        "gift_premium_123_456_premium",
+        "charge_gp_1",
+      );
       expect(ctx.reply).toHaveBeenCalledWith(
         expect.stringContaining("gifted"),
         expect.anything(),
       );
 
-      // Verify the PUT request to update the target user
+      // Verify the POST to grant premium on the target user
       const requests = (env.API_SERVICE as any)._requests;
-      const putReq = requests.find(
-        (r: any) => r.url.includes("/users/456") && r.method === "PUT",
+      const grantReq = requests.find((r: any) =>
+        r.url.includes("/users/456/grant-premium"),
       );
-      expect(putReq).toBeDefined();
-      expect(putReq.body.user.subscriptionTier).toBe("premium");
-      expect(
-        new Date(putReq.body.user.subscriptionExpiresAt).getTime(),
-      ).toBeGreaterThan(Date.now());
+      expect(grantReq).toBeDefined();
+      expect(grantReq.body.tier).toBe("premium");
+      expect(grantReq.body.chargeId).toBe("charge_gp_1");
+      expect(new Date(grantReq.body.expiresAt).getTime()).toBeGreaterThan(
+        Date.now(),
+      );
     });
 
     it("should preserve higher tier and extend from current expiry", async () => {
@@ -178,33 +186,103 @@ describe("Gift Premium", () => {
             }),
             { status: 200 },
           ),
+        "/users/456/grant-premium": () =>
+          new Response(JSON.stringify({ granted: true }), { status: 200 }),
       });
 
-      await handleGiftPremiumPayment(ctx, env, "gift_premium_123_456_premium");
+      await handleGiftPremiumPayment(
+        ctx,
+        env,
+        "gift_premium_123_456_premium",
+        "charge_gp_2",
+      );
       expect(ctx.reply).toHaveBeenCalledWith(
         expect.stringContaining("gifted"),
         expect.anything(),
       );
 
       const requests = (env.API_SERVICE as any)._requests;
-      const putReq = requests.find(
-        (r: any) => r.url.includes("/users/456") && r.method === "PUT",
+      const grantReq = requests.find((r: any) =>
+        r.url.includes("/users/456/grant-premium"),
       );
-      expect(putReq).toBeDefined();
+      expect(grantReq).toBeDefined();
       // Should preserve premium_plus (higher tier)
-      expect(putReq.body.user.subscriptionTier).toBe("premium_plus");
+      expect(grantReq.body.tier).toBe("premium_plus");
       // Should extend from the future expiry date, not from now
-      const newExpiry = new Date(putReq.body.user.subscriptionExpiresAt);
+      const newExpiry = new Date(grantReq.body.expiresAt);
       expect(newExpiry.getTime()).toBeGreaterThan(futureDate.getTime());
     });
 
+    it("should skip when charge already granted (replay)", async () => {
+      env.API_SERVICE = createMockApiService({
+        "/users/123": () =>
+          new Response(
+            JSON.stringify({ user: { id: "123", displayName: "Buyer" } }),
+            { status: 200 },
+          ),
+        "/users/456": () =>
+          new Response(
+            JSON.stringify({
+              user: {
+                id: "456",
+                displayName: "Target",
+                subscriptionTier: "free",
+              },
+            }),
+            { status: 200 },
+          ),
+        "/users/456/grant-premium": () =>
+          new Response(JSON.stringify({ granted: false }), { status: 200 }),
+      });
+
+      await handleGiftPremiumPayment(
+        ctx,
+        env,
+        "gift_premium_123_456_premium",
+        "charge_gp_replay",
+      );
+      // Replay should not confirm to the buyer nor notify the target
+      expect(ctx.reply).not.toHaveBeenCalled();
+    });
+
     it("should ignore invalid payload", async () => {
-      await handleGiftPremiumPayment(ctx, env, "invalid");
+      await handleGiftPremiumPayment(ctx, env, "invalid", "charge_gp_x");
       expect(ctx.reply).not.toHaveBeenCalled();
     });
 
     it("should still fulfill gift when payer differs from payload buyer", async () => {
-      await handleGiftPremiumPayment(ctx, env, "gift_premium_999_456_premium");
+      env.API_SERVICE = createMockApiService({
+        "/users/123": () =>
+          new Response(
+            JSON.stringify({ user: { id: "123", displayName: "Buyer" } }),
+            { status: 200 },
+          ),
+        "/users/999": () =>
+          new Response(
+            JSON.stringify({ user: { id: "999", displayName: "Other" } }),
+            { status: 200 },
+          ),
+        "/users/456": () =>
+          new Response(
+            JSON.stringify({
+              user: {
+                id: "456",
+                displayName: "Target",
+                subscriptionTier: "free",
+              },
+            }),
+            { status: 200 },
+          ),
+        "/users/456/grant-premium": () =>
+          new Response(JSON.stringify({ granted: true }), { status: 200 }),
+      });
+
+      await handleGiftPremiumPayment(
+        ctx,
+        env,
+        "gift_premium_999_456_premium",
+        "charge_gp_3",
+      );
       expect(ctx.reply).toHaveBeenCalledWith(
         expect.stringContaining("Premium 👑"),
         expect.any(Object),

@@ -76,7 +76,7 @@ deploy-shared:
 
 deploy-migrations:
 	@echo "Applying D1 migrations..."
-	cd services/cf-api && pnpm exec wrangler d1 migrations apply meetsmatch-dev --env dev --remote || echo "WARN: migrations failed (may need manual run, see CI note)"
+	cd services/cf-api && pnpm exec wrangler d1 migrations apply meetsmatch-dev --env dev --remote
 
 deploy-api:
 	@echo "Deploying cf-api Worker..."

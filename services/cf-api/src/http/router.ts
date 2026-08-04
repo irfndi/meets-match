@@ -147,6 +147,10 @@ export class ApiRouter {
           method === "POST":
           return this.handlePurchaseDMCredits(url.pathname, request);
         case url.pathname.startsWith("/users/") &&
+          url.pathname.endsWith("/grant-premium") &&
+          method === "POST":
+          return this.handleGrantPremium(url.pathname, request);
+        case url.pathname.startsWith("/users/") &&
           url.pathname.endsWith("/media") &&
           method === "POST":
           return this.handleUploadMedia(url.pathname, request);
@@ -731,8 +735,12 @@ export class ApiRouter {
         );
       }
       const amount = Math.max(1, Math.min(100, amountRaw));
+      const chargeId = typeof body.chargeId === "string" ? body.chargeId : "";
+      if (!chargeId) {
+        return jsonResponse({ error: "chargeId is required" }, 400);
+      }
       const result = await runEffect(
-        this.userRepo.addDMCredits(userId, amount),
+        this.userRepo.grantDMCredits(userId, amount, chargeId),
       );
       return jsonResponse(result);
     } catch (error) {
@@ -740,6 +748,46 @@ export class ApiRouter {
         return jsonResponse({ error: error.message }, 404);
       log.error("purchaseDMCredits", "Handler failed", undefined, error);
       return jsonResponse({ error: "Failed to purchase DM credits" }, 500);
+    }
+  }
+
+  private async handleGrantPremium(
+    path: string,
+    request: Request,
+  ): Promise<Response> {
+    const userId = path.replace("/users/", "").replace("/grant-premium", "");
+    try {
+      const body = (await request.json()) as Record<string, unknown>;
+      const tier = typeof body.tier === "string" ? body.tier : "";
+      if (tier !== "premium" && tier !== "premium_plus") {
+        return jsonResponse(
+          { error: "tier must be premium or premium_plus" },
+          400,
+        );
+      }
+      const expiresAt = body.expiresAt;
+      if (
+        typeof expiresAt !== "string" ||
+        Number.isNaN(Date.parse(expiresAt))
+      ) {
+        return jsonResponse(
+          { error: "expiresAt must be a valid ISO date" },
+          400,
+        );
+      }
+      const chargeId = typeof body.chargeId === "string" ? body.chargeId : "";
+      if (!chargeId) {
+        return jsonResponse({ error: "chargeId is required" }, 400);
+      }
+      const result = await runEffect(
+        this.userRepo.grantPremium(userId, tier, expiresAt, chargeId),
+      );
+      return jsonResponse(result);
+    } catch (error) {
+      if (error instanceof NotFoundError)
+        return jsonResponse({ error: error.message }, 404);
+      log.error("grantPremium", "Handler failed", undefined, error);
+      return jsonResponse({ error: "Failed to grant premium" }, 500);
     }
   }
 

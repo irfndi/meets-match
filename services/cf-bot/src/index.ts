@@ -77,25 +77,6 @@ export interface Env {
   ADMIN_CHAT_ID?: string;
 }
 
-/**
- * Claim an external payment charge before granting entitlements so a replayed
- * successful_payment webhook delivery (Telegram retries on non-2xx) cannot
- * double-grant DM credits / premium. The charge ID is unique per Telegram
- * payment; storing it under a per-user KV key and skipping when present makes
- * the grant idempotent.
- */
-async function claimPaymentCharge(
-  env: Env,
-  userId: string,
-  chargeId: string,
-): Promise<boolean> {
-  const key = `payment:charge:${userId}:${chargeId}`;
-  const existing = await env.KV.get(key);
-  if (existing !== null) return false;
-  await env.KV.put(key, "1", { expirationTtl: 30 * 86_400 });
-  return true;
-}
-
 function createBot(env: Env): Bot<MyContext> {
   const bot = new Bot<MyContext>(env.BOT_TOKEN);
 
@@ -486,16 +467,15 @@ function createBot(env: Env): Bot<MyContext> {
         });
         return;
       }
-      // Deduplicate replayed successful_payment deliveries (Telegram retries
-      // webhooks on non-2xx) so the same charge cannot grant credits twice.
-      const chargeId = payment.telegram_payment_charge_id;
-      if (!chargeId || !(await claimPaymentCharge(env, userId, chargeId))) {
-        return;
-      }
 
       try {
         const client = new ApiServiceClient(env.API_SERVICE, env.API_SECRET);
-        const result = await client.purchaseDMCredits(userId, amount);
+        const result = await client.purchaseDMCredits(
+          userId,
+          amount,
+          payment.telegram_payment_charge_id,
+        );
+        if (!result.granted) return;
         const lang = await fetchUserLang(env, userId);
         await ctx.reply(
           t("dmPurchased", lang, {
@@ -535,25 +515,21 @@ function createBot(env: Env): Bot<MyContext> {
         });
         return;
       }
-      // Deduplicate replayed successful_payment deliveries so the same
-      // charge cannot activate premium twice.
-      const chargeId = payment.telegram_payment_charge_id;
-      if (!chargeId || !(await claimPaymentCharge(env, userId, chargeId))) {
-        return;
-      }
 
       try {
         const client = new ApiServiceClient(env.API_SERVICE, env.API_SECRET);
         const expiresAt = new Date();
         expiresAt.setDate(expiresAt.getDate() + 30);
-        await client.updateUser({
+        // grantPremium atomically claims the Telegram charge id and applies
+        // the subscription in one D1 batch, so a replayed delivery cannot
+        // activate premium twice (granted: false when already claimed).
+        const result = await client.grantPremium(
           userId,
-          user: {
-            id: userId,
-            subscriptionTier: tier,
-            subscriptionExpiresAt: expiresAt.toISOString(),
-          },
-        });
+          tier,
+          expiresAt.toISOString(),
+          payment.telegram_payment_charge_id,
+        );
+        if (!result.granted) return;
         const lang = await fetchUserLang(env, userId);
         await ctx.reply(
           t("premiumPurchased", lang, {

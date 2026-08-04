@@ -21,9 +21,20 @@ export function createMockD1(
 ) {
   const captured: Array<{ sql: string; values: unknown[] }> = [];
 
-  function makeStmt(sql: string, values: unknown[]) {
+  type Stmt = {
+    _sql: string;
+    _values: unknown[];
+    run: ReturnType<typeof vi.fn>;
+    first: ReturnType<typeof vi.fn>;
+    all: ReturnType<typeof vi.fn>;
+    bind: ReturnType<typeof vi.fn>;
+  };
+
+  function makeStmt(sql: string, values: unknown[]): Stmt {
     captured.push({ sql, values });
     return {
+      _sql: sql,
+      _values: values,
       run: vi.fn(async () => {
         const result = await handler(sql, values);
         return {
@@ -39,19 +50,24 @@ export function createMockD1(
         const result = await handler(sql, values);
         return { results: result.results ?? [] };
       }),
+      bind: vi.fn((...newValues: unknown[]) => makeStmt(sql, newValues)),
     };
   }
 
   const mockD1 = {
-    prepare: vi.fn((sql: string) => {
-      const stmt = makeStmt(sql, []);
-      // Support chaining without .bind()
-      (stmt as any).bind = vi.fn((...values: unknown[]) =>
-        makeStmt(sql, values),
-      );
-      return stmt;
+    prepare: vi.fn((sql: string) => makeStmt(sql, [])),
+    batch: vi.fn(async (statements: Stmt[]) => {
+      const results = [];
+      for (const stmt of statements) {
+        const result = await handler(stmt._sql, stmt._values);
+        results.push({
+          success: result.success ?? true,
+          meta: result.meta ?? {},
+          results: result.results ?? [],
+        });
+      }
+      return results;
     }),
-    batch: vi.fn(async () => ({ success: true })),
     _captured: captured,
   };
 
