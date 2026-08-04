@@ -1137,8 +1137,8 @@ async function handleLocationTextConversation(
       if (!continued) {
         await ctx.reply(
           t("conversationLocationSaved", lang, {
-            city: escapeMd(city),
-            country: escapeMd(country),
+            city,
+            country,
           }),
           { parse_mode: "Markdown", reply_markup: getMainMenuKeyboard() },
         );
@@ -1174,8 +1174,8 @@ async function handleLocationTextConversation(
     if (!continued) {
       await ctx.reply(
         t("conversationLocationVerified", lang, {
-          city: escapeMd(normalizedCity),
-          country: escapeMd(normalizedCountry),
+          city: normalizedCity,
+          country: normalizedCountry,
         }),
         { parse_mode: "Markdown", reply_markup: getMainMenuKeyboard() },
       );

@@ -205,10 +205,13 @@ function cleanUserMedia(
     let mediaUrls: Array<{ url: string; type: string }> = [];
     if (row.media_urls) {
       try {
-        mediaUrls = JSON.parse(row.media_urls) as Array<{
-          url: string;
-          type: string;
-        }>;
+        const parsed = JSON.parse(row.media_urls) as unknown;
+        // Guard against JSON values that are valid JSON but not an array
+        // (e.g. "null", "{}", or a quoted string) so we never iterate over a
+        // non-iterable and crash the whole cleanup job.
+        mediaUrls = Array.isArray(parsed)
+          ? (parsed as Array<{ url: string; type: string }>)
+          : [];
       } catch (error) {
         log.error(
           "cleanUserMedia",
@@ -283,9 +286,9 @@ function cleanUserMedia(
           env.DB.prepare(
             `UPDATE users
              SET media_urls = '[]', media_deleted_at = CURRENT_TIMESTAMP, is_profile_complete = 0
-             WHERE id = ?`,
+             WHERE id = ? AND media_urls = ?`,
           )
-            .bind(row.id)
+            .bind(row.id, row.media_urls)
             .run(),
         catch: (error) => new Error(String(error)),
       }),
@@ -301,7 +304,7 @@ function cleanUserMedia(
       return false;
     }
 
-    yield* Effect.either(
+    const enqueueExit = yield* Effect.either(
       persistAndEnqueue(env.DB, producer, {
         notificationId: crypto.randomUUID(),
         userId: row.id,
@@ -312,6 +315,14 @@ function cleanUserMedia(
         }),
       }),
     );
+    if (enqueueExit._tag === "Left") {
+      log.error(
+        "cleanUserMedia",
+        "Failed to enqueue cleanup notification",
+        { userId: row.id },
+        enqueueExit.left,
+      );
+    }
     return true;
   });
 }

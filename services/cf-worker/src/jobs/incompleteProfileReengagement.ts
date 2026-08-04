@@ -51,8 +51,11 @@ const STAGES: ReadonlyArray<IncompleteStage> = [
 
 const BATCH_SIZE = 100;
 
+/** Escape legacy Markdown special characters in a string. Matches the bot's
+ *  escapeMd set (`_ * [ ] \` and backtick) so names are not double-escaped
+ *  when the bot re-escapes the whole message with the same narrow set. */
 function escapeMarkdown(text: string): string {
-  return text.replace(/[_*\[\]`\.!#+\-={}|~()><\\]/g, "\\$&");
+  return text.replace(/[_*\[\]`\\]/g, "\\$&");
 }
 
 const GENTLE_VARIANTS: ReadonlyArray<(name: string) => string> = [
@@ -142,6 +145,7 @@ export async function runIncompleteProfileReengagementJob(
              AND is_profile_complete = 0
              AND datetime(created_at) <= datetime(?)
              AND datetime(created_at) >= datetime(?)
+           ORDER BY created_at DESC
            LIMIT ?`,
         )
           .bind(

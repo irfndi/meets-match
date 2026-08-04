@@ -45,12 +45,21 @@ export class MatchRepository {
 
   getById(
     req: GetMatchRequest,
+    requesterId?: string,
   ): Effect.Effect<typeof Match.Type, NotFoundError | DatabaseError, never> {
     return Effect.tryPromise({
       try: async () => {
+        let sql = "SELECT * FROM matches WHERE id = ?";
+        const values: unknown[] = [req.matchId];
+        // When a requester is known, restrict to matches they participate in
+        // to prevent IDOR reads of other users' matches.
+        if (requesterId) {
+          sql += " AND (user1_id = ? OR user2_id = ?)";
+          values.push(requesterId, requesterId);
+        }
         const result = await this.db
-          .prepare("SELECT * FROM matches WHERE id = ?")
-          .bind(req.matchId)
+          .prepare(sql)
+          .bind(...values)
           .first();
         if (!result) throw new NotFoundError("Match", req.matchId);
         return this.toMatch(result);
@@ -96,11 +105,23 @@ export class MatchRepository {
 
   create(
     req: CreateMatchRequest,
-  ): Effect.Effect<typeof Match.Type, DatabaseError, never> {
+  ): Effect.Effect<typeof Match.Type, DatabaseError | ValidationError, never> {
     return Effect.tryPromise({
       try: async () => {
         // Normalize pair ordering to prevent duplicates
         const [u1, u2] = [req.user1Id, req.user2Id].sort();
+
+        if (this.blockRepo) {
+          const blocked = await Effect.runPromise(
+            this.blockRepo.isBlocked({ userId: u1, otherUserId: u2 }),
+          );
+          if (blocked) {
+            throw new ValidationError(
+              "blocked",
+              "Cannot interact with a blocked user",
+            );
+          }
+        }
 
         // Check if match already exists
         const existing = await this.db
@@ -126,7 +147,10 @@ export class MatchRepository {
           status: "PENDING" as const,
         } as typeof Match.Type;
       },
-      catch: (error) => new DatabaseError("create", error),
+      catch: (error) =>
+        error instanceof ValidationError
+          ? error
+          : new DatabaseError("create", error),
     });
   }
 
@@ -152,6 +176,22 @@ export class MatchRepository {
         const isUser1 = row.user1Id === req.userId;
         const actionCol = isUser1 ? "user1_action" : "user2_action";
         const otherAction = isUser1 ? row.user2Action : row.user1Action;
+
+        if (this.blockRepo) {
+          const otherId = isUser1 ? row.user2Id : row.user1Id;
+          const blocked = await Effect.runPromise(
+            this.blockRepo.isBlocked({
+              userId: req.userId,
+              otherUserId: otherId,
+            }),
+          );
+          if (blocked) {
+            throw new ValidationError(
+              "blocked",
+              "Cannot interact with a blocked user",
+            );
+          }
+        }
 
         // Build update fields
         const updates: string[] = [`${actionCol} = 'like'`];
@@ -220,6 +260,21 @@ export class MatchRepository {
         }
         const isUser1 = row.user1Id === req.userId;
         const actionCol = isUser1 ? "user1_action" : "user2_action";
+        if (this.blockRepo) {
+          const otherId = isUser1 ? row.user2Id : row.user1Id;
+          const blocked = await Effect.runPromise(
+            this.blockRepo.isBlocked({
+              userId: req.userId,
+              otherUserId: otherId,
+            }),
+          );
+          if (blocked) {
+            throw new ValidationError(
+              "blocked",
+              "Cannot interact with a blocked user",
+            );
+          }
+        }
         await this.db
           .prepare(
             `UPDATE matches SET ${actionCol} = 'dislike', status = 'rejected', updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
@@ -259,6 +314,21 @@ export class MatchRepository {
         }
         const isUser1 = row.user1Id === req.userId;
         const actionCol = isUser1 ? "user1_action" : "user2_action";
+        if (this.blockRepo) {
+          const otherId = isUser1 ? row.user2Id : row.user1Id;
+          const blocked = await Effect.runPromise(
+            this.blockRepo.isBlocked({
+              userId: req.userId,
+              otherUserId: otherId,
+            }),
+          );
+          if (blocked) {
+            throw new ValidationError(
+              "blocked",
+              "Cannot interact with a blocked user",
+            );
+          }
+        }
         await this.db
           .prepare(
             `UPDATE matches SET ${actionCol} = 'skip', updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
@@ -300,6 +370,22 @@ export class MatchRepository {
         const isUser1 = row.user1Id === req.userId;
         const actionCol = isUser1 ? "user1_action" : "user2_action";
         const myAction = isUser1 ? row.user1Action : row.user2Action;
+
+        if (this.blockRepo) {
+          const otherId = isUser1 ? row.user2Id : row.user1Id;
+          const blocked = await Effect.runPromise(
+            this.blockRepo.isBlocked({
+              userId: req.userId,
+              otherUserId: otherId,
+            }),
+          );
+          if (blocked) {
+            throw new ValidationError(
+              "blocked",
+              "Cannot interact with a blocked user",
+            );
+          }
+        }
 
         // Only allow undo if there was a recent action (like, dislike, skip)
         if (!myAction || myAction === "NONE") {

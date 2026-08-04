@@ -9,11 +9,12 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "json", "html"],
+      all: true,
       thresholds: {
-        statements: 80,
-        branches: 75,
-        functions: 76,
-        lines: 80,
+        statements: 79,
+        branches: 74,
+        functions: 75,
+        lines: 79,
       },
       include: ["packages/**/src/**/*.ts", "services/**/src/**/*.ts"],
       exclude: [

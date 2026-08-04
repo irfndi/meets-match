@@ -1,4 +1,4 @@
-.PHONY: help dev test lint format deploy deploy-api deploy-bot deploy-worker db-check clean
+.PHONY: help dev test lint format deploy deploy-api deploy-bot deploy-worker clean clean-state db-check
 
 # Default target
 help:
@@ -8,7 +8,7 @@ help:
 	@echo "  make dev-bot        Run cf-bot Worker locally"
 	@echo "  make dev-worker     Run cf-worker Worker locally"
 	@echo "  make test           Run all tests (vitest)"
-	@echo "  make lint           Type-check all packages (tsc --build --force)"
+	@echo "  make lint           Lint / format-check all packages (prettier)"
 	@echo "  make format         Format all code (prettier)"
 	@echo "  make deploy         Deploy all 3 Workers"
 	@echo "  make deploy-api     Deploy cf-api Worker"
@@ -21,7 +21,7 @@ help:
 
 dev:
 	@echo "Starting all Workers in parallel..."
-	@pnpm -w dev:api & PID1=$$!; pnpm -w dev:bot & PID2=$$!; pnpm -w dev:worker & PID3=$$!; FAIL=0; wait $$PID1 || FAIL=1; wait $$PID2 || FAIL=1; wait $$PID3 || FAIL=1; exit $$FAIL
+	@pnpm -w dev:api & PID1=$$!; pnpm -w dev:bot & PID2=$$!; pnpm -w dev:worker & PID3=$$!; trap 'kill $$PID1 $$PID2 $$PID3 2>/dev/null' EXIT INT TERM; FAIL=0; wait $$PID1 || FAIL=1; wait $$PID2 || FAIL=1; wait $$PID3 || FAIL=1; exit $$FAIL
 
 dev-api:
 	@echo "Starting cf-api Worker..."
@@ -42,7 +42,7 @@ test:
 	pnpm test
 
 lint:
-	@echo "Type-checking all packages..."
+	@echo "Linting all packages (prettier)..."
 	pnpm lint
 
 format:
@@ -51,7 +51,7 @@ format:
 
 # --- Deploy ---
 
-deploy: deploy-api deploy-bot deploy-worker
+deploy: test lint deploy-api deploy-bot deploy-worker
 
 deploy-api:
 	@echo "Deploying cf-api Worker..."
@@ -75,5 +75,12 @@ db-check:
 
 clean:
 	@echo "Cleaning build artifacts..."
-	rm -rf .wrangler/ dist/ node_modules/ services/*/node_modules/ packages/*/node_modules/
+	rm -rf dist/ node_modules/ services/*/node_modules/ packages/*/node_modules/
 	@echo "Clean complete."
+
+# Remove local Wrangler state (D1/KV dev data) — separate from `clean` so
+# routine cleanup does not wipe local dev databases.
+clean-state:
+	@echo "Removing local Wrangler state (D1/KV)..."
+	rm -rf .wrangler/ services/*/.wrangler/
+	@echo "State clean complete."

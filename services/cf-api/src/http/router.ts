@@ -47,6 +47,7 @@ export interface ApiEnv {
   KV: KVNamespace;
   NOTIFICATION_QUEUE: Queue;
   MEDIA_BUCKET: R2Bucket;
+  API_SECRET?: string;
 }
 
 export class ApiRouter {
@@ -73,6 +74,18 @@ export class ApiRouter {
   async route(request: Request): Promise<Response> {
     const url = new URL(request.url);
     const method = request.method;
+
+    // This service is only consumed internally by cf-bot and cf-worker via
+    // Cloudflare Service Bindings. When an API_SECRET is configured
+    // (production), require the `x-api-secret` header to match it. When
+    // API_SECRET is not set (local dev / tests), requests are allowed through
+    // so unmodified service-binding callers keep working.
+    if (url.pathname !== "/health" && this.env.API_SECRET) {
+      const provided = request.headers.get("x-api-secret");
+      if (provided !== this.env.API_SECRET) {
+        return jsonResponse({ error: "unauthorized" }, 401);
+      }
+    }
 
     try {
       switch (true) {
@@ -178,7 +191,7 @@ export class ApiRouter {
         case url.pathname === "/matches" && method === "POST":
           return this.handleCreateMatch(request);
         case url.pathname.startsWith("/matches/") && method === "GET":
-          return this.handleGetMatch(url.pathname);
+          return this.handleGetMatch(url.pathname, url.searchParams);
         case url.pathname.startsWith("/matches/") && method === "POST":
           return this.handleMatchAction(url.pathname, request);
         case url.pathname === "/notifications" && method === "POST":
@@ -335,6 +348,8 @@ export class ApiRouter {
     } catch (error) {
       if (error instanceof NotFoundError)
         return jsonResponse({ error: error.message }, 404);
+      if (error instanceof ValidationError)
+        return jsonResponse({ error: error.message }, 400);
       log.error("updateUser", "Handler failed", undefined, error);
       return jsonResponse({ error: "Database error" }, 500);
     }
@@ -389,10 +404,19 @@ export class ApiRouter {
     }
   }
 
-  private async handleGetMatch(path: string): Promise<Response> {
+  private async handleGetMatch(
+    path: string,
+    searchParams: URLSearchParams,
+  ): Promise<Response> {
     const matchId = path.replace("/matches/", "");
+    const requesterId = searchParams.get("userId");
+    if (!requesterId) {
+      return jsonResponse({ error: "user_id is required" }, 400);
+    }
     try {
-      const result = await runEffect(this.matchRepo.getById({ matchId }));
+      const result = await runEffect(
+        this.matchRepo.getById({ matchId }, requesterId),
+      );
       return jsonResponse({ match: result });
     } catch (error) {
       if (error instanceof NotFoundError)
@@ -757,6 +781,20 @@ export class ApiRouter {
         if (fileType !== "image" && fileType !== "video") {
           return jsonResponse({ error: "type must be image or video" }, 400);
         }
+        // Validate the URL resolves to this user's own R2 key so a caller
+        // cannot register a URL pointing at another user's media.
+        const key = extractMediaKeyFromUrl(publicUrl);
+        if (!key || !key.startsWith(`${userId}/`)) {
+          return jsonResponse(
+            {
+              error: new ValidationError(
+                "url",
+                "URL must reference this user's own media",
+              ).message,
+            },
+            400,
+          );
+        }
         console.log(
           `[api:media] Registering pre-uploaded ${fileType} for user ${userId}: ${publicUrl}`,
         );
@@ -989,7 +1027,14 @@ export class ApiRouter {
   ): Promise<Response> {
     try {
       const hoursRaw = searchParams.get("hours");
-      const hours = hoursRaw ? Number(hoursRaw) : 6;
+      let hours = hoursRaw ? Number(hoursRaw) : 6;
+      if (!Number.isFinite(hours) || hours < 0) {
+        return jsonResponse(
+          { error: "hours must be a non-negative number" },
+          400,
+        );
+      }
+      hours = Math.min(hours, 24 * 365);
       const summary = await runEffect(
         this.errorReportRepo.getAlertSummary(hours),
       );

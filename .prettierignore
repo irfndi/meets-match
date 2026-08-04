@@ -6,9 +6,12 @@ node_modules/
 dist/
 build/
 *.tsbuildinfo
+.wrangler/
 
 # Cache directories
 .clawpatch/
+.deepsec/
+.omo/
 .venv/
 .mypy_cache/
 .ruff_cache/

@@ -72,6 +72,7 @@ export interface Env {
   ERROR_ANALYTICS?: AnalyticsEngineDataset;
   BOT_TOKEN: string;
   TELEGRAM_WEBHOOK_SECRET?: string;
+  INTERNAL_SECRET?: string;
   ENVIRONMENT?: string;
   ADMIN_CHAT_ID?: string;
 }
@@ -456,6 +457,16 @@ function createBot(env: Env): Bot<MyContext> {
       const userId = parts[2];
       const amount = Number(parts[3] ?? 1);
       if (!userId) return;
+      // The invoice payload embeds the intended recipient; only the payer
+      // themselves may buy credits for their own account. A forwarded invoice
+      // link paid by someone else must not land the credits.
+      if (String(ctx.from?.id) !== userId) {
+        console.warn("[payment] dm_credit payer mismatch; not granting", {
+          payer: ctx.from?.id,
+          payloadUserId: userId,
+        });
+        return;
+      }
 
       try {
         const client = new ApiServiceClient(env.API_SERVICE);
@@ -486,6 +497,14 @@ function createBot(env: Env): Bot<MyContext> {
       const tier = parts.slice(2).join("_");
       if (!userId || !tier) return;
       if (tier !== "premium" && tier !== "premium_plus") return;
+      // Only the payer themselves may activate premium for their account.
+      if (String(ctx.from?.id) !== userId) {
+        console.warn("[payment] premium payer mismatch; not granting", {
+          payer: ctx.from?.id,
+          payloadUserId: userId,
+        });
+        return;
+      }
 
       try {
         const client = new ApiServiceClient(env.API_SERVICE);
@@ -711,19 +730,30 @@ export default {
     }
 
     if (url.pathname === "/webhook") {
-      if (env.TELEGRAM_WEBHOOK_SECRET) {
-        const secret = request.headers.get("X-Telegram-Bot-Api-Secret-Token");
-        if (secret !== env.TELEGRAM_WEBHOOK_SECRET) {
-          return new Response(JSON.stringify({ error: "Unauthorized" }), {
-            status: 401,
-            headers: { "Content-Type": "application/json" },
-          });
-        }
-      }
-
       if (request.method !== "POST") {
         return new Response(JSON.stringify({ error: "Method Not Allowed" }), {
           status: 405,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      // Fail closed: the webhook only accepts updates when a secret is
+      // configured AND the request carries the matching token. Without a
+      // configured secret, forged updates would otherwise be processed as
+      // genuine Telegram traffic (payment bypass / impersonation).
+      if (!env.TELEGRAM_WEBHOOK_SECRET) {
+        return new Response(
+          JSON.stringify({ error: "Webhook secret not configured" }),
+          {
+            status: 403,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+      const secret = request.headers.get("X-Telegram-Bot-Api-Secret-Token");
+      if (secret !== env.TELEGRAM_WEBHOOK_SECRET) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
           headers: { "Content-Type": "application/json" },
         });
       }
@@ -751,6 +781,19 @@ export default {
     }
 
     if (url.pathname === "/send-notification" && request.method === "POST") {
+      // This route is only meant to be called by sibling workers (cf-api,
+      // cf-worker) via their service binding. Fail closed when an internal
+      // secret is configured: require the matching x-internal-secret header
+      // so the public URL cannot be used to spam/impersonate.
+      if (env.INTERNAL_SECRET) {
+        const internalSecret = request.headers.get("x-internal-secret");
+        if (internalSecret !== env.INTERNAL_SECRET) {
+          return new Response(JSON.stringify({ error: "Unauthorized" }), {
+            status: 401,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+      }
       try {
         const body = (await request.json()) as Record<string, unknown>;
         if (typeof body.userId !== "string" || typeof body.type !== "string") {
@@ -776,6 +819,11 @@ export default {
         let keyboard: import("grammy").InlineKeyboard | undefined;
 
         const otherUsername = payload.otherUsername as string | undefined;
+        const otherUsernameSafe =
+          typeof otherUsername === "string" &&
+          /^[a-zA-Z0-9_]{5,32}$/.test(otherUsername)
+            ? otherUsername
+            : undefined;
 
         function escapeMd(text: string): string {
           return text.replace(/[_*\[\]`\\]/g, "\\$&");
@@ -795,15 +843,15 @@ export default {
         } else if (type === "mutual_match") {
           const otherName = escapeMd(payload.otherDisplayName ?? "Someone");
           message = `🎉 *It's a Match!*\n\nYou and *${otherName}* have liked each other! 💕`;
-          if (otherUsername) {
-            message += `\n\n👉 [Start chatting](https://t.me/${otherUsername})`;
+          if (otherUsernameSafe) {
+            message += `\n\n👉 [Start chatting](https://t.me/${otherUsernameSafe})`;
           }
           keyboard = new InlineKeyboard()
             .text("💕 View Matches", "matches")
             .row();
         } else if (type === "gift") {
           const fromName = escapeMd(payload.fromDisplayName ?? "Someone");
-          const giftEmoji = payload.giftEmoji ?? "🎁";
+          const giftEmoji = escapeMd(String(payload.giftEmoji ?? "🎁"));
           const giftName = escapeMd(payload.giftName ?? "gift");
           message = `🎁 *New Gift!*\n\n${fromName} sent you a ${giftEmoji} *${giftName}*! 💕`;
         } else if (type === "gift_premium") {
@@ -830,7 +878,7 @@ export default {
         } else if (type === "REENGAGEMENT_URGENT") {
           message =
             escapeMd(payload.message as string) ||
-            `🔥 New ${payload.label ?? "people"} joined near you! Don't miss out.`;
+            `🔥 New ${escapeMd(String(payload.label ?? "people"))} joined near you! Don't miss out.`;
           keyboard = new InlineKeyboard()
             .text("🔥 See Who's New", "find_match")
             .row();
@@ -885,7 +933,7 @@ export default {
           // No keyboard — passive nudge.
         } else if (type === "CLEANUP_MEDIA_DELETED") {
           message =
-            payload.message ||
+            escapeMd(String(payload.message ?? "")) ||
             `📸 Your profile photos were removed after 30 days of inactivity. Upload new photos to start matching again!`;
           keyboard = new InlineKeyboard()
             .text("👤 Go to Profile", "profile:media")
@@ -893,13 +941,13 @@ export default {
         } else {
           message =
             escapeMd(payload.message as string) ||
-            `You have a new ${type} notification!`;
+            `You have a new ${escapeMd(String(type))} notification!`;
         }
 
         await bot.api.sendMessage(userId, message, {
           parse_mode: "Markdown",
           reply_markup: keyboard,
-          link_preview_options: otherUsername
+          link_preview_options: otherUsernameSafe
             ? { is_disabled: false }
             : undefined,
         });

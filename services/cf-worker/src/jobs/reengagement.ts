@@ -94,9 +94,11 @@ function getMarketingCount(realCount: number): number {
   return Math.ceil(realCount / 100) * 100;
 }
 
-/** Escape MarkdownV2 special characters in a string. */
+/** Escape legacy Markdown special characters in a string. Matches the bot's
+ *  escapeMd set (`_ * [ ] \` and backtick) so names are not double-escaped
+ *  when the bot re-escapes the whole message with the same narrow set. */
 function escapeMarkdown(text: string): string {
-  return text.replace(/[_*\[\]`\.!#+\-={}|~()><\\]/g, "\\$&");
+  return text.replace(/[_*\[\]`\\]/g, "\\$&");
 }
 
 function extractCity(locationJson: string | null): string | null {
@@ -351,6 +353,7 @@ export async function runReengagementJob(env: Env): Promise<void> {
              AND last_active IS NOT NULL
              AND datetime(last_active) <= datetime(?)
              AND datetime(last_active) >= datetime(?)
+           ORDER BY last_active DESC
            LIMIT ?`,
         )
           .bind(

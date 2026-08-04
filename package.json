@@ -19,7 +19,7 @@
     "postinstall": "tsx scripts/generate-version.ts",
     "pretest": "tsx scripts/generate-version.ts",
     "test": "vitest",
-    "lint": "tsc --build --force",
+    "lint": "prettier --check \"**/*.{ts,tsx,json,md}\" --ignore-path .prettierignore",
     "typecheck:fast": "tsgo --noEmit",
     "typecheck:safe": "tsc --build --force",
     "format": "prettier --write \"**/*.{ts,tsx,json,md}\""

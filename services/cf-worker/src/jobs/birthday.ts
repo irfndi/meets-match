@@ -8,8 +8,11 @@ import {
 
 const log = createLogger("cf-worker.birthday");
 
+/** Escape legacy Markdown special characters in a string. Matches the bot's
+ *  escapeMd set (`_ * [ ] \` and backtick) so names are not double-escaped
+ *  when the bot re-escapes the whole message with the same narrow set. */
 function escapeMd(text: string): string {
-  return text.replace(/[_*\[\]`\.!#+\-={}|~()><\\]/g, "\\$&");
+  return text.replace(/[_*\[\]`\\]/g, "\\$&");
 }
 
 const isLeapYear = (y: number) =>
@@ -186,7 +189,7 @@ function notifyMatches(
               userId: matchUserId,
               type: "BIRTHDAY",
               payload: JSON.stringify({
-                message: `🎂 *It's ${safeName}'s birthday today!*\n\nSend them a message and make their day special! 💕`,
+                message: `🎂 It's ${safeName}'s birthday today!\n\nSend them a message and make their day special! 💕`,
               }),
             }),
           );

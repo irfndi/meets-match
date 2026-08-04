@@ -8,7 +8,11 @@ import {
   type UpdateLastActiveRequest,
   type UpdateLastRemindedAtRequest,
 } from "@meetsmatch/cf-shared";
-import { NotFoundError, DatabaseError } from "@meetsmatch/cf-shared";
+import {
+  NotFoundError,
+  DatabaseError,
+  ValidationError,
+} from "@meetsmatch/cf-shared";
 
 export class UserRepository {
   constructor(private readonly db: D1Database) {}
@@ -96,10 +100,32 @@ export class UserRepository {
 
   update(
     req: UpdateUserRequest,
-  ): Effect.Effect<typeof User.Type, NotFoundError | DatabaseError, never> {
+  ): Effect.Effect<
+    typeof User.Type,
+    NotFoundError | DatabaseError | ValidationError,
+    never
+  > {
     return Effect.tryPromise({
       try: async () => {
         const user = req.user;
+        const maskSet = req.updateMask ? new Set(req.updateMask) : undefined;
+
+        // Privileged fields are only writable when explicitly listed in
+        // updateMask (e.g. by an internal service or cron), never by a
+        // generic caller.
+        const PRIVILEGED_FIELDS = new Set([
+          "subscriptionTier",
+          "subscriptionExpiresAt",
+          "dmCredits",
+          "referralBonusSwipes",
+          "dailySwipesUsed",
+        ]);
+        const shouldWrite = (field: string): boolean => {
+          if (PRIVILEGED_FIELDS.has(field)) {
+            return maskSet ? maskSet.has(field) : false;
+          }
+          return maskSet ? maskSet.has(field) : true;
+        };
 
         // Ensure user exists (upsert — create if missing)
         const existing = await this.db
@@ -116,23 +142,23 @@ export class UserRepository {
         const fields: string[] = [];
         const values: unknown[] = [];
 
-        if (user.username !== undefined) {
+        if (user.username !== undefined && shouldWrite("username")) {
           fields.push("username = ?");
           values.push(user.username);
         }
-        if (user.displayName !== undefined) {
+        if (user.displayName !== undefined && shouldWrite("displayName")) {
           fields.push("first_name = ?");
           values.push(user.displayName);
         }
-        if (user.lastName !== undefined) {
+        if (user.lastName !== undefined && shouldWrite("lastName")) {
           fields.push("last_name = ?");
           values.push(user.lastName);
         }
-        if (user.bio !== undefined) {
+        if (user.bio !== undefined && shouldWrite("bio")) {
           fields.push("bio = ?");
           values.push(user.bio);
         }
-        if (user.birthDate !== undefined) {
+        if (user.birthDate !== undefined && shouldWrite("birthDate")) {
           fields.push("birth_date = ?");
           values.push(user.birthDate);
           // Auto-compute age from birth_date
@@ -148,27 +174,36 @@ export class UserRepository {
             values.push(age);
           }
         }
-        if (user.age !== undefined) {
+        if (user.age !== undefined && shouldWrite("age")) {
           fields.push("age = ?");
           values.push(user.age);
         }
-        if (user.gender !== undefined) {
+        if (user.gender !== undefined && shouldWrite("gender")) {
           fields.push("gender = ?");
           values.push(user.gender);
         }
-        if (user.interests !== undefined) {
+        if (user.interests !== undefined && shouldWrite("interests")) {
           fields.push("interests = ?");
           values.push(JSON.stringify(user.interests));
         }
-        if (user.mediaUrls !== undefined) {
+        if (user.mediaUrls !== undefined && shouldWrite("mediaUrls")) {
+          if (
+            !Array.isArray(user.mediaUrls) ||
+            !user.mediaUrls.every((u) => typeof u === "string")
+          ) {
+            throw new ValidationError(
+              "mediaUrls",
+              "mediaUrls must be an array of strings",
+            );
+          }
           fields.push("media_urls = ?");
           values.push(JSON.stringify(user.mediaUrls));
         }
-        if (user.location !== undefined) {
+        if (user.location !== undefined && shouldWrite("location")) {
           fields.push("location = ?");
           values.push(JSON.stringify(user.location));
         }
-        if (user.preferences !== undefined) {
+        if (user.preferences !== undefined && shouldWrite("preferences")) {
           const existingPrefsRow = await this.db
             .prepare("SELECT preferences FROM users WHERE id = ?")
             .bind(req.userId)
@@ -185,55 +220,73 @@ export class UserRepository {
           fields.push("preferences = ?");
           values.push(JSON.stringify(merged));
         }
-        if (user.isActive !== undefined) {
+        if (user.isActive !== undefined && shouldWrite("isActive")) {
           fields.push("is_active = ?");
           values.push(user.isActive ? 1 : 0);
         }
-        if (user.isSleeping !== undefined) {
+        if (user.isSleeping !== undefined && shouldWrite("isSleeping")) {
           fields.push("is_sleeping = ?");
           values.push(user.isSleeping ? 1 : 0);
         }
-        if (user.isProfileComplete !== undefined) {
+        if (
+          user.isProfileComplete !== undefined &&
+          shouldWrite("isProfileComplete")
+        ) {
           fields.push("is_profile_complete = ?");
           values.push(user.isProfileComplete ? 1 : 0);
         }
-        if (user.phoneNumber !== undefined) {
+        if (user.phoneNumber !== undefined && shouldWrite("phoneNumber")) {
           fields.push("phone_number = ?");
           values.push(user.phoneNumber);
         }
-        if (user.language !== undefined) {
+        if (user.language !== undefined && shouldWrite("language")) {
           fields.push("language = ?");
           values.push(user.language);
         }
-        if (user.subscriptionTier !== undefined) {
+        if (
+          user.subscriptionTier !== undefined &&
+          shouldWrite("subscriptionTier")
+        ) {
           fields.push("subscription_tier = ?");
           values.push(user.subscriptionTier);
         }
-        if (user.subscriptionExpiresAt !== undefined) {
+        if (
+          user.subscriptionExpiresAt !== undefined &&
+          shouldWrite("subscriptionExpiresAt")
+        ) {
           fields.push("subscription_expires_at = ?");
           values.push(user.subscriptionExpiresAt);
         }
-        if (user.dailySwipesUsed !== undefined) {
+        if (
+          user.dailySwipesUsed !== undefined &&
+          shouldWrite("dailySwipesUsed")
+        ) {
           fields.push("daily_swipes_used = ?");
           values.push(user.dailySwipesUsed);
         }
-        if (user.dailySwipesResetAt !== undefined) {
+        if (
+          user.dailySwipesResetAt !== undefined &&
+          shouldWrite("dailySwipesResetAt")
+        ) {
           fields.push("daily_swipes_reset_at = ?");
           values.push(user.dailySwipesResetAt);
         }
-        if (user.referralCode !== undefined) {
+        if (user.referralCode !== undefined && shouldWrite("referralCode")) {
           fields.push("referral_code = ?");
           values.push(user.referralCode);
         }
-        if (user.referredBy !== undefined) {
+        if (user.referredBy !== undefined && shouldWrite("referredBy")) {
           fields.push("referred_by = ?");
           values.push(user.referredBy);
         }
-        if (user.referralCount !== undefined) {
+        if (user.referralCount !== undefined && shouldWrite("referralCount")) {
           fields.push("referral_count = ?");
           values.push(user.referralCount);
         }
-        if (user.referralBonusSwipes !== undefined) {
+        if (
+          user.referralBonusSwipes !== undefined &&
+          shouldWrite("referralBonusSwipes")
+        ) {
           fields.push("referral_bonus_swipes = ?");
           values.push(user.referralBonusSwipes);
         }
@@ -263,6 +316,7 @@ export class UserRepository {
       },
       catch: (error) => {
         if (error instanceof NotFoundError) return error;
+        if (error instanceof ValidationError) return error;
         return new DatabaseError("update", error);
       },
     });

@@ -446,7 +446,7 @@ describe("ApiRouter extended routes", () => {
         new Request("http://api/users/u1/media", {
           method: "POST",
           body: JSON.stringify({
-            url: "https://example.com/photo.jpg",
+            url: "https://pub-15c733bf3c734c6ea7fc120d0becd3ed.r2.dev/u1/photo.jpg",
             type: "image",
           }),
         }),
