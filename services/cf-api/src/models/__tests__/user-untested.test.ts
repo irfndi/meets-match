@@ -847,15 +847,15 @@ describe("UserRepository useDMCredit", () => {
 // ---------------------------------------------------------------------------
 
 describe("UserRepository grantDMCredits", () => {
-  function grantHandler(insertChanges: number) {
+  function grantHandler(updateChanges: number) {
     return createMockD1((sql) => {
       if (sql.includes("SELECT id FROM users WHERE id =")) {
         return { results: [{ id: "u1" }] };
       }
-      if (sql.includes("INSERT OR IGNORE INTO payment_charges")) {
-        return { success: true, meta: { changes: insertChanges } };
-      }
       if (sql.includes("UPDATE users SET dm_credits")) {
+        return { success: true, meta: { changes: updateChanges } };
+      }
+      if (sql.includes("INSERT OR IGNORE INTO payment_charges")) {
         return { success: true, meta: { changes: 1 } };
       }
       if (sql.includes("SELECT dm_credits FROM users")) {
@@ -886,17 +886,18 @@ describe("UserRepository grantDMCredits", () => {
     ).rejects.toThrow(NotFoundError);
   });
 
-  it("is a single atomic batch (claim + grant + readback)", async () => {
+  it("is a single atomic batch (grant + claim + readback)", async () => {
     const db = grantHandler(1);
     const r = new UserRepository(db);
     await runEffect(r.grantDMCredits("u1", 10, "charge_1"));
     expect(db.batch).toHaveBeenCalledTimes(1);
     const statements = (db.batch as any).mock.calls[0][0];
     expect(statements.length).toBe(3);
-    expect(statements[0]._sql).toContain(
+    expect(statements[0]._sql).toContain("UPDATE users SET dm_credits");
+    expect(statements[0]._sql).toContain("NOT EXISTS");
+    expect(statements[1]._sql).toContain(
       "INSERT OR IGNORE INTO payment_charges",
     );
-    expect(statements[1]._sql).toContain("UPDATE users SET dm_credits");
     expect(statements[2]._sql).toContain("SELECT dm_credits");
   });
 });
@@ -906,15 +907,15 @@ describe("UserRepository grantDMCredits", () => {
 // ---------------------------------------------------------------------------
 
 describe("UserRepository grantPremium", () => {
-  function premiumHandler(insertChanges: number) {
+  function premiumHandler(updateChanges: number) {
     return createMockD1((sql) => {
       if (sql.includes("SELECT id FROM users WHERE id =")) {
         return { results: [{ id: "u1" }] };
       }
-      if (sql.includes("INSERT OR IGNORE INTO payment_charges")) {
-        return { success: true, meta: { changes: insertChanges } };
-      }
       if (sql.includes("UPDATE users SET subscription_tier")) {
+        return { success: true, meta: { changes: updateChanges } };
+      }
+      if (sql.includes("INSERT OR IGNORE INTO payment_charges")) {
         return { success: true, meta: { changes: 1 } };
       }
       return { results: [], success: true, meta: {} };
@@ -950,7 +951,7 @@ describe("UserRepository grantPremium", () => {
       ),
     );
     const statements = (db.batch as any).mock.calls[0][0];
-    expect(statements[0]._values).toContain("gift_premium");
+    expect(statements[1]._values).toContain("gift_premium");
   });
 
   it("throws NotFoundError when user missing", async () => {

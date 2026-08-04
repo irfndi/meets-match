@@ -909,12 +909,13 @@ export class UserRepository {
 
   /**
    * Atomically claim a Telegram payment charge and add DM credits in a single
-   * D1 batch. `INSERT OR IGNORE` on `payment_charges.charge_id` makes the
-   * claim exclusive; the credit UPDATE is gated on `changes()` reporting the
-   * INSERT as the most recent statement, so a replayed `successful_payment`
-   * delivery with the same charge id cannot double-grant. Because both run in
-   * one transaction, a failed mutation rolls back the claim and a retry may
-   * re-attempt the grant.
+   * D1 batch. The entitlement UPDATE is gated on the charge not yet being
+   * claimed (`NOT EXISTS`), and the claim is recorded with `INSERT OR IGNORE`
+   * on the unique `charge_id`, so a replayed `successful_payment` delivery
+   * with the same charge id cannot double-grant. Because both run in one
+   * transaction, a failed mutation rolls back the claim and a retry may
+   * re-attempt the grant. `granted` reflects whether the entitlement row was
+   * actually updated.
    */
   grantDMCredits(
     userId: string,
@@ -936,29 +937,31 @@ export class UserRepository {
         const results = await this.db.batch([
           this.db
             .prepare(
+              `UPDATE users SET dm_credits = dm_credits + ?
+               WHERE id = ? AND NOT EXISTS (
+                 SELECT 1 FROM payment_charges WHERE charge_id = ?
+               )`,
+            )
+            .bind(amount, userId, chargeId),
+          this.db
+            .prepare(
               `INSERT OR IGNORE INTO payment_charges (user_id, charge_id, kind)
                VALUES (?, ?, 'dm_credit')`,
             )
             .bind(userId, chargeId),
           this.db
-            .prepare(
-              `UPDATE users SET dm_credits = dm_credits + ?
-               WHERE id = ? AND (SELECT changes()) = 1`,
-            )
-            .bind(amount, userId),
-          this.db
             .prepare("SELECT dm_credits FROM users WHERE id = ?")
             .bind(userId),
         ]);
 
-        const claimInserted =
+        const granted =
           ((results[0] as { meta?: { changes?: number } }).meta?.changes ??
             0) === 1;
         const dmCredits = Number(
           (results[2] as { results?: Array<Record<string, unknown>> })
             .results?.[0]?.dm_credits ?? 0,
         );
-        return { granted: claimInserted, dmCredits };
+        return { granted, dmCredits };
       },
       catch: (error) =>
         error instanceof NotFoundError
@@ -973,7 +976,8 @@ export class UserRepository {
    * both the self-purchase premium flow and the gift-premium flow (which
    * passes `kind: 'gift_premium'`). A replayed webhook delivery with the same
    * charge id is ignored (`granted: false`) without downgrading or extending
-   * the subscription twice.
+   * the subscription twice. `granted` reflects whether the entitlement row was
+   * actually updated.
    */
   grantPremium(
     userId: string,
@@ -993,22 +997,24 @@ export class UserRepository {
         const results = await this.db.batch([
           this.db
             .prepare(
+              `UPDATE users SET subscription_tier = ?, subscription_expires_at = ?
+               WHERE id = ? AND NOT EXISTS (
+                 SELECT 1 FROM payment_charges WHERE charge_id = ?
+               )`,
+            )
+            .bind(tier, expiresAt, userId, chargeId),
+          this.db
+            .prepare(
               `INSERT OR IGNORE INTO payment_charges (user_id, charge_id, kind)
                VALUES (?, ?, ?)`,
             )
             .bind(userId, chargeId, kind),
-          this.db
-            .prepare(
-              `UPDATE users SET subscription_tier = ?, subscription_expires_at = ?
-               WHERE id = ? AND (SELECT changes()) = 1`,
-            )
-            .bind(tier, expiresAt, userId),
         ]);
 
-        const claimInserted =
+        const granted =
           ((results[0] as { meta?: { changes?: number } }).meta?.changes ??
             0) === 1;
-        return { granted: claimInserted };
+        return { granted };
       },
       catch: (error) =>
         error instanceof NotFoundError
