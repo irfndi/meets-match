@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   premiumCommand,
   referralCommand,
@@ -7,11 +7,67 @@ import {
 import type { MyContext } from "../../types.js";
 import { mockKV } from "./test-helpers.js";
 
+/** Single-assertion test helper for partial mocks. */
+interface TestCastInput {}
+
+function castForTest<T>(value: TestCastInput): T {
+  return value as T;
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // Mock response helpers
 // ────────────────────────────────────────────────────────────────────────────
 
-function ok(data: Record<string, unknown>): Response {
+interface MockApi {
+  createInvoiceLink: ReturnType<typeof vi.fn>;
+  getMe: ReturnType<typeof vi.fn>;
+}
+
+interface MockUser {
+  id: number;
+  first_name: string;
+  is_bot: boolean;
+  language_code?: string;
+}
+
+interface MockChat {
+  id: number;
+  type: string;
+}
+
+interface MockCallbackQuery {
+  id: string;
+  data: string | undefined;
+  from?: MockUser;
+  message?: { message_id: number; chat: MockChat; date: number };
+}
+
+interface MockMe {
+  username: string;
+  id: number;
+  is_bot: boolean;
+  first_name: string;
+}
+
+interface MockApiPayload {
+  user?: {
+    id: string;
+    displayName: string;
+    isProfileComplete: boolean;
+    phoneNumber: string;
+    subscriptionExpiresAt?: string;
+    referralCode?: string;
+    referralCount?: number;
+    referralBonusSwipes?: number;
+  };
+  tier?: string;
+  likesRemaining?: number;
+  likesTotal?: number;
+  dislikesRemaining?: number;
+  dislikesTotal?: number;
+}
+
+function ok(data: MockApiPayload): Response {
   return new Response(JSON.stringify(data), {
     status: 200,
     headers: { "Content-Type": "application/json" },
@@ -27,19 +83,18 @@ function err(status = 500): Response {
 // ────────────────────────────────────────────────────────────────────────────
 
 interface CtxOverrides {
-  from?: Record<string, unknown> | undefined;
+  from?: MockUser | undefined;
   reply?: ReturnType<typeof vi.fn>;
   answerCallbackQuery?: ReturnType<typeof vi.fn>;
   deleteMessage?: ReturnType<typeof vi.fn>;
-  api?: Record<string, unknown>;
-  me?: Record<string, unknown> | undefined;
-  callbackQuery?: Record<string, unknown> | undefined;
-  chat?: Record<string, unknown>;
-  [key: string]: unknown;
+  api?: Partial<MockApi>;
+  me?: MockMe | undefined;
+  callbackQuery?: MockCallbackQuery | undefined;
+  chat?: MockChat;
 }
 
 function mockCtx(overrides: CtxOverrides = {}): MyContext {
-  const defaults: Record<string, unknown> = {
+  const defaults = {
     reply: vi.fn().mockResolvedValue(undefined),
     answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
     deleteMessage: vi.fn().mockResolvedValue(undefined),
@@ -56,22 +111,25 @@ function mockCtx(overrides: CtxOverrides = {}): MyContext {
   // Deep-merge api so partial overrides don't wipe createInvoiceLink/getMe
   if (overrides.api) {
     merged.api = {
-      ...(defaults.api as Record<string, unknown>),
+      ...defaults.api,
       ...overrides.api,
     };
   }
-  return merged as unknown as MyContext;
+  return castForTest<MyContext>(merged);
 }
 
 // ────────────────────────────────────────────────────────────────────────────
 // API service mock factory (matches existing patterns)
 // ────────────────────────────────────────────────────────────────────────────
 
-function createMockApiService(responseMap: Record<string, () => Response>) {
+interface ResponseMap {
+  [key: string]: () => Response;
+}
+
+function createMockApiService(responseMap: ResponseMap) {
   return {
     fetch: vi.fn().mockImplementation((req: Request) => {
-      const url =
-        typeof req === "string" ? req : (req as any).url || String(req);
+      const url = req.url;
       const sortedPatterns = Object.entries(responseMap).sort(
         (a, b) => b[0].length - a[0].length,
       );
@@ -145,8 +203,8 @@ const referralUser = {
  * succeed. Extra entries typically supply interaction-status or similar.
  */
 function withUser(
-  extra: Record<string, () => Response> = {},
-): Record<string, () => Response> {
+  extra: ResponseMap = {},
+): ResponseMap {
   return {
     "/users/123": () => ok({ user: existingUser }),
     ...extra,
@@ -173,7 +231,7 @@ describe("premiumCommand", () => {
     it("returns early if ctx.from is missing", async () => {
       const ctx = mockCtx({ from: undefined });
       const env = {
-        KV: mockKV() as unknown as KVNamespace,
+        KV: mockKV(),
         API_SERVICE: createMockApiService({}),
       } as any;
 
@@ -203,7 +261,7 @@ describe("premiumCommand", () => {
     it("displays Free plan with interaction limits and no expiry", async () => {
       const ctx = mockCtx();
       const env = {
-        KV: mockKV() as unknown as KVNamespace,
+        KV: mockKV(),
         API_SERVICE: createMockApiService(
           withUser({
             "/users/123/interaction-status": () => ok(interactionFree),
@@ -527,7 +585,7 @@ describe("premiumCommand", () => {
         .mockResolvedValue(undefined);
 
       const env = {
-        KV: mockKV() as unknown as KVNamespace,
+        KV: mockKV(),
         API_SERVICE: createMockApiService(
           withUser({
             "/users/123/interaction-status": () => ok(interactionFree),
@@ -555,7 +613,7 @@ describe("referralCommand", () => {
     it("returns early if ctx.from is missing", async () => {
       const ctx = mockCtx({ from: undefined });
       const env = {
-        KV: mockKV() as unknown as KVNamespace,
+        KV: mockKV(),
         API_SERVICE: createMockApiService({}),
       } as any;
 
@@ -583,7 +641,7 @@ describe("referralCommand", () => {
     it("displays referral code, referral count, and bonus", async () => {
       const ctx = mockCtx();
       const env = {
-        KV: mockKV() as unknown as KVNamespace,
+        KV: mockKV(),
         API_SERVICE: createMockApiService({
           "/users/123": () => ok(referralUser),
         }),
@@ -747,7 +805,7 @@ describe("referralCommand", () => {
         .mockResolvedValue(undefined);
 
       const env = {
-        KV: mockKV() as unknown as KVNamespace,
+        KV: mockKV(),
         API_SERVICE: createMockApiService({
           "/users/123": () => ok(referralUser),
         }),
@@ -775,7 +833,7 @@ describe("premiumCallbacks", () => {
         callbackQuery: { id: "cb1", data: "premium:show" },
       });
       const env = {
-        KV: mockKV() as unknown as KVNamespace,
+        KV: mockKV(),
         API_SERVICE: createMockApiService({}),
       } as any;
 
@@ -790,7 +848,7 @@ describe("premiumCallbacks", () => {
         callbackQuery: { id: "cb1", data: "" },
       });
       const env = {
-        KV: mockKV() as unknown as KVNamespace,
+        KV: mockKV(),
         API_SERVICE: createMockApiService({}),
       } as any;
 
@@ -803,7 +861,7 @@ describe("premiumCallbacks", () => {
     it("returns early when callbackQuery is undefined", async () => {
       const ctx = mockCtx({ callbackQuery: undefined });
       const env = {
-        KV: mockKV() as unknown as KVNamespace,
+        KV: mockKV(),
         API_SERVICE: createMockApiService({}),
       } as any;
 
@@ -820,7 +878,7 @@ describe("premiumCallbacks", () => {
         callbackQuery: { id: "cb1", data: "premium:show" },
       });
       const env = {
-        KV: mockKV() as unknown as KVNamespace,
+        KV: mockKV(),
         API_SERVICE: createMockApiService(
           withUser({
             "/users/123/interaction-status": () => ok(interactionFree),
@@ -845,7 +903,7 @@ describe("premiumCallbacks", () => {
         .mockRejectedValueOnce(new Error("reply crash"))
         .mockResolvedValue(undefined);
       const env = {
-        KV: mockKV() as unknown as KVNamespace,
+        KV: mockKV(),
         API_SERVICE: createMockApiService(
           withUser({
             "/users/123/interaction-status": () => ok(interactionFree),
@@ -869,7 +927,7 @@ describe("premiumCallbacks", () => {
         callbackQuery: { id: "cb1", data: "premium:close" },
       });
       const env = {
-        KV: mockKV() as unknown as KVNamespace,
+        KV: mockKV(),
         API_SERVICE: createMockApiService({}),
       } as any;
 
@@ -886,7 +944,7 @@ describe("premiumCallbacks", () => {
       });
       ctx.deleteMessage = vi.fn().mockRejectedValue(new Error("delete err"));
       const env = {
-        KV: mockKV() as unknown as KVNamespace,
+        KV: mockKV(),
         API_SERVICE: createMockApiService({}),
       } as any;
 
@@ -922,7 +980,7 @@ describe("premiumCallbacks", () => {
         callbackQuery: { id: "cb1", data: "referral:close" },
       });
       const env = {
-        KV: mockKV() as unknown as KVNamespace,
+        KV: mockKV(),
         API_SERVICE: createMockApiService({}),
       } as any;
 
@@ -940,7 +998,7 @@ describe("premiumCallbacks", () => {
         callbackQuery: { id: "cb1", data: "referral:dismiss" },
       });
       const env = {
-        KV: mockKV() as unknown as KVNamespace,
+        KV: mockKV(),
         API_SERVICE: createMockApiService({}),
       } as any;
 
@@ -958,7 +1016,7 @@ describe("premiumCallbacks", () => {
         callbackQuery: { id: "cb1", data: "premium_ad:dismiss" },
       });
       const env = {
-        KV: mockKV() as unknown as KVNamespace,
+        KV: mockKV(),
         API_SERVICE: createMockApiService({}),
       } as any;
 
@@ -976,7 +1034,7 @@ describe("premiumCallbacks", () => {
         callbackQuery: { id: "cb1", data: "unknown:action" },
       });
       const env = {
-        KV: mockKV() as unknown as KVNamespace,
+        KV: mockKV(),
         API_SERVICE: createMockApiService({}),
       } as any;
 
@@ -998,7 +1056,7 @@ describe("premiumCallbacks", () => {
         .mockRejectedValueOnce(new Error("reply failure"))
         .mockResolvedValue(undefined);
       const env = {
-        KV: mockKV() as unknown as KVNamespace,
+        KV: mockKV(),
         API_SERVICE: createMockApiService(
           withUser({
             "/users/123/interaction-status": () => ok(interactionFree),
@@ -1020,7 +1078,7 @@ describe("premiumCallbacks", () => {
       const ctx = mockCtx();
       ctx.api.getMe = vi.fn().mockRejectedValue(new Error("no api"));
       const env = {
-        KV: mockKV() as unknown as KVNamespace,
+        KV: mockKV(),
         API_SERVICE: createMockApiService(
           withUser({
             "/users/123/interaction-status": () => ok(interactionFree),
@@ -1035,7 +1093,7 @@ describe("premiumCallbacks", () => {
     it("handles user with premium tier but no interaction status (null)", async () => {
       const ctx = mockCtx();
       const env = {
-        KV: mockKV() as unknown as KVNamespace,
+        KV: mockKV(),
         API_SERVICE: createMockApiService({
           "/users/123": () => ok({ user: existingUser }),
           "/users/123/interaction-status": () => err(500),
@@ -1050,7 +1108,7 @@ describe("premiumCallbacks", () => {
     it("handles expiry fetch failure gracefully (non-free tier)", async () => {
       const ctx = mockCtx();
       const env = {
-        KV: mockKV() as unknown as KVNamespace,
+        KV: mockKV(),
         API_SERVICE: createMockApiService({
           "/users/123/interaction-status": () => ok(interactionPremium),
           "/users/123": () => ok({ user: existingUser }),

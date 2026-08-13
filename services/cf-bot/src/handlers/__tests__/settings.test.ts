@@ -9,6 +9,32 @@ import {
 } from "../settings.js";
 import type { MyContext } from "../../types.js";
 
+/** Single-assertion test helper for partial mocks. */
+interface TestCastInput {}
+
+function castForTest<T>(value: TestCastInput): T {
+  return value as T;
+}
+
+interface MockUser {
+  id: number;
+  first_name: string;
+  is_bot: boolean;
+  language_code?: string;
+}
+
+interface MockChat {
+  id: number;
+  type: string;
+}
+
+interface MockCallbackQuery {
+  id: string;
+  from: MockUser;
+  data: string | null;
+  message: { message_id: number; chat: MockChat; date: number };
+}
+
 // ---------------------------------------------------------------------------
 // Mock helpers (following same patterns as match.test.ts and start.test.ts)
 // ---------------------------------------------------------------------------
@@ -27,8 +53,18 @@ function mockKV() {
   };
 }
 
-function mockCtx(overrides: Record<string, unknown> = {}): MyContext {
-  return {
+interface CtxOverrides {
+  editMessageText?: ReturnType<typeof vi.fn>;
+  reply?: ReturnType<typeof vi.fn>;
+  answerCallbackQuery?: ReturnType<typeof vi.fn>;
+  deleteMessage?: ReturnType<typeof vi.fn>;
+  from?: MockUser | undefined;
+  callbackQuery?: MockCallbackQuery | undefined;
+  chat?: MockChat;
+}
+
+function mockCtx(overrides: CtxOverrides = {}): MyContext {
+  return castForTest<MyContext>({
     reply: vi.fn().mockResolvedValue(undefined),
     answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
     deleteMessage: vi.fn().mockResolvedValue(undefined),
@@ -42,7 +78,7 @@ function mockCtx(overrides: Record<string, unknown> = {}): MyContext {
     },
     chat: { id: 123, type: "private" },
     ...overrides,
-  } as unknown as MyContext;
+  });
 }
 
 /**
@@ -52,12 +88,15 @@ function mockCtx(overrides: Record<string, unknown> = {}): MyContext {
  *   "/users/123"         – matches any method where URL includes this
  *   "PUT:/users/123"     – matches only PUT requests where URL includes "/users/123"
  */
-function createMockApiService(responseMap: Record<string, () => Response>) {
+interface ApiResponseMap {
+  [key: string]: () => Response;
+}
+
+function createMockApiService(responseMap: ApiResponseMap) {
   return {
     fetch: vi.fn().mockImplementation((req: Request) => {
-      const url =
-        typeof req === "string" ? req : (req as any).url || String(req);
-      const method = (req as any).method || "GET";
+      const url = req.url;
+      const method = req.method || "GET";
       // Sort by pattern length descending so more specific patterns match first
       const sortedPatterns = Object.entries(responseMap).sort(
         (a, b) => b[0].length - a[0].length,
@@ -83,7 +122,35 @@ function createMockApiService(responseMap: Record<string, () => Response>) {
 /**
  * Helper: build a standard user profile response for API_SERVICE.fetch.
  */
-function makeUserResponse(overrides: Record<string, unknown> = {}): Response {
+interface UserPreferences {
+  minAge?: number;
+  maxAge?: number;
+  maxDistance?: number;
+  genderPreference?: string[];
+}
+
+interface UserOverrides {
+  id?: string;
+  displayName?: string;
+  birthDate?: string | undefined;
+  age?: number | undefined;
+  gender?: string | undefined;
+  language?: string | undefined;
+  bio?: string;
+  location?: {
+    city?: string;
+    country?: string;
+    latitude?: number;
+    longitude?: number;
+  };
+  interests?: string[];
+  mediaUrls?: Array<{ url: string; type: string }>;
+  phoneNumber?: string;
+  isProfileComplete?: boolean;
+  preferences?: UserPreferences | undefined;
+}
+
+function makeUserResponse(overrides: UserOverrides = {}): Response {
   return new Response(
     JSON.stringify({
       user: {
@@ -127,13 +194,19 @@ function makeErrorResponse(status = 500): Response {
   });
 }
 
+interface PutBody {
+  user?: {
+    preferences?: UserPreferences;
+  };
+}
+
 /**
  * Helper to extract PUT request body from mock API fetch calls.
  * The mock receives a Request object; we await .text() to get the body.
  */
 async function getPutRequestBody(
   fetchMock: ReturnType<typeof vi.fn>,
-): Promise<Record<string, unknown> | null> {
+): Promise<PutBody | null> {
   const calls = (fetchMock as any).mock.calls as any[];
   for (const call of calls) {
     const req = call[0] as Request;
@@ -154,9 +227,9 @@ describe("Settings Handlers", () => {
   let ctx: MyContext;
   let env: any;
 
-  function makeEnvForCommand(apiExtra: Record<string, () => Response> = {}) {
+  function makeEnvForCommand(apiExtra: ApiResponseMap = {}) {
     return {
-      KV: kv as unknown as KVNamespace,
+      KV: kv,
       API_SERVICE: createMockApiService({
         "/users/123": () => makeUserResponse(),
         ...apiExtra,
@@ -182,7 +255,7 @@ describe("Settings Handlers", () => {
 
     it("shows error when ensureUserExists fails", async () => {
       env = {
-        KV: kv as unknown as KVNamespace,
+        KV: kv,
         API_SERVICE: createMockApiService({
           "/users/123": () => makeErrorResponse(500),
           "POST:/users": () => makeErrorResponse(500),
@@ -214,7 +287,7 @@ describe("Settings Handlers", () => {
       // getDefaultPreferences now trusts age column first: minAge=18, maxAge=32, maxDistance=25, genderPref=["male"]
       // We set prefs to { maxDistance: 10 }, so result merges defaults + rawPrefs
       env = {
-        KV: kv as unknown as KVNamespace,
+        KV: kv,
         API_SERVICE: createMockApiService({
           "/users/123": () =>
             makeUserResponse({
@@ -234,7 +307,7 @@ describe("Settings Handlers", () => {
 
     it("handles missing preferences gracefully (shows 'Not set')", async () => {
       env = {
-        KV: kv as unknown as KVNamespace,
+        KV: kv,
         API_SERVICE: createMockApiService({
           "/users/123": () =>
             makeUserResponse({
@@ -255,7 +328,7 @@ describe("Settings Handlers", () => {
       // When fetch rejects, ensureUserExists also fails (returns null),
       // so the handler shows the "try /start" message
       env = {
-        KV: kv as unknown as KVNamespace,
+        KV: kv,
         API_SERVICE: {
           fetch: vi.fn().mockRejectedValue(new Error("Network failure")),
         },
@@ -283,9 +356,9 @@ describe("Settings Handlers", () => {
   // settingsCallbacks
   // =========================================================================
   describe("settingsCallbacks", () => {
-    function makeEnvForCallback(userOverrides: Record<string, unknown> = {}) {
+    function makeEnvForCallback(userOverrides: UserOverrides = {}) {
       return {
-        KV: kv as unknown as KVNamespace,
+        KV: kv,
         API_SERVICE: createMockApiService({
           "/users/123": () => makeUserResponse(userOverrides),
         }),
@@ -357,7 +430,7 @@ describe("Settings Handlers", () => {
 
       it("handles API error gracefully during user fetch", async () => {
         env = {
-          KV: kv as unknown as KVNamespace,
+          KV: kv,
           API_SERVICE: createMockApiService({
             "/users/123": () => makeErrorResponse(500),
           }),
@@ -448,7 +521,7 @@ describe("Settings Handlers", () => {
 
     it("handles unhandled error in catch block", async () => {
       env = {
-        KV: kv as unknown as KVNamespace,
+        KV: kv,
         API_SERVICE: {
           fetch: vi.fn().mockRejectedValue(new Error("Network failure")),
         },
@@ -469,17 +542,17 @@ describe("Settings Handlers", () => {
   // =========================================================================
   describe("handleAgeRangeCallback", () => {
     function makeEnvForAge(
-      userOverrides: Record<string, unknown> = {},
+      userOverrides: UserOverrides = {},
       putResponseOverride?: Response,
     ) {
-      const responses: Record<string, () => Response> = {
+      const responses: ApiResponseMap = {
         "/users/123": () => makeUserResponse(userOverrides),
       };
       if (putResponseOverride) {
         responses["PUT:/users/123"] = () => putResponseOverride;
       }
       return {
-        KV: kv as unknown as KVNamespace,
+        KV: kv,
         API_SERVICE: createMockApiService(responses),
       };
     }
@@ -762,7 +835,7 @@ describe("Settings Handlers", () => {
 
     it("handles unhandled error in catch block", async () => {
       env = {
-        KV: kv as unknown as KVNamespace,
+        KV: kv,
         API_SERVICE: {
           fetch: vi.fn().mockRejectedValue(new Error("Network failure")),
         },
@@ -802,17 +875,17 @@ describe("Settings Handlers", () => {
   // =========================================================================
   describe("handleDistanceCallback", () => {
     function makeEnvForDistance(
-      userOverrides: Record<string, unknown> = {},
+      userOverrides: UserOverrides = {},
       putResponseOverride?: Response,
     ) {
-      const responses: Record<string, () => Response> = {
+      const responses: ApiResponseMap = {
         "/users/123": () => makeUserResponse(userOverrides),
       };
       if (putResponseOverride) {
         responses["PUT:/users/123"] = () => putResponseOverride;
       }
       return {
-        KV: kv as unknown as KVNamespace,
+        KV: kv,
         API_SERVICE: createMockApiService(responses),
       };
     }
@@ -959,7 +1032,7 @@ describe("Settings Handlers", () => {
 
     it("handles unhandled error in catch block", async () => {
       env = {
-        KV: kv as unknown as KVNamespace,
+        KV: kv,
         API_SERVICE: {
           fetch: vi.fn().mockRejectedValue(new Error("Network failure")),
         },
@@ -978,17 +1051,17 @@ describe("Settings Handlers", () => {
   // =========================================================================
   describe("handleGenderPrefCallback", () => {
     function makeEnvForGender(
-      userOverrides: Record<string, unknown> = {},
+      userOverrides: UserOverrides = {},
       putResponseOverride?: Response,
     ) {
-      const responses: Record<string, () => Response> = {
+      const responses: ApiResponseMap = {
         "/users/123": () => makeUserResponse(userOverrides),
       };
       if (putResponseOverride) {
         responses["PUT:/users/123"] = () => putResponseOverride;
       }
       return {
-        KV: kv as unknown as KVNamespace,
+        KV: kv,
         API_SERVICE: createMockApiService(responses),
       };
     }
@@ -1179,7 +1252,7 @@ describe("Settings Handlers", () => {
 
     it("handles unhandled error in catch block", async () => {
       env = {
-        KV: kv as unknown as KVNamespace,
+        KV: kv,
         API_SERVICE: {
           fetch: vi.fn().mockRejectedValue(new Error("Network failure")),
         },
@@ -1234,7 +1307,7 @@ describe("Settings Handlers", () => {
       expect(parsedMin.step).toBe(1);
 
       env = {
-        KV: kv as unknown as KVNamespace,
+        KV: kv,
         API_SERVICE: createMockApiService({
           "/users/123": () => makeUserResponse(),
           "PUT:/users/123": () => makePutOkResponse(),
@@ -1289,7 +1362,7 @@ describe("Settings Handlers", () => {
 
     it("edits message to language picker with keyboard", async () => {
       env = {
-        KV: kv as unknown as KVNamespace,
+        KV: kv,
         API_SERVICE: createMockApiService({
           "/users/123": () => makeUserResponse(),
         }),
@@ -1318,7 +1391,7 @@ describe("Settings Handlers", () => {
 
     it("shows language picker in Indonesian when user lang is id", async () => {
       env = {
-        KV: kv as unknown as KVNamespace,
+        KV: kv,
         API_SERVICE: createMockApiService({
           "/users/123": () => makeUserResponse({ language: "id" }),
         }),
@@ -1334,7 +1407,7 @@ describe("Settings Handlers", () => {
 
     it("falls back to en when user API fails for language picker", async () => {
       env = {
-        KV: kv as unknown as KVNamespace,
+        KV: kv,
         API_SERVICE: createMockApiService({
           "/users/123": () => makeErrorResponse(500),
         }),
@@ -1383,7 +1456,7 @@ describe("Settings Handlers", () => {
 
     it("updates language when API succeeds and re-renders settings", async () => {
       env = {
-        KV: kv as unknown as KVNamespace,
+        KV: kv,
         API_SERVICE: createMockApiService({
           "/users/123": () => makeUserResponse({ language: "id" }),
           "PUT:/users/123": () => makePutOkResponse(),
@@ -1406,7 +1479,7 @@ describe("Settings Handlers", () => {
 
     it("falls back to DEFAULT_LANGUAGE for invalid language code", async () => {
       env = {
-        KV: kv as unknown as KVNamespace,
+        KV: kv,
         API_SERVICE: createMockApiService({
           "/users/123": () => makeUserResponse(),
           "PUT:/users/123": () => makePutOkResponse(),
@@ -1426,7 +1499,7 @@ describe("Settings Handlers", () => {
 
     it("shows error when PUT API returns non-ok status", async () => {
       env = {
-        KV: kv as unknown as KVNamespace,
+        KV: kv,
         API_SERVICE: createMockApiService({
           "PUT:/users/123": () => makeErrorResponse(500),
         }),
@@ -1444,7 +1517,7 @@ describe("Settings Handlers", () => {
 
     it("handles API fetch rejection in catch block", async () => {
       env = {
-        KV: kv as unknown as KVNamespace,
+        KV: kv,
         API_SERVICE: {
           fetch: vi.fn().mockRejectedValue(new Error("Network failure")),
         },
@@ -1466,7 +1539,7 @@ describe("Settings Handlers", () => {
         new Error("callback failed"),
       );
       env = {
-        KV: kv as unknown as KVNamespace,
+        KV: kv,
         API_SERVICE: createMockApiService({
           "/users/123": () => makeUserResponse(),
           "PUT:/users/123": () => makePutOkResponse(),
@@ -1487,7 +1560,7 @@ describe("Settings Handlers", () => {
   describe("formatGenderPreference (via settingsCommand)", () => {
     it("shows 'All genders' when all four prefs are set", async () => {
       env = {
-        KV: kv as unknown as KVNamespace,
+        KV: kv,
         API_SERVICE: createMockApiService({
           "/users/123": () =>
             makeUserResponse({
@@ -1512,7 +1585,7 @@ describe("Settings Handlers", () => {
 
     it("shows comma-separated display when partial prefs set", async () => {
       env = {
-        KV: kv as unknown as KVNamespace,
+        KV: kv,
         API_SERVICE: createMockApiService({
           "/users/123": () =>
             makeUserResponse({
@@ -1532,7 +1605,7 @@ describe("Settings Handlers", () => {
 
     it("shows 'Not set' for empty gender preference array", async () => {
       env = {
-        KV: kv as unknown as KVNamespace,
+        KV: kv,
         API_SERVICE: createMockApiService({
           "/users/123": () =>
             makeUserResponse({
@@ -1552,7 +1625,7 @@ describe("Settings Handlers", () => {
 
     it("handles unknown gender value gracefully (uses raw value)", async () => {
       env = {
-        KV: kv as unknown as KVNamespace,
+        KV: kv,
         API_SERVICE: createMockApiService({
           "/users/123": () =>
             makeUserResponse({
@@ -1582,7 +1655,7 @@ describe("Settings Handlers", () => {
 
     it("generates grid for very young user (age 12)", async () => {
       env = {
-        KV: kv as unknown as KVNamespace,
+        KV: kv,
         API_SERVICE: createMockApiService({
           "/users/123": () =>
             makeUserResponse({ age: 12, birthDate: undefined }),
@@ -1603,7 +1676,7 @@ describe("Settings Handlers", () => {
 
     it("generates grid for older user (age 65)", async () => {
       env = {
-        KV: kv as unknown as KVNamespace,
+        KV: kv,
         API_SERVICE: createMockApiService({
           "/users/123": () =>
             makeUserResponse({ age: 65, birthDate: undefined }),
@@ -1632,7 +1705,7 @@ describe("Settings Handlers", () => {
         }),
       );
       env = {
-        KV: kv as unknown as KVNamespace,
+        KV: kv,
         API_SERVICE: createMockApiService({
           "/users/123": () =>
             makeUserResponse({ age: 25, birthDate: undefined }),
@@ -1652,7 +1725,7 @@ describe("Settings Handlers", () => {
 
     it("includes manual entry button in both min and max grids", async () => {
       env = {
-        KV: kv as unknown as KVNamespace,
+        KV: kv,
         API_SERVICE: createMockApiService({
           "/users/123": () => makeUserResponse(),
         }),
@@ -1762,7 +1835,7 @@ describe("Settings Handlers", () => {
   describe("getLanguageLabel (via settingsCommand)", () => {
     it("shows English flag+label for en user", async () => {
       env = {
-        KV: kv as unknown as KVNamespace,
+        KV: kv,
         API_SERVICE: createMockApiService({
           "/users/123": () => makeUserResponse({ language: "en" }),
         }),
@@ -1774,7 +1847,7 @@ describe("Settings Handlers", () => {
 
     it("shows Indonesian flag+label for id user", async () => {
       env = {
-        KV: kv as unknown as KVNamespace,
+        KV: kv,
         API_SERVICE: createMockApiService({
           "/users/123": () => makeUserResponse({ language: "id" }),
         }),
@@ -1791,7 +1864,7 @@ describe("Settings Handlers", () => {
   describe("handleDistanceCallback — manual edge cases", () => {
     it("handles distance:manual with API failure (still starts conversation)", async () => {
       env = {
-        KV: kv as unknown as KVNamespace,
+        KV: kv,
         API_SERVICE: createMockApiService({
           "/users/123": () => makeErrorResponse(500),
         }),
@@ -1816,7 +1889,7 @@ describe("Settings Handlers", () => {
 
     it("handles user with no API response (uses default age 25)", async () => {
       env = {
-        KV: kv as unknown as KVNamespace,
+        KV: kv,
         API_SERVICE: createMockApiService({
           "/users/123": () => makeErrorResponse(404),
         }),
@@ -1832,7 +1905,7 @@ describe("Settings Handlers", () => {
     it("computes age from birthDate when age column is missing", async () => {
       // birthDate "1990-01-01" → age ~35 (year dependent)
       env = {
-        KV: kv as unknown as KVNamespace,
+        KV: kv,
         API_SERVICE: createMockApiService({
           "/users/123": () =>
             makeUserResponse({
@@ -1850,7 +1923,7 @@ describe("Settings Handlers", () => {
 
     it("falls back to age 25 when user has no birthDate and no age column", async () => {
       env = {
-        KV: kv as unknown as KVNamespace,
+        KV: kv,
         API_SERVICE: createMockApiService({
           "/users/123": () =>
             makeUserResponse({

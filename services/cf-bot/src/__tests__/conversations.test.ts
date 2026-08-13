@@ -10,9 +10,16 @@ import {
 import type { MyContext } from "../types.js";
 import type { Language } from "../lib/i18n.js";
 
+/** Single-assertion test helper for partial mocks. */
+interface TestCastInput {}
+
+function castForTest<T>(value: TestCastInput): T {
+  return value as T;
+}
+
 function mockKV() {
   const store = new Map<string, string>();
-  return {
+  return castForTest<KVNamespace & { _store: Map<string, string> }>({
     get: vi.fn(async (key: string) => store.get(key) ?? null),
     put: vi.fn(async (key: string, value: string) => {
       store.set(key, value);
@@ -21,28 +28,48 @@ function mockKV() {
       store.delete(key);
     }),
     _store: store,
-  };
+  });
 }
 
 function mockEnv(kv = mockKV()) {
   return {
     DB: {} as D1Database,
-    KV: kv as unknown as KVNamespace,
-    API_SERVICE: {
+    KV: kv,
+    API_SERVICE: castForTest<Fetcher>({
       fetch: vi.fn().mockResolvedValue(new Response(null, { status: 200 })),
-    } as unknown as Fetcher,
+    }),
     BOT_TOKEN: "test-token",
   };
 }
 
 function mockCtx(text?: string): MyContext {
-  return {
+  return castForTest<MyContext>({
     reply: vi.fn().mockResolvedValue(undefined),
     from: { id: 123, first_name: "Test", is_bot: false, language_code: "en" },
     message: text
       ? { text, message_id: 1, date: 1, chat: { id: 123, type: "private" } }
       : undefined,
-  } as unknown as MyContext;
+  });
+}
+
+interface MockUserProfile {
+  id: string;
+  displayName?: string;
+  birthDate?: string;
+  gender?: string;
+  bio?: string;
+  language?: string | Language;
+  age?: number;
+  location?: {
+    city?: string;
+    country?: string;
+    latitude?: number;
+    longitude?: number;
+  };
+  mediaUrls?: Array<{ url: string; type: string; uploadedAt?: string }>;
+  interests?: string[];
+  phoneNumber?: string;
+  isProfileComplete?: boolean;
 }
 
 describe("Conversation State Management", () => {
@@ -53,13 +80,13 @@ describe("Conversation State Management", () => {
   });
 
   it("should set and get conversation state", async () => {
-    await setConversationState(kv as unknown as KVNamespace, {
+    await setConversationState(kv, {
       userId: "123",
       field: "bio",
       step: 0,
     });
     const state = await getConversationState(
-      kv as unknown as KVNamespace,
+      kv,
       "123",
     );
     expect(state).not.toBeNull();
@@ -68,26 +95,26 @@ describe("Conversation State Management", () => {
 
   it("should return null for missing state", async () => {
     const state = await getConversationState(
-      kv as unknown as KVNamespace,
+      kv,
       "999",
     );
     expect(state).toBeNull();
   });
 
   it("should clear conversation state", async () => {
-    await startConversation(kv as unknown as KVNamespace, "123", "bio");
-    await clearConversationState(kv as unknown as KVNamespace, "123");
+    await startConversation(kv, "123", "bio");
+    await clearConversationState(kv, "123");
     const state = await getConversationState(
-      kv as unknown as KVNamespace,
+      kv,
       "123",
     );
     expect(state).toBeNull();
   });
 
   it("should start conversation with field", async () => {
-    await startConversation(kv as unknown as KVNamespace, "123", "birthdate");
+    await startConversation(kv, "123", "birthdate");
     const state = await getConversationState(
-      kv as unknown as KVNamespace,
+      kv,
       "123",
     );
     expect(state!.field).toBe("birthdate");
@@ -109,34 +136,34 @@ describe("Conversation Message Handling", () => {
   });
 
   it("should handle Cancel command", async () => {
-    await startConversation(kv as unknown as KVNamespace, "123", "bio");
+    await startConversation(kv, "123", "bio");
     const ctx = mockCtx("Cancel");
     const result = await handleConversationMessage(ctx, mockEnv(kv));
     expect(result).toBe(true);
     expect(ctx.reply).toHaveBeenCalledWith("Cancelled.", expect.anything());
     const state = await getConversationState(
-      kv as unknown as KVNamespace,
+      kv,
       "123",
     );
     expect(state).toBeNull();
   });
 
   it("should process bio input", async () => {
-    await startConversation(kv as unknown as KVNamespace, "123", "bio");
+    await startConversation(kv, "123", "bio");
     const ctx = mockCtx("I love hiking and coding");
     const result = await handleConversationMessage(ctx, mockEnv(kv));
     expect(result).toBe(true);
   });
 
   it("should process birthdate input", async () => {
-    await startConversation(kv as unknown as KVNamespace, "123", "birthdate");
+    await startConversation(kv, "123", "birthdate");
     const ctx = mockCtx("15.03.1995");
     const result = await handleConversationMessage(ctx, mockEnv(kv));
     expect(result).toBe(true);
   });
 
   it("should reject invalid birthdate", async () => {
-    await startConversation(kv as unknown as KVNamespace, "123", "birthdate");
+    await startConversation(kv, "123", "birthdate");
     const ctx = mockCtx("not-a-date");
     const result = await handleConversationMessage(ctx, mockEnv(kv));
     expect(result).toBe(true);
@@ -146,14 +173,14 @@ describe("Conversation Message Handling", () => {
   });
 
   it("should process gender input", async () => {
-    await startConversation(kv as unknown as KVNamespace, "123", "gender");
+    await startConversation(kv, "123", "gender");
     const ctx = mockCtx("Male");
     const result = await handleConversationMessage(ctx, mockEnv(kv));
     expect(result).toBe(true);
   });
 
   it("should reject invalid gender", async () => {
-    await startConversation(kv as unknown as KVNamespace, "123", "gender");
+    await startConversation(kv, "123", "gender");
     const ctx = mockCtx("unknown");
     const result = await handleConversationMessage(ctx, mockEnv(kv));
     expect(result).toBe(true);
@@ -161,21 +188,21 @@ describe("Conversation Message Handling", () => {
   });
 
   it("should process name input", async () => {
-    await startConversation(kv as unknown as KVNamespace, "123", "name");
+    await startConversation(kv, "123", "name");
     const ctx = mockCtx("John");
     const result = await handleConversationMessage(ctx, mockEnv(kv));
     expect(result).toBe(true);
   });
 
   it("should process interests input", async () => {
-    await startConversation(kv as unknown as KVNamespace, "123", "interests");
+    await startConversation(kv, "123", "interests");
     const ctx = mockCtx("hiking, coding, coffee");
     const result = await handleConversationMessage(ctx, mockEnv(kv));
     expect(result).toBe(true);
   });
 
   it("should process location input", async () => {
-    await startConversation(kv as unknown as KVNamespace, "123", "location");
+    await startConversation(kv, "123", "location");
     const ctx = mockCtx("Jakarta, Indonesia");
     const result = await handleConversationMessage(ctx, mockEnv(kv));
     expect(result).toBe(true);
@@ -194,11 +221,11 @@ describe("continueOnboarding — explicit step sequence regression", () => {
     vi.resetModules();
   });
 
-  function createEnvWithUser(user: Record<string, unknown>) {
+  function createEnvWithUser(user: MockUserProfile) {
     return {
       DB: {} as D1Database,
-      KV: kv as unknown as KVNamespace,
-      API_SERVICE: {
+      KV: kv,
+      API_SERVICE: castForTest<Fetcher>({
         fetch: vi.fn().mockImplementation((req: Request) => {
           const url = String(req.url);
           if (url.includes("/users/123")) {
@@ -210,13 +237,13 @@ describe("continueOnboarding — explicit step sequence regression", () => {
             new Response(JSON.stringify({}), { status: 404 }),
           );
         }),
-      } as unknown as Fetcher,
+      }),
       BOT_TOKEN: "test-token",
     };
   }
 
   function mockCtxLang(lang: Language): MyContext {
-    return {
+    return castForTest<MyContext>({
       reply: vi.fn().mockResolvedValue(undefined),
       from: {
         id: 123,
@@ -225,7 +252,7 @@ describe("continueOnboarding — explicit step sequence regression", () => {
         language_code: lang,
       },
       message: undefined,
-    } as unknown as MyContext;
+    });
   }
 
   // ── Step 1: Name shows once ──
@@ -242,7 +269,7 @@ describe("continueOnboarding — explicit step sequence regression", () => {
 
       expect(result).toBe(true);
       const state = await getConversationState(
-        kv as unknown as KVNamespace,
+        kv,
         "123",
       );
       expect(state!.field).toBe("name");
@@ -273,7 +300,7 @@ describe("continueOnboarding — explicit step sequence regression", () => {
 
       expect(result).toBe(true);
       const state = await getConversationState(
-        kv as unknown as KVNamespace,
+        kv,
         "123",
       );
       expect(state!.field).toBe("birthdate");
@@ -296,7 +323,7 @@ describe("continueOnboarding — explicit step sequence regression", () => {
 
       expect(result).toBe(true);
       const state = await getConversationState(
-        kv as unknown as KVNamespace,
+        kv,
         "123",
       );
       expect(state!.field).toBe("gender");
@@ -320,7 +347,7 @@ describe("continueOnboarding — explicit step sequence regression", () => {
 
       expect(result).toBe(true);
       const state = await getConversationState(
-        kv as unknown as KVNamespace,
+        kv,
         "123",
       );
       expect(state!.field).toBe("bio");
@@ -345,7 +372,7 @@ describe("continueOnboarding — explicit step sequence regression", () => {
 
       expect(result).toBe(true);
       const state = await getConversationState(
-        kv as unknown as KVNamespace,
+        kv,
         "123",
       );
       expect(state!.field).toBe("location");
@@ -371,7 +398,7 @@ describe("continueOnboarding — explicit step sequence regression", () => {
 
       expect(result).toBe(true);
       const state = await getConversationState(
-        kv as unknown as KVNamespace,
+        kv,
         "123",
       );
       expect(state!.field).toBe("media");
@@ -400,7 +427,7 @@ describe("continueOnboarding — explicit step sequence regression", () => {
 
       expect(result).toBe(true);
       const state = await getConversationState(
-        kv as unknown as KVNamespace,
+        kv,
         "123",
       );
       // Should skip to interests (interests showOnce but not yet seen)
@@ -431,7 +458,7 @@ describe("continueOnboarding — explicit step sequence regression", () => {
 
       expect(result).toBe(true);
       const state = await getConversationState(
-        kv as unknown as KVNamespace,
+        kv,
         "123",
       );
       expect(state!.field).toBe("interests");
@@ -473,7 +500,7 @@ describe("continueOnboarding — explicit step sequence regression", () => {
 
       expect(result).toBe(true);
       const state = await getConversationState(
-        kv as unknown as KVNamespace,
+        kv,
         "123",
       );
       expect(state!.field).toBe("phone");
@@ -508,7 +535,7 @@ describe("continueOnboarding — explicit step sequence regression", () => {
 
       expect(result).toBe(true);
       const state = await getConversationState(
-        kv as unknown as KVNamespace,
+        kv,
         "123",
       );
       expect(state!.field).toBe("phone");
@@ -558,7 +585,7 @@ describe("continueOnboarding — explicit step sequence regression", () => {
   it.each<Language>(["en", "id"])(
     "[%s] full flow: empty profile → name → birthdate → gender → bio → location → media → interests → phone",
     async (lang) => {
-      const profile: Record<string, unknown> = {
+      const profile: MockUserProfile = {
         id: "123",
         displayName: "TestUser",
         language: lang,
@@ -570,7 +597,7 @@ describe("continueOnboarding — explicit step sequence regression", () => {
       let result = await continueOnboarding(ctx, env, "123", lang);
       expect(result).toBe(true);
       let state = await getConversationState(
-        kv as unknown as KVNamespace,
+        kv,
         "123",
       );
       expect(state!.field).toBe("name");
@@ -578,35 +605,35 @@ describe("continueOnboarding — explicit step sequence regression", () => {
       // 2. After name is shown, next call goes to birthdate
       result = await continueOnboarding(ctx, env, "123", lang);
       expect(result).toBe(true);
-      state = await getConversationState(kv as unknown as KVNamespace, "123");
+      state = await getConversationState(kv, "123");
       expect(state!.field).toBe("birthdate");
 
       // 3. After birthdate is filled, next call goes to gender
       profile.birthDate = "1995-03-15";
       result = await continueOnboarding(ctx, env, "123", lang);
       expect(result).toBe(true);
-      state = await getConversationState(kv as unknown as KVNamespace, "123");
+      state = await getConversationState(kv, "123");
       expect(state!.field).toBe("gender");
 
       // 4. After gender is filled, next call goes to bio
       profile.gender = "male";
       result = await continueOnboarding(ctx, env, "123", lang);
       expect(result).toBe(true);
-      state = await getConversationState(kv as unknown as KVNamespace, "123");
+      state = await getConversationState(kv, "123");
       expect(state!.field).toBe("bio");
 
       // 5. After bio is filled, next call goes to location
       profile.bio = "Hello world";
       result = await continueOnboarding(ctx, env, "123", lang);
       expect(result).toBe(true);
-      state = await getConversationState(kv as unknown as KVNamespace, "123");
+      state = await getConversationState(kv, "123");
       expect(state!.field).toBe("location");
 
       // 6. After location is filled, next call goes to media
       profile.location = { city: "Jakarta", country: "Indonesia" };
       result = await continueOnboarding(ctx, env, "123", lang);
       expect(result).toBe(true);
-      state = await getConversationState(kv as unknown as KVNamespace, "123");
+      state = await getConversationState(kv, "123");
       expect(state!.field).toBe("media");
 
       // 7. After media is filled, next call goes to interests (showOnce)
@@ -615,14 +642,14 @@ describe("continueOnboarding — explicit step sequence regression", () => {
       ];
       result = await continueOnboarding(ctx, env, "123", lang);
       expect(result).toBe(true);
-      state = await getConversationState(kv as unknown as KVNamespace, "123");
+      state = await getConversationState(kv, "123");
       expect(state!.field).toBe("interests");
 
       // 8. After interests is shown, next call goes to phone
       await kv.put(`onboarding:interests-skipped:123`, "true");
       result = await continueOnboarding(ctx, env, "123", lang);
       expect(result).toBe(true);
-      state = await getConversationState(kv as unknown as KVNamespace, "123");
+      state = await getConversationState(kv, "123");
       expect(state!.field).toBe("phone");
 
       // 9. After phone is filled, onboarding is complete

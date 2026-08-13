@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   getConversationState,
   setConversationState,
@@ -12,15 +12,41 @@ import {
   checkAndUpdateProfileComplete,
 } from "../conversations.js";
 import type { MyContext } from "../../types.js";
-import type { Language } from "../i18n.js";
+
+/** Single-assertion test helper for partial mocks. */
+interface TestCastInput {}
+
+function castForTest<T>(value: TestCastInput): T {
+  return value as T;
+}
 
 // ================================================================
 // Mock helpers
 // ================================================================
 
+interface MockUserProfile {
+  id?: string;
+  displayName?: string;
+  birthDate?: string;
+  gender?: string;
+  bio?: string;
+  language?: string;
+  age?: number;
+  location?: {
+    city?: string;
+    country?: string;
+    latitude?: number;
+    longitude?: number;
+  };
+  mediaUrls?: Array<{ url: string; type: string; uploadedAt?: string }>;
+  interests?: string[];
+  phoneNumber?: string;
+  isProfileComplete?: boolean;
+}
+
 function mockKV() {
   const store = new Map<string, string>();
-  return {
+  return castForTest<KVNamespace & { _store: Map<string, string> }>({
     get: vi.fn(async (key: string) => store.get(key) ?? null),
     put: vi.fn(async (key: string, value: string) => {
       store.set(key, value);
@@ -29,7 +55,7 @@ function mockKV() {
       store.delete(key);
     }),
     _store: store,
-  };
+  });
 }
 
 /**
@@ -39,12 +65,12 @@ function mockKV() {
  */
 function createEnvWithUser(
   kv: ReturnType<typeof mockKV>,
-  user: Record<string, unknown>,
+  user: MockUserProfile,
 ) {
   return {
     DB: {} as D1Database,
-    KV: kv as unknown as KVNamespace,
-    API_SERVICE: {
+    KV: kv,
+    API_SERVICE: castForTest<Fetcher>({
       fetch: vi.fn().mockImplementation((req: Request) => {
         const url = String(req.url);
         if (url.includes("/users/") && req.method === "GET") {
@@ -72,13 +98,13 @@ function createEnvWithUser(
           new Response(JSON.stringify({}), { status: 200 }),
         );
       }),
-    } as unknown as Fetcher,
+    }),
     BOT_TOKEN: "test-token",
   };
 }
 
 function createMockCtx(overrides: Partial<MyContext> = {}): MyContext {
-  return {
+  return castForTest<MyContext>({
     reply: vi.fn().mockResolvedValue(undefined),
     answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
     deleteMessage: vi.fn().mockResolvedValue(undefined),
@@ -90,7 +116,7 @@ function createMockCtx(overrides: Partial<MyContext> = {}): MyContext {
       chat: { id: 123, type: "private" as const },
     },
     ...overrides,
-  } as unknown as MyContext;
+  });
 }
 
 // ================================================================
@@ -610,10 +636,10 @@ describe("checkMandatoryUpdates", () => {
   it("returns false when API returns non-ok response", async () => {
     const env = {
       DB: {} as D1Database,
-      KV: kv as unknown as KVNamespace,
-      API_SERVICE: {
+      KV: kv,
+      API_SERVICE: castForTest<Fetcher>({
         fetch: vi.fn().mockResolvedValue(new Response(null, { status: 500 })),
-      } as unknown as Fetcher,
+      }),
       BOT_TOKEN: "test-token",
     };
     const ctx = createMockCtx();
@@ -625,12 +651,12 @@ describe("checkMandatoryUpdates", () => {
   it("returns false when user is not found in API response", async () => {
     const env = {
       DB: {} as D1Database,
-      KV: kv as unknown as KVNamespace,
-      API_SERVICE: {
+      KV: kv,
+      API_SERVICE: castForTest<Fetcher>({
         fetch: vi
           .fn()
           .mockResolvedValue(new Response(JSON.stringify({}), { status: 200 })),
-      } as unknown as Fetcher,
+      }),
       BOT_TOKEN: "test-token",
     };
     const ctx = createMockCtx();
@@ -724,10 +750,10 @@ describe("checkMandatoryUpdates", () => {
   it("handles errors gracefully (returns false on thrown exception)", async () => {
     const env = {
       DB: {} as D1Database,
-      KV: kv as unknown as KVNamespace,
-      API_SERVICE: {
+      KV: kv,
+      API_SERVICE: castForTest<Fetcher>({
         fetch: vi.fn().mockRejectedValue(new Error("Network failure")),
-      } as unknown as Fetcher,
+      }),
       BOT_TOKEN: "test-token",
     };
     const ctx = createMockCtx();
@@ -1627,8 +1653,8 @@ describe("handleContactMessage", () => {
   it("handles API error during phone update", async () => {
     const env = {
       DB: {} as D1Database,
-      KV: kv as unknown as KVNamespace,
-      API_SERVICE: {
+      KV: kv,
+      API_SERVICE: castForTest<Fetcher>({
         fetch: vi.fn().mockImplementation((req: Request) => {
           const url = String(req.url);
           if (url.includes("/users/") && req.method === "GET") {
@@ -1646,7 +1672,7 @@ describe("handleContactMessage", () => {
             new Response(JSON.stringify({}), { status: 200 }),
           );
         }),
-      } as unknown as Fetcher,
+      }),
       BOT_TOKEN: "test-token",
     };
 
@@ -1782,8 +1808,8 @@ describe("handleLocationMessage", () => {
   it("handles reverse geocoding failure gracefully", async () => {
     const env = {
       DB: {} as D1Database,
-      KV: kv as unknown as KVNamespace,
-      API_SERVICE: {
+      KV: kv,
+      API_SERVICE: castForTest<Fetcher>({
         fetch: vi.fn().mockImplementation((req: Request) => {
           const url = String(req.url);
           if (url.includes("/geocode")) {
@@ -1806,7 +1832,7 @@ describe("handleLocationMessage", () => {
             new Response(JSON.stringify({}), { status: 200 }),
           );
         }),
-      } as unknown as Fetcher,
+      }),
       BOT_TOKEN: "test-token",
     };
 
@@ -1895,10 +1921,10 @@ describe("checkAndUpdateProfileComplete", () => {
   it("returns false when user is not found", async () => {
     const env = {
       DB: {} as D1Database,
-      KV: kv as unknown as KVNamespace,
-      API_SERVICE: {
+      KV: kv,
+      API_SERVICE: castForTest<Fetcher>({
         fetch: vi.fn().mockResolvedValue(new Response(null, { status: 404 })),
-      } as unknown as Fetcher,
+      }),
       BOT_TOKEN: "test-token",
     };
 
@@ -1909,10 +1935,10 @@ describe("checkAndUpdateProfileComplete", () => {
   it("returns false on API error", async () => {
     const env = {
       DB: {} as D1Database,
-      KV: kv as unknown as KVNamespace,
-      API_SERVICE: {
+      KV: kv,
+      API_SERVICE: castForTest<Fetcher>({
         fetch: vi.fn().mockRejectedValue(new Error("Network error")),
-      } as unknown as Fetcher,
+      }),
       BOT_TOKEN: "test-token",
     };
 
