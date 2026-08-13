@@ -5,35 +5,46 @@ import {
   NotificationQueueProducer,
   NotificationQueueConsumer,
   persistAndEnqueue,
+  type NotificationMessage,
 } from "../../notifications/queue.js";
 
+interface TestCastInput {}
+
+function castForTest<T>(value: TestCastInput): T {
+  return value as T;
+}
+
+/** Notification row shape returned by the mock D1 query handler. */
+interface MockNotificationRow {
+  id: string;
+  status: string;
+}
+
 interface MockD1Options {
-  handler?: (
-    sql: string,
-    values: unknown[],
-  ) => { results?: Array<Record<string, unknown>> };
+  handler?: (sql: string, values: unknown[]) => {
+    results?: MockNotificationRow[];
+  };
   /** Return value for each `.run()` call. Defaults to `{ changes: 1 }`. */
-  runResult?:
-    | { changes: number }
-    | ((sql: string, values: unknown[]) => { changes: number });
+  runResult?: (sql: string, values: unknown[]) => { changes: number };
 }
 
 function createMockD1(options: MockD1Options = {}) {
   const handler =
-    options.handler ??
-    (() => ({ results: [] as Array<Record<string, unknown>> }));
-  return {
+    options.handler ?? (() => ({ results: [] as MockNotificationRow[] }));
+  const mockD1 = {
     prepare: vi.fn((sql: string) => {
       return {
         bind: vi.fn((...values: unknown[]) => ({
           run: vi.fn(async () => {
-            const changes =
-              typeof options.runResult === "function"
-                ? options.runResult(sql, values)
-                : (options.runResult ?? { changes: 1 });
+            const runResult =
+              options.runResult?.(sql, values) ?? { changes: 1 };
             return {
               success: true,
-              meta: { changes: changes.changes, last_row_id: 0, duration: 0 },
+              meta: {
+                changes: runResult.changes,
+                last_row_id: 0,
+                duration: 0,
+              },
             };
           }),
           first: vi.fn(async () => {
@@ -47,20 +58,21 @@ function createMockD1(options: MockD1Options = {}) {
         })),
       };
     }),
-  } as unknown as import("@cloudflare/workers-types").D1Database;
+  };
+  return castForTest<import("@cloudflare/workers-types").D1Database>(mockD1);
 }
 
 async function runEffect<A, E>(effect: Effect.Effect<A, E, never>): Promise<A> {
   const exit = await Effect.runPromiseExit(effect);
   if (Exit.isSuccess(exit)) return exit.value;
-  const failure = Cause.failureOption(exit.cause);
+  const failure = Cause.findErrorOption(exit.cause);
   if (failure._tag === "Some") throw failure.value;
   throw new Error(String(exit.cause));
 }
 
 describe("NotificationQueueProducer", () => {
   it("enqueues a message", async () => {
-    const queue = { send: vi.fn(async () => {}) } as unknown as Queue;
+    const queue = { send: vi.fn(async () => {}) } as Queue & object;
     const producer = new NotificationQueueProducer(queue);
     await runEffect(
       producer.enqueue({ notificationId: "n1", userId: "u1", type: "LIKE" }),
@@ -73,7 +85,7 @@ describe("NotificationQueueProducer", () => {
   it("returns error on queue failure", async () => {
     const queue = {
       send: vi.fn(() => Promise.reject(new Error("queue full"))),
-    } as unknown as Queue;
+    } as Queue & object;
     const producer = new NotificationQueueProducer(queue);
     await expect(
       runEffect(
@@ -86,7 +98,7 @@ describe("NotificationQueueProducer", () => {
 describe("persistAndEnqueue", () => {
   it("inserts the row then enqueues when both succeed", async () => {
     const db = createMockD1();
-    const queue = { send: vi.fn(async () => {}) } as unknown as Queue;
+    const queue = { send: vi.fn(async () => {}) } as Queue & object;
     const producer = new NotificationQueueProducer(queue);
 
     await runEffect(
@@ -105,7 +117,7 @@ describe("persistAndEnqueue", () => {
     const db = createMockD1();
     const queue = {
       send: vi.fn(() => Promise.reject(new Error("queue full"))),
-    } as unknown as Queue;
+    } as Queue & object;
     const producer = new NotificationQueueProducer(queue);
 
     await expect(
@@ -128,11 +140,9 @@ describe("persistAndEnqueue", () => {
 
 describe("NotificationQueueConsumer", () => {
   function createConsumer(
-    dbRows: Array<Record<string, unknown>> = [],
+    dbRows: MockNotificationRow[] = [],
     botResponse: { ok: boolean; text?: string } = { ok: true },
-    runResult?:
-      | { changes: number }
-      | ((sql: string, values: unknown[]) => { changes: number }),
+    runResult?: (sql: string, values: unknown[]) => { changes: number },
   ) {
     const db = createMockD1({
       handler: (sql) => {
@@ -144,22 +154,22 @@ describe("NotificationQueueConsumer", () => {
       runResult,
     });
 
-    const bot = {
+    const bot = castForTest<Fetcher & object>({
       fetch: vi.fn(async () => ({
         ok: botResponse.ok,
         text: async () => botResponse.text ?? "ok",
       })),
-    } as unknown as Fetcher;
+    });
 
     return { consumer: new NotificationQueueConsumer(db, bot), db, bot };
   }
 
-  function createMessage(body: Record<string, unknown>): Message {
-    return {
+  function createMessage(body: NotificationMessage): Message {
+    return castForTest<Message & object>({
       body: JSON.stringify(body),
       ack: vi.fn(),
       retry: vi.fn(),
-    } as unknown as Message;
+    });
   }
 
   it("processes and acks a pending message", async () => {
@@ -219,9 +229,10 @@ describe("NotificationQueueConsumer", () => {
         return { results: [] };
       },
     });
-    const consumer = new NotificationQueueConsumer(db, {
-      fetch: botFetch,
-    } as unknown as Fetcher);
+    const consumer = new NotificationQueueConsumer(
+      db,
+      castForTest<Fetcher & object>({ fetch: botFetch }),
+    );
     const msg = createMessage({
       notificationId: "n1",
       userId: "u1",
@@ -233,7 +244,7 @@ describe("NotificationQueueConsumer", () => {
 
     // 410 must persist as terminal 'dlq' (not retryable 'failed').
     const dlqUpdate = (db.prepare as ReturnType<typeof vi.fn>).mock.calls.find(
-      (c) => typeof c[0] === "string" && c[0].includes("status = 'dlq'"),
+      (c) => (c[0] as string).includes("status = 'dlq'"),
     );
     expect(dlqUpdate).toBeDefined();
   });
@@ -245,7 +256,7 @@ describe("NotificationQueueConsumer", () => {
     const { consumer, bot } = createConsumer(
       [{ id: "n1", status: "pending" }],
       { ok: true },
-      { changes: 0 },
+      () => ({ changes: 0 }),
     );
     const msg = createMessage({
       notificationId: "n1",
@@ -263,9 +274,10 @@ describe("NotificationQueueConsumer", () => {
         throw new Error("DB down");
       },
     });
-    const consumer = new NotificationQueueConsumer(db, {
-      fetch: vi.fn(),
-    } as unknown as Fetcher);
+    const consumer = new NotificationQueueConsumer(
+      db,
+      castForTest<Fetcher & object>({ fetch: vi.fn() }),
+    );
     const msg = createMessage({
       notificationId: "n1",
       userId: "u1",
@@ -277,11 +289,11 @@ describe("NotificationQueueConsumer", () => {
 
   it("acks invalid JSON (retry won't fix bad JSON)", async () => {
     const { consumer } = createConsumer();
-    const msg = {
+    const msg = castForTest<Message & object>({
       body: "not-json",
       ack: vi.fn(),
       retry: vi.fn(),
-    } as unknown as Message;
+    });
     await consumer.processBatch({ messages: [msg] } as any);
     expect(msg.ack).toHaveBeenCalled();
     expect(msg.retry).not.toHaveBeenCalled();
@@ -321,11 +333,11 @@ describe("NotificationQueueConsumer", () => {
       },
     });
 
-    const bot = {
+    const bot = castForTest<Fetcher & object>({
       fetch: vi.fn(async () => {
         throw new Error("network down");
       }),
-    } as unknown as Fetcher;
+    });
 
     const consumer = new NotificationQueueConsumer(db, bot);
     const msg = createMessage({
@@ -342,7 +354,7 @@ describe("NotificationQueueConsumer", () => {
     const failedUpdate = (
       db.prepare as ReturnType<typeof vi.fn>
     ).mock.calls.find(
-      (c) => typeof c[0] === "string" && c[0].includes("status = 'failed'"),
+      (c) => (c[0] as string).includes("status = 'failed'"),
     );
     expect(failedUpdate).toBeDefined();
   });

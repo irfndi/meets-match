@@ -2,24 +2,37 @@ import { describe, it, expect, vi } from "vitest";
 import type { Fetcher } from "@cloudflare/workers-types";
 import { ApiServiceClient } from "../api-client.js";
 
+interface TestCastInput {}
+
+function castForTest<T>(value: TestCastInput): T {
+  return value as T;
+}
+
+/** Concrete JSON response bodies the client decodes in the tests. */
+type ResponseBody =
+  | null
+  | { success: boolean }
+  | { userIds: string[] }
+  | { user: { id: string; displayName?: string } };
+
 interface MockResponseInit {
   ok: boolean;
   status: number;
-  data: unknown;
+  data: ResponseBody;
 }
 
 function createMockFetcher(response: MockResponseInit) {
-  return {
+  return castForTest<Fetcher & object>({
     fetch: vi.fn(async () => ({
       ok: response.ok,
       status: response.status,
       json: async () => response.data,
     })),
-  } as unknown as Fetcher;
+  });
 }
 
 function getRequest(mock: any, callIndex = 0): Request {
-  return mock.mock.calls[callIndex][0] as unknown as Request;
+  return castForTest<Request & object>(mock.mock.calls[callIndex][0]);
 }
 
 async function requestBodyAsJson(req: Request): Promise<unknown> {
@@ -27,7 +40,7 @@ async function requestBodyAsJson(req: Request): Promise<unknown> {
 }
 
 /** Construct a success response. */
-function okResponse(data: unknown): MockResponseInit {
+function okResponse(data: ResponseBody): MockResponseInit {
   return { ok: true, status: 200, data };
 }
 
@@ -359,9 +372,9 @@ describe("ApiServiceClient", () => {
 
   describe("network error handling", () => {
     it("throws when fetch itself rejects", async () => {
-      const mock = {
+      const mock = castForTest<Fetcher & object>({
         fetch: vi.fn(() => Promise.reject(new Error("Connection refused"))),
-      } as unknown as Fetcher;
+      });
       const client = new ApiServiceClient(mock);
 
       await expect(client.getUser({ userId: "u1" })).rejects.toThrow(
@@ -370,7 +383,7 @@ describe("ApiServiceClient", () => {
     });
 
     it("throws on JSON parse failure after successful response", async () => {
-      const mock = {
+      const mock = castForTest<Fetcher & object>({
         fetch: vi.fn(async () => ({
           ok: true,
           status: 200,
@@ -378,7 +391,7 @@ describe("ApiServiceClient", () => {
             throw new SyntaxError("Unexpected token");
           },
         })),
-      } as unknown as Fetcher;
+      });
       const client = new ApiServiceClient(mock);
 
       await expect(client.getUser({ userId: "u1" })).rejects.toThrow();

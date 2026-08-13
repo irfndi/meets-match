@@ -1,14 +1,22 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 
-function mockD1(
-  countValue: number,
-  results: Array<Record<string, unknown>> = [],
-) {
-  return {
+interface TestCastInput {}
+
+function castForTest<T>(value: TestCastInput): T {
+  return value as T;
+}
+
+type MockRowValue = string | number | boolean | null;
+interface MockRow {
+  id: string;
+  [key: string]: MockRowValue;
+}
+
+function mockD1(countValue: number, results: MockRow[] = []) {
+  const mock = {
     prepare() {
       const stmt = {
-        first: async () =>
-          typeof countValue === "number" ? { c: countValue } : null,
+        first: async () => ({ c: countValue }),
         all: async () => ({ results }),
         run: async () => ({ success: true }),
         bind() {
@@ -17,29 +25,27 @@ function mockD1(
       };
       return stmt;
     },
-  } as unknown as D1Database;
+  };
+  return castForTest<D1Database & object>(mock);
 }
 
-function mockEnv(
-  dlqCount = 5,
-  candidates: Array<Record<string, unknown>> = [],
-) {
+function mockEnv(dlqCount = 5, candidates: MockRow[] = []) {
   return {
     DB: mockD1(dlqCount, candidates),
     KV: {} as KVNamespace,
     NOTIFICATION_QUEUE: {
       send: vi.fn().mockResolvedValue(undefined),
-    } as unknown as Queue,
-    API_SERVICE: {
+    } as Queue & object,
+    API_SERVICE: castForTest<Fetcher & object>({
       fetch: vi.fn().mockResolvedValue(
         new Response(JSON.stringify({ ok: true }), {
           headers: { "Content-Type": "application/json" },
         }),
       ),
-    } as unknown as Fetcher,
-    BOT_SERVICE: {
+    }),
+    BOT_SERVICE: castForTest<Fetcher & object>({
       fetch: vi.fn().mockResolvedValue(new Response()),
-    } as unknown as Fetcher,
+    }),
     ENVIRONMENT: "test",
     REENGAGEMENT_SCHEDULE: "0 10 * * *",
     DLQ_PROCESSOR_SCHEDULE: "*/5 * * * *",
@@ -154,14 +160,14 @@ describe("Cron Jobs", () => {
       KV: {} as KVNamespace,
       NOTIFICATION_QUEUE: {
         send: vi.fn().mockResolvedValue(undefined),
-      } as unknown as Queue,
-      API_SERVICE: {
+      } as Queue & object,
+      API_SERVICE: castForTest<Fetcher & object>({
         fetch: vi
           .fn()
           .mockResolvedValue(
             new Response(JSON.stringify({ pendingLikes: [] }), { status: 200 }),
           ),
-      } as unknown as Fetcher,
+      }),
     };
     await expect(runDailyActiveStatesJob(env as any)).resolves.toBeUndefined();
   });

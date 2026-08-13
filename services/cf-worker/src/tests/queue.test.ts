@@ -1,9 +1,24 @@
 import { describe, it, expect, vi } from "vitest";
 import worker from "../index.js";
+import type { NotificationMessage } from "../notifications/queue.js";
 
-function createMockD1(notification: Record<string, unknown> | null = null) {
+interface TestCastInput {}
+
+function castForTest<T>(value: TestCastInput): T {
+  return value as T;
+}
+
+/** Notification row shape returned by the mock D1. */
+interface MockNotificationRow {
+  id: string;
+  status: string;
+  user_id: string;
+  type: string;
+}
+
+function createMockD1(notification: MockNotificationRow | null = null) {
   const queries: Array<{ sql: string; values: unknown[] }> = [];
-  return {
+  const mockD1 = {
     prepare: vi.fn((sql: string) => ({
       bind: vi.fn((...values: unknown[]) => {
         queries.push({ sql, values });
@@ -15,35 +30,36 @@ function createMockD1(notification: Record<string, unknown> | null = null) {
       }),
     })),
     _queries: queries,
-  } as unknown as D1Database & {
-    _queries: Array<{ sql: string; values: unknown[] }>;
   };
+  return castForTest<
+    D1Database & object & { _queries: Array<{ sql: string; values: unknown[] }> }
+  >(mockD1);
 }
 
 function createMockFetcher(response: Response) {
-  return {
+  return castForTest<Fetcher & object>({
     fetch: vi.fn(async () => response),
-  } as unknown as Fetcher;
+  });
 }
 
-function createMockMessage(body: Record<string, unknown>): Message {
-  return {
+function createMockMessage(body: NotificationMessage): Message {
+  return castForTest<Message & object>({
     id: crypto.randomUUID(),
     timestamp: new Date(),
     body: JSON.stringify(body),
     ack: vi.fn(),
     retry: vi.fn(),
     attempts: 1,
-  } as unknown as Message;
+  });
 }
 
 function createMockBatch(queue: string, messages: Message[]): MessageBatch {
-  return {
+  return castForTest<MessageBatch & object>({
     queue,
     messages,
     retryAll: vi.fn(),
     ackAll: vi.fn(),
-  } as unknown as MessageBatch;
+  });
 }
 
 describe("cf-worker queue handler", () => {

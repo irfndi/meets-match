@@ -1,22 +1,39 @@
 import { describe, it, expect, vi } from "vitest";
-import { NotificationQueueConsumer } from "../../notifications/queue.js";
+import {
+  NotificationQueueConsumer,
+  type NotificationMessage,
+} from "../../notifications/queue.js";
 import type { Message } from "@cloudflare/workers-types";
 import {
   createRacingMockD1,
   createRaceBarrier,
 } from "@meetsmatch/cf-shared/testing/race-mocks";
 
-function createMessage(body: Record<string, unknown>): Message {
-  return {
+interface TestCastInput {}
+
+function castForTest<T>(value: TestCastInput): T {
+  return value as T;
+}
+
+/** A concrete notification row shape for the racing D1 mock. */
+type NotificationRow = {
+  id: string;
+  status: string;
+  user_id: string;
+  type: string;
+};
+
+function createMessage(body: NotificationMessage): Message {
+  return castForTest<Message & object>({
     body: JSON.stringify(body),
     ack: vi.fn(),
     retry: vi.fn(),
-  } as unknown as Message;
+  });
 }
 
 describe("NotificationQueueConsumer idempotency", () => {
   it("does not re-deliver a notification that is already delivered", async () => {
-    const store = new Map<string, Record<string, unknown>>([
+    const store = new Map<string, NotificationRow>([
       [
         "n1",
         {
@@ -31,10 +48,10 @@ describe("NotificationQueueConsumer idempotency", () => {
     const db = createRacingMockD1({ initialRows: store });
     const botFetch = vi.fn(async () => new Response("ok"));
     const consumer = new NotificationQueueConsumer(
-      db as unknown as import("@cloudflare/workers-types").D1Database,
-      {
+      db,
+      castForTest<import("@cloudflare/workers-types").Fetcher & object>({
         fetch: botFetch,
-      } as unknown as import("@cloudflare/workers-types").Fetcher,
+      }),
     );
 
     const msg = createMessage({
@@ -51,7 +68,7 @@ describe("NotificationQueueConsumer idempotency", () => {
   });
 
   it("does not re-deliver a notification that is in DLQ", async () => {
-    const store = new Map<string, Record<string, unknown>>([
+    const store = new Map<string, NotificationRow>([
       [
         "n1",
         {
@@ -66,10 +83,10 @@ describe("NotificationQueueConsumer idempotency", () => {
     const db = createRacingMockD1({ initialRows: store });
     const botFetch = vi.fn(async () => new Response("ok"));
     const consumer = new NotificationQueueConsumer(
-      db as unknown as import("@cloudflare/workers-types").D1Database,
-      {
+      db,
+      castForTest<import("@cloudflare/workers-types").Fetcher & object>({
         fetch: botFetch,
-      } as unknown as import("@cloudflare/workers-types").Fetcher,
+      }),
     );
 
     const msg = createMessage({
@@ -85,7 +102,7 @@ describe("NotificationQueueConsumer idempotency", () => {
   });
 
   it("processes a batch of 10 messages independently", async () => {
-    const store = new Map<string, Record<string, unknown>>();
+    const store = new Map<string, NotificationRow>();
     for (let i = 0; i < 10; i++) {
       store.set(`n${i}`, {
         id: `n${i}`,
@@ -98,10 +115,10 @@ describe("NotificationQueueConsumer idempotency", () => {
     const db = createRacingMockD1({ initialRows: store });
     const botFetch = vi.fn(async () => new Response("ok"));
     const consumer = new NotificationQueueConsumer(
-      db as unknown as import("@cloudflare/workers-types").D1Database,
-      {
+      db,
+      castForTest<import("@cloudflare/workers-types").Fetcher & object>({
         fetch: botFetch,
-      } as unknown as import("@cloudflare/workers-types").Fetcher,
+      }),
     );
 
     const messages = Array.from({ length: 10 }, (_, i) =>
@@ -121,7 +138,7 @@ describe("NotificationQueueConsumer idempotency", () => {
   });
 
   it("acks delivered messages and retries failed ones in a mixed batch", async () => {
-    const store = new Map<string, Record<string, unknown>>([
+    const store = new Map<string, NotificationRow>([
       ["n1", { id: "n1", status: "pending", user_id: "u1", type: "LIKE" }],
       ["n2", { id: "n2", status: "delivered", user_id: "u1", type: "LIKE" }],
       ["n3", { id: "n3", status: "pending", user_id: "u1", type: "LIKE" }],
@@ -138,10 +155,10 @@ describe("NotificationQueueConsumer idempotency", () => {
     });
 
     const consumer = new NotificationQueueConsumer(
-      db as unknown as import("@cloudflare/workers-types").D1Database,
-      {
+      db,
+      castForTest<import("@cloudflare/workers-types").Fetcher & object>({
         fetch: botFetch,
-      } as unknown as import("@cloudflare/workers-types").Fetcher,
+      }),
     );
 
     const msgs = [
@@ -162,7 +179,7 @@ describe("NotificationQueueConsumer idempotency", () => {
   it("atomic claim prevents double delivery when two workers race on the same notification", async () => {
     const barrier = createRaceBarrier();
 
-    const store = new Map<string, Record<string, unknown>>([
+    const store = new Map<string, NotificationRow>([
       [
         "n1",
         {
@@ -191,10 +208,10 @@ describe("NotificationQueueConsumer idempotency", () => {
 
     const botFetch = vi.fn(async () => new Response("ok"));
     const consumer = new NotificationQueueConsumer(
-      db as unknown as import("@cloudflare/workers-types").D1Database,
-      {
+      db,
+      castForTest<import("@cloudflare/workers-types").Fetcher & object>({
         fetch: botFetch,
-      } as unknown as import("@cloudflare/workers-types").Fetcher,
+      }),
     );
 
     const msg = createMessage({
