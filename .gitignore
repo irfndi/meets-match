@@ -31,6 +31,9 @@ node_modules/
 .wrangler/
 .dev.vars
 
+# Alchemy local state (version check, logs, credentials cache)
+.alchemy/
+
 # Clawpatch
 .clawpatch/*
 !.clawpatch/config.json

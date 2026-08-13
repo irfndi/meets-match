@@ -14,7 +14,6 @@ const log = createLogger("cf-worker.dailyActiveStates");
 // - default            -> DAILY_ACTIVE_HAPPY
 
 const BATCH_SIZE = 100;
-const ONE_DAY_MS = 86_400_000;
 
 const LIKES_REMINDER_VARIANTS: ReadonlyArray<(name: string) => string> = [
   (name) =>
@@ -51,19 +50,26 @@ function pickVariant(
   return variants[idx % variants.length];
 }
 
-interface ActiveUser {
+interface ApiStateSnapshot {
+  hasPendingLikes: boolean;
+}
+
+interface DailyActiveUser {
   id: string;
   first_name: string | null;
   language: string | null;
-  last_active: string | null;
-  last_daily_message_at: string | null;
-  last_daily_message_type: string | null;
   daily_swipes_used: number | null;
-  daily_likes_used: number | null;
 }
 
-interface ApiStateSnapshot {
-  hasPendingLikes: boolean;
+interface DailyPayload {
+  message: string;
+  action: "view_matches" | "find_match";
+  state: string;
+}
+
+interface PickedDailyType {
+  type: "DAILY_LIKES_REMINDER" | "DAILY_EXPLORE_PROMPT" | "DAILY_ACTIVE_HAPPY";
+  message: (name: string) => string;
 }
 
 async function fetchUserState(
@@ -123,8 +129,8 @@ export async function runDailyActiveStatesJob(env: Env): Promise<void> {
            LIMIT ?`,
         )
           .bind(BATCH_SIZE)
-          .all();
-        return (results ?? []) as Array<Record<string, unknown>>;
+          .all<DailyActiveUser>();
+        return results ?? [];
       },
       catch: (error) => new Error(`fetchCandidates: ${String(error)}`),
     }),
@@ -148,7 +154,7 @@ export async function runDailyActiveStatesJob(env: Env): Promise<void> {
 
   const exit = await Effect.runPromiseExit(effect);
   if (Exit.isFailure(exit)) {
-    const failure = Cause.failureOption(exit.cause);
+    const failure = Cause.findErrorOption(exit.cause);
     if (failure._tag === "Some") {
       log.error("dailyActiveStates", "Job failed", undefined, failure.value);
     } else {
@@ -167,31 +173,28 @@ export async function runDailyActiveStatesJob(env: Env): Promise<void> {
 function pickType(
   state: ApiStateSnapshot,
   dailySwipesUsed: number,
-): {
-  type: "DAILY_LIKES_REMINDER" | "DAILY_EXPLORE_PROMPT" | "DAILY_ACTIVE_HAPPY";
-  message: (name: string) => string;
-} {
+): PickedDailyType {
   if (state.hasPendingLikes) {
-    return {
-      type: "DAILY_LIKES_REMINDER",
-      message: pickVariant(LIKES_REMINDER_VARIANTS),
-    };
+        return {
+          type: "DAILY_LIKES_REMINDER",
+          message: pickVariant(LIKES_REMINDER_VARIANTS),
+        } satisfies PickedDailyType;
   }
   if (dailySwipesUsed === 0) {
-    return {
-      type: "DAILY_EXPLORE_PROMPT",
-      message: pickVariant(EXPLORE_PROMPT_VARIANTS),
-    };
+        return {
+          type: "DAILY_EXPLORE_PROMPT",
+          message: pickVariant(EXPLORE_PROMPT_VARIANTS),
+        } satisfies PickedDailyType;
   }
-  return {
-    type: "DAILY_ACTIVE_HAPPY",
-    message: pickVariant(HAPPY_VARIANTS),
-  };
+      return {
+        type: "DAILY_ACTIVE_HAPPY",
+        message: pickVariant(HAPPY_VARIANTS),
+      } satisfies PickedDailyType;
 }
 
 function processDailyCandidate(
   env: Env,
-  user: Record<string, unknown>,
+  user: DailyActiveUser,
   now: Date,
 ): Effect.Effect<void, never, never> {
   return Effect.gen(function* () {
@@ -213,25 +216,25 @@ function processDailyCandidate(
 
     const producer = new NotificationQueueProducer(env.NOTIFICATION_QUEUE);
     const notificationId = crypto.randomUUID();
-    const payload: Record<string, unknown> = {
+    const payload = {
       message,
       action: type === "DAILY_LIKES_REMINDER" ? "view_matches" : "find_match",
       state: type,
-    };
+    } satisfies DailyPayload;
 
     const enqueueResult = yield* persistAndEnqueue(env.DB, producer, {
       notificationId,
       userId: id,
       type,
       payload: JSON.stringify(payload),
-    }).pipe(Effect.either);
+    }).pipe(Effect.result);
 
-    if (enqueueResult._tag === "Left") {
+    if (enqueueResult._tag === "Failure") {
       log.error(
         "dailyActiveStates",
         `Failed to enqueue`,
         { id },
-        enqueueResult.left,
+        enqueueResult.failure,
       );
       return;
     }
@@ -248,7 +251,7 @@ function processDailyCandidate(
           .run();
       },
       catch: (error) => new Error(`updateLastDailyMessage: ${String(error)}`),
-    }).pipe(Effect.orElse(() => Effect.void));
+    }).pipe(Effect.catch(() => Effect.void));
 
     log.info("dailyActiveStates", `Sent ${type} to ${id}`);
   });

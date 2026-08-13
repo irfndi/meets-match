@@ -114,7 +114,7 @@ describe("structured logging", () => {
     expect(entry.error.name).toBe("Error");
     expect(entry.error.message).toBe("critical failure");
     expect(entry.error.stack).toBeDefined();
-    expect(typeof entry.error.stack).toBe("string");
+    expect(entry.error.stack).toBeTypeOf("string");
   });
 
   it("serializes Error subclasses with their name", () => {

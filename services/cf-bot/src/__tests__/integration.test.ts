@@ -1,6 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { MyContext } from "../types.js";
 
+interface TestCastInput {}
+
+/** Single-assertion cast for test mocks that cannot structurally satisfy an interface. */
+function castForTest<T>(value: TestCastInput): T {
+  return value as T;
+}
+
 function mockKV() {
   const store = new Map<string, string>();
   return {
@@ -16,7 +23,7 @@ function mockKV() {
 }
 
 function mockCtx(text?: string): MyContext {
-  return {
+  return castForTest<MyContext>({
     reply: vi.fn().mockResolvedValue(undefined),
     answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
     deleteMessage: vi.fn().mockResolvedValue(undefined),
@@ -32,14 +39,13 @@ function mockCtx(text?: string): MyContext {
       : undefined,
     callbackQuery: undefined,
     chat: { id: 123, type: "private" as const },
-  } as unknown as MyContext;
+  });
 }
 
 function createMockApiService(responseMap: Record<string, () => Response>) {
   return {
     fetch: vi.fn().mockImplementation((req: Request) => {
-      const url =
-        typeof req === "string" ? req : (req as any).url || String(req);
+      const url = req.url;
       const sortedPatterns = Object.entries(responseMap).sort(
         (a, b) => b[0].length - a[0].length,
       );
@@ -80,7 +86,7 @@ describe("Integration: Main Menu Keyboard Routing", () => {
     const { matchCommand } = await import("../handlers/match.js");
     const ctx = mockCtx("🔍 Find Match");
     const env = {
-      KV: kv as unknown as KVNamespace,
+      KV: castForTest<KVNamespace>(kv),
       API_SERVICE: createMockApiService({
         "/users/123": () =>
           new Response(JSON.stringify({ user: completeUser }), { status: 200 }),
@@ -98,7 +104,7 @@ describe("Integration: Main Menu Keyboard Routing", () => {
     const { matchesCommand } = await import("../handlers/matches.js");
     const ctx = mockCtx("💕 My Matches");
     const env = {
-      KV: kv as unknown as KVNamespace,
+      KV: castForTest<KVNamespace>(kv),
       API_SERVICE: createMockApiService({
         "/users/123": () =>
           new Response(JSON.stringify({ user: completeUser }), { status: 200 }),
@@ -116,7 +122,7 @@ describe("Integration: Main Menu Keyboard Routing", () => {
     const { profileCommand } = await import("../handlers/profile.js");
     const ctx = mockCtx("👤 Profile");
     const env = {
-      KV: kv as unknown as KVNamespace,
+      KV: castForTest<KVNamespace>(kv),
       API_SERVICE: createMockApiService({
         "/users/123": () =>
           new Response(JSON.stringify({ user: completeUser }), { status: 200 }),
@@ -130,7 +136,7 @@ describe("Integration: Main Menu Keyboard Routing", () => {
     const { settingsCommand } = await import("../handlers/settings.js");
     const ctx = mockCtx("⚙️ Settings");
     const env = {
-      KV: kv as unknown as KVNamespace,
+      KV: castForTest<KVNamespace>(kv),
       API_SERVICE: createMockApiService({
         "/users/123": () =>
           new Response(JSON.stringify({ user: completeUser }), { status: 200 }),
@@ -148,7 +154,7 @@ describe("Integration: Profile Completion Flow", () => {
   beforeEach(() => {
     kv = mockKV();
     env = {
-      KV: kv as unknown as KVNamespace,
+      KV: castForTest<KVNamespace>(kv),
       API_SERVICE: createMockApiService({
         "/users/123": () =>
           new Response(
@@ -189,7 +195,7 @@ describe("Integration: Match Lifecycle", () => {
   beforeEach(() => {
     kv = mockKV();
     env = {
-      KV: kv as unknown as KVNamespace,
+      KV: castForTest<KVNamespace>(kv),
       API_SERVICE: createMockApiService({
         "/users/123": () =>
           new Response(JSON.stringify({ user: completeUser }), { status: 200 }),

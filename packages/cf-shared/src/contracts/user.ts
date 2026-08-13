@@ -1,17 +1,23 @@
 import {
   Array,
   Boolean,
-  Literal,
+  Literals,
   Number,
   String,
   Struct,
-  filter,
+  check,
+  makeFilter,
   optional,
 } from "effect/Schema";
 
 // --- Enums ---
 
-export const Gender = Literal("male", "female", "other", "prefer_not_to_say");
+export const Gender = Literals([
+  "male",
+  "female",
+  "other",
+  "prefer_not_to_say",
+]);
 export type Gender = typeof Gender.Type;
 
 // --- Nested Types ---
@@ -21,18 +27,20 @@ export const Location = Struct({
   longitude: optional(Number),
   city: optional(String),
   country: optional(String),
-  source: optional(Literal("gps", "geocoded")),
+  source: optional(Literals(["gps", "geocoded"])),
   lastUpdated: optional(String), // ISO 8601
 }).pipe(
-  filter((loc) => {
-    const hasLat = loc.latitude != null;
-    const hasLon = loc.longitude != null;
-    return hasLat === hasLon;
-  }),
+  check(
+    makeFilter((loc) => {
+      const hasLat = loc.latitude != null;
+      const hasLon = loc.longitude != null;
+      return hasLat === hasLon;
+    }),
+  ),
 );
 export type Location = typeof Location.Type;
 
-export const SubscriptionTier = Literal("free", "premium", "premium_plus");
+export const SubscriptionTier = Literals(["free", "premium", "premium_plus"]);
 export type SubscriptionTier = typeof SubscriptionTier.Type;
 
 export const Preferences = Struct({
@@ -64,7 +72,7 @@ export const User = Struct({
     Array(
       Struct({
         url: String,
-        type: Literal("image", "video"),
+        type: Literals(["image", "video"]),
         uploadedAt: String,
       }),
     ),

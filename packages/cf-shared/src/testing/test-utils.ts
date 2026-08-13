@@ -6,9 +6,20 @@ import { vi } from "vitest";
  */
 
 export interface MockD1Result {
-  results?: Array<Record<string, unknown>>;
+  results?: Array<MockValueMap>;
   success?: boolean;
-  meta?: Record<string, unknown>;
+  meta?: MockValueMap;
+}
+
+export type MockValue = string | number | boolean | null;
+export interface MockValueMap {
+  [key: string]: MockValue;
+}
+
+interface TestCastInput {}
+
+function castForTest<T>(value: TestCastInput): T {
+  return value as T;
 }
 
 export type MockD1QueryHandler = (
@@ -71,24 +82,25 @@ export function createMockD1(
     _captured: captured,
   };
 
-  return mockD1 as unknown as import("@cloudflare/workers-types").D1Database & {
+  return castForTest<import("@cloudflare/workers-types").D1Database & {
     _captured: typeof captured;
-  };
+  }>(mockD1);
 }
 
 export function createMockKV(initial: Record<string, string> = {}) {
   const store = new Map<string, string>(Object.entries(initial));
-  return {
-    get: vi.fn(async (key: string) => store.get(key) ?? null),
-    put: vi.fn(async (key: string, value: string) => store.set(key, value)),
-    delete: vi.fn(async (key: string) => store.delete(key)),
-    list: vi.fn(async () => ({
-      keys: Array.from(store.keys()).map((name) => ({ name })),
-    })),
-    _store: store,
-  } as unknown as import("@cloudflare/workers-types").KVNamespace & {
-    _store: Map<string, string>;
-  };
+  return castForTest<import("@cloudflare/workers-types").KVNamespace & {
+  }>(
+    {
+      get: vi.fn(async (key: string) => store.get(key) ?? null),
+      put: vi.fn(async (key: string, value: string) => store.set(key, value)),
+      delete: vi.fn(async (key: string) => store.delete(key)),
+      list: vi.fn(async () => ({
+        keys: Array.from(store.keys()).map((name) => ({ name })),
+      })),
+      _store: store,
+    },
+  );
 }
 
 export function createMockR2() {
@@ -96,46 +108,44 @@ export function createMockR2() {
     string,
     { body: ReadableStream; httpMetadata?: { contentType?: string } }
   >();
-  return {
-    put: vi.fn(
-      async (
-        key: string,
-        value: ReadableStream | ArrayBuffer,
-        opts?: { httpMetadata?: { contentType?: string } },
-      ) => {
-        const body =
-          value instanceof ReadableStream ? value : new Blob([value]).stream();
-        objects.set(key, {
-          body,
-          httpMetadata: opts?.httpMetadata,
-        });
-      },
-    ),
-    get: vi.fn(async (key: string) => {
-      const obj = objects.get(key);
-      if (!obj) return null;
-      return {
-        body: obj.body,
-        httpMetadata: obj.httpMetadata,
-        writeHttpMetadata: vi.fn(),
-        httpEtag: `"${key}"`,
-        size: 0,
-        uploaded: new Date(),
-        checksums: {},
-      };
-    }),
-    delete: vi.fn(async (key: string) => objects.delete(key)),
-    _objects: objects,
-  } as unknown as import("@cloudflare/workers-types").R2Bucket & {
-    _objects: Map<string, unknown>;
-  };
+  return castForTest<import("@cloudflare/workers-types").R2Bucket & {
+  }>(
+    {
+      put: vi.fn(
+        async (
+          key: string,
+          value: ReadableStream | ArrayBuffer,
+          opts?: { httpMetadata?: { contentType?: string } },
+        ) => {
+          const body =
+            value instanceof ReadableStream ? value : new Blob([value]).stream();
+          objects.set(key, { body, httpMetadata: opts?.httpMetadata });
+        },
+      ),
+      get: vi.fn(async (key: string) => {
+        const obj = objects.get(key);
+        if (!obj) return null;
+        return {
+          body: obj.body,
+          httpMetadata: obj.httpMetadata,
+          writeHttpMetadata: vi.fn(),
+          httpEtag: `"${key}"`,
+          size: 0,
+          uploaded: new Date(),
+          checksums: {},
+        };
+      }),
+      delete: vi.fn(async (key: string) => objects.delete(key)),
+      _objects: objects,
+    },
+  );
 }
 
 export function createMockQueue() {
-  return {
+  return castForTest<import("@cloudflare/workers-types").Queue>({
     send: vi.fn(async () => {}),
     sendBatch: vi.fn(async () => {}),
-  } as unknown as import("@cloudflare/workers-types").Queue;
+  });
 }
 
 /**
@@ -146,7 +156,7 @@ export async function runEffect<A, E>(
 ): Promise<A> {
   const exit = await Effect.runPromiseExit(effect);
   if (Exit.isSuccess(exit)) return exit.value;
-  const failure = Cause.failureOption(exit.cause);
+  const failure = Cause.findErrorOption(exit.cause);
   if (failure._tag === "Some") throw failure.value;
   throw new Error(String(exit.cause));
 }

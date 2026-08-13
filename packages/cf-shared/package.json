@@ -29,11 +29,11 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "effect": "^3.21.2"
+    "effect": "4.0.0-rc.108"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260515.1",
-    "typescript": "^6.0.3",
-    "vitest": "^4.1.6"
+    "@cloudflare/workers-types": "^5.20260808.1",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
   }
 }

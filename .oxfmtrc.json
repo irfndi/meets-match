@@ -1,0 +1,24 @@
+{
+  "semi": true,
+  "singleQuote": false,
+  "tabWidth": 2,
+  "useTabs": false,
+  "printWidth": 80,
+  "endOfLine": "lf",
+  "ignorePatterns": [
+    "**/dist/**",
+    "**/node_modules/**",
+    "**/__snapshots__/**",
+    "**/*.md",
+    "**/*.mdx",
+    ".clawpatch/**",
+    ".conductor/**",
+    ".deepsec/**",
+    ".github/**",
+    ".jules/**",
+    ".omo/**",
+    ".sisyphus/**",
+    ".uv-cache/**",
+    ".wrangler/**"
+  ]
+}

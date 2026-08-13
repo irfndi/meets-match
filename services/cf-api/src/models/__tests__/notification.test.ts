@@ -1,10 +1,24 @@
-import { describe, it, expect, vi } from "vitest";
+type TestRowValue =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | TestRowValue[]
+  | { [key: string]: TestRowValue };
+
+interface TestRow {
+  [key: string]: TestRowValue;
+}
+
+
+import { describe, it, expect } from "vitest";
 import { NotificationRepository } from "../notification.js";
 import { createMockD1, runEffect } from "@meetsmatch/cf-shared/testing";
 import { NotFoundError } from "@meetsmatch/cf-shared";
 
 describe("NotificationRepository", () => {
-  function createRepo(rows: Array<Record<string, unknown>> = []) {
+  function createRepo(rows: Array<TestRow> = []) {
     const db = createMockD1((sql, values) => {
       if (sql.includes("SELECT * FROM notifications WHERE id")) {
         return { results: rows };
@@ -29,7 +43,7 @@ describe("NotificationRepository", () => {
     return { repo: new NotificationRepository(db), db };
   }
 
-  function makeRow(overrides: Record<string, unknown> = {}) {
+  function makeRow(overrides: TestRow = {}) {
     return {
       id: "n1",
       user_id: "u1",

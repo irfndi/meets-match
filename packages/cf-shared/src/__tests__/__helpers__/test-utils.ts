@@ -5,10 +5,20 @@ import { vi } from "vitest";
  * Shared test utilities for mocking Cloudflare Workers primitives.
  */
 
+interface MockValueMap {
+  [key: string]: string | number | boolean | null;
+}
+
 export interface MockD1Result {
-  results?: Array<Record<string, unknown>>;
+  results?: Array<MockValueMap>;
   success?: boolean;
-  meta?: Record<string, unknown>;
+  meta?: MockValueMap;
+}
+
+interface TestCastInput {}
+
+function castForTest<T>(value: TestCastInput): T {
+  return value as T;
 }
 
 export type MockD1QueryHandler = (
@@ -55,14 +65,16 @@ export function createMockD1(
     _captured: captured,
   };
 
-  return mockD1 as unknown as import("@cloudflare/workers-types").D1Database & {
+  return castForTest<import("@cloudflare/workers-types").D1Database & {
     _captured: typeof captured;
-  };
+  }>(mockD1);
 }
 
 export function createMockKV(initial: Record<string, string> = {}) {
   const store = new Map<string, string>(Object.entries(initial));
-  return {
+  return castForTest<import("@cloudflare/workers-types").KVNamespace & {
+    _store: Map<string, string>;
+  }>({
     get: vi.fn(async (key: string) => store.get(key) ?? null),
     put: vi.fn(async (key: string, value: string) => store.set(key, value)),
     delete: vi.fn(async (key: string) => store.delete(key)),
@@ -70,9 +82,7 @@ export function createMockKV(initial: Record<string, string> = {}) {
       keys: Array.from(store.keys()).map((name) => ({ name })),
     })),
     _store: store,
-  } as unknown as import("@cloudflare/workers-types").KVNamespace & {
-    _store: Map<string, string>;
-  };
+  });
 }
 
 export function createMockR2() {
@@ -80,7 +90,9 @@ export function createMockR2() {
     string,
     { body: ReadableStream; httpMetadata?: { contentType?: string } }
   >();
-  return {
+  return castForTest<import("@cloudflare/workers-types").R2Bucket & {
+    _objects: Map<string, unknown>;
+  }>({
     put: vi.fn(
       async (
         key: string,
@@ -110,16 +122,14 @@ export function createMockR2() {
     }),
     delete: vi.fn(async (key: string) => objects.delete(key)),
     _objects: objects,
-  } as unknown as import("@cloudflare/workers-types").R2Bucket & {
-    _objects: Map<string, unknown>;
-  };
+  });
 }
 
 export function createMockQueue() {
-  return {
+  return castForTest<import("@cloudflare/workers-types").Queue>({
     send: vi.fn(async () => {}),
     sendBatch: vi.fn(async () => {}),
-  } as unknown as import("@cloudflare/workers-types").Queue;
+  });
 }
 
 /**
@@ -130,7 +140,7 @@ export async function runEffect<A, E>(
 ): Promise<A> {
   const exit = await Effect.runPromiseExit(effect);
   if (Exit.isSuccess(exit)) return exit.value;
-  const failure = Cause.failureOption(exit.cause);
+  const failure = Cause.findErrorOption(exit.cause);
   if (failure._tag === "Some") throw failure.value;
   throw new Error(String(exit.cause));
 }

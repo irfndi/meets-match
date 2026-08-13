@@ -50,7 +50,7 @@ const INTERESTS_POOL = [
   "marketing",
 ];
 
-const FIRST_NAMES: Record<string, string[]> = {
+const FIRST_NAMES = {
   male: [
     "Ahmad",
     "Budi",
@@ -270,7 +270,7 @@ function generateUser(
   const lastName = rand(LAST_NAMES);
   const age = randInt(20, 45);
 
-  const genderPrefMap: Record<string, string[]> = {
+  const genderPrefMap = {
     male: randomFloat() > 0.1 ? ["female"] : ["female", "non-binary"],
     female: randomFloat() > 0.1 ? ["male"] : ["male", "non-binary"],
     "non-binary": ["male", "female", "non-binary"],
@@ -314,7 +314,7 @@ function generateUser(
 }
 
 function userToSql(u: SeedUser): string {
-  const values = [
+  const values: Array<string | number> = [
     u.id,
     u.username,
     u.first_name,
@@ -340,11 +340,7 @@ function userToSql(u: SeedUser): string {
   ];
 
   return `(${values
-    .map((v) =>
-      typeof v === "string" && v !== "NULL" && !v.startsWith("datetime")
-        ? `'${v}'`
-        : v,
-    )
+    .map((v) => String(v) === "NULL" || String(v).startsWith("datetime") ? v : `'${v}'`)
     .join(", ")})`;
 }
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { Config, ConfigProvider, Effect, Layer } from "effect";
+import { ConfigProvider, Effect } from "effect";
 import { AppConfig } from "../config.js";
 
 describe("Config", () => {
@@ -13,8 +13,8 @@ describe("Config", () => {
       const result = await Effect.runPromise(
         program.pipe(
           Effect.provide(
-            Layer.setConfigProvider(
-              ConfigProvider.fromMap(new Map([["ENVIRONMENT", "production"]])),
+            ConfigProvider.layer(
+              ConfigProvider.fromUnknown({ ENVIRONMENT: "production" }),
             ),
           ),
         ),
@@ -31,9 +31,7 @@ describe("Config", () => {
 
       const result = await Effect.runPromise(
         program.pipe(
-          Effect.provide(
-            Layer.setConfigProvider(ConfigProvider.fromMap(new Map())),
-          ),
+          Effect.provide(ConfigProvider.layer(ConfigProvider.fromUnknown({}))),
         ),
       );
 
@@ -49,8 +47,8 @@ describe("Config", () => {
       const result = await Effect.runPromise(
         program.pipe(
           Effect.provide(
-            Layer.setConfigProvider(
-              ConfigProvider.fromMap(new Map([["ENVIRONMENT", "staging"]])),
+            ConfigProvider.layer(
+              ConfigProvider.fromUnknown({ ENVIRONMENT: "staging" }),
             ),
           ),
         ),
@@ -68,8 +66,11 @@ describe("Config", () => {
       const result = await Effect.runPromise(
         program.pipe(
           Effect.provide(
-            Layer.setConfigProvider(
-              ConfigProvider.fromMap(new Map([["ENVIRONMENT", ""]])),
+            ConfigProvider.layer(
+              ConfigProvider.fromUnknown(
+                { ENVIRONMENT: "" },
+                { preserveEmptyStrings: true },
+              ),
             ),
           ),
         ),
@@ -87,13 +88,11 @@ describe("Config", () => {
       const result = await Effect.runPromise(
         program.pipe(
           Effect.provide(
-            Layer.setConfigProvider(
-              ConfigProvider.fromMap(
-                new Map([
-                  ["ENVIRONMENT", "test"],
-                  ["OTHER_VAR", "ignored"],
-                ]),
-              ),
+            ConfigProvider.layer(
+              ConfigProvider.fromUnknown({
+                ENVIRONMENT: "test",
+                OTHER_VAR: "ignored",
+              }),
             ),
           ),
         ),
@@ -111,8 +110,8 @@ describe("Config", () => {
       const result = await Effect.runPromise(
         program.pipe(
           Effect.provide(
-            Layer.setConfigProvider(
-              ConfigProvider.fromMap(new Map([["ENVIRONMENT", "production"]])),
+            ConfigProvider.layer(
+              ConfigProvider.fromUnknown({ ENVIRONMENT: "production" }),
             ),
           ),
         ),

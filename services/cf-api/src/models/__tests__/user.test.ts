@@ -1,11 +1,30 @@
+type TestRowValue =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | TestRowValue[]
+  | { [key: string]: TestRowValue };
+
+interface TestRow {
+  [key: string]: TestRowValue;
+}
+
+interface TestCastInput {}
+
+function castForTest<T>(value: TestCastInput): T {
+  return value as T;
+}
+
+
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { UserRepository } from "../user.js";
-import { NotFoundError } from "@meetsmatch/cf-shared";
 import { createMockD1 } from "@meetsmatch/cf-shared/testing";
 
 function mockD1() {
-  const store = new Map<string, Record<string, unknown>>();
-  function seed(id: string, data: Record<string, unknown> = {}) {
+  const store = new Map<string, TestRow>();
+  function seed(id: string, data: TestRow = {}) {
     store.set(id, {
       id,
       first_name: "Test",
@@ -36,7 +55,7 @@ function mockD1() {
             run: async () => ({ success: true }),
             first: async () => {
               if (sql.includes("SELECT id FROM users"))
-                return store.get(String(values[0])) ? { id: values[0] } : null;
+                return store.get(String(values[0])) ? { id: String(values[0]) } : null;
               if (sql.includes("FROM users WHERE id ="))
                 return store.get(String(values[0])) ?? null;
               return null;
@@ -57,7 +76,7 @@ describe("UserRepository", () => {
 
   beforeEach(() => {
     db = mockD1();
-    repo = new UserRepository(db as unknown as D1Database);
+    repo = new UserRepository(castForTest<D1Database>(db));
   });
 
   it("should retrieve existing user by id", async () => {
@@ -154,8 +173,8 @@ describe("UserRepository quota methods", () => {
     vi.useRealTimers();
   });
 
-  function createRepo(row: Record<string, unknown> = {}) {
-    const db = createMockD1((sql, values) => {
+  function createRepo(row: TestRow = {}) {
+    const db = createMockD1((sql, _values) => {
       if (sql.includes("FROM users WHERE id =")) {
         return {
           results: [

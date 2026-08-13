@@ -1145,14 +1145,14 @@ const id: Translations = {
   notificationIncompleteProfileCTA: "👤 Lengkapi Profil",
 };
 
-const dictionaries: Record<Language, Translations> = { en, id };
+const dictionaries = { en, id } satisfies Record<Language, Translations>;
 
 export function escapeMd(value: string): string {
-  return value.replace(/[_*\[\]`\\]/g, "\\$&");
+  return value.replace(/[_*[\]`\\]/g, "\\$&");
 }
 
 export function escapeMarkdownV2(value: string): string {
-  return value.replace(/[_*\[\]()~`>#+=|{}\.!\\-]/g, "\\$&");
+  return value.replace(/[_*[\]()~`>#+=|{}.!\\-]/g, "\\$&");
 }
 
 /**

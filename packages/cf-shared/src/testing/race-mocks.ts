@@ -1,5 +1,16 @@
 import { vi } from "vitest";
 
+type MockValue = string | number | boolean | null;
+interface MockRow {
+  [key: string]: MockValue;
+}
+
+interface TestCastInput {}
+
+function castForTest<T>(value: TestCastInput): T {
+  return value as T;
+}
+
 /**
  * A barrier that allows pausing an async operation at a specific point
  * and resuming it later. Used to deterministically simulate race conditions.
@@ -40,7 +51,7 @@ export function createRaceBarrier(): RaceBarrier {
  * when barriers are released.
  */
 export function createRacingMockD1(options: {
-  initialRows?: Map<string, Record<string, unknown>>;
+  initialRows?: Map<string, MockRow>;
   pauseBeforeRun?: (
     sql: string,
     values: unknown[],
@@ -72,7 +83,7 @@ export function createRacingMockD1(options: {
           for (const assign of assignments) {
             const colMatch = assign.match(/^(\w+)\s*=\s*\?/);
             if (colMatch) {
-              row[colMatch[1]] = values[valueIdx];
+              row[colMatch[1]] = values[valueIdx] as MockValue;
               valueIdx++;
             } else {
               const directMatch = assign.match(/^(\w+)\s*=\s*'(\w+)'/);
@@ -93,7 +104,7 @@ export function createRacingMockD1(options: {
           for (const assign of assignments) {
             const colMatch = assign.match(/^(\w+)\s*=\s*\?/);
             if (colMatch) {
-              row[colMatch[1]] = values[valueIdx];
+              row[colMatch[1]] = values[valueIdx] as MockValue;
               valueIdx++;
             }
           }
@@ -120,7 +131,7 @@ export function createRacingMockD1(options: {
           for (const assign of assignments) {
             const colMatch = assign.match(/^(\w+)\s*=\s*\?/);
             if (colMatch) {
-              row[colMatch[1]] = values[valueIdx];
+              row[colMatch[1]] = values[valueIdx] as MockValue;
               valueIdx++;
             } else {
               const directMatch = assign.match(/^(\w+)\s*=\s*'(\w+)'/);
@@ -167,10 +178,10 @@ export function createRacingMockD1(options: {
     _captured: captured,
   };
 
-  return mock as unknown as import("@cloudflare/workers-types").D1Database & {
-    _store: Map<string, Record<string, unknown>>;
+  return castForTest<import("@cloudflare/workers-types").D1Database & {
+    _store: Map<string, MockRow>;
     _captured: Array<{ sql: string; values: unknown[] }>;
-  };
+  }>(mock);
 }
 
 /**
@@ -193,7 +204,7 @@ export function createRacingMockKV(options: {
       if (pause) await pause;
       return store.get(key) ?? null;
     }),
-    put: vi.fn(async (key: string, value: string, _opts?: unknown) => {
+    put: vi.fn(async (key: string, value: string, _opts?: { expiration?: number; expirationTtl?: number }) => {
       const pause = options.pauseBeforePut?.(key);
       if (pause) await pause;
       store.set(key, value);
@@ -207,7 +218,7 @@ export function createRacingMockKV(options: {
     _store: store,
   };
 
-  return mock as unknown as import("@cloudflare/workers-types").KVNamespace & {
+  return castForTest<import("@cloudflare/workers-types").KVNamespace & {
     _store: Map<string, string>;
-  };
+  }>(mock);
 }

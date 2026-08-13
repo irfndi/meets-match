@@ -1,6 +1,9 @@
 import { Effect } from "effect";
 import type { KVNamespace } from "@cloudflare/workers-types";
 
+interface GeocodingAddress { city?: string; town?: string; village?: string; municipality?: string; country?: string; }
+interface GeocodingResult { lat?: string; lon?: string; address?: GeocodingAddress; }
+
 export interface Location {
   latitude: number;
   longitude: number;
@@ -44,12 +47,12 @@ export class GeocodingService {
         });
         if (!res.ok) throw new Error(`Geocoding search failed: ${res.status}`);
 
-        const results = (await res.json()) as Array<Record<string, unknown>>;
+        const results = (await res.json()) as Array<GeocodingResult>;
         const locations: Array<Location> = [];
         const seen = new Set<string>();
 
         for (const r of results) {
-          const addr = (r.address ?? {}) as Record<string, string>;
+          const addr = (r.address ?? {}) as GeocodingAddress;
           const city =
             addr.city || addr.town || addr.village || addr.municipality || "";
           const country = addr.country || "";
@@ -98,8 +101,8 @@ export class GeocodingService {
         });
         if (!res.ok) throw new Error(`Reverse geocoding failed: ${res.status}`);
 
-        const result = (await res.json()) as Record<string, unknown>;
-        const addr = (result.address ?? {}) as Record<string, string>;
+        const result = (await res.json()) as GeocodingResult;
+        const addr = (result.address ?? {}) as GeocodingAddress;
         const city =
           addr.city || addr.town || addr.village || addr.municipality || "";
         const country = addr.country || "";

@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Effect, Schema } from "effect";
 import type { D1Database } from "@cloudflare/workers-types";
 import {
   User,
@@ -8,6 +8,66 @@ import {
   type UpdateLastActiveRequest,
   type UpdateLastRemindedAtRequest,
 } from "@meetsmatch/cf-shared";
+
+interface UserDbRow {
+  id?: string | number;
+  username?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  bio?: string | null;
+  age?: number | string | null;
+  birth_date?: string | null;
+  gender?: string | null;
+  interests?: string | null;
+  media_urls?: string | null;
+  location?: string | null;
+  preferences?: string | null;
+  is_active?: number | null;
+  is_sleeping?: number | null;
+  is_profile_complete?: number | null;
+  phone_number?: string | null;
+  language?: string | null;
+  subscription_tier?: string | null;
+  subscription_expires_at?: string | null;
+  daily_swipes_used?: number | null;
+  daily_swipes_reset_at?: string | null;
+  daily_likes_used?: number | null;
+  daily_likes_reset_at?: string | null;
+  daily_dislikes_used?: number | null;
+  daily_dislikes_reset_at?: string | null;
+  daily_media_used?: number | null;
+  daily_media_reset_at?: string | null;
+  referral_code?: string | null;
+  referred_by?: string | null;
+  referral_count?: number | null;
+  referral_bonus_swipes?: number | null;
+  dm_credits?: number | null;
+  hidden_from_matches?: number | null;
+  media_deleted_at?: string | null;
+  last_interaction_at?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  last_active?: string | null;
+}
+
+interface PaymentResultRow {
+  dm_credits?: number | string | null;
+}
+interface PaymentBatchResult {
+  results?: PaymentResultRow[];
+}
+
+// Decode boundaries for untrusted update payloads. A media item is either a
+// plain string (backward compatibility) or an object with string `url` and
+// `type` fields. `Schema.is` validates at runtime without ad hoc `typeof`
+// narrowing.
+const MediaItemSchema = Schema.Union([
+  Schema.String,
+  Schema.Struct({ url: Schema.String, type: Schema.String }),
+]);
+const MediaUrlsSchema = Schema.Array(MediaItemSchema);
+const UpdateMaskSchema = Schema.Array(Schema.String);
+
 import {
   NotFoundError,
   DatabaseError,
@@ -113,10 +173,7 @@ export class UserRepository {
         // silently produce a per-character mask. Require an array of strings.
         let maskSet: Set<string> | undefined;
         if (req.updateMask !== undefined) {
-          if (
-            !Array.isArray(req.updateMask) ||
-            !req.updateMask.every((field) => typeof field === "string")
-          ) {
+          if (!Schema.is(UpdateMaskSchema)(req.updateMask)) {
             throw new ValidationError(
               "updateMask",
               "updateMask must be an array of strings",
@@ -205,17 +262,9 @@ export class UserRepository {
         if (user.mediaUrls !== undefined && shouldWrite("mediaUrls")) {
           // Accept the same shape addMedia stores / toUser returns
           // ({ url, type, uploadedAt }) plus plain strings for backward
-          // compatibility with older stored data.
-          const isValidMediaItem = (item: unknown): boolean =>
-            typeof item === "string" ||
-            (typeof item === "object" &&
-              item !== null &&
-              typeof (item as { url?: unknown }).url === "string" &&
-              typeof (item as { type?: unknown }).type === "string");
-          if (
-            !Array.isArray(user.mediaUrls) ||
-            !user.mediaUrls.every((item) => isValidMediaItem(item))
-          ) {
+          // compatibility with older stored data. Decode at the boundary with
+          // an Effect Schema instead of ad hoc typeof narrowing.
+          if (!Schema.is(MediaUrlsSchema)(user.mediaUrls)) {
             throw new ValidationError(
               "mediaUrls",
               "mediaUrls must be an array of strings or media objects",
@@ -233,7 +282,7 @@ export class UserRepository {
             .prepare("SELECT preferences FROM users WHERE id = ?")
             .bind(req.userId)
             .first<{ preferences: string }>();
-          let existingPrefs: Record<string, unknown> = {};
+          let existingPrefs: NonNullable<typeof user.preferences> = {};
           if (existingPrefsRow?.preferences) {
             try {
               existingPrefs = JSON.parse(existingPrefsRow.preferences);
@@ -398,18 +447,10 @@ export class UserRepository {
           .first();
         if (!row) throw new NotFoundError("User", userId);
 
-        const tier = String(
-          (row as Record<string, unknown>).subscription_tier ?? "free",
-        );
-        let used = Number(
-          (row as Record<string, unknown>).daily_swipes_used ?? 0,
-        );
-        let resetAt = String(
-          (row as Record<string, unknown>).daily_swipes_reset_at ?? "",
-        );
-        const bonus = Number(
-          (row as Record<string, unknown>).referral_bonus_swipes ?? 0,
-        );
+        const tier = String((row as UserDbRow).subscription_tier ?? "free");
+        let used = Number((row as UserDbRow).daily_swipes_used ?? 0);
+        let resetAt = String((row as UserDbRow).daily_swipes_reset_at ?? "");
+        const bonus = Number((row as UserDbRow).referral_bonus_swipes ?? 0);
 
         const now = new Date();
         const today = new Date(
@@ -460,18 +501,10 @@ export class UserRepository {
           .first();
         if (!row) throw new NotFoundError("User", userId);
 
-        const tier = String(
-          (row as Record<string, unknown>).subscription_tier ?? "free",
-        );
-        let used = Number(
-          (row as Record<string, unknown>).daily_swipes_used ?? 0,
-        );
-        let resetAt = String(
-          (row as Record<string, unknown>).daily_swipes_reset_at ?? "",
-        );
-        const bonus = Number(
-          (row as Record<string, unknown>).referral_bonus_swipes ?? 0,
-        );
+        const tier = String((row as UserDbRow).subscription_tier ?? "free");
+        let used = Number((row as UserDbRow).daily_swipes_used ?? 0);
+        let resetAt = String((row as UserDbRow).daily_swipes_reset_at ?? "");
+        const bonus = Number((row as UserDbRow).referral_bonus_swipes ?? 0);
 
         const now = new Date();
         const today = new Date(
@@ -531,24 +564,14 @@ export class UserRepository {
           .first();
         if (!row) throw new NotFoundError("User", userId);
 
-        const tier = String(
-          (row as Record<string, unknown>).subscription_tier ?? "free",
-        );
-        let likesUsed = Number(
-          (row as Record<string, unknown>).daily_likes_used ?? 0,
-        );
-        let dislikesUsed = Number(
-          (row as Record<string, unknown>).daily_dislikes_used ?? 0,
-        );
-        let resetAt = String(
-          (row as Record<string, unknown>).daily_likes_reset_at ?? "",
-        );
+        const tier = String((row as UserDbRow).subscription_tier ?? "free");
+        let likesUsed = Number((row as UserDbRow).daily_likes_used ?? 0);
+        let dislikesUsed = Number((row as UserDbRow).daily_dislikes_used ?? 0);
+        let resetAt = String((row as UserDbRow).daily_likes_reset_at ?? "");
         let dislikesResetAt = String(
-          (row as Record<string, unknown>).daily_dislikes_reset_at ?? "",
+          (row as UserDbRow).daily_dislikes_reset_at ?? "",
         );
-        const bonus = Number(
-          (row as Record<string, unknown>).referral_bonus_swipes ?? 0,
-        );
+        const bonus = Number((row as UserDbRow).referral_bonus_swipes ?? 0);
 
         const now = new Date();
         const today = new Date(
@@ -613,18 +636,10 @@ export class UserRepository {
           .first();
         if (!row) throw new NotFoundError("User", userId);
 
-        const tier = String(
-          (row as Record<string, unknown>).subscription_tier ?? "free",
-        );
-        let used = Number(
-          (row as Record<string, unknown>).daily_likes_used ?? 0,
-        );
-        let resetAt = String(
-          (row as Record<string, unknown>).daily_likes_reset_at ?? "",
-        );
-        const bonus = Number(
-          (row as Record<string, unknown>).referral_bonus_swipes ?? 0,
-        );
+        const tier = String((row as UserDbRow).subscription_tier ?? "free");
+        let used = Number((row as UserDbRow).daily_likes_used ?? 0);
+        let resetAt = String((row as UserDbRow).daily_likes_reset_at ?? "");
+        const bonus = Number((row as UserDbRow).referral_bonus_swipes ?? 0);
 
         const now = new Date();
         const today = new Date(
@@ -677,18 +692,10 @@ export class UserRepository {
           .first();
         if (!row) throw new NotFoundError("User", userId);
 
-        const tier = String(
-          (row as Record<string, unknown>).subscription_tier ?? "free",
-        );
-        let used = Number(
-          (row as Record<string, unknown>).daily_dislikes_used ?? 0,
-        );
-        let resetAt = String(
-          (row as Record<string, unknown>).daily_dislikes_reset_at ?? "",
-        );
-        const bonus = Number(
-          (row as Record<string, unknown>).referral_bonus_swipes ?? 0,
-        );
+        const tier = String((row as UserDbRow).subscription_tier ?? "free");
+        let used = Number((row as UserDbRow).daily_dislikes_used ?? 0);
+        let resetAt = String((row as UserDbRow).daily_dislikes_reset_at ?? "");
+        const bonus = Number((row as UserDbRow).referral_bonus_swipes ?? 0);
 
         const now = new Date();
         const today = new Date(
@@ -735,7 +742,7 @@ export class UserRepository {
           .first();
         if (!row) throw new NotFoundError("User", userId);
 
-        let code = String((row as Record<string, unknown>).referral_code ?? "");
+        let code = String((row as UserDbRow).referral_code ?? "");
         if (!code) {
           code = Math.random().toString(36).substring(2, 8).toUpperCase();
           await this.db
@@ -770,11 +777,10 @@ export class UserRepository {
           .bind(userId)
           .first();
         if (!selfRow) throw new NotFoundError("User", userId);
-        const selfCode = String(
-          (selfRow as Record<string, unknown>).referral_code ?? "",
-        );
-        const alreadyReferred = (selfRow as Record<string, unknown>)
-          .referred_by as string | null;
+        const selfCode = String((selfRow as UserDbRow).referral_code ?? "");
+        const alreadyReferred = (selfRow as UserDbRow).referred_by as
+          | string
+          | null;
 
         if (selfCode === code)
           return {
@@ -796,12 +802,12 @@ export class UserRepository {
         if (!referrerRow)
           return { success: false, message: "Referral code not found." };
 
-        const referrerId = String((referrerRow as Record<string, unknown>).id);
+        const referrerId = String((referrerRow as UserDbRow).id);
         const referrerCount = Number(
-          (referrerRow as Record<string, unknown>).referral_count ?? 0,
+          (referrerRow as UserDbRow).referral_count ?? 0,
         );
-        const referrerBonus = Number(
-          (referrerRow as Record<string, unknown>).referral_bonus_swipes ?? 0,
+        const _referrerBonus = Number(
+          (referrerRow as UserDbRow).referral_bonus_swipes ?? 0,
         );
 
         // Give both users +5 bonus swipes
@@ -847,12 +853,8 @@ export class UserRepository {
           .bind(userId)
           .first();
         if (!row) throw new NotFoundError("User", userId);
-        const tier = String(
-          (row as Record<string, unknown>).subscription_tier ?? "free",
-        );
-        const dmCredits = Number(
-          (row as Record<string, unknown>).dm_credits ?? 0,
-        );
+        const tier = String((row as UserDbRow).subscription_tier ?? "free");
+        const dmCredits = Number((row as UserDbRow).dm_credits ?? 0);
         const canSendDM =
           tier === "premium" || tier === "premium_plus" || dmCredits > 0;
         return { canSendDM, tier, dmCredits };
@@ -880,12 +882,8 @@ export class UserRepository {
           .bind(userId)
           .first();
         if (!row) throw new NotFoundError("User", userId);
-        const tier = String(
-          (row as Record<string, unknown>).subscription_tier ?? "free",
-        );
-        let dmCredits = Number(
-          (row as Record<string, unknown>).dm_credits ?? 0,
-        );
+        const tier = String((row as UserDbRow).subscription_tier ?? "free");
+        let dmCredits = Number((row as UserDbRow).dm_credits ?? 0);
 
         if (tier === "premium" || tier === "premium_plus") {
           return { success: true, dmCredits };
@@ -958,8 +956,7 @@ export class UserRepository {
           ((results[0] as { meta?: { changes?: number } }).meta?.changes ??
             0) === 1;
         const dmCredits = Number(
-          (results[2] as { results?: Array<Record<string, unknown>> })
-            .results?.[0]?.dm_credits ?? 0,
+          (results[2] as PaymentBatchResult).results?.[0]?.dm_credits ?? 0,
         );
         return { granted, dmCredits };
       },
@@ -1023,7 +1020,7 @@ export class UserRepository {
     });
   }
 
-  private toUser(row: Record<string, unknown>): typeof User.Type {
+  private toUser(row: UserDbRow): typeof User.Type {
     return {
       id: String(row.id),
       username: row.username ? String(row.username) : undefined,
@@ -1124,15 +1121,9 @@ export class UserRepository {
           .first();
         if (!row) throw new NotFoundError("User", userId);
 
-        const tier = String(
-          (row as Record<string, unknown>).subscription_tier ?? "free",
-        );
-        let used = Number(
-          (row as Record<string, unknown>).daily_media_used ?? 0,
-        );
-        let resetAt = String(
-          (row as Record<string, unknown>).daily_media_reset_at ?? "",
-        );
+        const tier = String((row as UserDbRow).subscription_tier ?? "free");
+        let used = Number((row as UserDbRow).daily_media_used ?? 0);
+        let resetAt = String((row as UserDbRow).daily_media_reset_at ?? "");
 
         const now = new Date();
         const today = new Date(
@@ -1181,15 +1172,9 @@ export class UserRepository {
           .first();
         if (!row) throw new NotFoundError("User", userId);
 
-        const tier = String(
-          (row as Record<string, unknown>).subscription_tier ?? "free",
-        );
-        let used = Number(
-          (row as Record<string, unknown>).daily_media_used ?? 0,
-        );
-        let resetAt = String(
-          (row as Record<string, unknown>).daily_media_reset_at ?? "",
-        );
+        const tier = String((row as UserDbRow).subscription_tier ?? "free");
+        let used = Number((row as UserDbRow).daily_media_used ?? 0);
+        let resetAt = String((row as UserDbRow).daily_media_reset_at ?? "");
 
         const now = new Date();
         const today = new Date(
@@ -1240,7 +1225,7 @@ export class UserRepository {
           .bind(userId)
           .first();
         if (!row) throw new NotFoundError("User", userId);
-        const media = (row as Record<string, unknown>).media_urls;
+        const media = (row as UserDbRow).media_urls;
         return media
           ? (JSON.parse(String(media)) as Array<{
               url: string;
@@ -1271,7 +1256,7 @@ export class UserRepository {
           .bind(userId)
           .first();
         if (!row) throw new NotFoundError("User", userId);
-        const current = (row as Record<string, unknown>).media_urls;
+        const current = (row as UserDbRow).media_urls;
         const mediaUrls: Array<{
           url: string;
           type: string;
@@ -1311,7 +1296,7 @@ export class UserRepository {
           .bind(userId)
           .first();
         if (!row) throw new NotFoundError("User", userId);
-        const current = (row as Record<string, unknown>).media_urls;
+        const current = (row as UserDbRow).media_urls;
         const mediaUrls: Array<{
           url: string;
           type: string;

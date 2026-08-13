@@ -1,7 +1,7 @@
 import {
   Array,
   Boolean,
-  Literal,
+  Literals,
   Number,
   String,
   Struct,
@@ -11,10 +11,10 @@ import { User } from "./user.js";
 
 // --- Enums ---
 
-export const MatchStatus = Literal("PENDING", "MATCHED", "REJECTED");
+export const MatchStatus = Literals(["PENDING", "MATCHED", "REJECTED"]);
 export type MatchStatus = typeof MatchStatus.Type;
 
-export const MatchAction = Literal("LIKE", "DISLIKE", "SKIP", "NONE");
+export const MatchAction = Literals(["LIKE", "DISLIKE", "SKIP", "NONE"]);
 export type MatchAction = typeof MatchAction.Type;
 
 // --- Main Match Type ---

@@ -6,6 +6,13 @@ export interface DefaultPreferenceInput {
   gender?: string;
 }
 
+interface ComputedDefaults {
+  genderPreference?: string[];
+  minAge?: number;
+  maxAge?: number;
+  maxDistance?: number;
+}
+
 const BIRTHDATE_REGEX = /^(0[1-9]|[12]\d|3[01])\.(0[1-9]|1[0-2])\.(\d{4})$/;
 
 function parseBirthDate(
@@ -81,12 +88,12 @@ export function computeDefaultPreferences(
     input.age ??
     (input.birthDate ? computeAgeFromBirthDate(input.birthDate) : undefined);
 
-  const genderPreference = input.gender
+  const genderPreference: string[] | undefined = input.gender
     ? input.gender === "male"
-      ? (["female"] as const)
+      ? ["female"]
       : input.gender === "female"
-        ? (["male"] as const)
-        : (["male", "female", "other", "prefer_not_to_say"] as const)
+        ? ["male"]
+        : ["male", "female", "other", "prefer_not_to_say"]
     : undefined;
 
   const normalizedAge =
@@ -97,11 +104,11 @@ export function computeDefaultPreferences(
     normalizedAge != null ? Math.min(80, normalizedAge + 7) : undefined;
   const maxDistance = 25;
 
-  const defaults: Record<string, unknown> = {};
+  const defaults: ComputedDefaults = {};
   if (genderPreference) defaults.genderPreference = genderPreference;
   if (minAge != null) defaults.minAge = minAge;
   if (maxAge != null) defaults.maxAge = maxAge;
   defaults.maxDistance = maxDistance;
 
-  return defaults as Partial<Preferences>;
+  return defaults satisfies Partial<Preferences>;
 }

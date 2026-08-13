@@ -8,6 +8,16 @@ import {
 
 const log = createLogger("cf-worker.birthday");
 
+interface BirthdayUser {
+  id: string;
+  first_name: string | null;
+  birth_date: string;
+}
+
+interface MatchRow {
+  match_user_id: string;
+}
+
 const isLeapYear = (y: number) =>
   (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
 
@@ -29,17 +39,17 @@ export async function runBirthdayJob(env: Env): Promise<void> {
            AND substr(birth_date, 6, 5) = ?`,
         )
           .bind(`${month}-${day}`)
-          .all(),
+          .all<BirthdayUser>(),
       catch: (error) => new Error(`fetchBirthdays: ${String(error)}`),
     });
 
-    const birthdayUsers = (results ?? []) as Array<Record<string, unknown>>;
+    const birthdayUsers = (results ?? []) as BirthdayUser[];
     log.info(
       "runBirthdayJob",
       `Found ${birthdayUsers.length} birthday(s) today`,
     );
 
-    let leapDayUsers: Array<Record<string, unknown>> = [];
+    let leapDayUsers: BirthdayUser[] = [];
     if (month === "02" && day === "28" && !isLeapYear(now.getFullYear())) {
       const { results: leapResults } = yield* Effect.tryPromise({
         try: () =>
@@ -50,10 +60,10 @@ export async function runBirthdayJob(env: Env): Promise<void> {
              AND substr(birth_date, 6, 5) = ?`,
           )
             .bind("02-29")
-            .all(),
+            .all<BirthdayUser>(),
         catch: (error) => new Error(`fetchLeapBirthdays: ${String(error)}`),
       });
-      leapDayUsers = (leapResults ?? []) as Array<Record<string, unknown>>;
+      leapDayUsers = (leapResults ?? []) as BirthdayUser[];
       log.info(
         "runBirthdayJob",
         `Found ${leapDayUsers.length} leap-day user(s) to refresh`,
@@ -76,7 +86,7 @@ export async function runBirthdayJob(env: Env): Promise<void> {
 
   const exit = await Effect.runPromiseExit(effect);
   if (Exit.isFailure(exit)) {
-    const failure = Cause.failureOption(exit.cause);
+    const failure = Cause.findErrorOption(exit.cause);
     if (failure._tag === "Some") {
       log.error("runBirthdayJob", "Job failed", undefined, failure.value);
     } else {
@@ -89,7 +99,7 @@ export async function runBirthdayJob(env: Env): Promise<void> {
 
 function refreshAge(
   env: Env,
-  user: Record<string, unknown>,
+  user: BirthdayUser,
   today: Date,
 ): Effect.Effect<void, never, never> {
   return Effect.gen(function* () {
@@ -107,7 +117,7 @@ function refreshAge(
       !isLeapYear(today.getFullYear());
     if (isLeapDayBirth && isFeb28NonLeap) age++;
 
-    const exit = yield* Effect.either(
+    const exit = yield* Effect.result(
       Effect.tryPromise({
         try: () =>
           env.DB.prepare("UPDATE users SET age = ? WHERE id = ?")
@@ -116,14 +126,14 @@ function refreshAge(
         catch: (error) => new Error(`updateAge ${userId}: ${String(error)}`),
       }),
     );
-    if (exit._tag === "Right") {
+    if (exit._tag === "Success") {
       log.info("refreshAge", `Updated age to ${age} for ${userId}`);
     } else {
       log.error(
         "refreshAge",
         `Failed to update age for ${userId}`,
         undefined,
-        exit.left,
+        exit.failure,
       );
     }
   });
@@ -132,7 +142,7 @@ function refreshAge(
 function notifyMatches(
   env: Env,
   producer: NotificationQueueProducer,
-  user: Record<string, unknown>,
+  user: BirthdayUser,
 ): Effect.Effect<void, never, never> {
   return Effect.gen(function* () {
     const birthdayUserId = String(user.id);
@@ -162,7 +172,7 @@ function notifyMatches(
         new Error(`fetchMatches ${birthdayUserId}: ${String(error)}`),
     }).pipe(Effect.orElseSucceed(() => ({ results: [] as Array<unknown> })));
 
-    const matchIds = ((matches ?? []) as Array<Record<string, unknown>>).map(
+    const matchIds = ((matches ?? []) as MatchRow[]).map(
       (m) => String(m.match_user_id),
     );
     log.info(
@@ -174,7 +184,7 @@ function notifyMatches(
       matchIds,
       (matchUserId) =>
         Effect.gen(function* () {
-          const exit = yield* Effect.either(
+          const exit = yield* Effect.result(
             persistAndEnqueue(env.DB, producer, {
               notificationId: crypto.randomUUID(),
               userId: matchUserId,
@@ -184,7 +194,7 @@ function notifyMatches(
               }),
             }),
           );
-          if (exit._tag === "Right") {
+          if (exit._tag === "Success") {
             log.info(
               "notifyMatches",
               `Notified ${matchUserId} about ${firstName}'s birthday`,
@@ -194,7 +204,7 @@ function notifyMatches(
               "notifyMatches",
               `Failed to notify ${matchUserId}`,
               undefined,
-              exit.left,
+              exit.failure,
             );
           }
         }),

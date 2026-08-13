@@ -20,6 +20,10 @@ import {
   ValidationError,
   computeDefaultPreferences,
 } from "@meetsmatch/cf-shared";
+interface MatchDbRow {
+  id?: string; user1_id?: string; user2_id?: string; status?: string; score?: string | null; created_at?: string; updated_at?: string; matched_at?: string | null; user1_action?: string; user2_action?: string; match_status?: string; match_updated_at?: string; viewed_at?: string | null; like_message?: string | null; username?: string | null; first_name?: string | null; last_name?: string | null; bio?: string | null; age?: number | string | null; birth_date?: string | null; gender?: string | null; interests?: string | null; media_urls?: string | null; location?: string | null; preferences?: string | null; is_active?: number | null; is_sleeping?: number | null; subscription_tier?: string | null; is_profile_complete?: number | null;
+}
+
 import { UserRepository } from "./user.js";
 import { BlockRepository } from "./block.js";
 
@@ -96,7 +100,7 @@ export class MatchRepository {
           .bind(...values)
           .all();
         return (results ?? []).map((r) =>
-          this.toMatch(r as Record<string, unknown>),
+          this.toMatch(r as MatchDbRow),
         );
       },
       catch: (error) => new DatabaseError("getList", error),
@@ -601,7 +605,7 @@ export class MatchRepository {
           .prepare(sql)
           .bind(...values)
           .all();
-        const rows = (results ?? []) as Array<Record<string, unknown>>;
+        const rows = (results ?? []) as Array<MatchDbRow>;
 
         // 3. Filter and score candidates
         const nowTime = Date.now();
@@ -948,14 +952,14 @@ export class MatchRepository {
           .all();
 
         return (results ?? []).map((r) =>
-          this.rowToUser(r as Record<string, unknown>),
+          this.rowToUser(r as MatchDbRow),
         );
       },
       catch: (error) => new DatabaseError("getPendingLikes", error),
     });
   }
 
-  private toMatch(row: Record<string, unknown>): typeof Match.Type {
+  private toMatch(row: MatchDbRow): typeof Match.Type {
     return {
       id: String(row.id),
       user1Id: String(row.user1_id),
@@ -978,7 +982,7 @@ export class MatchRepository {
   }
 
   private rowToUser(
-    row: Record<string, unknown>,
+    row: MatchDbRow,
     preParsed?: {
       location?: typeof User.Type.location;
       preferences?: typeof User.Type.preferences;

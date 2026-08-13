@@ -17,7 +17,6 @@ import {
   GetMatchRequest,
   GetMatchResponse,
   CreateMatchRequest,
-  CreateMatchResponse,
 } from "../../contracts/match.js";
 
 const validMatch = {

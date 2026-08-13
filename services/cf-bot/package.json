@@ -5,25 +5,20 @@
   "type": "module",
   "main": "./dist/index.js",
   "scripts": {
-    "dev": "wrangler dev",
-    "deploy": "tsx ../../scripts/generate-version.ts cf-bot && wrangler deploy --env dev",
     "build": "tsx ../../scripts/generate-version.ts cf-bot && tsc -p tsconfig.json",
     "test": "vitest",
     "lint": "tsx ../../scripts/generate-version.ts cf-bot && tsc --noEmit"
   },
   "dependencies": {
-    "@effect/platform": "^0.96.1",
     "@grammyjs/conversations": "^2.1.1",
     "@grammyjs/menu": "^1.3.1",
     "@meetsmatch/cf-shared": "file:../../packages/cf-shared",
-    "effect": "^3.21.2",
-    "grammy": "^1.42.0"
+    "grammy": "^1.45.1"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260515.1",
-    "@grammyjs/types": "^3.27.3",
-    "typescript": "^6.0.3",
-    "vitest": "^4.1.6",
-    "wrangler": "^4.91.0"
+    "@cloudflare/workers-types": "^5.20260808.1",
+    "@grammyjs/types": "^4.0.0",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
   }
 }

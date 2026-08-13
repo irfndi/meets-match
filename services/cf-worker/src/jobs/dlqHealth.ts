@@ -2,6 +2,10 @@ import type { Env } from "../index.js";
 
 const DLQ_ALERT_THRESHOLD = 100;
 
+interface CountRow {
+  c?: number;
+}
+
 export async function runDLQHealthCheck(env: Env): Promise<void> {
   console.log("[dlq-health] Starting DLQ health check");
 
@@ -10,7 +14,7 @@ export async function runDLQHealthCheck(env: Env): Promise<void> {
       `SELECT COUNT(*) as c FROM notifications WHERE status = 'dlq'`,
     ).first();
 
-    const dlqCount = Number((result as Record<string, unknown>).c ?? 0);
+    const dlqCount = Number((result as CountRow | null)?.c ?? 0);
     console.log(`[dlq-health] DLQ count: ${dlqCount}`);
 
     if (dlqCount > DLQ_ALERT_THRESHOLD) {
@@ -26,7 +30,7 @@ export async function runDLQHealthCheck(env: Env): Promise<void> {
     ).first();
 
     const expiredCount = Number(
-      (expiredResult as Record<string, unknown>).c ?? 0,
+      (expiredResult as CountRow | null)?.c ?? 0,
     );
     if (expiredCount > 0) {
       console.log(

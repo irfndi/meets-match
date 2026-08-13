@@ -1,10 +1,23 @@
+type TestRowValue =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | TestRowValue[]
+  | { [key: string]: TestRowValue };
+
+interface TestRow {
+  [key: string]: TestRowValue;
+}
+
+
 import { describe, it, expect } from "vitest";
 import { BlockRepository } from "../block.js";
 import { createMockD1, runEffect } from "@meetsmatch/cf-shared/testing";
-import { ValidationError } from "@meetsmatch/cf-shared";
 
 describe("BlockRepository extended", () => {
-  function createRepo(rows: Array<Record<string, unknown>> = []) {
+  function createRepo(rows: Array<TestRow> = []) {
     const db = createMockD1((sql) => {
       if (sql.includes("SELECT blocked_id")) return { results: rows };
       if (sql.includes("SELECT 1 FROM blocks"))

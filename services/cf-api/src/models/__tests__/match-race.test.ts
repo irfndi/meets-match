@@ -1,3 +1,17 @@
+type TestRowValue =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | TestRowValue[]
+  | { [key: string]: TestRowValue };
+
+interface TestRow {
+  [key: string]: TestRowValue;
+}
+
+
 import { describe, it, expect } from "vitest";
 import { Effect } from "effect";
 import { MatchRepository } from "../match.js";
@@ -20,7 +34,7 @@ describe("MatchRepository race conditions", () => {
       // the other's action and the status remains 'pending' forever.
       const barrier = createRaceBarrier();
 
-      const store = new Map<string, Record<string, unknown>>([
+      const store = new Map<string, TestRow>([
         [
           "m1",
           {
@@ -83,7 +97,7 @@ describe("MatchRepository race conditions", () => {
     });
 
     it("correctly detects mutuality when likes are sequential", async () => {
-      const store = new Map<string, Record<string, unknown>>([
+      const store = new Map<string, TestRow>([
         [
           "m1",
           {
@@ -129,7 +143,7 @@ describe("MatchRepository race conditions", () => {
     it("documents race when undo() and like() interleave", async () => {
       const barrier = createRaceBarrier();
 
-      const store = new Map<string, Record<string, unknown>>([
+      const store = new Map<string, TestRow>([
         [
           "m1",
           {

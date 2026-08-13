@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import { FeedbackRepository } from "../feedback.js";
 import { createMockD1, runEffect } from "@meetsmatch/cf-shared/testing";
 

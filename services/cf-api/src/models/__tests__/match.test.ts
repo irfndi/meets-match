@@ -1,3 +1,23 @@
+type TestRowValue =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | TestRowValue[]
+  | { [key: string]: TestRowValue };
+
+interface TestRow {
+  [key: string]: TestRowValue;
+}
+
+interface TestCastInput {}
+
+function castForTest<T>(value: TestCastInput): T {
+  return value as T;
+}
+
+
 import { describe, it, expect, vi } from "vitest";
 import { Effect } from "effect";
 import { MatchRepository, calculateMatchScore, haversine } from "../match.js";
@@ -6,18 +26,20 @@ import {
   computeDefaultPreferences,
   NotFoundError,
   ValidationError,
-  DatabaseError,
 } from "@meetsmatch/cf-shared";
 import { runEffect } from "@meetsmatch/cf-shared/testing";
 
 function createMockD1(
-  candidates: Array<Record<string, unknown>> = [],
-  currentUser: Record<string, unknown> | null = null,
+  candidates: Array<TestRow> = [],
+  currentUser: TestRow | null = null,
 ) {
   const capturedSql: string[] = [];
   const capturedValues: unknown[][] = [];
 
-  const mockD1 = {
+  const mockD1 = castForTest<D1Database & {
+    _capturedSql: string[];
+    _capturedValues: unknown[][];
+  }>({
     prepare: vi.fn((sql: string) => {
       capturedSql.push(sql);
       return {
@@ -47,20 +69,17 @@ function createMockD1(
         }),
       };
     }),
-    batch: vi.fn(async (statements: unknown[]) => ({ success: true })),
+    batch: vi.fn(async (_statements: unknown[]) => ({ success: true })),
     _capturedSql: capturedSql,
     _capturedValues: capturedValues,
-  } as unknown as D1Database & {
-    _capturedSql: string[];
-    _capturedValues: unknown[][];
-  };
+  });
 
   return mockD1;
 }
 
 function createDbRow(
-  overrides: Partial<Record<string, unknown>> = {},
-): Record<string, unknown> {
+  overrides: Partial<TestRow> = {},
+): TestRow {
   return {
     id: "100",
     first_name: "Test",
@@ -82,8 +101,8 @@ function createDbRow(
 }
 
 function createUser(
-  overrides: Partial<Record<string, unknown>> = {},
-): Record<string, unknown> {
+  overrides: Partial<TestRow> = {},
+): TestRow {
   return {
     id: "100",
     username: undefined,
@@ -1035,7 +1054,7 @@ describe("computeDefaultPreferences", () => {
  * multiple sequential DB calls.
  */
 function createSequentialMockD1(
-  firstQueue: Array<Record<string, unknown> | null>,
+  firstQueue: Array<TestRow | null>,
 ) {
   let firstIdx = 0;
   const capturedSql: string[] = [];
@@ -1071,8 +1090,8 @@ function createSequentialMockD1(
  * Build a DB row (snake_case) matching what toMatch() expects.
  */
 function createMatchRow(
-  overrides: Partial<Record<string, unknown>> = {},
-): Record<string, unknown> {
+  overrides: Partial<TestRow> = {},
+): TestRow {
   return {
     id: "match-1",
     user1_id: "user-a",
@@ -1096,7 +1115,7 @@ describe("MatchRepository.getById", () => {
     const row = createMatchRow({ id: "m1" });
     const mockD1 = createSequentialMockD1([row]);
 
-    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const repo = new MatchRepository(castForTest<D1Database>(mockD1));
     const result = await Effect.runPromise(repo.getById({ matchId: "m1" }));
 
     expect(result.id).toBe("m1");
@@ -1108,7 +1127,7 @@ describe("MatchRepository.getById", () => {
   it("throws NotFoundError when match is not found", async () => {
     const mockD1 = createSequentialMockD1([null]);
 
-    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const repo = new MatchRepository(castForTest<D1Database>(mockD1));
     await expect(runEffect(repo.getById({ matchId: "m1" }))).rejects.toThrow(
       NotFoundError,
     );
@@ -1118,7 +1137,7 @@ describe("MatchRepository.getById", () => {
     const row = createMatchRow({ id: "m1" });
     const mockD1 = createSequentialMockD1([row]);
 
-    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const repo = new MatchRepository(castForTest<D1Database>(mockD1));
     await Effect.runPromise(repo.getById({ matchId: "m1" }));
 
     expect(mockD1._capturedSql[0]).toContain("WHERE id = ?");
@@ -1132,7 +1151,7 @@ describe("MatchRepository.create", () => {
   it("creates a new match when pair does not exist", async () => {
     const mockD1 = createSequentialMockD1([null]);
 
-    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const repo = new MatchRepository(castForTest<D1Database>(mockD1));
     const result = await Effect.runPromise(
       repo.create({ user1Id: "user-b", user2Id: "user-a" }),
     );
@@ -1152,7 +1171,7 @@ describe("MatchRepository.create", () => {
     });
     const mockD1 = createSequentialMockD1([existingRow]);
 
-    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const repo = new MatchRepository(castForTest<D1Database>(mockD1));
     const result = await Effect.runPromise(
       repo.create({ user1Id: "user-a", user2Id: "user-b" }),
     );
@@ -1166,7 +1185,7 @@ describe("MatchRepository.create", () => {
     const existingRow = createMatchRow({ id: "existing-match" });
     const mockD1 = createSequentialMockD1([existingRow]);
 
-    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const repo = new MatchRepository(castForTest<D1Database>(mockD1));
     await Effect.runPromise(
       repo.create({ user1Id: "user-a", user2Id: "user-b" }),
     );
@@ -1180,7 +1199,7 @@ describe("MatchRepository.create", () => {
   it("sorts user IDs so user1Id < user2Id", async () => {
     const mockD1 = createSequentialMockD1([null]);
 
-    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const repo = new MatchRepository(castForTest<D1Database>(mockD1));
     const result = await Effect.runPromise(
       repo.create({ user1Id: "zzz", user2Id: "aaa" }),
     );
@@ -1206,7 +1225,7 @@ describe("MatchRepository.like", () => {
     });
     const mockD1 = createSequentialMockD1([initialRow, updatedRow]);
 
-    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const repo = new MatchRepository(castForTest<D1Database>(mockD1));
     const result = await Effect.runPromise(
       repo.like({ matchId: "match-1", userId: "user-a" }),
     );
@@ -1230,7 +1249,7 @@ describe("MatchRepository.like", () => {
     });
     const mockD1 = createSequentialMockD1([initialRow, finalRow]);
 
-    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const repo = new MatchRepository(castForTest<D1Database>(mockD1));
     const result = await Effect.runPromise(
       repo.like({ matchId: "match-1", userId: "user-b" }),
     );
@@ -1258,7 +1277,7 @@ describe("MatchRepository.like", () => {
     });
     const mockD1 = createSequentialMockD1([initialRow, updatedRow]);
 
-    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const repo = new MatchRepository(castForTest<D1Database>(mockD1));
     const result = await Effect.runPromise(
       repo.like({
         matchId: "match-1",
@@ -1291,7 +1310,7 @@ describe("MatchRepository.like", () => {
     });
     const mockD1 = createSequentialMockD1([initialRow, updatedRow]);
 
-    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const repo = new MatchRepository(castForTest<D1Database>(mockD1));
     const result = await Effect.runPromise(
       repo.like({
         matchId: "match-1",
@@ -1312,7 +1331,7 @@ describe("MatchRepository.like", () => {
     });
     const mockD1 = createSequentialMockD1([row]);
 
-    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const repo = new MatchRepository(castForTest<D1Database>(mockD1));
     await expect(
       runEffect(repo.like({ matchId: "match-1", userId: "user-c" })),
     ).rejects.toThrow(ValidationError);
@@ -1321,7 +1340,7 @@ describe("MatchRepository.like", () => {
   it("throws NotFoundError when match does not exist", async () => {
     const mockD1 = createSequentialMockD1([null]);
 
-    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const repo = new MatchRepository(castForTest<D1Database>(mockD1));
     await expect(
       runEffect(repo.like({ matchId: "match-1", userId: "user-a" })),
     ).rejects.toThrow(NotFoundError);
@@ -1340,7 +1359,7 @@ describe("MatchRepository.like", () => {
     });
     const mockD1 = createSequentialMockD1([initialRow, updatedRow]);
 
-    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const repo = new MatchRepository(castForTest<D1Database>(mockD1));
     const result = await Effect.runPromise(
       repo.like({ matchId: "match-1", userId: "user-b" }),
     );
@@ -1362,7 +1381,7 @@ describe("MatchRepository.like", () => {
     });
     const mockD1 = createSequentialMockD1([initialRow, finalRow]);
 
-    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const repo = new MatchRepository(castForTest<D1Database>(mockD1));
     const result = await Effect.runPromise(
       repo.like({ matchId: "match-1", userId: "user-b" }),
     );
@@ -1387,7 +1406,7 @@ describe("MatchRepository.dislike", () => {
     });
     const mockD1 = createSequentialMockD1([initialRow, updatedRow]);
 
-    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const repo = new MatchRepository(castForTest<D1Database>(mockD1));
     const result = await Effect.runPromise(
       repo.dislike({ matchId: "match-1", userId: "user-a" }),
     );
@@ -1409,7 +1428,7 @@ describe("MatchRepository.dislike", () => {
     });
     const mockD1 = createSequentialMockD1([initialRow, updatedRow]);
 
-    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const repo = new MatchRepository(castForTest<D1Database>(mockD1));
     const result = await Effect.runPromise(
       repo.dislike({ matchId: "match-1", userId: "user-b" }),
     );
@@ -1425,7 +1444,7 @@ describe("MatchRepository.dislike", () => {
     });
     const mockD1 = createSequentialMockD1([row]);
 
-    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const repo = new MatchRepository(castForTest<D1Database>(mockD1));
     await expect(
       runEffect(repo.dislike({ matchId: "match-1", userId: "user-c" })),
     ).rejects.toThrow(ValidationError);
@@ -1434,7 +1453,7 @@ describe("MatchRepository.dislike", () => {
   it("throws NotFoundError when match does not exist", async () => {
     const mockD1 = createSequentialMockD1([null]);
 
-    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const repo = new MatchRepository(castForTest<D1Database>(mockD1));
     await expect(
       runEffect(repo.dislike({ matchId: "match-1", userId: "user-a" })),
     ).rejects.toThrow(NotFoundError);
@@ -1457,7 +1476,7 @@ describe("MatchRepository.skip", () => {
     });
     const mockD1 = createSequentialMockD1([initialRow, updatedRow]);
 
-    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const repo = new MatchRepository(castForTest<D1Database>(mockD1));
     const result = await Effect.runPromise(
       repo.skip({ matchId: "match-1", userId: "user-a" }),
     );
@@ -1479,7 +1498,7 @@ describe("MatchRepository.skip", () => {
     });
     const mockD1 = createSequentialMockD1([initialRow, updatedRow]);
 
-    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const repo = new MatchRepository(castForTest<D1Database>(mockD1));
     const result = await Effect.runPromise(
       repo.skip({ matchId: "match-1", userId: "user-b" }),
     );
@@ -1495,7 +1514,7 @@ describe("MatchRepository.skip", () => {
     });
     const mockD1 = createSequentialMockD1([row]);
 
-    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const repo = new MatchRepository(castForTest<D1Database>(mockD1));
     await expect(
       runEffect(repo.skip({ matchId: "match-1", userId: "user-c" })),
     ).rejects.toThrow(ValidationError);
@@ -1504,7 +1523,7 @@ describe("MatchRepository.skip", () => {
   it("throws NotFoundError when match does not exist", async () => {
     const mockD1 = createSequentialMockD1([null]);
 
-    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const repo = new MatchRepository(castForTest<D1Database>(mockD1));
     await expect(
       runEffect(repo.skip({ matchId: "match-1", userId: "user-a" })),
     ).rejects.toThrow(NotFoundError);
@@ -1522,7 +1541,7 @@ describe("MatchRepository.undo", () => {
     });
     const mockD1 = createSequentialMockD1([row]);
 
-    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const repo = new MatchRepository(castForTest<D1Database>(mockD1));
     const result = await Effect.runPromise(
       repo.undo({ matchId: "match-1", userId: "user-a" }),
     );
@@ -1544,7 +1563,7 @@ describe("MatchRepository.undo", () => {
     });
     const mockD1 = createSequentialMockD1([initialRow, updatedRow]);
 
-    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const repo = new MatchRepository(castForTest<D1Database>(mockD1));
     const result = await Effect.runPromise(
       repo.undo({ matchId: "match-1", userId: "user-a" }),
     );
@@ -1569,7 +1588,7 @@ describe("MatchRepository.undo", () => {
     });
     const mockD1 = createSequentialMockD1([initialRow, updatedRow]);
 
-    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const repo = new MatchRepository(castForTest<D1Database>(mockD1));
     const result = await Effect.runPromise(
       repo.undo({ matchId: "match-1", userId: "user-a" }),
     );
@@ -1593,7 +1612,7 @@ describe("MatchRepository.undo", () => {
     });
     const mockD1 = createSequentialMockD1([initialRow, updatedRow]);
 
-    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const repo = new MatchRepository(castForTest<D1Database>(mockD1));
     const result = await Effect.runPromise(
       repo.undo({ matchId: "match-1", userId: "user-a" }),
     );
@@ -1616,7 +1635,7 @@ describe("MatchRepository.undo", () => {
     });
     const mockD1 = createSequentialMockD1([initialRow, updatedRow]);
 
-    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const repo = new MatchRepository(castForTest<D1Database>(mockD1));
     const result = await Effect.runPromise(
       repo.undo({ matchId: "match-1", userId: "user-b" }),
     );
@@ -1632,7 +1651,7 @@ describe("MatchRepository.undo", () => {
     });
     const mockD1 = createSequentialMockD1([row]);
 
-    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const repo = new MatchRepository(castForTest<D1Database>(mockD1));
     await expect(
       runEffect(repo.undo({ matchId: "match-1", userId: "user-c" })),
     ).rejects.toThrow(ValidationError);
@@ -1641,7 +1660,7 @@ describe("MatchRepository.undo", () => {
   it("throws NotFoundError when match does not exist", async () => {
     const mockD1 = createSequentialMockD1([null]);
 
-    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const repo = new MatchRepository(castForTest<D1Database>(mockD1));
     await expect(
       runEffect(repo.undo({ matchId: "match-1", userId: "user-a" })),
     ).rejects.toThrow(NotFoundError);
@@ -1652,8 +1671,8 @@ describe("MatchRepository.undo", () => {
 
 describe("MatchRepository.getList", () => {
   function createSequentialMockD1WithAll(
-    allResults: Array<Record<string, unknown>>,
-    firstResults: Array<Record<string, unknown> | null> = [],
+    allResults: Array<TestRow>,
+    firstResults: Array<TestRow | null> = [],
   ) {
     let firstIdx = 0;
     const capturedSql: string[] = [];
@@ -1693,7 +1712,7 @@ describe("MatchRepository.getList", () => {
     ];
     const mockD1 = createSequentialMockD1WithAll(rows);
 
-    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const repo = new MatchRepository(castForTest<D1Database>(mockD1));
     const result = await Effect.runPromise(repo.getList({ userId: "user-a" }));
 
     expect(result).toHaveLength(2);
@@ -1705,7 +1724,7 @@ describe("MatchRepository.getList", () => {
     const rows = [createMatchRow({ id: "m1", status: "matched" })];
     const mockD1 = createSequentialMockD1WithAll(rows);
 
-    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const repo = new MatchRepository(castForTest<D1Database>(mockD1));
     await Effect.runPromise(
       repo.getList({ userId: "user-a", status: "MATCHED" }),
     );
@@ -1717,7 +1736,7 @@ describe("MatchRepository.getList", () => {
   it("includes LIMIT and OFFSET when provided", async () => {
     const mockD1 = createSequentialMockD1WithAll([]);
 
-    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const repo = new MatchRepository(castForTest<D1Database>(mockD1));
     await Effect.runPromise(
       repo.getList({ userId: "user-a", limit: 5, offset: 10 }),
     );
@@ -1730,7 +1749,7 @@ describe("MatchRepository.getList", () => {
   it("queries for both user1_id and user2_id", async () => {
     const mockD1 = createSequentialMockD1WithAll([]);
 
-    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const repo = new MatchRepository(castForTest<D1Database>(mockD1));
     await Effect.runPromise(repo.getList({ userId: "user-a" }));
 
     const sql = mockD1._capturedSql[0];
@@ -1742,7 +1761,7 @@ describe("MatchRepository.getList", () => {
   it("returns empty array when no matches exist", async () => {
     const mockD1 = createSequentialMockD1WithAll([]);
 
-    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const repo = new MatchRepository(castForTest<D1Database>(mockD1));
     const result = await Effect.runPromise(repo.getList({ userId: "user-a" }));
 
     expect(result).toHaveLength(0);
@@ -1753,7 +1772,7 @@ describe("MatchRepository.getList", () => {
 
 describe("MatchRepository.getPendingLikes (extended)", () => {
   function createPendingLikesMockD1(
-    allResults: Array<Record<string, unknown>>,
+    allResults: Array<TestRow>,
   ) {
     const capturedSql: string[] = [];
     const capturedValues: unknown[][] = [];
@@ -1802,7 +1821,7 @@ describe("MatchRepository.getPendingLikes (extended)", () => {
     ];
     const mockD1 = createPendingLikesMockD1(rows);
 
-    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const repo = new MatchRepository(castForTest<D1Database>(mockD1));
     const result = await Effect.runPromise(
       repo.getPendingLikes({ userId: "user-a" }),
     );
@@ -1815,7 +1834,7 @@ describe("MatchRepository.getPendingLikes (extended)", () => {
   it("returns empty array when no pending likes", async () => {
     const mockD1 = createPendingLikesMockD1([]);
 
-    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const repo = new MatchRepository(castForTest<D1Database>(mockD1));
     const result = await Effect.runPromise(
       repo.getPendingLikes({ userId: "user-a" }),
     );
@@ -1826,7 +1845,7 @@ describe("MatchRepository.getPendingLikes (extended)", () => {
   it("queries with correct pending-likes filter", async () => {
     const mockD1 = createPendingLikesMockD1([]);
 
-    const repo = new MatchRepository(mockD1 as unknown as D1Database);
+    const repo = new MatchRepository(castForTest<D1Database>(mockD1));
     await Effect.runPromise(repo.getPendingLikes({ userId: "user-a" }));
 
     const sql = mockD1._capturedSql[0];

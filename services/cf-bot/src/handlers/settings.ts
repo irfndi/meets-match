@@ -12,9 +12,8 @@ import {
   computeAgeFromBirthDate,
   getDefaultPreferences,
 } from "../lib/user-utils.js";
-import { ApiServiceClient } from "../services/api-client.js";
 import { getMainMenuKeyboard } from "../lib/main-menu.js";
-import { createLogger } from "@meetsmatch/cf-shared";
+import { createLogger, type Preferences, type User } from "@meetsmatch/cf-shared";
 import { replyWithError } from "../lib/error-feedback.js";
 
 const log = createLogger("cf-bot");
@@ -23,7 +22,6 @@ import {
   DEFAULT_LANGUAGE,
   SUPPORTED_LANGUAGES,
   type Language,
-  escapeMd,
 } from "../lib/i18n.js";
 
 function getLanguageLabel(lang: Language): string {
@@ -40,13 +38,13 @@ function formatGenderPreference(prefs: string[], lang: Language): string {
   ) {
     return t("genderPrefAllButton", lang);
   }
-  const map: Record<string, string> = {
+  const map = {
     male: t("genderDisplayMale", lang),
     female: t("genderDisplayFemale", lang),
     other: t("genderDisplayOther", lang),
     prefer_not_to_say: t("genderDisplayPreferNot", lang),
-  };
-  return prefs.map((p) => map[p] ?? p).join(", ");
+  } satisfies Record<string, string>;
+  return prefs.map((p) => map[p as keyof typeof map] ?? p).join(", ");
 }
 
 function buildLanguageKeyboard(): InlineKeyboard {
@@ -144,9 +142,11 @@ export const settingsCommand = async (
     const userId = String(ctx.from.id);
     const lang = (result.user.language as Language) ?? DEFAULT_LANGUAGE;
     const rawPrefs = await fetchUserPreferences(env, userId);
-    const defaults = getDefaultPreferences(
-      result.user as unknown as Record<string, unknown>,
-    );
+    const defaults = getDefaultPreferences({
+      age: result.user.age,
+      birthDate: result.user.birthDate,
+      gender: result.user.gender,
+    });
     // Merge defaults with existing prefs so partially set preferences
     // still show calculated defaults for unset fields
     const prefs = { ...defaults, ...rawPrefs };
@@ -163,7 +163,7 @@ export const settingsCommand = async (
       prefs?.genderPreference !== undefined &&
       Array.isArray(prefs.genderPreference) &&
       prefs.genderPreference.length > 0
-        ? formatGenderPreference(prefs.genderPreference as string[], lang)
+        ? formatGenderPreference(prefs.genderPreference, lang)
         : t("settingsNotSet", lang);
     const lines = [
       t("settingsTitle", lang),
@@ -205,14 +205,14 @@ export const settingsCallbacks = async (
           : undefined,
       }),
     );
-    let userData: Record<string, unknown> | undefined;
+    let userData: User | undefined;
     let userAge = 25;
     let lang: Language = "en";
     if (userRes.ok) {
-      const json = (await userRes.json()) as { user?: Record<string, unknown> };
+      const json = (await userRes.json()) as { user?: User };
       userData = json.user;
-      const bd = userData?.birthDate as string | undefined;
-      const age = userData?.age as number | undefined;
+      const bd = userData?.birthDate;
+      const age = userData?.age;
       userAge = age ?? (bd ? computeAgeFromBirthDate(bd) : undefined) ?? 25;
       lang = (userData?.language as Language) ?? "en";
     }
@@ -290,11 +290,11 @@ export async function handleAgeRangeCallback(
     );
     let userAge = 25;
     let lang: Language = "en";
-    let userData: { user?: Record<string, unknown> } | undefined;
+    let userData: { user?: User } | undefined;
     if (userRes.ok) {
-      userData = (await userRes.json()) as { user?: Record<string, unknown> };
-      const bd = userData.user?.birthDate as string | undefined;
-      const age = userData.user?.age as number | undefined;
+      userData = (await userRes.json()) as { user?: User };
+      const bd = userData.user?.birthDate;
+      const age = userData.user?.age;
       userAge = age ?? (bd ? computeAgeFromBirthDate(bd) : undefined) ?? 25;
       lang = (userData.user?.language as Language) ?? "en";
     }
@@ -361,9 +361,7 @@ export async function handleAgeRangeCallback(
         return true;
       }
 
-      const existing = userData?.user?.preferences as
-        | Record<string, unknown>
-        | undefined;
+      const existing = userData?.user?.preferences;
       const success = await updateUserPreferences(env, userId, {
         ...(existing ?? {}),
         minAge: min,
@@ -420,9 +418,9 @@ export async function handleDistanceCallback(
       }),
     );
     let lang: Language = "en";
-    let userData: { user?: Record<string, unknown> } | undefined;
+    let userData: { user?: User } | undefined;
     if (userRes.ok) {
-      userData = (await userRes.json()) as { user?: Record<string, unknown> };
+      userData = (await userRes.json()) as { user?: User };
       lang = (userData.user?.language as Language) ?? "en";
     }
 
@@ -442,9 +440,7 @@ export async function handleDistanceCallback(
         await ctx.answerCallbackQuery("Invalid distance.").catch(() => {});
         return true;
       }
-      const existing = userData?.user?.preferences as
-        | Record<string, unknown>
-        | undefined;
+      const existing = userData?.user?.preferences;
       const success = await updateUserPreferences(env, userId, {
         ...(existing ?? {}),
         maxDistance: val,
@@ -496,15 +492,11 @@ export async function handleGenderPrefCallback(
       }),
     );
     let lang: Language = "en";
-    let existing: Record<string, unknown> | undefined;
+    let existing: Preferences | undefined;
     if (userRes.ok) {
-      const userData = (await userRes.json()) as {
-        user?: Record<string, unknown>;
-      };
+      const userData = (await userRes.json()) as { user?: User };
       lang = (userData.user?.language as Language) ?? "en";
-      existing = userData.user?.preferences as
-        | Record<string, unknown>
-        | undefined;
+      existing = userData.user?.preferences;
     }
 
     let selected: string[] = [];
@@ -572,13 +564,12 @@ export async function handleSettingsLanguageCallback(
     : DEFAULT_LANGUAGE;
 
   try {
+    const headers = new Headers({ "Content-Type": "application/json" });
+    if (env.API_SECRET) headers.set("x-api-secret", env.API_SECRET);
     const res = await env.API_SERVICE.fetch(
       new Request(`http://api/users/${userId}`, {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          ...(env.API_SECRET ? { "x-api-secret": env.API_SECRET } : {}),
-        },
+        headers,
         body: JSON.stringify({ user: { language: selectedLang } }),
       }),
     );
@@ -618,7 +609,7 @@ export async function handleSettingsLanguageCallback(
 async function fetchUserPreferences(
   env: Env,
   userId: string,
-): Promise<Record<string, unknown> | null> {
+): Promise<Preferences | null> {
   try {
     const response = await env.API_SERVICE.fetch(
       new Request(`http://api/users/${userId}`, {
@@ -629,10 +620,10 @@ async function fetchUserPreferences(
       }),
     );
     if (!response.ok) return null;
-    const data = (await response.json()) as { user?: Record<string, unknown> };
+    const data = (await response.json()) as { user?: User };
     const user = data.user;
     if (!user) return null;
-    return (user.preferences as Record<string, unknown>) ?? {};
+    return user.preferences ?? {};
   } catch (error) {
     log.error(
       "fetchUserPreferences",
@@ -647,17 +638,16 @@ async function fetchUserPreferences(
 async function updateUserPreferences(
   env: Env,
   userId: string,
-  prefs: Record<string, unknown>,
+  prefs: Preferences,
 ): Promise<boolean> {
   try {
+    const headers = new Headers({ "Content-Type": "application/json" });
+    if (env.API_SECRET) headers.set("x-api-secret", env.API_SECRET);
     const response = await env.API_SERVICE.fetch(
       new Request(`http://api/users/${userId}`, {
         method: "PUT",
         body: JSON.stringify({ user: { preferences: prefs } }),
-        headers: {
-          "Content-Type": "application/json",
-          ...(env.API_SECRET ? { "x-api-secret": env.API_SECRET } : {}),
-        },
+        headers,
       }),
     );
     return response.ok;

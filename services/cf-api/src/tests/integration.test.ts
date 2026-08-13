@@ -1,18 +1,29 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import type { R2Bucket } from "@cloudflare/workers-types";
-import { UserRepository } from "../models/user.js";
-import { MatchRepository } from "../models/match.js";
-import { NotificationRepository } from "../models/notification.js";
-import { GeocodingService } from "../models/geocoding.js";
-import { ApiRouter } from "../http/router.js";
+type TestRowValue =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | TestRowValue[]
+  | { [key: string]: TestRowValue };
 
-interface MockD1Result {
-  results?: Array<Record<string, unknown>>;
-  first?: () => Promise<Record<string, unknown> | null>;
+interface TestRow {
+  [key: string]: TestRowValue;
 }
 
+interface TestCastInput {}
+
+function castForTest<T>(value: TestCastInput): T {
+  return value as T;
+}
+
+
+import { describe, it, expect, beforeEach } from "vitest";
+import type { R2Bucket } from "@cloudflare/workers-types";
+import { ApiRouter } from "../http/router.js";
+
 function createMockD1() {
-  const data = new Map<string, Array<Record<string, unknown>>>();
+  const data = new Map<string, Array<TestRow>>();
   return {
     prepare: (sql: string) => ({
       bind: (...values: unknown[]) => ({
@@ -38,7 +49,7 @@ function createMockD1() {
         all: async () => {
           if (sql.includes("FROM matches WHERE (user1_id =")) {
             const userId = String(values[0]);
-            const results: Array<Record<string, unknown>> = [];
+            const results: Array<TestRow> = [];
             for (const [key, value] of data) {
               if (key.startsWith("match:")) {
                 const row = value[0];
@@ -50,7 +61,7 @@ function createMockD1() {
             return { results };
           }
           if (sql.includes("FROM users")) {
-            const results: Array<Record<string, unknown>> = [];
+            const results: Array<TestRow> = [];
             for (const [key, value] of data) {
               if (key.startsWith("user:")) {
                 results.push(value[0]);
@@ -63,7 +74,7 @@ function createMockD1() {
       }),
     }),
     _data: data,
-    _insert: (key: string, row: Record<string, unknown>) => {
+    _insert: (key: string, row: TestRow) => {
       data.set(key, [row]);
     },
   };
@@ -84,7 +95,7 @@ function createMockKV() {
 }
 
 function createMockQueue() {
-  const messages: Array<Record<string, unknown>> = [];
+  const messages: Array<TestRow> = [];
   return {
     send: async (message: string) => {
       messages.push(JSON.parse(message));
@@ -105,9 +116,9 @@ describe("API Integration", () => {
     mockQueue = createMockQueue();
     router = new ApiRouter({
       MEDIA_BUCKET: {} as R2Bucket,
-      DB: mockD1 as unknown as D1Database,
-      KV: mockKV as unknown as KVNamespace,
-      NOTIFICATION_QUEUE: mockQueue as unknown as Queue,
+      DB: castForTest<D1Database>(mockD1),
+      KV: castForTest<KVNamespace>(mockKV),
+      NOTIFICATION_QUEUE: castForTest<Queue>(mockQueue),
     });
   });
 
@@ -192,7 +203,7 @@ describe("API Integration", () => {
     const request = new Request("http://localhost/health", { method: "GET" });
     const response = await router.route(request);
     expect(response.status).toBe(200);
-    const body = (await response.json()) as Record<string, unknown>;
+    const body = (await response.json()) as TestRow;
     expect(body.status).toBe("ok");
   });
 

@@ -15,18 +15,16 @@
  */
 
 declare const console: {
-  error(...args: unknown[]): void;
-  warn(...args: unknown[]): void;
-  log(...args: unknown[]): void;
-  debug(...args: unknown[]): void;
+  error(...args: LogValue[]): void;
+  warn(...args: LogValue[]): void;
+  log(...args: LogValue[]): void;
+  debug(...args: LogValue[]): void;
 };
 
 export type LogLevel = "error" | "warn" | "info" | "debug";
+type LogValue = string | number | boolean | null | undefined | object;
 
-export interface LogContext {
-  userId?: string;
-  [key: string]: unknown;
-}
+export type LogContext = object & { userId?: string };
 
 export interface StructuredLogEntry {
   timestamp: string;
@@ -42,17 +40,17 @@ export interface StructuredLogEntry {
   };
 }
 
-function serializeError(error: unknown): StructuredLogEntry["error"] {
-  if (error instanceof Error) {
+function serializeError(cause: unknown): StructuredLogEntry["error"] {
+  if (cause instanceof Error) {
     return {
-      name: error.name,
-      message: error.message,
-      stack: error.stack,
+      name: cause.name,
+      message: cause.message,
+      stack: cause.stack,
     };
   }
   return {
     name: "Unknown",
-    message: String(error),
+    message: String(cause),
   };
 }
 
@@ -62,7 +60,7 @@ function buildLogEntry(
   operation: string,
   message: string,
   context?: LogContext,
-  error?: unknown,
+  cause?: unknown,
 ): StructuredLogEntry {
   const entry: StructuredLogEntry = {
     timestamp: new Date().toISOString(),
@@ -72,8 +70,8 @@ function buildLogEntry(
     message,
     context,
   };
-  if (error !== undefined) {
-    entry.error = serializeError(error);
+  if (cause !== undefined) {
+    entry.error = serializeError(cause);
   }
   return entry;
 }
@@ -102,21 +100,21 @@ export function createLogger(service: string) {
       operation: string,
       message: string,
       context?: LogContext,
-      error?: unknown,
+      cause?: unknown,
     ) =>
       output(
         "error",
-        buildLogEntry("error", service, operation, message, context, error),
+        buildLogEntry("error", service, operation, message, context, cause),
       ),
     warn: (
       operation: string,
       message: string,
       context?: LogContext,
-      error?: unknown,
+      cause?: unknown,
     ) =>
       output(
         "warn",
-        buildLogEntry("warn", service, operation, message, context, error),
+        buildLogEntry("warn", service, operation, message, context, cause),
       ),
     info: (operation: string, message: string, context?: LogContext) =>
       output(

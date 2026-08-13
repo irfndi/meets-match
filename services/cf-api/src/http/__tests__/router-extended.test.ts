@@ -1,3 +1,23 @@
+type TestRowValue =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | TestRowValue[]
+  | { [key: string]: TestRowValue };
+
+interface TestRow {
+  [key: string]: TestRowValue;
+}
+
+interface TestCastInput {}
+
+function castForTest<T>(value: TestCastInput): T {
+  return value as T;
+}
+
+
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ApiRouter } from "../router.js";
 
@@ -6,9 +26,9 @@ function createMockD1(
     sql: string,
     values: unknown[],
   ) => {
-    results?: Array<Record<string, unknown>>;
+    results?: Array<TestRow>;
     success?: boolean;
-    meta?: Record<string, unknown>;
+    meta?: TestRow;
   } = () => ({
     results: [],
   }),
@@ -33,7 +53,7 @@ function createMockD1(
     };
   }
 
-  return {
+  return castForTest<import("@cloudflare/workers-types").D1Database>({
     prepare: vi.fn((sql: string) => makeStmt(sql, [])),
     batch: vi.fn(async (statements: any[]) => {
       const results = [];
@@ -47,26 +67,26 @@ function createMockD1(
       }
       return results;
     }),
-  } as unknown as import("@cloudflare/workers-types").D1Database;
+  });
 }
 
 function createMockKV(initial: Record<string, string> = {}) {
   const store = new Map<string, string>(Object.entries(initial));
-  return {
+  return castForTest<import("@cloudflare/workers-types").KVNamespace>({
     get: vi.fn(async (key: string) => store.get(key) ?? null),
     put: vi.fn(async (key: string, value: string) => store.set(key, value)),
     delete: vi.fn(async (key: string) => store.delete(key)),
     list: vi.fn(async () => ({
       keys: Array.from(store.keys()).map((name) => ({ name })),
     })),
-  } as unknown as import("@cloudflare/workers-types").KVNamespace;
+  });
 }
 
 function createMockQueue() {
-  return {
+  return castForTest<import("@cloudflare/workers-types").Queue>({
     send: vi.fn(async () => {}),
     sendBatch: vi.fn(async () => {}),
-  } as unknown as import("@cloudflare/workers-types").Queue;
+  });
 }
 
 function createMockR2() {
@@ -74,7 +94,7 @@ function createMockR2() {
     string,
     { body: ReadableStream; httpMetadata?: { contentType?: string } }
   >();
-  return {
+  return castForTest<import("@cloudflare/workers-types").R2Bucket>({
     put: vi.fn(
       async (
         key: string,
@@ -100,10 +120,10 @@ function createMockR2() {
       };
     }),
     delete: vi.fn(async (key: string) => objects.delete(key)),
-  } as unknown as import("@cloudflare/workers-types").R2Bucket;
+  });
 }
 
-function makeUserResult(id: string, overrides: Record<string, unknown> = {}) {
+function makeUserResult(id: string, overrides: TestRow = {}) {
   return {
     id,
     first_name: "Test",
@@ -155,9 +175,9 @@ describe("ApiRouter extended routes", () => {
       sql: string,
       values: unknown[],
     ) => {
-      results?: Array<Record<string, unknown>>;
+      results?: Array<TestRow>;
       success?: boolean;
-      meta?: Record<string, unknown>;
+      meta?: TestRow;
     };
   }) {
     const db = createMockD1(
@@ -167,7 +187,7 @@ describe("ApiRouter extended routes", () => {
             return { results: [makeUserResult(String(values[0]))] };
           }
           if (sql.includes("SELECT id FROM users WHERE id")) {
-            return { results: [{ id: values[0] }] };
+            return { results: [{ id: String(values[0]) }] };
           }
           if (sql.includes("SELECT referral_code FROM users")) {
             return { results: [{ referral_code: "REF123" }] };
@@ -256,7 +276,7 @@ describe("ApiRouter extended routes", () => {
             return {
               results: [
                 {
-                  id: values[0],
+                  id: String(values[0]),
                   user1_id: "u1",
                   user2_id: "u2",
                   status: "pending",
@@ -304,7 +324,7 @@ describe("ApiRouter extended routes", () => {
         }),
       );
       expect(response.status).toBe(200);
-      const body = (await response.json()) as Record<string, unknown>;
+      const body = (await response.json()) as TestRow;
       expect(body.user).toBeDefined();
     });
   });
@@ -315,7 +335,7 @@ describe("ApiRouter extended routes", () => {
         new Request("http://api/users/u1/swipe-status"),
       );
       expect(response.status).toBe(200);
-      const body = (await response.json()) as Record<string, unknown>;
+      const body = (await response.json()) as TestRow;
       expect(body.remaining).toBeDefined();
       expect(body.total).toBeDefined();
     });
@@ -336,7 +356,7 @@ describe("ApiRouter extended routes", () => {
         new Request("http://api/users/u1/interaction-status"),
       );
       expect(response.status).toBe(200);
-      const body = (await response.json()) as Record<string, unknown>;
+      const body = (await response.json()) as TestRow;
       expect(body.likesRemaining).toBeDefined();
       expect(body.dislikesRemaining).toBeDefined();
     });
@@ -366,7 +386,7 @@ describe("ApiRouter extended routes", () => {
         new Request("http://api/users/u1/dm-status"),
       );
       expect(response.status).toBe(200);
-      const body = (await response.json()) as Record<string, unknown>;
+      const body = (await response.json()) as TestRow;
       expect(body.canSendDM).toBeDefined();
     });
   });
@@ -468,7 +488,7 @@ describe("ApiRouter extended routes", () => {
   describe("POST /users/:id/apply-referral", () => {
     it("applies a referral code", async () => {
       const mockRouter = createRouter({
-        handler: (sql, values) => {
+        handler: (sql, _values) => {
           if (
             sql.includes(
               "SELECT referral_code, referred_by FROM users WHERE id =",
@@ -605,7 +625,7 @@ describe("ApiRouter extended routes", () => {
         }),
       );
       expect(response.status).toBe(400);
-      const body = (await response.json()) as Record<string, unknown>;
+      const body = (await response.json()) as TestRow;
       expect(body.error).toContain("Maximum 3");
     });
   });
@@ -692,7 +712,7 @@ describe("ApiRouter extended routes", () => {
         new Request("http://api/users/u1/restore-profile", { method: "POST" }),
       );
       expect(response.status).toBe(200);
-      const body = (await response.json()) as Record<string, unknown>;
+      const body = (await response.json()) as TestRow;
       expect(body.success).toBe(true);
     });
   });
@@ -703,7 +723,7 @@ describe("ApiRouter extended routes", () => {
         new Request("http://api/users/u1/last-reminded-at", { method: "POST" }),
       );
       expect(response.status).toBe(200);
-      const body = (await response.json()) as Record<string, unknown>;
+      const body = (await response.json()) as TestRow;
       expect(body.success).toBe(true);
     });
   });
@@ -721,7 +741,7 @@ describe("ApiRouter extended routes", () => {
         }),
       );
       expect(response.status).toBe(200);
-      const body = (await response.json()) as Record<string, unknown>;
+      const body = (await response.json()) as TestRow;
       expect(body.success).toBe(true);
       expect(body.reportId).toBeTruthy();
     });
@@ -792,7 +812,7 @@ describe("ApiRouter extended routes", () => {
         new Request("http://api/error-reports/mark-sent", { method: "POST" }),
       );
       expect(response.status).toBe(200);
-      const body = (await response.json()) as Record<string, unknown>;
+      const body = (await response.json()) as TestRow;
       expect(body.marked).toBe(1);
     });
   });
@@ -805,7 +825,7 @@ describe("ApiRouter extended routes", () => {
     it("returns 400 when neither query nor lat/lon provided", async () => {
       const response = await router.route(new Request("http://api/geocode"));
       expect(response.status).toBe(400);
-      const body = (await response.json()) as Record<string, unknown>;
+      const body = (await response.json()) as TestRow;
       expect(body.error).toContain("Missing");
     });
 

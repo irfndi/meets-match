@@ -1,36 +1,44 @@
 {
   "name": "@meetsmatch/monorepo",
   "private": true,
-  "type": "module",
   "workspaces": [
     "packages/*",
     "services/cf-*"
   ],
-  "packageManager": "pnpm@11.1.2",
+  "type": "module",
   "scripts": {
-    "dev:api": "cd services/cf-api && pnpm run dev",
-    "dev:bot": "cd services/cf-bot && pnpm run dev",
-    "dev:tail": "cd services/cf-tail && pnpm run dev",
-    "dev:worker": "cd services/cf-worker && pnpm run dev",
-    "deploy:api": "cd services/cf-api && pnpm run deploy",
-    "deploy:bot": "cd services/cf-bot && pnpm run deploy",
-    "deploy:tail": "cd services/cf-tail && pnpm run deploy:dev",
-    "deploy:worker": "cd services/cf-worker && pnpm run deploy",
-    "postinstall": "tsx scripts/generate-version.ts",
+    "dev": "alchemy dev",
+    "deploy": "alchemy deploy --stage prod --adopt",
+    "deploy:dev": "alchemy deploy --stage dev",
+    "deploy:prod": "alchemy deploy --stage prod --adopt",
+    "plan": "alchemy plan --stage prod",
+    "plan:dev": "alchemy plan --stage dev",
+    "postinstall": "tsx scripts/generate-version.ts && effect-tsgo patch --oxlint",
     "pretest": "tsx scripts/generate-version.ts",
     "test": "vitest",
-    "lint": "prettier --check \"**/*.{ts,tsx,json,md}\" --ignore-path .prettierignore",
-    "typecheck:fast": "tsgo --noEmit",
-    "typecheck:safe": "tsc --build --force",
-    "format": "prettier --write \"**/*.{ts,tsx,json,md}\""
+    "lint": "oxlint .",
+    "format": "oxfmt format .",
+    "format:check": "oxfmt check .",
+    "typecheck:fast": "tsgo --noEmit -p packages/cf-shared && tsgo --noEmit -p services/cf-api && tsgo --noEmit -p services/cf-bot && tsgo --noEmit -p services/cf-worker && tsgo --noEmit -p services/cf-tail",
+    "typecheck:safe": "tsc --build --force"
   },
   "devDependencies": {
-    "@typescript/native-preview": "7.0.0-dev.20260516.1",
-    "@vitest/coverage-v8": "^4.1.6",
-    "fast-check": "^4.8.0",
-    "prettier": "^3.8.3",
-    "tsx": "^4.22.0",
-    "typescript": "^6.0.3",
-    "vitest": "^4.1.6"
-  }
+    "@effect/platform-bun": "4.0.0-rc.108",
+    "@effect/platform-node": "4.0.0-rc.108",
+    "@effect/tsgo": "^0.36.4",
+    "@oxlint/plugins": "1.77.0",
+    "@typescript/native-preview": "7.0.0-dev.20260707.2",
+    "@vitest/coverage-v8": "^4.1.10",
+    "alchemy": "2.0.0-beta.72",
+    "effect": "4.0.0-rc.108",
+    "fast-check": "^4.9.0",
+    "oxfmt": "^0.62.0",
+    "oxlint": "1.77.0",
+    "oxlint-tsgolint": "^7.0.2001",
+    "tsx": "^4.23.11",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10",
+    "wrangler": "^4.120.0"
+  },
+  "packageManager": "pnpm@11.1.2"
 }

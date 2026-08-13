@@ -1,3 +1,17 @@
+type TestRowValue =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | TestRowValue[]
+  | { [key: string]: TestRowValue };
+
+interface TestRow {
+  [key: string]: TestRowValue;
+}
+
+
 import { describe, it, expect } from "vitest";
 import { Effect } from "effect";
 import { UserRepository } from "../user.js";
@@ -17,7 +31,7 @@ describe("UserRepository race conditions", () => {
       // Intended invariant: only one concurrent call should consume quota.
       const barrier = createRaceBarrier();
 
-      const store = new Map<string, Record<string, unknown>>([
+      const store = new Map<string, TestRow>([
         [
           "u1",
           {
@@ -72,7 +86,7 @@ describe("UserRepository race conditions", () => {
       // TODO: unskip when read-modify-write race is fixed.
       const barrier = createRaceBarrier();
 
-      const store = new Map<string, Record<string, unknown>>([
+      const store = new Map<string, TestRow>([
         [
           "u1",
           {
@@ -108,9 +122,9 @@ describe("UserRepository race conditions", () => {
       }
       expect(pauseCount).toBe(1);
 
-      const r2 = await runEffect(repo.recordDislike("u1"));
+      const _r2 = await runEffect(repo.recordDislike("u1"));
       barrier.resolve();
-      const r1 = await p1;
+      const _r1 = await p1;
 
       // DB should only be incremented once
       const finalRow = db._store.get("u1")!;
@@ -121,7 +135,7 @@ describe("UserRepository race conditions", () => {
       // TODO: unskip when read-modify-write race is fixed.
       const barrier = createRaceBarrier();
 
-      const store = new Map<string, Record<string, unknown>>([
+      const store = new Map<string, TestRow>([
         [
           "u1",
           {
@@ -157,9 +171,9 @@ describe("UserRepository race conditions", () => {
       }
       expect(pauseCount).toBe(1);
 
-      const r2 = await runEffect(repo.recordSwipe("u1"));
+      const _r2 = await runEffect(repo.recordSwipe("u1"));
       barrier.resolve();
-      const r1 = await p1;
+      const _r1 = await p1;
 
       // DB should only be incremented once
       const finalRow = db._store.get("u1")!;
@@ -169,7 +183,7 @@ describe("UserRepository race conditions", () => {
 
   describe("sequential counter operations", () => {
     it("correctly enforces like quota when calls are sequential", async () => {
-      const store = new Map<string, Record<string, unknown>>([
+      const store = new Map<string, TestRow>([
         [
           "u1",
           {

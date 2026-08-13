@@ -1,3 +1,23 @@
+type TestRowValue =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | TestRowValue[]
+  | { [key: string]: TestRowValue };
+
+interface TestRow {
+  [key: string]: TestRowValue;
+}
+
+interface TestCastInput {}
+
+function castForTest<T>(value: TestCastInput): T {
+  return value as T;
+}
+
+
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { UserRepository } from "../user.js";
 import { createMockD1, runEffect } from "@meetsmatch/cf-shared/testing";
@@ -7,7 +27,7 @@ import { NotFoundError, DatabaseError } from "@meetsmatch/cf-shared";
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeUserRow(overrides: Record<string, unknown> = {}) {
+function makeUserRow(overrides: TestRow = {}) {
   return {
     id: "u1",
     username: "testuser",
@@ -158,7 +178,7 @@ describe("UserRepository update", () => {
   });
 
   it("merges existing preferences", async () => {
-    const db = createMockD1((sql, values) => {
+    const db = createMockD1((sql, _values) => {
       if (sql.includes("SELECT id FROM users WHERE id ="))
         return { results: [{ id: "u1" }] };
       if (sql.includes("SELECT preferences FROM users")) {
@@ -167,15 +187,13 @@ describe("UserRepository update", () => {
         };
       }
       if (sql.includes("UPDATE users SET")) {
-        const captured = (
-          db as unknown as {
-            _captured: Array<{ sql: string; values: unknown[] }>;
-          }
-        )._captured;
+        const captured = castForTest<{
+          _captured: Array<{ sql: string; values: unknown[] }>;
+        }>(db)._captured;
         const updateCall = captured.at(-1);
         if (updateCall && updateCall.sql.includes("UPDATE users SET")) {
           const prefsIdx = updateCall.values.findIndex(
-            (v) => typeof v === "string" && v.includes("existing"),
+            (v) => String(v).includes("existing"),
           );
           expect(prefsIdx).toBeGreaterThanOrEqual(0);
         }
@@ -256,7 +274,7 @@ describe("UserRepository update", () => {
       (c) => c.sql.includes("UPDATE users SET") && c.values.length > 0,
     );
     const ageIdx = updateCall?.values.findIndex(
-      (v) => typeof v === "number" && v >= 20 && v <= 30,
+      (v) => Number(v) >= 20 && Number(v) <= 30,
     );
     expect(ageIdx).toBeGreaterThanOrEqual(0);
     vi.useRealTimers();
@@ -333,10 +351,10 @@ describe("UserRepository getOrCreateReferralCode", () => {
 
 describe("UserRepository applyReferral", () => {
   function createReferralDb(
-    selfRow: Record<string, unknown> | null,
-    referrerRow: Record<string, unknown> | null = null,
+    selfRow: TestRow | null,
+    referrerRow: TestRow | null = null,
   ) {
-    return createMockD1((sql, values) => {
+    return createMockD1((sql, _values) => {
       if (
         sql.includes("SELECT referral_code, referred_by FROM users WHERE id =")
       ) {

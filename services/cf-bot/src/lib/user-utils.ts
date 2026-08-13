@@ -2,7 +2,7 @@ import type { MyContext } from "../types.js";
 import type { Env } from "../index.js";
 import { ApiServiceClient, ApiError } from "../services/api-client.js";
 import { createLogger, computeDefaultPreferences } from "@meetsmatch/cf-shared";
-import type { DefaultPreferenceInput } from "@meetsmatch/cf-shared";
+import type { DefaultPreferenceInput, Preferences } from "@meetsmatch/cf-shared";
 
 const log = createLogger("cf-bot");
 
@@ -17,8 +17,14 @@ export interface UserProfile {
   gender?: string;
   interests?: string[];
   mediaUrls?: Array<{ url: string; type: string; uploadedAt: string }>;
-  location?: Record<string, unknown>;
-  preferences?: Record<string, unknown>;
+  location?: {
+    city?: string;
+    latitude?: number;
+    longitude?: number;
+    country?: string;
+    source?: string;
+  };
+  preferences?: Preferences;
   isActive?: boolean;
   isSleeping?: boolean;
   isProfileComplete?: boolean;
@@ -40,25 +46,22 @@ export const REQUIRED_FIELDS = [
   "mediaUrls",
 ] as const;
 
+export interface ProfileCompleteness {
+  complete: boolean;
+  missing: string[];
+}
+
 export function isPhoneVerified(user: UserProfile): boolean {
   return !!user.phoneNumber && user.phoneNumber.trim().length > 0;
 }
 
 export function getDefaultPreferences(
-  user: Record<string, unknown>,
-): Record<string, unknown> {
-  const input: DefaultPreferenceInput = {
-    age: user.age as number | undefined,
-    birthDate: user.birthDate as string | undefined,
-    gender: user.gender as string | undefined,
-  };
-  return computeDefaultPreferences(input);
+  user: DefaultPreferenceInput,
+): Partial<Preferences> {
+  return computeDefaultPreferences(user);
 }
 
-export function getProfileCompleteness(user: UserProfile): {
-  complete: boolean;
-  missing: string[];
-} {
+export function getProfileCompleteness(user: UserProfile): ProfileCompleteness {
   const missing: string[] = [];
 
   if (!user.displayName || user.displayName.trim().length === 0) {
@@ -84,15 +87,14 @@ export function getProfileCompleteness(user: UserProfile): {
 }
 
 export function getMissingFieldsDisplay(missing: string[]): string {
-  const labels: Record<string, string> = {
-    displayName: "👤 Name",
-    birthDate: "🎂 Age",
-    gender: "⚧ Gender",
-    bio: "📝 Bio",
-    location: "📍 Location",
-    interests: "🌟 Interests",
-    mediaUrls: "📸 Media",
-  };
+  const labels: Record<string, string> = {};
+  labels.displayName = "👤 Name";
+  labels.birthDate = "🎂 Age";
+  labels.gender = "⚧ Gender";
+  labels.bio = "📝 Bio";
+  labels.location = "📍 Location";
+  labels.interests = "🌟 Interests";
+  labels.mediaUrls = "📸 Media";
   return missing.map((f) => labels[f] || f).join(", ");
 }
 
@@ -199,14 +201,13 @@ export async function updateUserProfileComplete(
   isComplete: boolean,
 ): Promise<boolean> {
   try {
+    const headers = new Headers({ "Content-Type": "application/json" });
+    if (env.API_SECRET) headers.set("x-api-secret", env.API_SECRET);
     const response = await env.API_SERVICE.fetch(
       new Request(`http://api/users/${userId}`, {
         method: "PUT",
         body: JSON.stringify({ user: { isProfileComplete: isComplete } }),
-        headers: {
-          "Content-Type": "application/json",
-          ...(env.API_SECRET ? { "x-api-secret": env.API_SECRET } : {}),
-        },
+        headers,
       }),
     );
     return response.ok;

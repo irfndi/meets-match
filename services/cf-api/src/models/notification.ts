@@ -1,19 +1,18 @@
 import { Effect } from "effect";
-import type { D1Database, Queue } from "@cloudflare/workers-types";
+import type { D1Database } from "@cloudflare/workers-types";
 import {
   Notification,
   NotificationStatus,
   type EnqueueNotificationRequest,
   type GetNotificationRequest,
-  type GetQueueStatsRequest,
   type GetQueueStatsResponse,
-  type GetDLQStatsRequest,
   type GetDLQStatsResponse,
   type ReplayDLQRequest,
-  type ReplayDLQResponse,
-  type LogNotificationResultRequest,
 } from "@meetsmatch/cf-shared";
 import { NotFoundError, DatabaseError } from "@meetsmatch/cf-shared";
+
+interface NotificationDbRow { id?: string; user_id?: string; type?: string; channel?: string; payload?: string | null; status?: string; priority?: number; attempt_count?: number; max_attempts?: number; created_at?: string; updated_at?: string | null; delivered_at?: string | null; last_error?: string | null; dlq_at?: string | null; scheduled_at?: string | null; failed_at?: string | null; c?: number | string; }
+interface CountRow { c?: number | string; }
 
 export class NotificationRepository {
   constructor(private readonly db: D1Database) {}
@@ -158,13 +157,13 @@ export class NotificationRepository {
           )
           .first();
         return {
-          pendingCount: Number((pending as Record<string, unknown>).c ?? 0),
+          pendingCount: Number((pending as CountRow).c ?? 0),
           processingCount: Number(
-            (processing as Record<string, unknown>).c ?? 0,
+            (processing as CountRow).c ?? 0,
           ),
-          deliveredCount: Number((delivered as Record<string, unknown>).c ?? 0),
-          failedCount: Number((failed as Record<string, unknown>).c ?? 0),
-          dlqCount: Number((dlq as Record<string, unknown>).c ?? 0),
+          deliveredCount: Number((delivered as CountRow).c ?? 0),
+          failedCount: Number((failed as CountRow).c ?? 0),
+          dlqCount: Number((dlq as CountRow).c ?? 0),
         };
       },
       catch: (error) => new DatabaseError("getQueueStats", error),
@@ -184,7 +183,7 @@ export class NotificationRepository {
           )
           .first();
         return {
-          totalMessages: Number((result as Record<string, unknown>).c ?? 0),
+          totalMessages: Number((result as CountRow).c ?? 0),
         };
       },
       catch: (error) => new DatabaseError("getDLQStats", error),
@@ -202,7 +201,7 @@ export class NotificationRepository {
           .bind(String(limit))
           .all();
         const ids = (results ?? []).map((r) =>
-          String((r as Record<string, unknown>).id),
+          String((r as NotificationDbRow).id),
         );
         for (const id of ids) {
           await this.db
@@ -247,7 +246,7 @@ export class NotificationRepository {
   }
 
   private toNotification(
-    row: Record<string, unknown>,
+    row: NotificationDbRow,
   ): typeof Notification.Type {
     return {
       id: String(row.id),

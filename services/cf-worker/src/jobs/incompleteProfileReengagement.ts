@@ -25,6 +25,22 @@ interface IncompleteStage {
   readonly cooldownDays: number;
 }
 
+interface IncompleteUser {
+  id: string;
+  first_name: string | null;
+  language: string | null;
+  created_at: string;
+  last_reengagement_stage: number | null;
+  last_reengagement_at: string | null;
+}
+
+interface IncompletePayload {
+  message: string;
+  action: "complete_profile";
+  language: string;
+  stage: number;
+}
+
 const STAGES: ReadonlyArray<IncompleteStage> = [
   {
     stage: 1,
@@ -103,16 +119,6 @@ function stageFor(ageDays: number): IncompleteStage | null {
   return null;
 }
 
-interface IncompleteUser {
-  id: string;
-  first_name: string | null;
-  language: string | null;
-  created_at: string | null;
-  last_reminded_at: string | null;
-  last_reengagement_stage: number | null;
-  last_reengagement_at: string | null;
-}
-
 export async function runIncompleteProfileReengagementJob(
   env: Env,
 ): Promise<void> {
@@ -146,8 +152,8 @@ export async function runIncompleteProfileReengagementJob(
             upperCutoff.toISOString(),
             BATCH_SIZE,
           )
-          .all();
-        return (results ?? []) as Array<Record<string, unknown>>;
+          .all<IncompleteUser>();
+        return results ?? [];
       },
       catch: (error) => new Error(`fetchCandidates: ${String(error)}`),
     }),
@@ -171,7 +177,7 @@ export async function runIncompleteProfileReengagementJob(
 
   const exit = await Effect.runPromiseExit(effect);
   if (Exit.isFailure(exit)) {
-    const failure = Cause.failureOption(exit.cause);
+    const failure = Cause.findErrorOption(exit.cause);
     if (failure._tag === "Some") {
       log.error(
         "incompleteProfileReengagement",
@@ -194,7 +200,7 @@ export async function runIncompleteProfileReengagementJob(
 
 function processIncompleteCandidate(
   env: Env,
-  user: Record<string, unknown>,
+  user: IncompleteUser,
   now: Date,
 ): Effect.Effect<void, never, never> {
   return Effect.gen(function* () {
@@ -257,26 +263,26 @@ function processIncompleteCandidate(
 
     const producer = new NotificationQueueProducer(env.NOTIFICATION_QUEUE);
     const notificationId = crypto.randomUUID();
-    const payload: Record<string, unknown> = {
+    const payload = {
       message,
       action: "complete_profile",
       language: lang,
       stage: stage.stage,
-    };
+    } satisfies IncompletePayload;
 
     const enqueueResult = yield* persistAndEnqueue(env.DB, producer, {
       notificationId,
       userId: id,
       type: stage.type,
       payload: JSON.stringify(payload),
-    }).pipe(Effect.either);
+    }).pipe(Effect.result);
 
-    if (enqueueResult._tag === "Left") {
+    if (enqueueResult._tag === "Failure") {
       log.error(
         "incompleteProfileReengagement",
         `Failed to enqueue`,
         { id },
-        enqueueResult.left,
+        enqueueResult.failure,
       );
       return;
     }
@@ -306,7 +312,7 @@ function processIncompleteCandidate(
           ),
         ),
       ),
-      Effect.orElse(() => Effect.void),
+      Effect.catch(() => Effect.void),
     );
 
     log.info(

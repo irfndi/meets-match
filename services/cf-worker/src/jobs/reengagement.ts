@@ -55,16 +55,46 @@ const STAGES: ReadonlyArray<ReengagementStage> = [
 
 const BATCH_SIZE = 100;
 
-interface InactiveUser {
+interface LocationData {
+  city?: string | null;
+  name?: string | null;
+}
+
+interface NearbyCountRow {
+  c?: number;
+}
+
+interface ReengagementUser {
   id: string;
-  first_name: string;
+  first_name: string | null;
   gender: string | null;
   location: string | null;
   preferences: string | null;
-  last_active: string;
+  last_active: string | null;
   last_reengagement_stage: number | null;
   last_reengagement_at: string | null;
 }
+
+interface ReengagementPayload {
+  message: string;
+  action: "find_match";
+  stage: number;
+  tone: string;
+  marketingCount: number;
+}
+
+interface GenderLabel {
+  plural: string;
+  singular: string;
+}
+
+const WOMEN_LABEL: GenderLabel = { plural: "women", singular: "woman" };
+const MEN_LABEL: GenderLabel = { plural: "men", singular: "man" };
+const PEOPLE_LABEL: GenderLabel = { plural: "people", singular: "person" };
+const MEN_AND_WOMEN_LABEL: GenderLabel = {
+  plural: "men and women",
+  singular: "person",
+};
 
 /** Generate a believable "marketing" count from the real DB count.
  *  Small communities get inflated numbers; large ones stay roughly truthful.
@@ -97,9 +127,9 @@ function getMarketingCount(realCount: number): number {
 function extractCity(locationJson: string | null): string | null {
   if (!locationJson) return null;
   try {
-    const loc = JSON.parse(locationJson) as Record<string, unknown>;
+    const loc = JSON.parse(locationJson) as LocationData;
     const city = loc.city ?? loc.name;
-    if (typeof city === "string" && city.trim().length > 0) {
+    if (city && city.trim().length > 0) {
       return city.trim();
     }
   } catch {
@@ -115,16 +145,7 @@ interface ParsedPreferences {
 function parsePreferences(preferencesJson: string | null): ParsedPreferences {
   if (!preferencesJson) return {};
   try {
-    const parsed = JSON.parse(preferencesJson) as unknown;
-    // JSON.parse("null") returns null; guard so helpers never see null.
-    if (
-      parsed === null ||
-      typeof parsed !== "object" ||
-      Array.isArray(parsed)
-    ) {
-      return {};
-    }
-    return parsed as ParsedPreferences;
+    return JSON.parse(preferencesJson) as ParsedPreferences;
   } catch {
     return {};
   }
@@ -133,23 +154,23 @@ function parsePreferences(preferencesJson: string | null): ParsedPreferences {
 function getGenderLabel(
   gender: string | null,
   prefs: ParsedPreferences,
-): { plural: string; singular: string } {
+): GenderLabel {
   const gp = prefs.genderPreference;
   if (Array.isArray(gp) && gp.length > 0) {
     if (gp.length === 1) {
-      if (gp[0] === "female") return { plural: "women", singular: "woman" };
-      if (gp[0] === "male") return { plural: "men", singular: "man" };
-      return { plural: "people", singular: "person" };
+      if (gp[0] === "female") return WOMEN_LABEL;
+      if (gp[0] === "male") return MEN_LABEL;
+      return PEOPLE_LABEL;
     }
     if (gp.includes("male") && gp.includes("female") && gp.length === 2) {
-      return { plural: "men and women", singular: "person" };
+      return MEN_AND_WOMEN_LABEL;
     }
-    return { plural: "people", singular: "person" };
+    return PEOPLE_LABEL;
   }
   const g = (gender ?? "").toLowerCase();
-  if (g === "male") return { plural: "women", singular: "woman" };
-  if (g === "female") return { plural: "men", singular: "man" };
-  return { plural: "people", singular: "person" };
+  if (g === "male") return WOMEN_LABEL;
+  if (g === "female") return MEN_LABEL;
+  return PEOPLE_LABEL;
 }
 
 // --- Per-stage message variants. Each stage has a distinct tone. ---
@@ -258,7 +279,7 @@ async function countNearbyUsers(
         .bind(userId, ...gp)
         .all();
       return Number(
-        (results?.[0] as Record<string, unknown> | undefined)?.c ?? 0,
+        (results?.[0] as NearbyCountRow | undefined)?.c ?? 0,
       );
     }
     const g = (gender ?? "").toLowerCase();
@@ -275,7 +296,7 @@ async function countNearbyUsers(
         .bind(userId, oppositeGender)
         .all();
       return Number(
-        (results?.[0] as Record<string, unknown> | undefined)?.c ?? 0,
+        (results?.[0] as NearbyCountRow | undefined)?.c ?? 0,
       );
     }
     const { results } = await db
@@ -288,7 +309,7 @@ async function countNearbyUsers(
       .bind(userId)
       .all();
     return Number(
-      (results?.[0] as Record<string, unknown> | undefined)?.c ?? 0,
+      (results?.[0] as NearbyCountRow | undefined)?.c ?? 0,
     );
   } catch (error) {
     log.error(
@@ -308,7 +329,7 @@ function enqueueReengagement(
   notificationId: string,
   userId: string,
   type: ReengagementStage["type"],
-  payload: Record<string, unknown>,
+  payload: ReengagementPayload,
 ): Effect.Effect<void, Error, never> {
   return persistAndEnqueue(db, producer, {
     notificationId,
@@ -354,8 +375,8 @@ export async function runReengagementJob(env: Env): Promise<void> {
             upperCutoff.toISOString(),
             BATCH_SIZE,
           )
-          .all();
-        return (results ?? []) as Array<Record<string, unknown>>;
+          .all<ReengagementUser>();
+        return results ?? [];
       },
       catch: (error) => new Error(`fetchCandidates: ${String(error)}`),
     }),
@@ -375,7 +396,7 @@ export async function runReengagementJob(env: Env): Promise<void> {
 
   const exit = await Effect.runPromiseExit(effect);
   if (Exit.isFailure(exit)) {
-    const failure = Cause.failureOption(exit.cause);
+    const failure = Cause.findErrorOption(exit.cause);
     if (failure._tag === "Some") {
       log.error("runReengagementJob", "Job failed", undefined, failure.value);
     } else {
@@ -394,7 +415,7 @@ export async function runReengagementJob(env: Env): Promise<void> {
 /** Process a single reengagement candidate. */
 function processCandidate(
   env: Env,
-  user: Record<string, unknown>,
+  user: ReengagementUser,
   now: Date,
 ): Effect.Effect<void, never, never> {
   return Effect.gen(function* () {
@@ -464,13 +485,13 @@ function processCandidate(
     const message = variant(name, marketingCount, genderLabel.plural, city);
 
     const notificationId = crypto.randomUUID();
-    const payload: Record<string, unknown> = {
+    const payload = {
       message,
       action: "find_match",
       stage: stage.stage,
       tone: stage.tone,
       marketingCount,
-    };
+    } satisfies ReengagementPayload;
 
     const enqueueResult = yield* enqueueReengagement(
       env.DB,
@@ -479,14 +500,14 @@ function processCandidate(
       id,
       stage.type,
       payload,
-    ).pipe(Effect.either);
+    ).pipe(Effect.result);
 
-    if (enqueueResult._tag === "Left") {
+    if (enqueueResult._tag === "Failure") {
       log.error(
         "processCandidate",
         `Failed to enqueue`,
         { id },
-        enqueueResult.left,
+        enqueueResult.failure,
       );
       return;
     }
@@ -516,7 +537,7 @@ function processCandidate(
           ),
         ),
       ),
-      Effect.orElse(() => Effect.void),
+      Effect.catch(() => Effect.void),
     );
 
     log.info(
@@ -524,6 +545,6 @@ function processCandidate(
       `Sent ${stage.type} to ${id} (inactive=${inactiveDays}d, real=${nearbyCount}, marketing=${marketingCount})`,
     );
 
-    return enqueueResult.right;
+    return enqueueResult.success;
   });
 }

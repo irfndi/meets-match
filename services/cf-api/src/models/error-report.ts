@@ -57,6 +57,17 @@ export interface ErrorReport {
   updatedAt?: string | null;
 }
 
+interface ErrorReportCandidate {
+  id?: string;
+  reporterId?: string;
+  status?: ErrorReportStatus;
+  severity?: "high" | "low";
+}
+
+function coerceErrorReport(row: ErrorReportCandidate): ErrorReport {
+  return row as ErrorReport;
+}
+
 export interface AggregatedAlert {
   severity: string;
   count: number;
@@ -141,7 +152,9 @@ export class ErrorReportRepository {
           )
           .bind(batchSize)
           .all();
-        return (result.results ?? []) as unknown as ErrorReport[];
+        return (result.results ?? []).map((row) =>
+          coerceErrorReport(row as ErrorReportCandidate),
+        );
       },
       catch: (error) => new DatabaseError("findUnsentLowSeverity", error),
     });
@@ -176,7 +189,7 @@ export class ErrorReportRepository {
           )
           .bind(id)
           .first();
-        return result as unknown as ErrorReport | null;
+        return result as ErrorReport | null;
       },
       catch: (error) => new DatabaseError("findErrorReportById", error),
     });
@@ -199,7 +212,7 @@ export class ErrorReportRepository {
         if (!updated) {
           throw new NotFoundError("ErrorReport", id);
         }
-        return updated as unknown as ErrorReport;
+        return coerceErrorReport(updated as ErrorReportCandidate);
       },
       catch: (error) => {
         if (error instanceof NotFoundError) return error;

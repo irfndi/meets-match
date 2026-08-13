@@ -16,6 +16,10 @@ interface UserRow {
   media_urls: string;
 }
 
+interface CleanupRow {
+  c?: number;
+}
+
 const dbRun = (
   db: D1Database,
   sql: string,
@@ -31,7 +35,7 @@ const dbRun = (
       new Error(`${sql.split("\n")[0]?.trim() ?? "sql"}: ${String(error)}`),
   });
 
-const dbAll = <T = Record<string, unknown>>(
+const dbAll = <T = CleanupRow>(
   db: D1Database,
   sql: string,
   ...params: unknown[]
@@ -57,7 +61,7 @@ const dbAll = <T = Record<string, unknown>>(
 export async function runCleanupJob(env: Env): Promise<void> {
   const exit = await Effect.runPromiseExit(cleanupEffect(env));
   if (Exit.isFailure(exit)) {
-    const failure = Cause.failureOption(exit.cause);
+    const failure = Cause.findErrorOption(exit.cause);
     if (failure._tag === "Some") {
       log.error("runCleanupJob", "Job failed", undefined, failure.value);
     } else {
@@ -160,9 +164,9 @@ function cleanupEffect(env: Env): Effect.Effect<void, Error, never> {
     let failures = 0;
 
     for (const row of rows) {
-      const cleaned = yield* Effect.either(cleanUserMedia(env, producer, row));
-      if (cleaned._tag === "Right") {
-        if (cleaned.right) deletedCount++;
+      const cleaned = yield* Effect.result(cleanUserMedia(env, producer, row));
+      if (cleaned._tag === "Success") {
+        if (cleaned.success) deletedCount++;
         else failures++;
       } else {
         failures++;
@@ -235,26 +239,25 @@ function cleanUserMedia(
         const url = new URL(media.url);
         const key = url.pathname.slice(1);
         if (key) {
-          const exit = yield* Effect.either(
+          const exit = yield* Effect.result(
             Effect.tryPromise({
               try: () =>
                 env.API_SERVICE.fetch(
                   new Request(`http://api/users/${row.id}/media`, {
                     method: "DELETE",
                     body: JSON.stringify({ url: media.url }),
-                    headers: {
-                      "Content-Type": "application/json",
-                      ...(env.API_SECRET
-                        ? { "x-api-secret": env.API_SECRET }
-                        : {}),
-                    },
+          headers: (() => {
+            const headers = new Headers({ "Content-Type": "application/json" });
+            if (env.API_SECRET) headers.set("x-api-secret", env.API_SECRET);
+            return headers;
+          })(),
                   }),
                 ),
               catch: (error) => new Error(String(error)),
             }),
           );
-          if (exit._tag === "Right") {
-            const response = exit.right;
+          if (exit._tag === "Success") {
+            const response = exit.success;
             if (!response.ok && response.status !== 404) {
               log.error(
                 "cleanUserMedia",
@@ -268,7 +271,7 @@ function cleanUserMedia(
               "cleanUserMedia",
               "R2 deletion threw",
               { userId: row.id, url: media.url },
-              exit.left,
+              exit.failure,
             );
             allDeleted = false;
           }
@@ -291,7 +294,7 @@ function cleanUserMedia(
       return false;
     }
 
-    const dbExit = yield* Effect.either(
+    const dbExit = yield* Effect.result(
       Effect.tryPromise({
         try: () =>
           env.DB.prepare(
@@ -305,17 +308,17 @@ function cleanUserMedia(
       }),
     );
 
-    if (dbExit._tag === "Left") {
+    if (dbExit._tag === "Failure") {
       log.error(
         "cleanUserMedia",
         "DB update failed after R2 deletion",
         { userId: row.id },
-        dbExit.left,
+        dbExit.failure,
       );
       return false;
     }
 
-    if ((dbExit.right.meta?.changes ?? 0) === 0) {
+    if ((dbExit.success.meta?.changes ?? 0) === 0) {
       // Another request changed media_urls concurrently, so this row was
       // already cleaned up. Skip the notification to avoid a duplicate.
       log.info(
@@ -326,7 +329,7 @@ function cleanUserMedia(
       return false;
     }
 
-    const enqueueExit = yield* Effect.either(
+    const enqueueExit = yield* Effect.result(
       persistAndEnqueue(env.DB, producer, {
         notificationId: crypto.randomUUID(),
         userId: row.id,
@@ -337,12 +340,12 @@ function cleanUserMedia(
         }),
       }),
     );
-    if (enqueueExit._tag === "Left") {
+    if (enqueueExit._tag === "Failure") {
       log.error(
         "cleanUserMedia",
         "Failed to enqueue cleanup notification",
         { userId: row.id },
-        enqueueExit.left,
+        enqueueExit.failure,
       );
     }
     return true;

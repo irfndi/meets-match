@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { ErrorReportRepository } from "../error-report.js";
 import { createMockD1, runEffect } from "@meetsmatch/cf-shared/testing";
-import { NotFoundError } from "@meetsmatch/cf-shared";
 
 describe("ErrorReportRepository extended", () => {
   function createRepo(handler?: Parameters<typeof createMockD1>[0]) {

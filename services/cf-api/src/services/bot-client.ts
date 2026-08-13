@@ -1,4 +1,3 @@
-import { Effect } from "effect";
 import type { Fetcher } from "@cloudflare/workers-types";
 import {
   type SendNotificationRequest,
@@ -29,16 +28,16 @@ export class BotServiceClient implements INotificationService {
   async sendNotification(
     req: SendNotificationRequest,
   ): Promise<SendNotificationResponse> {
+    const headers = new Headers({ "Content-Type": "application/json" });
+    if (this.internalSecret) {
+      headers.set("x-internal-secret", this.internalSecret);
+    }
+
     const response = await this.binding.fetch(
       new Request("http://bot/send-notification", {
         method: "POST",
         body: JSON.stringify(req),
-        headers: {
-          "Content-Type": "application/json",
-          ...(this.internalSecret
-            ? { "x-internal-secret": this.internalSecret }
-            : {}),
-        },
+        headers,
       }),
     );
 

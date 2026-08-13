@@ -13,12 +13,21 @@ interface CapturedRequest {
   body: unknown;
 }
 
+/** JSON-serializable value accepted by the mock response helpers. */
+type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JsonValue[]
+  | { [key: string]: JsonValue };
+
 async function captureRequest(req: Request): Promise<CapturedRequest> {
   const rawHeaders: Record<string, string> = {};
   req.headers.forEach((val, key) => {
     rawHeaders[key] = val;
   });
-  let body: unknown = null;
+  let body: string | null = null;
   const ct = (req.headers.get("content-type") ?? "").toLowerCase();
   if (req.body && ct.includes("application/json")) {
     try {
@@ -40,7 +49,7 @@ function mockFetcher(response: Response) {
 }
 
 /** Shorthand: a successful JSON response. */
-function ok(data: unknown, init?: ResponseInit): Response {
+function ok(data: JsonValue, init?: ResponseInit): Response {
   return new Response(JSON.stringify(data), {
     status: 200,
     ...init,
@@ -49,7 +58,7 @@ function ok(data: unknown, init?: ResponseInit): Response {
 }
 
 /** Shorthand: an error response with a non-2xx status code. */
-function err(status: number, body?: unknown): Response {
+function err(status: number, body?: JsonValue): Response {
   return new Response(JSON.stringify(body ?? { error: "fail" }), {
     status,
     headers: { "Content-Type": "application/json" },
@@ -62,10 +71,13 @@ function err(status: number, body?: unknown): Response {
 
 type MockFetcher = ReturnType<typeof mockFetcher>;
 
-function createClient(response: Response): {
+/** A client instance paired with the Fetcher backing it, for assertions. */
+interface ClientAndFetcher {
   client: BotServiceClient;
   fetcher: MockFetcher;
-} {
+}
+
+function createClient(response: Response): ClientAndFetcher {
   const fetcher = mockFetcher(response);
   const client = new BotServiceClient(fetcher as any);
   return { client, fetcher };
@@ -248,7 +260,7 @@ describe("logNotificationResult", () => {
 
 describe("BotServiceClient constructor", () => {
   it("accepts a Fetcher binding", () => {
-    const fetcher = { fetch: vi.fn(), connect: vi.fn() } as unknown as Fetcher;
+    const fetcher = { fetch: vi.fn(), connect: vi.fn() } as Fetcher;
     const client = new BotServiceClient(fetcher);
     expect(client).toBeInstanceOf(BotServiceClient);
   });

@@ -1,12 +1,4 @@
-import {
-  Array,
-  Boolean,
-  Literal,
-  Number,
-  String,
-  Struct,
-  optional,
-} from "effect/Schema";
+import { String, Struct } from "effect/Schema";
 
 export const HealthCheckRequest = Struct({});
 export type HealthCheckRequest = typeof HealthCheckRequest.Type;

@@ -8,7 +8,7 @@ import {
   type UserProfile,
 } from "./user-utils.js";
 import { getMainMenuKeyboard } from "./main-menu.js";
-import { t, type Language, type Translations, escapeMd } from "./i18n.js";
+import { t, type Language, type Translations } from "./i18n.js";
 import { InlineKeyboard, Keyboard } from "grammy";
 import { isBotBlockedError } from "./error-feedback.js";
 import {
@@ -21,14 +21,48 @@ const log = createLogger("cf-bot");
 import {
   handleReportConversation,
   handleLikeMessageConversation,
-  handleLikeMessageMedia,
 } from "../handlers/match.js";
 
 interface ConversationState {
   userId: string;
   field: string;
   step: number;
-  data?: Record<string, unknown>;
+  data?: Record<string, string | number>;
+}
+
+/** Concrete subset of the profile fields updated through conversations. */
+interface ProfileUpdate {
+  phoneNumber?: string;
+  bio?: string;
+  birthDate?: string;
+  displayName?: string;
+  gender?: string;
+  interests?: string[];
+  location?: {
+    latitude?: number;
+    longitude?: number;
+    city?: string;
+    country?: string;
+    source?: string;
+  };
+  preferences?: {
+    minAge?: number;
+    maxAge?: number;
+    maxDistance?: number;
+    genderPreference?: string[];
+  };
+}
+
+interface StepKeyboardOptions {
+  keyboard: Array<Array<{ text: string; request_location?: boolean }>>;
+  resize_keyboard: boolean;
+  one_time_keyboard: boolean;
+}
+
+function apiJsonHeaders(env: Env): Headers {
+  const headers = new Headers({ "Content-Type": "application/json" });
+  if (env.API_SECRET) headers.set("x-api-secret", env.API_SECRET);
+  return headers;
 }
 
 /**
@@ -175,11 +209,7 @@ function shouldSkipStep(
 function buildStepKeyboard(
   step: (typeof ONBOARDING_STEPS)[number],
   lang: Language,
-): {
-  keyboard: Array<Array<{ text: string; request_location?: boolean }>>;
-  resize_keyboard: boolean;
-  one_time_keyboard: boolean;
-} {
+): StepKeyboardOptions {
   const base = { resize_keyboard: true, one_time_keyboard: true };
   switch (step.keyboardType) {
     case "name":
@@ -322,7 +352,7 @@ export async function startConversation(
   kv: KVNamespace,
   userId: string,
   field: string,
-  data?: Record<string, unknown>,
+  data?: Record<string, string | number>,
 ): Promise<void> {
   await setConversationState(kv, { userId, field, step: 0, data });
 }
@@ -388,17 +418,14 @@ export async function checkMandatoryUpdates(
 async function updateUser(
   env: Env,
   userId: string,
-  updates: Record<string, unknown>,
+  updates: ProfileUpdate,
 ): Promise<boolean> {
   try {
     const response = await env.API_SERVICE.fetch(
       new Request(`http://api/users/${userId}`, {
         method: "PUT",
         body: JSON.stringify({ user: updates }),
-        headers: {
-          "Content-Type": "application/json",
-          ...(env.API_SECRET ? { "x-api-secret": env.API_SECRET } : {}),
-        },
+        headers: apiJsonHeaders(env),
       }),
     );
     return response.ok;
@@ -419,8 +446,8 @@ async function getUser(env: Env, userId: string): Promise<UserProfile | null> {
       }),
     );
     if (!response.ok) return null;
-    const data = (await response.json()) as { user?: Record<string, unknown> };
-    return (data.user ?? null) as UserProfile | null;
+    const data = (await response.json()) as { user?: UserProfile };
+    return data.user ?? null;
   } catch (error) {
     log.error("getUser", "Failed to get user", { userId }, error);
     return null;
@@ -826,10 +853,7 @@ export async function handleMediaMessage(
       new Request(`http://api/users/${userId}/media`, {
         method: "POST",
         body: JSON.stringify({ url: publicUrl, type: fileType }),
-        headers: {
-          "Content-Type": "application/json",
-          ...(env.API_SECRET ? { "x-api-secret": env.API_SECRET } : {}),
-        },
+        headers: apiJsonHeaders(env),
       }),
     );
 
@@ -1043,10 +1067,9 @@ async function handleGenderConversation(
   text: string,
   lang: Language,
 ): Promise<boolean> {
-  const genderMap: Record<string, string> = {
-    [t("genderMaleButton", lang)]: "male",
-    [t("genderFemaleButton", lang)]: "female",
-  };
+  const genderMap: Record<string, string> = {};
+  genderMap[t("genderMaleButton", lang)] = "male";
+  genderMap[t("genderFemaleButton", lang)] = "female";
   const gender = genderMap[text];
   if (!gender) {
     await ctx.reply(t("genderInvalid", lang));
@@ -1412,10 +1435,7 @@ export async function handleFeedbackConversation(
     const response = await env.API_SERVICE.fetch(
       new Request("http://api/feedback", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(env.API_SECRET ? { "x-api-secret": env.API_SECRET } : {}),
-        },
+        headers: apiJsonHeaders(env),
         body: JSON.stringify({ userId, message: text }),
       }),
     );

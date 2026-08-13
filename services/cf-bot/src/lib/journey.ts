@@ -1,4 +1,4 @@
-import type { Env } from "../index.js";
+import { Schema } from "effect";
 import { createLogger } from "@meetsmatch/cf-shared";
 
 const log = createLogger("cf-bot");
@@ -19,40 +19,39 @@ export interface UserJourney {
   lastErrorTrace?: string;
 }
 
-function safeJsonParse<T>(value: string | null, fallback: T): T {
-  if (!value) return fallback;
-  try {
-    return JSON.parse(value) as T;
-  } catch {
-    return fallback;
-  }
-}
+const JourneyEventSchema = Schema.Struct({
+  ts: Schema.String,
+  action: Schema.String,
+  detail: Schema.optional(Schema.String),
+  targetId: Schema.optional(Schema.String),
+});
 
-function normalizeJourney(obj: unknown): UserJourney {
-  if (!obj || typeof obj !== "object") return { events: [] };
-  const j = obj as Record<string, unknown>;
-  const events = Array.isArray(j.events) ? j.events : [];
-  return {
-    events: events.filter(
-      (e): e is JourneyEvent =>
-        e &&
-        typeof e === "object" &&
-        typeof (e as JourneyEvent).ts === "string" &&
-        typeof (e as JourneyEvent).action === "string",
-    ),
-    lastErrorAt: typeof j.lastErrorAt === "string" ? j.lastErrorAt : undefined,
-    lastErrorTrace:
-      typeof j.lastErrorTrace === "string" ? j.lastErrorTrace : undefined,
-  };
-}
+const UserJourneySchema = Schema.Struct({
+  events: Schema.optional(Schema.Array(JourneyEventSchema)),
+  lastErrorAt: Schema.optional(Schema.String),
+  lastErrorTrace: Schema.optional(Schema.String),
+});
 
 export async function getJourney(
   kv: KVNamespace,
   userId: string,
 ): Promise<UserJourney> {
   const raw = await kv.get(`journey:${userId}`);
-  const parsed = safeJsonParse(raw, { events: [] });
-  return normalizeJourney(parsed);
+  if (!raw) return { events: [] };
+  try {
+    const option = Schema.decodeUnknownOption(UserJourneySchema)(
+      JSON.parse(raw),
+    );
+    if (option._tag !== "Some") return { events: [] };
+    const value = option.value;
+    return {
+      events: value.events ? [...value.events] : [],
+      lastErrorAt: value.lastErrorAt,
+      lastErrorTrace: value.lastErrorTrace,
+    };
+  } catch {
+    return { events: [] };
+  }
 }
 
 export async function recordJourneyEvent(

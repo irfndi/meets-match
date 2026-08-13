@@ -42,32 +42,36 @@ The entire application runs on **Cloudflare Workers** as three independently dep
 ## Technology Stack
 
 - **Runtime**: Cloudflare Workers (`compatibility_date = "2026-05-01"`, `nodejs_compat` flag)
-- **Language**: TypeScript 6.0.3, ES2024 target, ES2022 modules, `"type": "module"`
+- **Language**: TypeScript 7.0.2 (native), ES2024 target, ES2022 modules, `"type": "module"`
 - **Package Manager**: pnpm 11.1.2 (workspaces enabled)
 - **Monorepo**: pnpm workspaces (`packages/*`, `services/cf-*`)
-- **FP Framework**: [Effect TS](https://effect.website/) (^3.21.2) — used for typed error handling, schemas, and composable effects in cf-api models
-- **Bot Framework**: [Grammy](https://grammy.dev/) (^1.42.0) with `@grammyjs/conversations` and `@grammyjs/menu`
+- **FP Framework**: [Effect TS](https://effect.website/) (4.0.0-beta.103) — typed error handling, schemas, and composable effects in cf-shared/cf-api/cf-worker
+- **Infrastructure**: [Alchemy](https://alchemy.run) (2.0.0-beta.70) — `alchemy.run.ts` declares all Workers + Cloudflare resources as one Effect stack; deploys replace per-service `wrangler.toml` flows
+- **Bot Framework**: [Grammy](https://grammy.dev/) (^1.45.1) with `@grammyjs/conversations` and `@grammyjs/menu`
 - **HTTP Routing**: Custom request router in cf-api (no external framework)
-- **Database**: Cloudflare D1 (SQLite) with raw SQL via `D1Database.prepare()`
-- **Testing**: Vitest (^4.1.6) with `@vitest/coverage-v8`, `fast-check` for property-based tests
-- **Build**: TypeScript compiler (`tsc`) only — no bundler
-- **Dev Server**: Wrangler CLI (`wrangler dev`)
-- **Formatting**: Prettier
+- **Database**: Cloudflare D1 (SQLite) with raw SQL via `D1Database.prepare()`; migrations applied automatically on alchemy deploy (`migrationsDir` in `alchemy.run.ts`)
+- **Testing**: Vitest (^4.1.10) with `@vitest/coverage-v8`, `fast-check` for property-based tests
+- **Lint**: Oxlint (^1.77.0) with the `effecttsgo` plugin — type-aware linting patched by `@effect/tsgo` (see `.oxlintrc.json`)
+- **Format**: Oxfmt (^0.62.0) with `.oxfmtrc.json` (prettier-compatible defaults)
+- **Type checking**: `tsgo` (fast, per project) and `tsc --build --force` (safe)
 - **Version Generation**: Custom `scripts/generate-version.ts` (git tag or short hash)
 
 ## Project Structure
 
 ```
 .
+├── alchemy.run.ts           # Infrastructure-as-Effects stack (Workers + resources)
 ├── package.json              # Root monorepo manifest
 ├── pnpm-workspace.yaml       # Workspace definitions
 ├── tsconfig.json             # Root TS project references (composite: true)
+├── .oxlintrc.json            # Oxlint config (effecttsgo plugin, type-aware)
+├── .oxfmtrc.json             # Oxfmt formatting config
 ├── vitest.config.ts          # Shared vitest config (coverage thresholds: 60%)
 ├── Makefile                  # Common dev tasks (dev, test, lint, deploy, db-check)
 ├── scripts/
 │   ├── generate-version.ts   # Auto-generates src/lib/version.ts per service
 │   ├── setup-bot-commands.ts # Registers commands with BotFather
-│   └── seed-dev-db.ts        # Seeds D1 with synthetic test users
+│   └── seed-dev-db.ts        # Seeds D1 with synthetic test users (wrangler d1 execute)
 ├── packages/
 │   └── cf-shared/
 │       ├── src/
@@ -88,8 +92,7 @@ The entire application runs on **Cloudflare Workers** as three independently dep
 │   │   │   ├── services/     # Business logic layers
 │   │   │   └── lib/version.ts # Auto-generated version metadata
 │   │   ├── migrations/       # D1 SQL migrations (0001_init.sql … 0021_add_cf_metadata.sql)
-│   │   ├── wrangler.toml     # Worker config (D1, KV, R2, Queue bindings)
-│   │   └── package.json
+│   │   └── wrangler.toml     # D1 dev tooling only (seed/db-check); deploys go through alchemy
 │   ├── cf-bot/
 │   │   ├── src/
 │   │   │   ├── index.ts      # Worker fetch + webhook handler, bot setup
@@ -97,16 +100,14 @@ The entire application runs on **Cloudflare Workers** as three independently dep
 │   │   │   ├── menus/        # Inline keyboard menus
 │   │   │   ├── lib/          # Conversations, i18n, notifications, activity tracking
 │   │   │   └── services/     # ApiServiceClient (service binding RPC wrapper)
-│   │   ├── wrangler.toml
-│   │   └── package.json
+│   │   └── tsconfig.json
 │   └── cf-worker/
 │       ├── src/
 │       │   ├── index.ts      # Worker fetch + queue + scheduled handlers
 │       │   ├── jobs/         # Cron job implementations (reengagement, cleanup, birthday, DLQ, subscription expiry)
 │       │   ├── notifications/ # Queue consumer logic
 │       │   └── services/     # ApiServiceClient
-│       ├── wrangler.toml
-│       └── package.json
+│       └── tsconfig.json
 ```
 
 ## Build and Test Commands
@@ -117,59 +118,53 @@ All commands run from the repository root unless noted.
 # Install dependencies
 pnpm install
 
-# Development (run each in its own terminal)
-pnpm dev:api      # cf-api on port 8787
-pnpm dev:bot      # cf-bot on port 8788
-pnpm dev:worker   # cf-worker on port 8789
+# Development — run the whole stack locally (hot reloading)
+pnpm dev
 
-# Or use Make
-make dev          # Runs all three in parallel (background processes)
-make dev-api
-make dev-bot
-make dev-worker
+# Preview a deploy without applying (requires Cloudflare credentials)
+pnpm plan          # prod stage
+pnpm plan:dev      # dev stage
 
 # Testing
 pnpm test         # Run full vitest suite across monorepo
 make test
 
-# Type checking
-pnpm lint         # tsc --build --force (safe but slow)
-pnpm typecheck:fast   # tsgo --noEmit (fast experimental checker)
-pnpm typecheck:safe   # tsc --build --force
+# Linting and formatting
+pnpm lint            # oxlint (type-aware, effecttsgo plugin)
+pnpm format          # oxfmt write all TS/JS/JSON
+pnpm format:check    # oxfmt verify
 make lint
 
-# Formatting
-pnpm format       # Prettier write all TS/JSON/MD
-make format
+# Type checking
+pnpm typecheck:fast   # tsgo --noEmit per project (fast)
+pnpm typecheck:safe   # tsc --build --force (safe, slow)
+make typecheck
 
-# Deployment
-pnpm deploy:api
-pnpm deploy:bot
-pnpm deploy:worker
-# Or
-make deploy       # Deploys all three sequentially
-make deploy-api
-make deploy-bot
-make deploy-worker
+# Deployment (alchemy)
+pnpm deploy:dev     # dev stage
+pnpm deploy:prod    # prod stage, adopts existing cloud resources (--adopt)
+pnpm deploy         # alias for deploy:prod
+make deploy         # quality gates + dev stage
+make deploy-prod    # prod stage with adoption
 
 # Database
-make db-check     # Verify local D1 connectivity
-
-# Clean
-make clean        # Remove node_modules, dist, .wrangler
+make db-check     # Verify local D1 connectivity (wrangler, dev tooling only)
 ```
 
 ### Pre-Dev Setup
 
-1. `cp .dev.vars.example services/cf-bot/.dev.vars` and fill in `BOT_TOKEN`.
-2. Apply D1 migrations locally:
-   ```bash
-   cd services/cf-api && pnpm exec wrangler d1 migrations apply meetsmatch-db --local
-   ```
+1. Copy `.env.example` to `.env` and fill in `BOT_TOKEN` (+ `TELEGRAM_WEBHOOK_SECRET`, `API_SECRET`).
+2. Log in to Cloudflare for alchemy (interactive on first `pnpm dev`/`plan`, or via `CLOUDFLARE_ACCOUNT_ID` + `CLOUDFLARE_API_TOKEN` env vars).
 3. Register bot commands (one-time or after changes):
    ```bash
    BOT_TOKEN=<token> pnpm exec tsx scripts/setup-bot-commands.ts
    ```
+
+### Effect v4 notes
+
+- The repo runs `effect@4.0.0-beta.103` — pinned below beta.104 because alchemy 2.0.0-beta.70's compiled runtime still uses `Schema.TaggedErrorClass` (renamed to `Schema.TaggedError` in beta.104). Bump `effect` and `alchemy` together, and verify `pnpm exec alchemy --help` still works.
+- v3→v4 renames used across the code: `Effect.either`→`Effect.result`, `Effect.catchAll`→`Effect.catch`, `Effect.orElse`→`Effect.catch`/`Effect.matchEffect`, `Cause.failureOption`→`Cause.findErrorOption`, `Schema.Literal(a,b)`→`Schema.Literals([a,b])`, `Schema.filter`→`Schema.check(Schema.makeFilter(...))`, `ConfigProvider.fromMap`→`ConfigProvider.fromUnknown`, `Layer.setConfigProvider`→`ConfigProvider.layer`, `effect/Either`→`effect/Result`, `effect/ParseResult`→`effect/SchemaIssue`, `Context.Tag`→`Context.Service`.
+- The `effecttsgo` oxlint plugin flags v3 APIs against the v4 surface (`outdated-api`) — treat its warnings as errors.
 
 ## Code Style Guidelines
 
@@ -228,38 +223,33 @@ pnpm test -- --run services/cf-api/src/models/__tests__/user.test.ts
 
 ## Deployment Process
 
-Deployments are automated via GitHub Actions (`.github/workflows/ci.yml`).
+Deployments are automated via GitHub Actions (`.github/workflows/ci.yml`) using alchemy.
 
-### Environments
+### Stages
 
-- **Dev**: Auto-deployed on every push to `main` or pre-release tags (`v*-(pre|rc|beta|alpha|snapshot|nightly|canary|dev)`).
-- **Production**: Deployed on release tags matching `v*` without pre-release suffixes.
+Alchemy stages mirror the old wrangler environments:
 
-### Deployment Order
+- **Dev** (`--stage dev`): auto-deployed on every push to `main` or pre-release tags (`v*-(pre|rc|beta|alpha|snapshot|nightly|canary|dev)`). Uses `meetsmatch-dev` D1, `notification-queue-dev`/`dlq-dev`, no cron triggers.
+- **Production** (`--stage prod`): deployed on release tags matching `v*` without pre-release suffixes. Adopts the pre-existing resources (`--adopt`): D1 `meetsmatch`, R2 `meetsmatch-media`, queues `notification-queue`/`dlq`, Analytics Engine datasets.
 
-1. Run tests and type checks.
-2. Build `cf-shared` (`tsc -b packages/cf-shared`).
-3. Generate version files (`scripts/generate-version.ts`).
-4. Apply D1 migrations (`wrangler d1 migrations apply --remote`).
-5. Deploy `cf-api` → `cf-bot` → `cf-worker`.
+### How a deploy works
+
+1. `alchemy plan` computes the diff against the state store (preview with `pnpm plan`).
+2. `alchemy deploy` builds each Worker, applies D1 migrations (`migrationsDir` in `alchemy.run.ts`), creates/updates resources and bindings, and deploys all four Workers.
+3. KV namespaces are NOT adopted (ambiguous titles) — fresh namespaces per stage; delete the old ones from the dashboard after cutover.
+4. Secrets are read from the deploy environment (`BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `API_SECRET`) and bound as `secret_text`.
 
 ### Required Secrets
 
-- `CLOUDFLARE_API_TOKEN` — GitHub Actions secret with Workers deploy and D1 permissions.
+- `CLOUDFLARE_ACCOUNT_ID` + `CLOUDFLARE_API_TOKEN` — GitHub Actions vars/secrets for alchemy provider auth.
+- `BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `API_SECRET` — GitHub Actions secrets, bound by alchemy at deploy time.
 
 ### Manual Deployment
 
 ```bash
-# Dev
-CF_ENV=development pnpm -w deploy:api
-CF_ENV=development pnpm -w deploy:bot
-CF_ENV=development pnpm -w deploy:worker
-
-# Production
-CF_ENV=production pnpm exec tsx scripts/generate-version.ts
-cd services/cf-api && wrangler deploy --env production
-cd services/cf-bot && wrangler deploy --env production
-cd services/cf-worker && wrangler deploy --env production
+pnpm plan            # preview prod
+pnpm deploy:dev      # dev stage
+pnpm deploy:prod     # prod stage with --adopt
 ```
 
 ## Development Conventions
@@ -275,8 +265,8 @@ Each service has an auto-generated `src/lib/version.ts` created by `scripts/gene
 ### D1 Migrations
 
 - Migrations live in `services/cf-api/migrations/` and are numbered sequentially (`0001_init.sql`, `0002_add_matches.sql`, …).
-- Apply locally: `wrangler d1 migrations apply meetsmatch-db --local`
-- Apply remotely: `wrangler d1 migrations apply meetsmatch --env production --remote`
+- Applied automatically by alchemy on every deploy (`migrationsDir` on the `DB` resource in `alchemy.run.ts`).
+- Local-only D1 tooling (`make db-check`, `scripts/seed-dev-db.ts`) still uses `wrangler d1 execute` against the kept `services/cf-api/wrangler.toml`.
 
 ### Bot Commands
 
@@ -287,7 +277,7 @@ Commands are registered once via `scripts/setup-bot-commands.ts` to avoid rate-l
 Cloudflare Workers natively export OpenTelemetry logs and traces. No SDK bundling required.
 
 - Configure destinations in the Cloudflare Dashboard → Workers & Pages → Observability.
-- Uncomment `destinations` arrays in each `wrangler.toml` after adding backends (Sentry, Honeycomb, etc.).
+- Wire named destinations into Workers via the `Cloudflare.Worker` observability props in `alchemy.run.ts`.
 
 ### Commits
 
@@ -296,12 +286,13 @@ Use conventional commits: `feat:`, `fix:`, `refactor:`, `chore:`, `test:`.
 ## Important Notes for Agents
 
 - **Do not trust `.github/copilot-instructions.md`** — it describes a legacy Python/Go stack that has been fully migrated to TypeScript/Cloudflare Workers.
-- **Do not add a bundler** — the project uses `tsc` only. Wrangler handles bundling during deploy.
+- **Do not add a bundler** — alchemy bundles Workers during deploy; `tsc` is used for type checking and building `cf-shared` only.
 - **Do not change import extensions** — relative imports must use `.js` extensions for ESM compatibility.
 - **When adding a new cf-api model**: Follow the existing `Effect.tryPromise` pattern, export typed `Effect.Effect<…>` signatures, and add `__tests__` alongside the model file.
 - **When adding a new bot handler**: Register it in `cf-bot/src/index.ts` under the appropriate `bot.command`, `bot.on("callback_query:data")`, or `bot.on("message:text")` branch.
-- **When adding a new cron job**: Add the implementation in `cf-worker/src/jobs/`, wire it into `cf-worker/src/index.ts` in the `scheduled` handler, and add the cron expression to `wrangler.toml`.
+- **When adding a new cron job**: Add the implementation in `cf-worker/src/jobs/`, wire it into `cf-worker/src/index.ts` in the `scheduled` handler, and add the cron expression to `alchemy.run.ts` (`crons` prop on the `Worker` resource).
 - **When modifying shared contracts**: Update the Effect Schema in `packages/cf-shared/src/contracts/`, then run `pnpm exec tsc -b packages/cf-shared` so dependent services pick up the changes.
+- **When adding a new binding/resource**: Declare it in `alchemy.run.ts` (D1, KV, R2, Queues, Analytics Engine, service bindings, secrets), never in a `wrangler.toml` — the only remaining one is cf-api's D1-dev-tooling config.
 
 - Do not preserve backward compatibility. Remove obsolete paths instead of adding compatibility layers, fallbacks, or migrations.
 - Choose the simplest implementation that fully meets the current requirements. Avoid speculative abstractions, configuration, and indirection.

@@ -6,4 +6,4 @@ export const AppConfig = Config.all({
   ),
 });
 
-export type AppConfig = Effect.Effect.Success<typeof AppConfig>;
+export type AppConfig = Effect.Success<typeof AppConfig>;

@@ -1,7 +1,12 @@
 import { InlineKeyboard, Keyboard } from "grammy";
 import type { MyContext } from "../types.js";
 import type { Env } from "../index.js";
-import { createLogger } from "@meetsmatch/cf-shared";
+import {
+  createLogger,
+  type Preferences,
+  User,
+} from "@meetsmatch/cf-shared";
+import { Schema } from "effect";
 
 const log = createLogger("cf-bot");
 import {
@@ -11,34 +16,45 @@ import {
   isPhoneVerified,
   isBirthdayToday,
   getDefaultPreferences,
-  type UserProfile,
 } from "../lib/user-utils.js";
 import { addNotification } from "../lib/notifications.js";
-import {
-  replyWithError,
-  recordActionJourney,
-  isBotBlockedError,
-} from "../lib/error-feedback.js";
+import { replyWithError, recordActionJourney } from "../lib/error-feedback.js";
 import {
   getConversationState,
   setConversationState,
   clearConversationState,
 } from "../lib/conversations.js";
 
+interface NotificationPayload {
+  fromDisplayName?: string;
+  fromMediaUrl?: string;
+  otherDisplayName?: string;
+  otherUsername?: string;
+  otherMediaUrl?: string;
+  mediaUrl?: string;
+  messageText?: string;
+  giftEmoji?: string;
+  giftName?: string;
+  tier?: string;
+}
+
+interface LangUser {
+  language?: string;
+}
+
 async function enqueueNotification(
   env: Env,
   userId: string,
   type: string,
-  payload: Record<string, unknown>,
+  payload: NotificationPayload,
 ): Promise<void> {
   try {
+    const headers = new Headers({ "Content-Type": "application/json" });
+    if (env.API_SECRET) headers.set("x-api-secret", env.API_SECRET);
     await env.API_SERVICE.fetch(
       new Request("http://api/notifications", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(env.API_SECRET ? { "x-api-secret": env.API_SECRET } : {}),
-        },
+        headers,
         body: JSON.stringify({
           userId,
           type,
@@ -85,7 +101,7 @@ import { ApiServiceClient } from "../services/api-client.js";
 import { getMainMenuKeyboard } from "../lib/main-menu.js";
 import { t, type Language, mdv2, escapeMd } from "../lib/i18n.js";
 
-function getLang(user: Record<string, unknown> | UserProfile): Language {
+function getLang(user: LangUser): Language {
   return (user.language as Language) ?? "en";
 }
 
@@ -103,7 +119,7 @@ export async function fetchUserLang(
       }),
     );
     if (!res.ok) return "en";
-    const data = (await res.json()) as { user?: Record<string, unknown> };
+    const data = (await res.json()) as { user?: User };
     return getLang(data.user ?? {});
   } catch (error) {
     log.error(
@@ -129,11 +145,11 @@ async function safeAnswerCallbackQuery(
 async function ensureDefaultPreferences(
   env: Env,
   userId: string,
-  user: Record<string, unknown>,
 ): Promise<void> {
   // Always fetch fresh preferences from the API to avoid overwriting
   // custom preferences with stale data from a previous fetch
-  let freshPrefs: Record<string, unknown> = {};
+  let freshPrefs: Preferences = {};
+  let user: User | undefined;
   try {
     const res = await env.API_SERVICE.fetch(
       new Request(`http://api/users/${userId}`, {
@@ -144,19 +160,13 @@ async function ensureDefaultPreferences(
       }),
     );
     if (res.ok) {
-      const data = (await res.json()) as { user?: Record<string, unknown> };
-      freshPrefs =
-        (data.user?.preferences as Record<string, unknown> | undefined) ?? {};
-    } else {
-      // API returned non-OK — fall back to cached user object to avoid
-      // overwriting existing preferences during transient failures
-      freshPrefs =
-        (user.preferences as Record<string, unknown> | undefined) ?? {};
+      const data = (await res.json()) as { user?: User };
+      user = data.user;
+      freshPrefs = data.user?.preferences ?? {};
     }
   } catch {
-    // fall back to the passed-in user object
-    freshPrefs =
-      (user.preferences as Record<string, unknown> | undefined) ?? {};
+    // transient failure — treated as no prefs; the PUT below will then
+    // only run if defaults are calculable and fail-fast if the API stays up
   }
 
   const hasPrefs =
@@ -165,21 +175,25 @@ async function ensureDefaultPreferences(
     freshPrefs.maxDistance !== undefined ||
     freshPrefs.genderPreference !== undefined;
   if (hasPrefs) return;
+  if (!user) return;
 
-  const defaults = getDefaultPreferences(user);
+  const defaults = getDefaultPreferences({
+    age: user.age,
+    birthDate: user.birthDate,
+    gender: user.gender,
+  });
   if (Object.keys(defaults).length === 0) return;
 
   try {
+    const headers = new Headers({ "Content-Type": "application/json" });
+    if (env.API_SECRET) headers.set("x-api-secret", env.API_SECRET);
     const res = await env.API_SERVICE.fetch(
       new Request(`http://api/users/${userId}`, {
         method: "PUT",
         body: JSON.stringify({
           user: { preferences: defaults },
         }),
-        headers: {
-          "Content-Type": "application/json",
-          ...(env.API_SECRET ? { "x-api-secret": env.API_SECRET } : {}),
-        },
+        headers,
       }),
     );
     if (!res.ok) {
@@ -202,7 +216,7 @@ async function fetchPotentialMatches(
   env: Env,
   userId: string,
   limit = 5,
-): Promise<{ matches: Array<Record<string, unknown>>; relaxed: boolean }> {
+): Promise<{ matches: Array<User>; relaxed: boolean }> {
   try {
     const res = await env.API_SERVICE.fetch(
       new Request(
@@ -217,7 +231,7 @@ async function fetchPotentialMatches(
     );
     if (!res.ok) return { matches: [], relaxed: false };
     const data = (await res.json()) as {
-      potentialMatches?: Array<Record<string, unknown>>;
+      potentialMatches?: Array<User>;
       relaxed?: boolean;
     };
     return {
@@ -242,7 +256,7 @@ const DM_BYPASS_LIMIT = 100;
 const DM_BYPASS_TTL = 86400; // 24 hours
 
 interface MatchQueue {
-  matches: Array<Record<string, unknown>>;
+  matches: readonly User[];
   index: number;
   tier: string;
   relaxed: boolean;
@@ -257,15 +271,26 @@ interface LastAction {
   timestamp: string;
 }
 
-function isValidMatchQueue(obj: unknown): obj is MatchQueue {
-  if (!obj || typeof obj !== "object") return false;
-  const q = obj as Record<string, unknown>;
-  return (
-    Array.isArray(q.matches) &&
-    typeof q.index === "number" &&
-    typeof q.tier === "string"
-  );
-}
+const MatchQueueSchema = Schema.Struct({
+  matches: Schema.Array(User),
+  index: Schema.Number,
+  tier: Schema.String,
+  relaxed: Schema.optional(Schema.Boolean),
+  myLocation: Schema.optional(
+    Schema.Struct({
+      latitude: Schema.Number,
+      longitude: Schema.Number,
+    }),
+  ),
+  referralCode: Schema.optional(Schema.String),
+});
+
+const LastActionSchema = Schema.Struct({
+  matchId: Schema.String,
+  targetUserId: Schema.String,
+  action: Schema.String,
+  timestamp: Schema.String,
+});
 
 async function getMatchQueue(
   kv: KVNamespace,
@@ -274,8 +299,18 @@ async function getMatchQueue(
   const value = await kv.get(`match_queue:${userId}`);
   if (!value) return null;
   try {
-    const parsed = JSON.parse(value) as unknown;
-    return isValidMatchQueue(parsed) ? parsed : null;
+    const option = Schema.decodeUnknownOption(MatchQueueSchema)(
+      JSON.parse(value),
+    );
+    if (option._tag === "None") return null;
+    return {
+      matches: option.value.matches,
+      index: option.value.index,
+      tier: option.value.tier,
+      relaxed: option.value.relaxed ?? false,
+      myLocation: option.value.myLocation,
+      referralCode: option.value.referralCode,
+    };
   } catch {
     return null;
   }
@@ -295,16 +330,6 @@ async function clearMatchQueue(kv: KVNamespace, userId: string): Promise<void> {
   await kv.delete(`match_queue:${userId}`);
 }
 
-function isValidLastAction(obj: unknown): obj is LastAction {
-  if (!obj || typeof obj !== "object") return false;
-  const a = obj as Record<string, unknown>;
-  return (
-    typeof a.matchId === "string" &&
-    typeof a.targetUserId === "string" &&
-    typeof a.action === "string"
-  );
-}
-
 async function getLastAction(
   kv: KVNamespace,
   userId: string,
@@ -312,8 +337,16 @@ async function getLastAction(
   const value = await kv.get(`last_action:${userId}`);
   if (!value) return null;
   try {
-    const parsed = JSON.parse(value) as unknown;
-    return isValidLastAction(parsed) ? parsed : null;
+    const option = Schema.decodeUnknownOption(LastActionSchema)(
+      JSON.parse(value),
+    );
+    if (option._tag === "None") return null;
+    return {
+      matchId: option.value.matchId,
+      targetUserId: option.value.targetUserId,
+      action: option.value.action,
+      timestamp: option.value.timestamp,
+    };
   } catch {
     return null;
   }
@@ -452,16 +485,6 @@ export function getMatchActionKeyboard(tier: string, lang: Language): Keyboard {
   return keyboard.resized();
 }
 
-function formatProfile(user: Record<string, unknown>, index: number): string {
-  const name = (user.displayName ?? user.first_name ?? "Unknown") as string;
-  const age = user.age ?? "?";
-  const bio = user.bio ? `\n📝 ${user.bio}` : "";
-  const interests = user.interests
-    ? `\n🌟 ${Array.isArray(user.interests) ? (user.interests as string[]).join(", ") : String(user.interests)}`
-    : "";
-  return `${index}. ${name}, ${age}${bio}${interests}`;
-}
-
 function getGenderPronoun(gender: string | undefined, lang: Language): string {
   switch (gender) {
     case "male":
@@ -501,32 +524,28 @@ function formatDistance(km: number): string {
 }
 
 function buildMatchCard(
-  otherUser: Record<string, unknown>,
+  otherUser: User,
   lang: Language,
   myLocation?: { latitude: number; longitude: number },
 ): string {
-  const name = (otherUser.displayName ??
-    otherUser.first_name ??
-    "Someone") as string;
+  const name = otherUser.displayName ?? "Someone";
   const age = otherUser.age ?? "?";
-  const genderRaw = (otherUser.gender as string)?.toLowerCase();
+  const genderRaw = otherUser.gender?.toLowerCase();
   const gender =
     genderRaw === "male"
       ? t("matchCardMale", lang)
       : genderRaw === "female"
         ? t("matchCardFemale", lang)
         : t("matchCardOther", lang);
-  const birthdayBadge = isBirthdayToday(
-    otherUser.birthDate as string | undefined,
-  )
+  const birthdayBadge = isBirthdayToday(otherUser.birthDate)
     ? " 🎂"
     : "";
 
-  const loc = otherUser.location as Record<string, unknown> | undefined;
-  const city = loc?.city as string | undefined;
-  const country = loc?.country as string | undefined;
-  const lat = loc?.latitude as number | undefined;
-  const lon = loc?.longitude as number | undefined;
+  const loc = otherUser.location;
+  const city = loc?.city;
+  const country = loc?.country;
+  const lat = loc?.latitude;
+  const lon = loc?.longitude;
 
   // Distance
   let distanceText = "";
@@ -564,7 +583,7 @@ function buildMatchCard(
   }
   const interestsText = otherUser.interests
     ? Array.isArray(otherUser.interests)
-      ? (otherUser.interests as string[]).join(", ")
+      ? otherUser.interests.join(", ")
       : String(otherUser.interests)
     : "";
   const interests = interestsText ? mdv2`\n🌟 ${interestsText}` : "";
@@ -577,11 +596,9 @@ function buildMatchCard(
   return parts.join("\n");
 }
 
-function buildChatLink(otherUser: Record<string, unknown>): string {
-  const username = otherUser.username as string | undefined;
-  const displayName = (otherUser.displayName ??
-    otherUser.first_name ??
-    "Someone") as string;
+function buildChatLink(otherUser: User): string {
+  const username = otherUser.username;
+  const displayName = otherUser.displayName ?? "Someone";
   if (username) {
     return `👉 [Start chatting with ${escapeMd(displayName)}](https://t.me/${username})`;
   }
@@ -590,16 +607,13 @@ function buildChatLink(otherUser: Record<string, unknown>): string {
 
 async function sendMatchCard(
   ctx: MyContext,
-  match: Record<string, unknown>,
+  match: User,
   lang: Language,
   tier: string,
   myLocation?: { latitude: number; longitude: number },
 ): Promise<void> {
   const text = buildMatchCard(match, lang, myLocation);
-  const mediaUrls = (match.mediaUrls ?? []) as unknown as Array<{
-    url: string;
-    type: string;
-  }>;
+  const mediaUrls = match.mediaUrls ?? [];
   // Preserve media order: show the first uploaded item (image or video)
   const firstRenderable = mediaUrls.find(
     (m) => m.type === "image" || m.type === "video",
@@ -679,7 +693,7 @@ export async function showNextMatch(
     }
 
     await sendMatchCard(ctx, match, lang, queue.tier, queue.myLocation);
-  } catch (error) {
+  } catch {
     await replyWithError(ctx, env, lang, { action: "show_next_match" });
   }
 }
@@ -730,11 +744,7 @@ export const matchCommand = async (ctx: MyContext, env: Env): Promise<void> => {
     const tier = (user.subscriptionTier as string) ?? "free";
 
     // Set default preferences if none exist
-    await ensureDefaultPreferences(
-      env,
-      userId,
-      user as unknown as Record<string, unknown>,
-    );
+    await ensureDefaultPreferences(env, userId);
 
     // Clear any existing queue to start fresh
     await clearMatchQueue(env.KV, userId);
@@ -765,16 +775,12 @@ export const matchCommand = async (ctx: MyContext, env: Env): Promise<void> => {
     }
 
     // Extract current user's location for distance display on cards
+    const userLocation = user.location;
+    const userLat = userLocation?.latitude;
+    const userLon = userLocation?.longitude;
     const myLocation =
-      (user.location as Record<string, unknown> | undefined)?.latitude != null
-        ? {
-            latitude: Number(
-              (user.location as Record<string, unknown>).latitude,
-            ),
-            longitude: Number(
-              (user.location as Record<string, unknown>).longitude,
-            ),
-          }
+      userLat != null && userLon != null
+        ? { latitude: Number(userLat), longitude: Number(userLon) }
         : undefined;
 
     // Store queue and show first match only
@@ -835,11 +841,7 @@ async function handleMatchAction(
     let myMediaUrl: string | undefined;
     try {
       const myProfile = await client.getUser({ userId });
-      const myMediaUrls = (myProfile.user?.mediaUrls ??
-        []) as unknown as Array<{
-        url: string;
-        type: string;
-      }>;
+      const myMediaUrls = myProfile.user?.mediaUrls ?? [];
       myMediaUrl = myMediaUrls.find((m) => m.type === "image")?.url;
     } catch {
       // ignore — notification will be text-only
@@ -904,12 +906,9 @@ async function handleMatchAction(
 
       if (likeRes.isMutual) {
         const otherUserRes = await client.getUser({ userId: targetUserId });
-        const otherUser = otherUserRes.user as Record<string, unknown>;
-        const name = (otherUser.displayName ??
-          otherUser.first_name ??
-          "Someone") as string;
-        const username = otherUser.username as string | undefined;
-        const pronoun = getGenderPronoun(otherUser.gender as string, lang);
+        const otherUser = otherUserRes.user;
+        const name = otherUser.displayName ?? "Someone";
+        const pronoun = getGenderPronoun(otherUser.gender, lang);
         const chatLink = buildChatLink(otherUser);
 
         await ctx.reply(t("matchItsAMatch", lang, { name }), {
@@ -950,13 +949,12 @@ async function handleMatchAction(
         });
       }
     } else if (action === "dislike") {
+      const headers = new Headers({ "Content-Type": "application/json" });
+      if (env.API_SECRET) headers.set("x-api-secret", env.API_SECRET);
       const dislikeRes = await env.API_SERVICE.fetch(
         new Request(`http://api/matches/${matchId}/dislike`, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...(env.API_SECRET ? { "x-api-secret": env.API_SECRET } : {}),
-          },
+          headers,
           body: JSON.stringify({ userId }),
         }),
       );
@@ -964,13 +962,12 @@ async function handleMatchAction(
         await client.recordDislike(userId);
       }
     } else if (action === "skip") {
+      const headers = new Headers({ "Content-Type": "application/json" });
+      if (env.API_SECRET) headers.set("x-api-secret", env.API_SECRET);
       await env.API_SERVICE.fetch(
         new Request(`http://api/matches/${matchId}/skip`, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...(env.API_SECRET ? { "x-api-secret": env.API_SECRET } : {}),
-          },
+          headers,
           body: JSON.stringify({ userId }),
         }),
       );
@@ -1146,9 +1143,9 @@ async function handleSendDM(ctx: MyContext, env: Env, targetUserId: string) {
 
     // Load target user details BEFORE consuming credits
     const otherUserRes = await client.getUser({ userId: targetUserId });
-    const otherUser = otherUserRes.user as Record<string, unknown>;
+    const otherUser = otherUserRes.user;
     const chatLink = buildChatLink(otherUser);
-    const name = (otherUser.displayName ?? "Someone") as string;
+    const name = otherUser.displayName ?? "Someone";
 
     // Use bypass for Premium+
     if (dmStatus.tier === "premium_plus" && bypassRemaining !== undefined) {
@@ -1408,11 +1405,7 @@ export async function handleLikeMessageConversation(
     let myMediaUrl: string | undefined;
     try {
       const myProfile = await client.getUser({ userId });
-      const myMediaUrls = (myProfile.user?.mediaUrls ??
-        []) as unknown as Array<{
-        url: string;
-        type: string;
-      }>;
+      const myMediaUrls = myProfile.user?.mediaUrls ?? [];
       myMediaUrl = myMediaUrls.find((m) => m.type === "image")?.url;
     } catch {
       // ignore
@@ -1432,11 +1425,9 @@ export async function handleLikeMessageConversation(
 
     if (likeRes.isMutual) {
       const otherUserRes = await client.getUser({ userId: targetUserId });
-      const otherUser = otherUserRes.user as Record<string, unknown>;
-      const name = (otherUser.displayName ??
-        otherUser.first_name ??
-        "Someone") as string;
-      const pronoun = getGenderPronoun(otherUser.gender as string, lang);
+      const otherUser = otherUserRes.user;
+      const name = otherUser.displayName ?? "Someone";
+      const pronoun = getGenderPronoun(otherUser.gender, lang);
       const chatLink = buildChatLink(otherUser);
 
       await ctx.reply(t("matchItsAMatch", lang, { name }), {
@@ -1472,7 +1463,7 @@ export async function handleLikeMessageConversation(
       });
 
       // Send notification with the message
-      const notificationPayload: Record<string, unknown> = {
+      const notificationPayload: NotificationPayload = {
         fromDisplayName: myName,
         fromMediaUrl: myMediaUrl,
       };
@@ -1515,7 +1506,7 @@ export async function handleLikeMessageMedia(
   ctx: MyContext,
   env: Env,
   mediaUrl: string,
-  mediaType: "image" | "video",
+  _mediaType: "image" | "video",
 ): Promise<boolean> {
   if (!ctx.from) return false;
   const userId = String(ctx.from.id);
@@ -1542,11 +1533,7 @@ export async function handleLikeMessageMedia(
     let myMediaUrl: string | undefined;
     try {
       const myProfile = await client.getUser({ userId });
-      const myMediaUrls = (myProfile.user?.mediaUrls ??
-        []) as unknown as Array<{
-        url: string;
-        type: string;
-      }>;
+      const myMediaUrls = myProfile.user?.mediaUrls ?? [];
       myMediaUrl = myMediaUrls.find((m) => m.type === "image")?.url;
     } catch {
       // ignore
@@ -1564,11 +1551,9 @@ export async function handleLikeMessageMedia(
 
     if (likeRes.isMutual) {
       const otherUserRes = await client.getUser({ userId: targetUserId });
-      const otherUser = otherUserRes.user as Record<string, unknown>;
-      const name = (otherUser.displayName ??
-        otherUser.first_name ??
-        "Someone") as string;
-      const pronoun = getGenderPronoun(otherUser.gender as string, lang);
+      const otherUser = otherUserRes.user;
+      const name = otherUser.displayName ?? "Someone";
+      const pronoun = getGenderPronoun(otherUser.gender, lang);
       const chatLink = buildChatLink(otherUser);
 
       await ctx.reply(t("matchItsAMatch", lang, { name }), {
@@ -1953,25 +1938,22 @@ export async function handleGiftPremiumPayment(
   try {
     const client = new ApiServiceClient(env.API_SERVICE, env.API_SECRET);
 
-    // Get buyer and target user names
-    const [buyerRes, targetRes] = await Promise.all([
-      client.getUser({ userId: buyerId }),
-      client.getUser({ userId: targetUserId }),
-    ]);
+    // Get target user name
+    const targetRes = await client.getUser({ userId: targetUserId });
 
-    const buyerName = (buyerRes.user?.displayName ?? "Someone") as string;
     const targetName = (targetRes.user?.displayName ?? "Someone") as string;
     const tierLabel = tier === "premium_plus" ? "Premium+ 💎" : "Premium 👑";
 
     // Determine effective tier: never downgrade (premium_plus > premium > free)
     const currentTier = (targetRes.user?.subscriptionTier as string) ?? "free";
-    const tierRank: Record<string, number> = {
+    const tierRank = {
       premium_plus: 2,
       premium: 1,
       free: 0,
-    };
+    } as const;
     const effectiveTier =
-      (tierRank[tier] ?? 0) >= (tierRank[currentTier] ?? 0)
+      (tierRank[tier as keyof typeof tierRank] ?? 0) >=
+      (tierRank[currentTier as keyof typeof tierRank] ?? 0)
         ? tier
         : currentTier;
 
@@ -2166,11 +2148,6 @@ export const matchCallbacks = async (
     await ctx.answerCallbackQuery().catch(() => {});
   }
 };
-
-async function handleBuyDM(ctx: MyContext, env: Env, targetUserId: string) {
-  // Deprecated: combined into handleSendDM for single-step flow
-  await handleSendDM(ctx, env, targetUserId);
-}
 
 async function handleBlock(
   ctx: MyContext,

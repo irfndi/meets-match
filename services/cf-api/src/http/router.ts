@@ -17,9 +17,7 @@ import {
 import { BlockRepository } from "../models/block.js";
 import { GeocodingService } from "../models/geocoding.js";
 import {
-  AppError,
   NotFoundError,
-  DatabaseError,
   ValidationError,
   createLogger,
   buildMediaKey,
@@ -30,12 +28,61 @@ import { getVersionInfo } from "../lib/version.js";
 
 const log = createLogger("cf-api");
 
+interface JsonBody {
+  user?: typeof import("@meetsmatch/cf-shared").User.Type;
+  updateMask?: string[];
+  user1Id?: string;
+  user2Id?: string;
+  userId?: string;
+  message?: string;
+  type?: string;
+  channel?: string;
+  payload?: string | object;
+  scheduledAt?: string;
+  code?: string;
+  amount?: number;
+  chargeId?: string;
+  tier?: "premium" | "premium_plus";
+  expiresAt?: string;
+  url?: string;
+  fileData?: string;
+  fileType?: string;
+  fileName?: string;
+  reporterId?: string;
+  reason?: string;
+  mediaUrl?: string;
+  traceId?: string;
+  journey?: string;
+  severity?: "high" | "low";
+  source?: string;
+  botVersion?: string;
+  apiVersion?: string;
+  workerVersion?: string;
+  errorStack?: string;
+  userLanguage?: string;
+  userTier?: string;
+  triggerInput?: string;
+  kvSession?: string;
+  cfMetadata?: string;
+  blockedId?: string;
+  status?: "pending" | "reviewed" | "dismissed";
+}
+
+interface MatchMessage {
+  text?: string;
+  mediaUrl?: string;
+}
+
+async function parseJsonBody(request: Request): Promise<JsonBody> {
+  return (await request.json()) as JsonBody;
+}
+
 async function runEffect<A, E>(effect: Effect.Effect<A, E, never>): Promise<A> {
   const exit = await Effect.runPromiseExit(effect);
   if (Exit.isSuccess(exit)) {
     return exit.value;
   }
-  const failureOption = Cause.failureOption(exit.cause);
+  const failureOption = Cause.findErrorOption(exit.cause);
   if (failureOption._tag === "Some") {
     throw failureOption.value;
   }
@@ -229,7 +276,7 @@ export class ApiRouter {
   }
 
   private async handleCreateUser(request: Request): Promise<Response> {
-    const body = (await request.json()) as Record<string, unknown>;
+    const body = await parseJsonBody(request);
     const result = await runEffect(
       this.userRepo.create({
         user: body.user as typeof import("@meetsmatch/cf-shared").User.Type,
@@ -339,7 +386,7 @@ export class ApiRouter {
     request: Request,
   ): Promise<Response> {
     const userId = path.replace("/users/", "");
-    const body = (await request.json()) as Record<string, unknown>;
+    const body = await parseJsonBody(request);
     try {
       const result = await runEffect(
         this.userRepo.update({
@@ -360,7 +407,7 @@ export class ApiRouter {
   }
 
   private async handleCreateMatch(request: Request): Promise<Response> {
-    const body = (await request.json()) as Record<string, unknown>;
+    const body = await parseJsonBody(request);
     const result = await runEffect(
       this.matchRepo.create({
         user1Id: String(body.user1Id),
@@ -437,15 +484,13 @@ export class ApiRouter {
     const parts = path.replace("/matches/", "").split("/");
     const matchId = parts[0];
     const action = parts[1];
-    const body = (await request.json()) as Record<string, unknown>;
+    const body = await parseJsonBody(request);
     const userId = String(body.userId);
 
     try {
       switch (action) {
         case "like": {
-          const message = body.message as
-            | { text?: string; mediaUrl?: string }
-            | undefined;
+          const message = body.message as MatchMessage | undefined;
           const result = await runEffect(
             this.matchRepo.like({ matchId, userId, message }),
           );
@@ -481,7 +526,7 @@ export class ApiRouter {
   }
 
   private async handleEnqueueNotification(request: Request): Promise<Response> {
-    const body = (await request.json()) as Record<string, unknown>;
+    const body = await parseJsonBody(request);
     let notification:
       | typeof import("@meetsmatch/cf-shared").Notification.Type
       | null = null;
@@ -497,11 +542,7 @@ export class ApiRouter {
                 body.channel,
               ) as typeof import("@meetsmatch/cf-shared").NotificationChannel.Type)
             : undefined,
-          payload: body.payload
-            ? typeof body.payload === "string"
-              ? body.payload
-              : JSON.stringify(body.payload)
-            : undefined,
+          payload: body.payload ? String(body.payload) : undefined,
           scheduledAt: body.scheduledAt ? String(body.scheduledAt) : undefined,
         }),
       );
@@ -680,7 +721,7 @@ export class ApiRouter {
   ): Promise<Response> {
     const userId = path.replace("/users/", "").replace("/apply-referral", "");
     try {
-      const body = (await request.json()) as Record<string, unknown>;
+      const body = await parseJsonBody(request);
       const code = String(body.code ?? "");
       const result = await runEffect(this.userRepo.applyReferral(userId, code));
       return jsonResponse(result, result.success ? 200 : 400);
@@ -726,7 +767,7 @@ export class ApiRouter {
       .replace("/users/", "")
       .replace("/purchase-dm-credits", "");
     try {
-      const body = (await request.json()) as Record<string, unknown>;
+      const body = await parseJsonBody(request);
       const amountRaw = Number(body.amount ?? 1);
       if (Number.isNaN(amountRaw) || amountRaw < 1 || amountRaw > 100) {
         return jsonResponse(
@@ -735,7 +776,7 @@ export class ApiRouter {
         );
       }
       const amount = Math.max(1, Math.min(100, amountRaw));
-      const chargeId = typeof body.chargeId === "string" ? body.chargeId : "";
+      const chargeId = body.chargeId ?? "";
       if (!chargeId) {
         return jsonResponse({ error: "chargeId is required" }, 400);
       }
@@ -757,25 +798,22 @@ export class ApiRouter {
   ): Promise<Response> {
     const userId = path.replace("/users/", "").replace("/grant-premium", "");
     try {
-      const body = (await request.json()) as Record<string, unknown>;
-      const tier = typeof body.tier === "string" ? body.tier : "";
+      const body = await parseJsonBody(request);
+      const tier = body.tier ?? "";
       if (tier !== "premium" && tier !== "premium_plus") {
         return jsonResponse(
           { error: "tier must be premium or premium_plus" },
           400,
         );
       }
-      const expiresAt = body.expiresAt;
-      if (
-        typeof expiresAt !== "string" ||
-        Number.isNaN(Date.parse(expiresAt))
-      ) {
+      const expiresAt = body.expiresAt ?? "";
+      if (Number.isNaN(Date.parse(expiresAt))) {
         return jsonResponse(
           { error: "expiresAt must be a valid ISO date" },
           400,
         );
       }
-      const chargeId = typeof body.chargeId === "string" ? body.chargeId : "";
+      const chargeId = body.chargeId ?? "";
       if (!chargeId) {
         return jsonResponse({ error: "chargeId is required" }, 400);
       }
@@ -797,7 +835,7 @@ export class ApiRouter {
   ): Promise<Response> {
     const userId = path.replace("/users/", "").replace("/media", "");
     try {
-      const body = (await request.json()) as Record<string, unknown>;
+      const body = await parseJsonBody(request);
 
       // Check daily media upload limit
       const mediaStatus = await runEffect(
@@ -904,7 +942,7 @@ export class ApiRouter {
   ): Promise<Response> {
     const userId = path.replace("/users/", "").replace("/media", "");
     try {
-      const body = (await request.json()) as Record<string, unknown>;
+      const body = await parseJsonBody(request);
       const url = String(body.url ?? "");
       if (!url) return jsonResponse({ error: "url is required" }, 400);
 
@@ -955,7 +993,7 @@ export class ApiRouter {
   ): Promise<Response> {
     const reportedId = path.replace("/users/", "").replace("/report", "");
     try {
-      const body = (await request.json()) as Record<string, unknown>;
+      const body = await parseJsonBody(request);
       const reporterId = String(body.reporterId ?? "");
       const reason = body.reason ? String(body.reason) : undefined;
       const mediaUrl = body.mediaUrl ? String(body.mediaUrl) : undefined;
@@ -974,7 +1012,7 @@ export class ApiRouter {
 
   private async handleFeedback(request: Request): Promise<Response> {
     try {
-      const body = (await request.json()) as Record<string, unknown>;
+      const body = await parseJsonBody(request);
       const userId = String(body.userId ?? "");
       const typeRaw = body.type ? String(body.type) : undefined;
       const message = body.message ? String(body.message) : undefined;
@@ -1003,9 +1041,9 @@ export class ApiRouter {
   }
 
   private async handleErrorReport(request: Request): Promise<Response> {
-    let body: Record<string, unknown>;
+    let body: JsonBody;
     try {
-      body = (await request.json()) as Record<string, unknown>;
+      body = await parseJsonBody(request);
     } catch {
       return jsonResponse({ error: "Invalid JSON body" }, 400);
     }
@@ -1125,7 +1163,7 @@ export class ApiRouter {
       );
     }
 
-    let body: unknown;
+    let body: JsonBody;
     try {
       body = await request.json();
     } catch {
@@ -1135,14 +1173,7 @@ export class ApiRouter {
       );
     }
 
-    if (!body || typeof body !== "object" || Array.isArray(body)) {
-      return jsonResponse(
-        { error: new ValidationError("body", "Invalid JSON body").message },
-        400,
-      );
-    }
-
-    const status = (body as Record<string, unknown>).status;
+    const status = body.status;
     if (
       !ERROR_REPORT_STATUSES.includes(
         status as "pending" | "reviewed" | "dismissed",
@@ -1203,7 +1234,7 @@ export class ApiRouter {
   private async handleBlock(path: string, request: Request): Promise<Response> {
     const blockerId = path.replace("/users/", "").replace("/block", "");
     try {
-      const body = (await request.json()) as Record<string, unknown>;
+      const body = await parseJsonBody(request);
       const blockedId = String(body.blockedId ?? "");
       if (!blockedId) {
         return jsonResponse({ error: "blockedId is required" }, 400);
@@ -1226,7 +1257,7 @@ export class ApiRouter {
   ): Promise<Response> {
     const blockerId = path.replace("/users/", "").replace("/unblock", "");
     try {
-      const body = (await request.json()) as Record<string, unknown>;
+      const body = await parseJsonBody(request);
       const blockedId = String(body.blockedId ?? "");
       if (!blockedId) {
         return jsonResponse({ error: "blockedId is required" }, 400);
@@ -1264,7 +1295,7 @@ export class ApiRouter {
   }
 }
 
-function jsonResponse(body: unknown, status = 200): Response {
+function jsonResponse<T>(body: T, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: { "Content-Type": "application/json" },

@@ -1,4 +1,3 @@
-import { Effect } from "effect";
 import type { Fetcher } from "@cloudflare/workers-types";
 import {
   type GetUserRequest,

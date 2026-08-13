@@ -1,20 +1,19 @@
-.PHONY: help dev test lint typecheck format deploy deploy-shared deploy-migrations deploy-api deploy-bot deploy-worker clean clean-state db-check
+.PHONY: help dev test lint format format-check typecheck deploy deploy-dev deploy-prod plan plan-dev db-check clean clean-state
 
 # Default target
 help:
 	@echo "Available commands:"
-	@echo "  make dev            Run all 3 Workers locally in parallel"
-	@echo "  make dev-api        Run cf-api Worker locally"
-	@echo "  make dev-bot        Run cf-bot Worker locally"
-	@echo "  make dev-worker     Run cf-worker Worker locally"
+	@echo "  make dev            Run all Workers locally (alchemy dev)"
 	@echo "  make test           Run all tests (vitest)"
-	@echo "  make lint           Lint / format-check all packages (prettier)"
-	@echo "  make typecheck      Type-check the entire monorepo (tsc)"
-	@echo "  make format         Format all code (prettier)"
-	@echo "  make deploy         Deploy all 3 Workers"
-	@echo "  make deploy-api     Deploy cf-api Worker"
-	@echo "  make deploy-bot     Deploy cf-bot Worker"
-	@echo "  make deploy-worker  Deploy cf-worker Worker"
+	@echo "  make lint           Lint all packages (oxlint)"
+	@echo "  make format         Format all code (oxfmt)"
+	@echo "  make format-check   Verify formatting (oxfmt check)"
+	@echo "  make typecheck      Type-check the entire monorepo (tsc -b)"
+	@echo "  make deploy         Quality gates + deploy dev stage (alchemy)"
+	@echo "  make deploy-dev     Deploy dev stage (alchemy)"
+	@echo "  make deploy-prod    Deploy prod stage with resource adoption (alchemy --adopt)"
+	@echo "  make plan           Preview prod changes (alchemy plan)"
+	@echo "  make plan-dev       Preview dev changes (alchemy plan)"
 	@echo "  make db-check       Check D1 local connectivity"
 	@echo "  make clean          Remove build artifacts and dependencies"
 	@echo "  make clean-state    Remove local Wrangler state"
@@ -22,20 +21,8 @@ help:
 # --- Development ---
 
 dev:
-	@echo "Starting all Workers in parallel..."
-	@pnpm -w dev:api & PID1=$$!; pnpm -w dev:bot & PID2=$$!; pnpm -w dev:worker & PID3=$$!; trap 'kill $$PID1 $$PID2 $$PID3 2>/dev/null' EXIT INT TERM; FAIL=0; wait $$PID1 || FAIL=1; wait $$PID2 || FAIL=1; wait $$PID3 || FAIL=1; exit $$FAIL
-
-dev-api:
-	@echo "Starting cf-api Worker..."
-	@pnpm -w dev:api
-
-dev-bot:
-	@echo "Starting cf-bot Worker..."
-	@pnpm -w dev:bot
-
-dev-worker:
-	@echo "Starting cf-worker Worker..."
-	@pnpm -w dev:worker
+	@echo "Starting all Workers via alchemy dev..."
+	pnpm dev
 
 # --- Quality ---
 
@@ -44,54 +31,53 @@ test:
 	pnpm test
 
 lint:
-	@echo "Linting all packages (prettier)..."
+	@echo "Linting all packages (oxlint)..."
 	pnpm lint
+
+format:
+	@echo "Formatting code (oxfmt)..."
+	pnpm format
+
+format-check:
+	@echo "Checking formatting (oxfmt)..."
+	pnpm format:check
 
 typecheck:
 	@echo "Type-checking the entire monorepo..."
 	pnpm typecheck:safe
 
-format:
-	@echo "Formatting code..."
-	pnpm format
-
 # --- Deploy ---
 
 # Run quality gates serially before deploying so `make -j deploy` cannot
-# start a deploy before checks finish. Mirror the CI deployment order:
-# build cf-shared, generate version files, apply D1 migrations, then deploy
-# each service so shared code and schema are never stale.
+# start a deploy before checks finish. Deploys go through alchemy, which
+# builds, applies D1 migrations, and deploys every Worker in the stack.
 deploy:
 	@$(MAKE) test
 	@$(MAKE) lint
 	@$(MAKE) typecheck
-	@$(MAKE) deploy-shared
-	@$(MAKE) deploy-migrations
-	@$(MAKE) deploy-api deploy-bot deploy-worker
+	@$(MAKE) deploy-dev
 
-deploy-shared:
-	@echo "Building cf-shared + generating version files..."
-	pnpm exec tsc -b packages/cf-shared
-	pnpm exec tsx scripts/generate-version.ts
+deploy-dev:
+	@echo "Deploying dev stage (alchemy)..."
+	pnpm deploy:dev
 
-deploy-migrations:
-	@echo "Applying D1 migrations..."
-	cd services/cf-api && pnpm exec wrangler d1 migrations apply meetsmatch-dev --env dev --remote
+deploy-prod:
+	@echo "Deploying prod stage (alchemy, adopting existing resources)..."
+	pnpm deploy:prod
 
-deploy-api:
-	@echo "Deploying cf-api Worker..."
-	pnpm -w deploy:api
+plan:
+	@echo "Previewing prod changes (alchemy plan)..."
+	pnpm plan
 
-deploy-bot:
-	@echo "Deploying cf-bot Worker..."
-	pnpm -w deploy:bot
-
-deploy-worker:
-	@echo "Deploying cf-worker Worker..."
-	pnpm -w deploy:worker
+plan-dev:
+	@echo "Previewing dev changes (alchemy plan)..."
+	pnpm plan:dev
 
 # --- Database ---
 
+# Local D1 connectivity check. `wrangler d1 execute --local` uses the
+# cf-api wrangler.toml (kept for D1 dev tooling only — deploys go through
+# alchemy).
 db-check:
 	@echo "Checking D1 local connectivity..."
 	cd services/cf-api && pnpm exec wrangler d1 execute meetsmatch-db --local --command="SELECT 'D1 local DB ready';"

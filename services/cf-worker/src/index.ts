@@ -24,11 +24,15 @@ export interface Env {
   DAILY_ACTIVE_STATES_SCHEDULE?: string;
 }
 
+interface DlqMessageBody {
+  notificationId?: string;
+}
+
 export default {
   async fetch(
-    request: Request,
-    env: Env,
-    ctx: ExecutionContext,
+    _request: Request,
+    _env: Env,
+    _ctx: ExecutionContext,
   ): Promise<Response> {
     return new Response(
       JSON.stringify({
@@ -46,17 +50,14 @@ export default {
   async queue(
     batch: MessageBatch,
     env: Env,
-    ctx: ExecutionContext,
+    _ctx: ExecutionContext,
   ): Promise<void> {
     const isDLQ = batch.queue.startsWith("dlq");
     if (isDLQ) {
       // DLQ messages: just mark them in DB and ack; no further delivery attempts.
       for (const message of batch.messages) {
         try {
-          const body = JSON.parse(message.body as string) as Record<
-            string,
-            unknown
-          >;
+          const body = JSON.parse(String(message.body)) as DlqMessageBody;
           const notificationId = String(body.notificationId);
           await processDLQMessage(env, notificationId, message);
         } catch (error) {
@@ -77,7 +78,7 @@ export default {
   async scheduled(
     event: ScheduledEvent,
     env: Env,
-    ctx: ExecutionContext,
+    _ctx: ExecutionContext,
   ): Promise<void> {
     const reengagementSchedule = env.REENGAGEMENT_SCHEDULE || "0 10 * * *";
     const dlqSchedule = env.DLQ_PROCESSOR_SCHEDULE || "*/5 * * * *";

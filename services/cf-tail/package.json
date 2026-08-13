@@ -5,16 +5,11 @@
   "type": "module",
   "main": "./dist/index.js",
   "scripts": {
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
-    "deploy:dev": "wrangler deploy --env dev",
     "build": "tsc -p tsconfig.json",
-    "test": "vitest",
     "lint": "tsc --noEmit"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260515.1",
-    "typescript": "^6.0.3",
-    "wrangler": "^4.91.0"
+    "@cloudflare/workers-types": "^5.20260808.1",
+    "typescript": "^7.0.2"
   }
 }

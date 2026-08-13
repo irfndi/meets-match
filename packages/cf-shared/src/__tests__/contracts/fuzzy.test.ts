@@ -3,12 +3,9 @@ import * as fc from "fast-check";
 import { Schema } from "effect";
 import {
   User,
-  Match,
   MatchStatus,
   Notification,
-  NotificationStatus,
   NotificationType,
-  NotificationChannel,
   Gender,
 } from "../../contracts/index.js";
 
@@ -16,9 +13,11 @@ describe("contract property-based tests", () => {
   const safeString = fc.string({ maxLength: 100 });
   const ageArb = fc.integer({ min: 18, max: 100 });
 
-  function decode<T>(schema: Schema.Schema<T>, data: unknown): boolean {
-    const either = Schema.decodeUnknownEither(schema)(data);
-    return either._tag === "Right";
+  type DecodeInput = unknown;
+
+  function decode<T>(schema: Schema.Schema<T>, data: DecodeInput): boolean {
+    const result = Schema.decodeUnknownResult(schema)(data);
+    return result._tag === "Success";
   }
 
   describe("User schema", () => {

@@ -27,6 +27,16 @@ export class NotificationQueueProducer {
 
 type Db = D1Database;
 
+interface NotificationRow {
+  id: string;
+  user_id: string;
+  type: string;
+  payload: string | null;
+  status: string;
+  attempt_count: number;
+  max_attempts: number;
+}
+
 const dbRun = (
   db: Db,
   sql: string,
@@ -62,7 +72,7 @@ const dbRunWithChanges = (
       new Error(`${sql.split("\n")[0]?.trim() ?? "sql"}: ${String(error)}`),
   });
 
-const dbFirst = <T = Record<string, unknown>>(
+const dbFirst = <T = NotificationRow>(
   db: Db,
   sql: string,
   ...params: unknown[]
@@ -116,9 +126,9 @@ export function persistAndEnqueue(
     // If enqueue fails the persisted row would be orphaned (status='pending'
     // forever with no queue message left to drive delivery). Compensate by
     // deleting the row so a future enqueue can recreate it cleanly.
-    const enqueueResult = yield* producer.enqueue(message).pipe(Effect.either);
+    const enqueueResult = yield* producer.enqueue(message).pipe(Effect.result);
 
-    if (enqueueResult._tag === "Left") {
+    if (enqueueResult._tag === "Failure") {
       yield* Effect.tryPromise({
         try: () =>
           db
@@ -138,9 +148,9 @@ export function persistAndEnqueue(
             ),
           ),
         ),
-        Effect.orElse(() => Effect.void),
+        Effect.catch(() => Effect.void),
       );
-      return yield* Effect.fail(enqueueResult.left);
+      return yield* Effect.fail(enqueueResult.failure);
     }
   });
 }
@@ -156,7 +166,7 @@ export class NotificationQueueConsumer {
     for (const message of batch.messages) {
       const exit = await Effect.runPromiseExit(this.processOne(message));
       if (Exit.isSuccess(exit)) continue;
-      const failure = Cause.failureOption(exit.cause);
+      const failure = Cause.findErrorOption(exit.cause);
       const detail =
         failure._tag === "Some" ? String(failure.value) : String(exit.cause);
       log.error("processBatch", `defect processing message: ${detail}`);
@@ -169,7 +179,7 @@ export class NotificationQueueConsumer {
     const botService = this.botService;
     const internalSecret = this.internalSecret;
     return Effect.gen(function* () {
-      const raw = typeof message.body === "string" ? message.body : "{}";
+      const raw = String(message.body);
       let body: NotificationMessage;
       try {
         body = JSON.parse(raw) as NotificationMessage;
@@ -179,7 +189,7 @@ export class NotificationQueueConsumer {
       }
       const notificationId = String(body.notificationId);
 
-      const notification = yield* dbFirst<Record<string, unknown>>(
+      const notification = yield* dbFirst<NotificationRow>(
         db,
         "SELECT * FROM notifications WHERE id = ?",
         notificationId,
@@ -195,7 +205,7 @@ export class NotificationQueueConsumer {
         return yield* ack(message);
       }
 
-      const result = yield* Effect.either(
+      const result = yield* Effect.result(
         deliverOrMarkFailed(
           db,
           botService,
@@ -205,13 +215,13 @@ export class NotificationQueueConsumer {
         ),
       );
 
-      if (result._tag === "Right") {
+      if (result._tag === "Success") {
         return yield* ack(message);
       }
 
       log.error(
         "processOne",
-        `delivery failed for ${notificationId}: ${result.left.message}`,
+        `delivery failed for ${notificationId}: ${result.failure.message}`,
       );
       return yield* retry(message);
     });
@@ -259,17 +269,16 @@ function deliverOrMarkFailed(
               type: body.type,
               payload: body.payload,
             }),
-            headers: {
-              "Content-Type": "application/json",
-              ...(internalSecret
-                ? { "x-internal-secret": internalSecret }
-                : {}),
-            },
+                headers: (() => {
+                  const headers = new Headers({ "Content-Type": "application/json" });
+                  if (internalSecret) headers.set("x-internal-secret", internalSecret);
+                  return headers;
+                })(),
           }),
         ),
       catch: (error) => new Error(String(error)),
     }).pipe(
-      Effect.catchAll((err) =>
+      Effect.catch((err) =>
         Effect.gen(function* () {
           yield* dbRun(
             db,

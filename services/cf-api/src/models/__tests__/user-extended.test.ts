@@ -1,16 +1,30 @@
+type TestRowValue =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | TestRowValue[]
+  | { [key: string]: TestRowValue };
+
+interface TestRow {
+  [key: string]: TestRowValue;
+}
+
+
 import { describe, it, expect, vi } from "vitest";
 import { UserRepository } from "../user.js";
 import { createMockD1, runEffect } from "@meetsmatch/cf-shared/testing";
 import { NotFoundError } from "@meetsmatch/cf-shared";
 
 describe("UserRepository extended", () => {
-  function createRepo(rows: Array<Record<string, unknown>> = []) {
+  function createRepo(rows: Array<TestRow> = []) {
     const db = createMockD1((sql, values) => {
       if (sql.includes("SELECT * FROM users WHERE id")) {
         return { results: rows };
       }
       if (sql.includes("SELECT id FROM users WHERE id")) {
-        return { results: rows.length > 0 ? [{ id: values[0] }] : [] };
+        return { results: rows.length > 0 ? [{ id: String(values[0]) }] : [] };
       }
       if (sql.includes("COUNT(*)")) {
         return { results: [{ c: rows.length }] };
@@ -26,7 +40,7 @@ describe("UserRepository extended", () => {
     return { repo: new UserRepository(db), db };
   }
 
-  function makeUserRow(overrides: Record<string, unknown> = {}) {
+  function makeUserRow(overrides: TestRow = {}) {
     return {
       id: "u1",
       username: "test",

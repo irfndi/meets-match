@@ -1,3 +1,23 @@
+type TestRowValue =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | TestRowValue[]
+  | { [key: string]: TestRowValue };
+
+interface TestRow {
+  [key: string]: TestRowValue;
+}
+
+interface TestCastInput {}
+
+function castForTest<T>(value: TestCastInput): T {
+  return value as T;
+}
+
+
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ApiRouter } from "../router.js";
 
@@ -6,9 +26,9 @@ function createMockD1(
     sql: string,
     values: unknown[],
   ) => {
-    results?: Array<Record<string, unknown>>;
+    results?: Array<TestRow>;
     success?: boolean;
-    meta?: Record<string, unknown>;
+    meta?: TestRow;
   } = () => ({
     results: [],
   }),
@@ -31,29 +51,29 @@ function createMockD1(
     };
   }
 
-  return {
+  return castForTest<import("@cloudflare/workers-types").D1Database>({
     prepare: vi.fn((sql: string) => makeStmt(sql, [])),
     batch: vi.fn(async () => ({ success: true })),
-  } as unknown as import("@cloudflare/workers-types").D1Database;
+  });
 }
 
 function createMockKV(initial: Record<string, string> = {}) {
   const store = new Map<string, string>(Object.entries(initial));
-  return {
+  return castForTest<import("@cloudflare/workers-types").KVNamespace>({
     get: vi.fn(async (key: string) => store.get(key) ?? null),
     put: vi.fn(async (key: string, value: string) => store.set(key, value)),
     delete: vi.fn(async (key: string) => store.delete(key)),
     list: vi.fn(async () => ({
       keys: Array.from(store.keys()).map((name) => ({ name })),
     })),
-  } as unknown as import("@cloudflare/workers-types").KVNamespace;
+  });
 }
 
 function createMockQueue() {
-  return {
+  return castForTest<import("@cloudflare/workers-types").Queue>({
     send: vi.fn(async () => {}),
     sendBatch: vi.fn(async () => {}),
-  } as unknown as import("@cloudflare/workers-types").Queue;
+  });
 }
 
 function createMockR2() {
@@ -61,7 +81,7 @@ function createMockR2() {
     string,
     { body: ReadableStream; httpMetadata?: { contentType?: string } }
   >();
-  return {
+  return castForTest<import("@cloudflare/workers-types").R2Bucket>({
     put: vi.fn(
       async (
         key: string,
@@ -87,7 +107,7 @@ function createMockR2() {
       };
     }),
     delete: vi.fn(async (key: string) => objects.delete(key)),
-  } as unknown as import("@cloudflare/workers-types").R2Bucket;
+  });
 }
 
 describe("ApiRouter", () => {
@@ -101,7 +121,7 @@ describe("ApiRouter", () => {
         return {
           results: [
             {
-              id: values[0],
+              id: String(values[0]),
               first_name: "Test",
               age: 25,
               gender: "female",
@@ -123,7 +143,7 @@ describe("ApiRouter", () => {
         return {
           results: [
             {
-              id: values[0],
+              id: String(values[0]),
               user1_id: "u1",
               user2_id: "u2",
               status: "pending",
@@ -163,14 +183,14 @@ describe("ApiRouter", () => {
     it("returns 404 for unknown routes", async () => {
       const response = await router.route(new Request("http://api/unknown"));
       expect(response.status).toBe(404);
-      const body = (await response.json()) as Record<string, unknown>;
+      const body = (await response.json()) as TestRow;
       expect(body.error).toBe("Not Found");
     });
 
     it("returns health status", async () => {
       const response = await router.route(new Request("http://api/health"));
       expect(response.status).toBe(200);
-      const body = (await response.json()) as Record<string, unknown>;
+      const body = (await response.json()) as TestRow;
       expect(body.status).toBe("ok");
       expect(body.service).toBe("cf-api");
     });
@@ -178,7 +198,7 @@ describe("ApiRouter", () => {
     it("routes GET /users/:id", async () => {
       const response = await router.route(new Request("http://api/users/123"));
       expect(response.status).toBe(200);
-      const body = (await response.json()) as Record<string, unknown>;
+      const body = (await response.json()) as TestRow;
       expect(body.user).toBeDefined();
     });
 
@@ -199,7 +219,7 @@ describe("ApiRouter", () => {
         new Request("http://api/users/123/potential-matches?limit=5"),
       );
       expect(response.status).toBe(200);
-      const body = (await response.json()) as Record<string, unknown>;
+      const body = (await response.json()) as TestRow;
       expect(Array.isArray(body.potentialMatches)).toBe(true);
     });
 
@@ -215,7 +235,7 @@ describe("ApiRouter", () => {
         new Request("http://api/matches?userId=123"),
       );
       expect(response.status).toBe(200);
-      const body = (await response.json()) as Record<string, unknown>;
+      const body = (await response.json()) as TestRow;
       expect(Array.isArray(body.matches)).toBe(true);
     });
 
@@ -269,7 +289,7 @@ describe("ApiRouter", () => {
         }),
       );
       expect(response.status).toBe(200);
-      const body = (await response.json()) as Record<string, unknown>;
+      const body = (await response.json()) as TestRow;
       expect(body.success).toBe(true);
     });
 
@@ -493,7 +513,7 @@ describe("ApiRouter", () => {
             ]),
             { status: 200, headers: { "Content-Type": "application/json" } },
           ),
-      ) as unknown as typeof fetch;
+      ) as typeof fetch;
       const response = await router.route(
         new Request("http://api/geocode?q=jakarta&limit=5"),
       );
@@ -513,7 +533,7 @@ describe("ApiRouter", () => {
             }),
             { status: 200, headers: { "Content-Type": "application/json" } },
           ),
-      ) as unknown as typeof fetch;
+      ) as typeof fetch;
       const response = await router.route(
         new Request("http://api/geocode?lat=-6.2&lon=106.8"),
       );

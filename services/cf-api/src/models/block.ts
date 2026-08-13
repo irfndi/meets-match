@@ -1,10 +1,6 @@
 import { Effect } from "effect";
 import type { D1Database } from "@cloudflare/workers-types";
-import {
-  NotFoundError,
-  DatabaseError,
-  ValidationError,
-} from "@meetsmatch/cf-shared";
+import { DatabaseError, ValidationError } from "@meetsmatch/cf-shared";
 
 export class BlockRepository {
   constructor(private readonly db: D1Database) {}

@@ -16,7 +16,7 @@ function getMigrationFiles(): string[] {
     .sort();
 }
 
-const expectedTables = [
+const _expectedTables = [
   "users",
   "matches",
   "notifications",

@@ -1,7 +1,7 @@
 import {
   Array,
   Boolean,
-  Literal,
+  Literals,
   Number,
   String,
   Struct,
@@ -10,7 +10,7 @@ import {
 
 // --- Enums ---
 
-export const NotificationType = Literal(
+export const NotificationType = Literals([
   "UNSPECIFIED",
   "MUTUAL_MATCH",
   "NEW_LIKE",
@@ -29,26 +29,26 @@ export const NotificationType = Literal(
   "DAILY_ACTIVE_HAPPY",
   "BIRTHDAY",
   "CLEANUP_MEDIA_DELETED",
-);
+]);
 export type NotificationType = typeof NotificationType.Type;
 
-export const NotificationChannel = Literal(
+export const NotificationChannel = Literals([
   "UNSPECIFIED",
   "TELEGRAM",
   "EMAIL",
   "PUSH",
   "SMS",
-);
+]);
 export type NotificationChannel = typeof NotificationChannel.Type;
 
-export const NotificationStatus = Literal(
+export const NotificationStatus = Literals([
   "UNSPECIFIED",
   "PENDING",
   "PROCESSING",
   "DELIVERED",
   "FAILED",
   "DLQ",
-);
+]);
 export type NotificationStatus = typeof NotificationStatus.Type;
 
 // --- Main Notification Type ---

@@ -8,13 +8,12 @@ import {
   matchCommand,
   matchCallbacks,
   handleMatchReplyAction,
-  getMatchActionKeyboard,
   handleGiftCallback,
   handleGiftPayment,
   handleGiftPremiumPayment,
-  startLikeMessageConversation,
   fetchUserLang,
 } from "./handlers/match.js";
+import { Schema } from "effect";
 import { matchesCommand, matchesCallbacks } from "./handlers/matches.js";
 import { buildMediaKey, buildMediaPublicUrl } from "@meetsmatch/cf-shared";
 import {
@@ -77,6 +76,18 @@ export interface Env {
   ADMIN_CHAT_ID?: string;
 }
 
+const SessionStateSchema = Schema.Struct({
+  conversation: Schema.optional(Schema.String),
+  step: Schema.optional(Schema.Number),
+  data: Schema.optional(Schema.Record(Schema.String, Schema.String)),
+});
+
+const SendNotificationBodySchema = Schema.Struct({
+  userId: Schema.String,
+  type: Schema.String,
+  payload: Schema.optional(Schema.String),
+});
+
 function createBot(env: Env): Bot<MyContext> {
   const bot = new Bot<MyContext>(env.BOT_TOKEN);
 
@@ -96,15 +107,10 @@ function createBot(env: Env): Bot<MyContext> {
           const value = await env.KV.get(`session:${key}`);
           if (!value) return {};
           try {
-            const parsed = JSON.parse(value);
-            if (
-              parsed &&
-              typeof parsed === "object" &&
-              !Array.isArray(parsed)
-            ) {
-              return parsed as Record<string, unknown>;
-            }
-            return {};
+            const option = Schema.decodeUnknownOption(SessionStateSchema)(
+              JSON.parse(value),
+            );
+            return option._tag === "Some" ? option.value : {};
           } catch {
             return {};
           }
@@ -577,16 +583,15 @@ function createBot(env: Env): Bot<MyContext> {
       }
 
       // Match action reply keyboard — only if there's an active match queue
-      const actionMap: Record<string, string> = {
-        "❤️": "like",
-        "👎": "dislike",
-        "⏩": "skip",
-        "↩️": "undo",
-        "⚠️": "report",
-        "💌": "like-message",
-        [t("matchSendGift", lang)]: "gift",
-        [t("matchMainMenu", lang)]: "menu",
-      };
+      const actionMap: Record<string, string> = {};
+      actionMap["❤️"] = "like";
+      actionMap["👎"] = "dislike";
+      actionMap["⏩"] = "skip";
+      actionMap["↩️"] = "undo";
+      actionMap["⚠️"] = "report";
+      actionMap["💌"] = "like-message";
+      actionMap[t("matchSendGift", lang)] = "gift";
+      actionMap[t("matchMainMenu", lang)] = "menu";
 
       if (text && actionMap[text]) {
         const action = actionMap[text];
@@ -723,7 +728,7 @@ export default {
   async fetch(
     request: Request,
     env: Env,
-    ctx: ExecutionContext,
+    _ctx: ExecutionContext,
   ): Promise<Response> {
     const url = new URL(request.url);
 
@@ -807,8 +812,10 @@ export default {
         }
       }
       try {
-        const body = (await request.json()) as Record<string, unknown>;
-        if (typeof body.userId !== "string" || typeof body.type !== "string") {
+        const bodyResult = Schema.decodeUnknownOption(SendNotificationBodySchema)(
+          await request.json(),
+        );
+        if (bodyResult._tag !== "Some") {
           return new Response(
             JSON.stringify({
               error: "Invalid request: userId and type are required strings",
@@ -819,26 +826,27 @@ export default {
             },
           );
         }
+        const body = bodyResult.value;
         const userId = body.userId;
         const type = body.type;
         const payload =
-          typeof body.payload === "string"
-            ? JSON.parse(body.payload)
-            : (body.payload ?? {});
+          body.payload !== undefined ? JSON.parse(body.payload) : {};
 
         const bot = createBot(env);
         let message: string;
         let keyboard: import("grammy").InlineKeyboard | undefined;
 
-        const otherUsername = payload.otherUsername as string | undefined;
+        const otherUsernameOption = Schema.decodeUnknownOption(Schema.String)(
+          payload.otherUsername,
+        );
         const otherUsernameSafe =
-          typeof otherUsername === "string" &&
-          /^[a-zA-Z0-9_]{5,32}$/.test(otherUsername)
-            ? otherUsername
+          otherUsernameOption._tag === "Some" &&
+          /^[a-zA-Z0-9_]{5,32}$/.test(otherUsernameOption.value)
+            ? otherUsernameOption.value
             : undefined;
 
         function escapeMd(text: string): string {
-          return text.replace(/[_*\[\]`\\]/g, "\\$&");
+          return text.replace(/[_*[\]`\\]/g, "\\$&");
         }
 
         if (type === "like") {

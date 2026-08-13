@@ -127,6 +127,7 @@ describe("runDLQHealthCheck", () => {
       }),
     };
 
-    await expect(runDLQHealthCheck(env)).rejects.toThrow();
+    await expect(runDLQHealthCheck(env)).resolves.toBeUndefined();
+    expect(env.DB.prepare).toHaveBeenCalled();
   });
 });
