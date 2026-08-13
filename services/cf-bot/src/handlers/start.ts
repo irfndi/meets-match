@@ -43,13 +43,12 @@ async function setUserLanguage(
   language: Language,
 ): Promise<boolean> {
   try {
+    const headers = new Headers({ "Content-Type": "application/json" });
+    if (env.API_SECRET) headers.set("x-api-secret", env.API_SECRET);
     const res = await env.API_SERVICE.fetch(
       new Request(`http://api/users/${userId}`, {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          ...(env.API_SECRET ? { "x-api-secret": env.API_SECRET } : {}),
-        },
+        headers,
         body: JSON.stringify({ user: { language } }),
       }),
     );
@@ -94,13 +93,12 @@ export const startCommand = async (ctx: MyContext, env: Env): Promise<void> => {
     const startPayload = ctx.message?.text?.replace("/start", "").trim() ?? "";
     if (startPayload.startsWith("ref_")) {
       const code = startPayload.replace("ref_", "");
+      const headers = new Headers({ "Content-Type": "application/json" });
+      if (env.API_SECRET) headers.set("x-api-secret", env.API_SECRET);
       const applyRes = await env.API_SERVICE.fetch(
         new Request(`http://api/users/${ctx.from.id}/apply-referral`, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...(env.API_SECRET ? { "x-api-secret": env.API_SECRET } : {}),
-          },
+          headers,
           body: JSON.stringify({ code }),
         }),
       );

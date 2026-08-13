@@ -1,5 +1,3 @@
-import { InlineKeyboard } from "grammy";
-import type { MyContext } from "../types.js";
 import type { Env } from "../index.js";
 import { createLogger } from "@meetsmatch/cf-shared";
 import { escapeMarkdownV2 } from "./i18n.js";
@@ -93,13 +91,12 @@ export async function queueAlert(
   payload: AlertPayload,
 ): Promise<void> {
   try {
+    const headers = new Headers({ "Content-Type": "application/json" });
+    if (env.API_SECRET) headers.set("x-api-secret", env.API_SECRET);
     await env.API_SERVICE.fetch(
       new Request("http://api/error-reports", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(env.API_SECRET ? { "x-api-secret": env.API_SECRET } : {}),
-        },
+        headers,
         body: JSON.stringify({
           reporterId: payload.userId,
           traceId: payload.traceId,

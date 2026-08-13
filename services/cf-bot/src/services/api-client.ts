@@ -18,13 +18,17 @@ import {
   type LikeMatchResponse,
   type GetMatchListRequest,
   type GetMatchListResponse,
+  type Match,
+  type User,
   UserService as IUserService,
 } from "@meetsmatch/cf-shared";
+
+type ApiErrorBody = string | null | { error?: string };
 
 export class ApiError extends Error {
   constructor(
     public readonly status: number,
-    public readonly body: unknown,
+    public readonly body: ApiErrorBody,
     public readonly endpoint: string,
   ) {
     super(`API ${status} on ${endpoint}`);
@@ -59,7 +63,7 @@ export class ApiServiceClient implements IUserService {
     );
 
     if (!response.ok) {
-      let body: unknown;
+      let body: ApiErrorBody;
       try {
         body = await response.json();
       } catch {
@@ -121,8 +125,8 @@ export class ApiServiceClient implements IUserService {
 
   async getPendingLikes(
     userId: string,
-  ): Promise<{ pendingLikes: Array<Record<string, unknown>> }> {
-    return this.request<{ pendingLikes: Array<Record<string, unknown>> }>(
+  ): Promise<{ pendingLikes: Array<User> }> {
+    return this.request<{ pendingLikes: Array<User> }>(
       `/users/${userId}/pending-likes`,
       { method: "GET" },
     );
@@ -281,8 +285,8 @@ export class ApiServiceClient implements IUserService {
   async undoMatch(
     matchId: string,
     userId: string,
-  ): Promise<{ restored: boolean; match: Record<string, unknown> }> {
-    return this.request<{ restored: boolean; match: Record<string, unknown> }>(
+  ): Promise<{ restored: boolean; match: Match }> {
+    return this.request<{ restored: boolean; match: Match }>(
       `/matches/${matchId}/undo`,
       {
         method: "POST",

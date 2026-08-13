@@ -6,6 +6,7 @@ import { t, type Language } from "../lib/i18n.js";
 import { getMainMenuKeyboard } from "../lib/main-menu.js";
 import type { UserProfile } from "../lib/user-utils.js";
 import { replyWithError } from "../lib/error-feedback.js";
+import type { User } from "@meetsmatch/cf-shared";
 
 export function getProfileMenu(env: Env, mediaCount = 0) {
   return new InlineKeyboard()
@@ -42,9 +43,7 @@ export async function handleProfileCallback(
     );
     let lang: Language = "en";
     if (userRes.ok) {
-      const userData = (await userRes.json()) as {
-        user?: Record<string, unknown>;
-      };
+      const userData = (await userRes.json()) as { user?: User };
       lang = (userData.user?.language as Language) ?? "en";
     }
 
@@ -258,15 +257,16 @@ export async function handleMediaCallback(
         return true;
       }
 
+      const deleteHeaders = new Headers({
+        "Content-Type": "application/json",
+      });
+      if (env.API_SECRET) deleteHeaders.set("x-api-secret", env.API_SECRET);
       // Call API to delete specific media item
       const deleteRes = await env.API_SERVICE.fetch(
         new Request(`http://api/users/${userId}/media`, {
           method: "DELETE",
           body: JSON.stringify({ url: item.url }),
-          headers: {
-            "Content-Type": "application/json",
-            ...(env.API_SECRET ? { "x-api-secret": env.API_SECRET } : {}),
-          },
+          headers: deleteHeaders,
         }),
       );
 
@@ -334,10 +334,16 @@ export async function handleMediaCallback(
 
     return false;
   } catch (error) {
-    await replyWithError(ctx, env, "en", {
-      action: "media_callback",
-      extra: data,
-    });
+    await replyWithError(
+      ctx,
+      env,
+      "en",
+      {
+        action: "media_callback",
+        extra: data,
+      },
+      error,
+    );
     return true;
   }
 }

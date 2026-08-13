@@ -21,11 +21,11 @@ import {
 
 const log = createLogger("cf-bot");
 
-export function isBotBlockedError(error: unknown): boolean {
-  if (error instanceof Error) {
+export function isBotBlockedError(cause: unknown): boolean {
+  if (cause instanceof Error) {
     return (
-      error.message.includes("403: Forbidden: bot was blocked by the user") ||
-      error.message.includes("Forbidden: bot was blocked by the user")
+      cause.message.includes("403: Forbidden: bot was blocked by the user") ||
+      cause.message.includes("Forbidden: bot was blocked by the user")
     );
   }
   return false;
@@ -36,9 +36,9 @@ export function isBotBlockedError(error: unknown): boolean {
  * These happen when the user deleted their account, blocked the bot,
  * or never started a chat with the bot.
  */
-export function isPermanentDeliveryError(error: unknown): boolean {
-  if (error instanceof Error) {
-    const msg = error.message.toLowerCase();
+export function isPermanentDeliveryError(cause: unknown): boolean {
+  if (cause instanceof Error) {
+    const msg = cause.message.toLowerCase();
     return (
       msg.includes("chat not found") ||
       msg.includes("bot was blocked by the user") ||
@@ -75,14 +75,17 @@ interface ErrorReportPayload {
   cfMetadata?: string;
 }
 
+interface HealthResponse {
+  version?: { version?: string };
+}
+
 /** Fetch API version via service binding (lightweight health check). */
 async function fetchApiVersion(env: Env): Promise<string> {
   try {
     const res = await env.API_SERVICE.fetch(new Request("http://api/health"));
     if (res.ok) {
-      const data = (await res.json()) as Record<string, unknown>;
-      const version = (data.version as Record<string, string> | undefined)
-        ?.version;
+      const data = (await res.json()) as HealthResponse;
+      const version = data.version?.version;
       if (version) return version;
     }
   } catch {
@@ -97,7 +100,7 @@ async function buildErrorReportPayload(
   env: Env,
   traceId: string,
   context: ErrorContext | undefined,
-  error: unknown,
+  cause: unknown,
 ): Promise<ErrorReportPayload> {
   const userId = ctx.from ? String(ctx.from.id) : "unknown";
   const source = buildErrorSource(context);
@@ -120,7 +123,7 @@ async function buildErrorReportPayload(
   const userTier = context?.userTier ?? undefined;
 
   // Stack trace
-  const errorStack = error instanceof Error ? error.stack : String(error);
+  const errorStack = cause instanceof Error ? cause.stack : String(cause);
 
   // KV session snapshot
   let kvSession: string | undefined;
@@ -140,8 +143,8 @@ async function buildErrorReportPayload(
 
   // Build report text for admin / message field
   const isUserSubmitted =
-    error instanceof Error &&
-    (error as Error & { code?: string }).code === "USER_SUBMITTED_REPORT";
+    cause instanceof Error &&
+    (cause as Error & { code?: string }).code === "USER_SUBMITTED_REPORT";
   const reportLines = [
     t(isUserSubmitted ? "errorFeedbackTitle" : "errorReportTitle", "en"),
     "",
@@ -190,7 +193,7 @@ export async function replyWithError(
   env: Env,
   lang: Language = "en",
   context?: ErrorContext,
-  error?: unknown,
+  cause?: unknown,
 ): Promise<void> {
   const userId = ctx.from ? String(ctx.from.id) : "unknown";
   const traceId = generateTraceId();
@@ -221,7 +224,7 @@ export async function replyWithError(
     env,
     traceId,
     context,
-    error ?? new Error("replyWithError called without error"),
+    cause ?? new Error("replyWithError called without error"),
   );
 
   // Admin alerting (skip for silent/expected errors like 403 bot blocked)
@@ -294,15 +297,15 @@ export async function handleErrorReportCallback(
       }),
     );
 
+    const headers = new Headers({ "Content-Type": "application/json" });
+    if (env.API_SECRET) headers.set("x-api-secret", env.API_SECRET);
+
     // Persist to database via API
     const apiResponse = await env.API_SERVICE.fetch(
       new Request("http://api/error-reports", {
         method: "POST",
         body: JSON.stringify(payload),
-        headers: {
-          "Content-Type": "application/json",
-          ...(env.API_SECRET ? { "x-api-secret": env.API_SECRET } : {}),
-        },
+        headers,
       }),
     );
 

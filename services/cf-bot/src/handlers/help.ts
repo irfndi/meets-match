@@ -42,7 +42,7 @@ export const helpCommand = async (ctx: MyContext, env: Env): Promise<void> => {
       reply_markup: getMainMenuKeyboard(),
     });
   } catch (error) {
-    await replyWithError(ctx, env, "en", { command: "help" });
+    await replyWithError(ctx, env, "en", { command: "help" }, error);
   }
 };
 
@@ -88,6 +88,6 @@ export const aboutCommand = async (ctx: MyContext, env: Env): Promise<void> => {
       reply_markup: getMainMenuKeyboard(),
     });
   } catch (error) {
-    await replyWithError(ctx, env, "en", { command: "about" });
+    await replyWithError(ctx, env, "en", { command: "about" }, error);
   }
 };

@@ -1,7 +1,7 @@
 import { InlineKeyboard } from "grammy";
 import type { MyContext } from "../types.js";
 import type { Env } from "../index.js";
-import { createLogger } from "@meetsmatch/cf-shared";
+import { createLogger, type Match } from "@meetsmatch/cf-shared";
 
 const log = createLogger("cf-bot");
 import {
@@ -23,22 +23,31 @@ import { type Language } from "../lib/i18n.js";
 import { ApiServiceClient } from "../services/api-client.js";
 import { replyWithError } from "../lib/error-feedback.js";
 
-function buildChatLink(
-  otherUser: Record<string, unknown>,
-  lang: Language,
-): string {
-  const username = otherUser.username as string | undefined;
-  const displayName = (otherUser.displayName ??
-    otherUser.first_name ??
-    "Someone") as string;
+/** Renderable fields of another user used when building match/chat cards. */
+interface OtherUser {
+  id?: string | number;
+  username?: string;
+  displayName?: string;
+  first_name?: string;
+  age?: number | string;
+  bio?: string;
+  matched_at?: string;
+  interests?: readonly string[] | string;
+  mediaUrls?: readonly { url: string; type: string }[];
+}
+
+function buildChatLink(otherUser: OtherUser, lang: Language): string {
+  const username = otherUser.username;
+  const displayName =
+    otherUser.displayName ?? otherUser.first_name ?? "Someone";
   if (username) {
     return t("matchesChatWith", lang, { name: escapeMd(displayName) });
   }
   return t("matchesNoUsernameSet", lang, { name: escapeMd(displayName) });
 }
 
-function formatMatch(match: Record<string, unknown>, lang: Language): string {
-  const name = (match.displayName ?? match.first_name ?? "Unknown") as string;
+function formatMatch(match: OtherUser, lang: Language): string {
+  const name = match.displayName ?? match.first_name ?? "Unknown";
   const age = match.age ?? "?";
   const bio = match.bio ? `\n📝 ${escapeMd(String(match.bio))}` : "";
   const matchedAt = match.matched_at
@@ -61,9 +70,7 @@ async function fetchMutualMatches(env: Env, userId: string) {
       ),
     );
     if (!res.ok) return [];
-    const data = (await res.json()) as {
-      matches?: Array<Record<string, unknown>>;
-    };
+    const data = (await res.json()) as { matches?: Array<Match> };
     return data.matches ?? [];
   } catch (error) {
     log.error(
@@ -87,9 +94,7 @@ async function fetchPendingLikes(env: Env, userId: string) {
       }),
     );
     if (!res.ok) return [];
-    const data = (await res.json()) as {
-      pendingLikes?: Array<Record<string, unknown>>;
-    };
+    const data = (await res.json()) as { pendingLikes?: Array<OtherUser> };
     return data.pendingLikes ?? [];
   } catch (error) {
     log.error(
@@ -218,13 +223,10 @@ export const matchesCommand = async (
         try {
           const client = new ApiServiceClient(env.API_SERVICE, env.API_SECRET);
           const userRes = await client.getUser({ userId: String(otherUserId) });
-          const otherUser = userRes.user as Record<string, unknown>;
+          const otherUser: OtherUser = userRes.user;
           const msg = formatMatch(otherUser, lang);
           const chatLink = buildChatLink(otherUser, lang);
-          const mediaUrls = (otherUser.mediaUrls ?? []) as Array<{
-            url: string;
-            type: string;
-          }>;
+          const mediaUrls = otherUser.mediaUrls ?? [];
           // Preserve media order: show the first uploaded item (image or video)
           const firstRenderable = mediaUrls.find(
             (m) => m.type === "image" || m.type === "video",
@@ -322,19 +324,14 @@ export const matchesCallbacks = async (
       try {
         const client = new ApiServiceClient(env.API_SERVICE, env.API_SECRET);
         const userRes = await client.getUser({ userId: targetUserId });
-        const targetUser = userRes.user as Record<string, unknown>;
-        const name = (targetUser.displayName ??
-          targetUser.first_name ??
-          "Unknown") as string;
+        const targetUser: OtherUser = userRes.user;
+        const name = targetUser.displayName ?? targetUser.first_name ?? "Unknown";
         const age = targetUser.age ?? "?";
         const bio = targetUser.bio ? `\n📝 ${targetUser.bio}` : "";
         const interests = targetUser.interests
-          ? `\n🌟 ${Array.isArray(targetUser.interests) ? (targetUser.interests as string[]).join(", ") : String(targetUser.interests)}`
+          ? `\n🌟 ${Array.isArray(targetUser.interests) ? targetUser.interests.join(", ") : String(targetUser.interests)}`
           : "";
-        const mediaUrls = (targetUser.mediaUrls ?? []) as Array<{
-          url: string;
-          type: string;
-        }>;
+        const mediaUrls = targetUser.mediaUrls ?? [];
         // Preserve media order: show the first uploaded item (image or video)
         const firstRenderable = mediaUrls.find(
           (m) => m.type === "image" || m.type === "video",

@@ -7,7 +7,6 @@ import {
   getMissingFieldsDisplay,
   computeAgeFromBirthDate,
 } from "../lib/user-utils.js";
-import { getMainMenuKeyboard } from "../lib/main-menu.js";
 import { mdv2, t, type Language } from "../lib/i18n.js";
 import { createLogger } from "@meetsmatch/cf-shared";
 import { replyWithError } from "../lib/error-feedback.js";
@@ -40,10 +39,7 @@ export const profileCommand = async (
       computedAge !== undefined
         ? String(computedAge)
         : t("profileInterestsNotSet", lang);
-    const genderRaw =
-      typeof user.gender === "string" && user.gender
-        ? user.gender.toLowerCase()
-        : null;
+    const genderRaw = user.gender ? user.gender.toLowerCase() : null;
     const gender =
       genderRaw === "male"
         ? t("genderDisplayMale", lang)

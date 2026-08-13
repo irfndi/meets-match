@@ -2,10 +2,10 @@ import { InlineKeyboard } from "grammy";
 import type { MyContext } from "../types.js";
 import type { Env } from "../index.js";
 import { ensureUserExists } from "../lib/user-utils.js";
-import { getMainMenuKeyboard } from "../lib/main-menu.js";
 import { ApiServiceClient } from "../services/api-client.js";
 import { createLogger } from "@meetsmatch/cf-shared";
 import { replyWithError } from "../lib/error-feedback.js";
+import type { User } from "@meetsmatch/cf-shared";
 import { t, type Language } from "../lib/i18n.js";
 import { showNextMatch, fetchUserLang } from "./match.js";
 
@@ -41,7 +41,7 @@ async function advanceMatchQueueAfterAdDismiss(
     return;
   }
 
-  if (!Array.isArray(queue.matches) || typeof queue.index !== "number") return;
+  if (!Array.isArray(queue.matches)) return;
 
   queue.index++;
   await env.KV.put(`match_queue:${userId}`, JSON.stringify(queue), {
@@ -104,7 +104,7 @@ async function getReferralInfo(
       }),
     );
     if (!res.ok) return null;
-    const data = (await res.json()) as { user?: Record<string, unknown> };
+    const data = (await res.json()) as { user?: User };
     const user = data.user;
     if (!user) return null;
 
