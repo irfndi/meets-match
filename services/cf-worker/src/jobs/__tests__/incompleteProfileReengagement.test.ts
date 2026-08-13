@@ -7,8 +7,33 @@ function daysAgo(n: number): string {
   return d.toISOString();
 }
 
+interface IncompleteProfileCandidate {
+  id: string;
+  first_name: string | null;
+  language: string;
+  created_at: string;
+  last_reengagement_stage?: number;
+  last_reengagement_at?: string;
+}
+
+interface NotificationBody {
+  userId?: string;
+  type?: string;
+  payload: string;
+}
+
+interface NotificationPayload {
+  message?: string;
+}
+
+interface TestCastInput {}
+
+function castForTest<T>(value: TestCastInput): T {
+  return value as T;
+}
+
 function createEnv(overrides?: {
-  candidates?: Array<Record<string, unknown>>;
+  candidates?: Array<IncompleteProfileCandidate>;
   queueOk?: boolean;
 }) {
   const candidates = overrides?.candidates ?? [];
@@ -21,7 +46,7 @@ function createEnv(overrides?: {
   });
 
   const db = {
-    prepare: vi.fn((sql: string) => ({
+    prepare: vi.fn((_sql: string) => ({
       bind: vi.fn(() => ({
         all: allMock,
         run: runMock,
@@ -30,11 +55,11 @@ function createEnv(overrides?: {
   };
 
   return {
-    DB: db as unknown as D1Database,
+    DB: castForTest<D1Database>(db),
     KV: {} as KVNamespace,
-    NOTIFICATION_QUEUE: { send: sendMock } as unknown as Queue,
-    API_SERVICE: { fetch: vi.fn() } as unknown as Fetcher,
-    BOT_SERVICE: {} as unknown as Fetcher,
+    NOTIFICATION_QUEUE: { send: sendMock } as Queue & object,
+    API_SERVICE: castForTest<Fetcher>({ fetch: vi.fn() }),
+    BOT_SERVICE: castForTest<Fetcher>({}),
     _send: sendMock,
     _runMock: runMock,
   };
@@ -59,12 +84,12 @@ describe("runIncompleteProfileReengagementJob", () => {
     expect(env._send).toHaveBeenCalledTimes(2);
 
     const call1 = (env._send.mock.calls as unknown[][])[0]![0] as string;
-    const body1 = JSON.parse(call1) as Record<string, unknown>;
+    const body1 = JSON.parse(call1) as NotificationBody;
     expect(body1.userId).toBe("u1");
     expect(body1.type).toBe("INCOMPLETE_PROFILE_GENTLE");
 
     const call2 = (env._send.mock.calls as unknown[][])[1]![0] as string;
-    const body2 = JSON.parse(call2) as Record<string, unknown>;
+    const body2 = JSON.parse(call2) as NotificationBody;
     expect(body2.userId).toBe("u2");
     expect(body2.type).toBe("INCOMPLETE_PROFILE_URGENT");
   });
@@ -108,11 +133,8 @@ describe("runIncompleteProfileReengagementJob", () => {
 
     expect(env._send).toHaveBeenCalledTimes(1);
     const call = (env._send.mock.calls as unknown[][])[0]![0] as string;
-    const body = JSON.parse(call) as Record<string, unknown>;
-    const payload = JSON.parse(body.payload as string) as Record<
-      string,
-      unknown
-    >;
+    const body = JSON.parse(call) as NotificationBody;
+    const payload = JSON.parse(body.payload) as NotificationPayload;
     expect(payload.message).toContain("There");
   });
 
@@ -127,11 +149,8 @@ describe("runIncompleteProfileReengagementJob", () => {
 
     const calls = env._send.mock.calls as unknown[][];
     const call = calls[0]![0] as string;
-    const body = JSON.parse(call) as Record<string, unknown>;
-    const payload = JSON.parse(body.payload as string) as Record<
-      string,
-      unknown
-    >;
+    const body = JSON.parse(call) as NotificationBody;
+    const payload = JSON.parse(body.payload) as NotificationPayload;
     expect(payload.message).toContain("Kamu");
   });
 
@@ -151,11 +170,8 @@ describe("runIncompleteProfileReengagementJob", () => {
 
     const calls = env._send.mock.calls as unknown[][];
     const call = calls[0]![0] as string;
-    const body = JSON.parse(call) as Record<string, unknown>;
-    const payload = JSON.parse(body.payload as string) as Record<
-      string,
-      unknown
-    >;
+    const body = JSON.parse(call) as NotificationBody;
+    const payload = JSON.parse(body.payload) as NotificationPayload;
     expect(payload.message).toContain("Test_Name");
   });
 
@@ -189,7 +205,7 @@ describe("runIncompleteProfileReengagementJob", () => {
     });
     await runIncompleteProfileReengagementJob(env);
     const call = (env._send.mock.calls as unknown[][])[0]![0] as string;
-    const body = JSON.parse(call) as Record<string, unknown>;
+    const body = JSON.parse(call) as NotificationBody;
     expect(body.type).toBe("INCOMPLETE_PROFILE_LAST_CHANCE");
   });
 

@@ -1,9 +1,15 @@
 import { describe, it, expect, vi } from "vitest";
 import { runDLQHealthCheck } from "../dlqHealth.js";
 
+interface TestCastInput {}
+
+function castForTest<T>(value: TestCastInput): T {
+  return value as T;
+}
+
 describe("runDLQHealthCheck", () => {
   const createEnv = (counts: { dlq?: number; expired?: number } = {}) => ({
-    DB: {
+    DB: castForTest<import("@cloudflare/workers-types").D1Database>({
       prepare: vi.fn((sql: string) => {
         const isExpired = sql.includes("dlq_at");
         const c = isExpired ? (counts.expired ?? 0) : (counts.dlq ?? 0);
@@ -16,17 +22,17 @@ describe("runDLQHealthCheck", () => {
           })),
         };
       }),
-    } as unknown as import("@cloudflare/workers-types").D1Database,
-    KV: {} as unknown as import("@cloudflare/workers-types").KVNamespace,
+    }),
+    KV: castForTest<import("@cloudflare/workers-types").KVNamespace>({}),
     NOTIFICATION_QUEUE: {
       send: vi.fn(async () => {}),
-    } as unknown as Queue,
-    API_SERVICE: {
+    } as Queue & object,
+    API_SERVICE: castForTest<import("@cloudflare/workers-types").Fetcher>({
       fetch: vi.fn(async () => new Response()),
-    } as unknown as import("@cloudflare/workers-types").Fetcher,
-    BOT_SERVICE: {
+    }),
+    BOT_SERVICE: castForTest<import("@cloudflare/workers-types").Fetcher>({
       fetch: vi.fn(async () => new Response()),
-    } as unknown as import("@cloudflare/workers-types").Fetcher,
+    }),
   });
 
   it("logs DLQ count when below threshold", async () => {
@@ -51,7 +57,7 @@ describe("runDLQHealthCheck", () => {
 
   it("handles DB failure gracefully", async () => {
     const env = {
-      DB: {
+      DB: castForTest<import("@cloudflare/workers-types").D1Database>({
         prepare: vi.fn(() => {
           throw new Error("DB down");
         }),
@@ -59,17 +65,17 @@ describe("runDLQHealthCheck", () => {
         exec: vi.fn(),
         withSession: vi.fn(),
         dump: vi.fn(),
-      },
-      KV: {} as unknown as import("@cloudflare/workers-types").KVNamespace,
+      }),
+      KV: castForTest<import("@cloudflare/workers-types").KVNamespace>({}),
       NOTIFICATION_QUEUE: {
         send: vi.fn(async () => {}),
-      } as unknown as Queue,
-      API_SERVICE: {
+      } as Queue & object,
+      API_SERVICE: castForTest<import("@cloudflare/workers-types").Fetcher>({
         fetch: vi.fn(async () => new Response()),
-      } as unknown as import("@cloudflare/workers-types").Fetcher,
-      BOT_SERVICE: {
+      }),
+      BOT_SERVICE: castForTest<import("@cloudflare/workers-types").Fetcher>({
         fetch: vi.fn(async () => new Response()),
-      } as unknown as import("@cloudflare/workers-types").Fetcher,
+      }),
     };
 
     await expect(runDLQHealthCheck(env)).rejects.toThrow();
@@ -97,8 +103,8 @@ describe("runDLQHealthCheck", () => {
 
   it("handles DB first() returning null for main query", async () => {
     const env = {
-      DB: {
-        prepare: vi.fn((sql: string) => {
+      DB: castForTest<import("@cloudflare/workers-types").D1Database>({
+        prepare: vi.fn((_sql: string) => {
           return {
             bind: vi.fn(() => ({
               first: vi.fn(async () => null),
@@ -108,17 +114,17 @@ describe("runDLQHealthCheck", () => {
             first: vi.fn(async () => null),
           };
         }),
-      } as unknown as import("@cloudflare/workers-types").D1Database,
-      KV: {} as unknown as import("@cloudflare/workers-types").KVNamespace,
+      }),
+      KV: castForTest<import("@cloudflare/workers-types").KVNamespace>({}),
       NOTIFICATION_QUEUE: {
         send: vi.fn(async () => {}),
-      } as unknown as Queue,
-      API_SERVICE: {
+      } as Queue & object,
+      API_SERVICE: castForTest<import("@cloudflare/workers-types").Fetcher>({
         fetch: vi.fn(async () => new Response()),
-      } as unknown as import("@cloudflare/workers-types").Fetcher,
-      BOT_SERVICE: {
+      }),
+      BOT_SERVICE: castForTest<import("@cloudflare/workers-types").Fetcher>({
         fetch: vi.fn(async () => new Response()),
-      } as unknown as import("@cloudflare/workers-types").Fetcher,
+      }),
     };
 
     await expect(runDLQHealthCheck(env)).rejects.toThrow();

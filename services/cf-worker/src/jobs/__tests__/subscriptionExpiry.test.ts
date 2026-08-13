@@ -1,13 +1,19 @@
 import { describe, it, expect, vi } from "vitest";
 import { runSubscriptionExpiryJob } from "../subscriptionExpiry.js";
 
+interface TestCastInput {}
+
+function castForTest<T>(value: TestCastInput): T {
+  return value as T;
+}
+
 describe("runSubscriptionExpiryJob", () => {
   const createEnv = (apiResponse?: {
     ok: boolean;
     status?: number;
     json?: unknown;
   }) => ({
-    API_SERVICE: {
+    API_SERVICE: castForTest<import("@cloudflare/workers-types").Fetcher>({
       fetch: vi.fn(async () => ({
         ok: apiResponse?.ok ?? true,
         status: apiResponse?.status ?? 200,
@@ -15,23 +21,25 @@ describe("runSubscriptionExpiryJob", () => {
         json: async () => apiResponse?.json ?? {},
       })),
       connect: vi.fn(),
-    } as unknown as import("@cloudflare/workers-types").Fetcher,
-    KV: {} as unknown as import("@cloudflare/workers-types").KVNamespace,
+    }),
+    KV: castForTest<import("@cloudflare/workers-types").KVNamespace>({}),
     NOTIFICATION_QUEUE: {
       send: vi.fn(async () => {}),
-    } as unknown as Queue,
-    BOT_SERVICE: {
+    } as Queue & object,
+    BOT_SERVICE: castForTest<import("@cloudflare/workers-types").Fetcher>({
       fetch: vi.fn(async () => new Response()),
       connect: vi.fn(),
-    } as unknown as import("@cloudflare/workers-types").Fetcher,
-    DB: {} as unknown as import("@cloudflare/workers-types").D1Database,
+    }),
+    DB: castForTest<import("@cloudflare/workers-types").D1Database>({}),
   });
 
   it("calls the downgrade endpoint", async () => {
     const env = createEnv({ ok: true, json: { downgraded: 3 } });
     await runSubscriptionExpiryJob(env);
     expect(env.API_SERVICE.fetch).toHaveBeenCalledTimes(1);
-    const req = (env.API_SERVICE.fetch as any).mock.calls[0][0] as Request;
+    const req = castForTest<Request>(
+      (env.API_SERVICE.fetch as any).mock.calls[0][0],
+    );
     expect(req.url).toBe("http://api/cron/downgrade-expired-subscriptions");
     expect(req.method).toBe("POST");
   });
@@ -43,19 +51,19 @@ describe("runSubscriptionExpiryJob", () => {
 
   it("handles fetch exception gracefully", async () => {
     const env = {
-      API_SERVICE: {
+      API_SERVICE: castForTest<import("@cloudflare/workers-types").Fetcher>({
         fetch: vi.fn(() => Promise.reject(new Error("network"))),
         connect: vi.fn(),
-      } as unknown as import("@cloudflare/workers-types").Fetcher,
-      KV: {} as unknown as import("@cloudflare/workers-types").KVNamespace,
+      }),
+      KV: castForTest<import("@cloudflare/workers-types").KVNamespace>({}),
       NOTIFICATION_QUEUE: {
         send: vi.fn(async () => {}),
-      } as unknown as Queue,
-      BOT_SERVICE: {
+      } as Queue & object,
+      BOT_SERVICE: castForTest<import("@cloudflare/workers-types").Fetcher>({
         fetch: vi.fn(async () => new Response()),
         connect: vi.fn(),
-      } as unknown as import("@cloudflare/workers-types").Fetcher,
-      DB: {} as unknown as import("@cloudflare/workers-types").D1Database,
+      }),
+      DB: castForTest<import("@cloudflare/workers-types").D1Database>({}),
     };
     await expect(runSubscriptionExpiryJob(env)).rejects.toThrow();
   });

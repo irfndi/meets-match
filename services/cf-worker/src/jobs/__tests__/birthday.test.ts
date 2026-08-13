@@ -1,12 +1,28 @@
 import { describe, it, expect, vi } from "vitest";
 import { runBirthdayJob } from "../birthday.js";
 
+interface BirthdayUserRow {
+  id: string;
+  first_name: string | null;
+  birth_date: string;
+}
+
+interface BirthdayMatchRow {
+  match_user_id: string;
+}
+
+interface TestCastInput {}
+
+function castForTest<T>(value: TestCastInput): T {
+  return value as T;
+}
+
 describe("runBirthdayJob", () => {
   const createEnv = (
     overrides: {
-      dbResults?: Array<Record<string, unknown>>;
-      matchResults?: Array<Record<string, unknown>>;
-      leapResults?: Array<Record<string, unknown>>;
+      dbResults?: Array<BirthdayUserRow>;
+      matchResults?: Array<BirthdayMatchRow>;
+      leapResults?: Array<BirthdayUserRow>;
       apiResponse?: { ok: boolean; status?: number; json?: unknown };
     } = {},
   ) => {
@@ -16,7 +32,7 @@ describe("runBirthdayJob", () => {
     const apiOk = overrides.apiResponse?.ok ?? true;
 
     return {
-      DB: {
+      DB: castForTest<import("@cloudflare/workers-types").D1Database>({
         prepare: vi.fn((sql: string) => {
           const isMatchQuery = sql.includes("FROM matches m");
           const results = isMatchQuery ? matchResults : dbResults;
@@ -31,22 +47,22 @@ describe("runBirthdayJob", () => {
             })),
           };
         }),
-      } as unknown as import("@cloudflare/workers-types").D1Database,
-      API_SERVICE: {
+      }),
+      API_SERVICE: castForTest<import("@cloudflare/workers-types").Fetcher>({
         fetch: vi.fn(async () => ({
           ok: apiOk,
           status: overrides.apiResponse?.status ?? 200,
           text: async () => "ok",
           json: async () => overrides.apiResponse?.json ?? {},
         })),
-      } as unknown as import("@cloudflare/workers-types").Fetcher,
-      KV: {} as unknown as import("@cloudflare/workers-types").KVNamespace,
+      }),
+      KV: castForTest<import("@cloudflare/workers-types").KVNamespace>({}),
       NOTIFICATION_QUEUE: {
         send: vi.fn(async () => {}),
-      } as unknown as Queue,
-      BOT_SERVICE: {
+      } as Queue & object,
+      BOT_SERVICE: castForTest<import("@cloudflare/workers-types").Fetcher>({
         fetch: vi.fn(async () => new Response()),
-      } as unknown as import("@cloudflare/workers-types").Fetcher,
+      }),
     };
   };
 
@@ -128,7 +144,7 @@ describe("runBirthdayJob", () => {
 
   it("handles DB failure gracefully", async () => {
     const env = {
-      DB: {
+      DB: castForTest<import("@cloudflare/workers-types").D1Database>({
         prepare: vi.fn(() => {
           throw new Error("DB down");
         }),
@@ -136,17 +152,17 @@ describe("runBirthdayJob", () => {
         exec: vi.fn(),
         withSession: vi.fn(),
         dump: vi.fn(),
-      } as unknown as import("@cloudflare/workers-types").D1Database,
-      API_SERVICE: {
+      }),
+      API_SERVICE: castForTest<import("@cloudflare/workers-types").Fetcher>({
         fetch: vi.fn(),
-      } as unknown as import("@cloudflare/workers-types").Fetcher,
-      KV: {} as unknown as import("@cloudflare/workers-types").KVNamespace,
+      }),
+      KV: castForTest<import("@cloudflare/workers-types").KVNamespace>({}),
       NOTIFICATION_QUEUE: {
         send: vi.fn(async () => {}),
-      } as unknown as Queue,
-      BOT_SERVICE: {
+      } as Queue & object,
+      BOT_SERVICE: castForTest<import("@cloudflare/workers-types").Fetcher>({
         fetch: vi.fn(async () => new Response()),
-      } as unknown as import("@cloudflare/workers-types").Fetcher,
+      }),
     };
 
     await expect(runBirthdayJob(env)).resolves.toBeUndefined();
@@ -239,7 +255,7 @@ describe("runBirthdayJob", () => {
 
     let updateCallCount = 0;
     const env = {
-      DB: {
+      DB: castForTest<import("@cloudflare/workers-types").D1Database>({
         prepare: vi.fn((sql: string) => {
           const isAgeUpdate = sql.includes("UPDATE users SET age");
           const isMatchQuery = sql.includes("FROM matches m");
@@ -264,22 +280,22 @@ describe("runBirthdayJob", () => {
             })),
           };
         }),
-      } as unknown as import("@cloudflare/workers-types").D1Database,
-      API_SERVICE: {
+      }),
+      API_SERVICE: castForTest<import("@cloudflare/workers-types").Fetcher>({
         fetch: vi.fn(async () => ({
           ok: true,
           status: 200,
           text: async () => "ok",
           json: async () => ({}),
         })),
-      } as unknown as import("@cloudflare/workers-types").Fetcher,
-      KV: {} as unknown as import("@cloudflare/workers-types").KVNamespace,
+      }),
+      KV: castForTest<import("@cloudflare/workers-types").KVNamespace>({}),
       NOTIFICATION_QUEUE: {
         send: vi.fn(async () => {}),
-      } as unknown as Queue,
-      BOT_SERVICE: {
+      } as Queue & object,
+      BOT_SERVICE: castForTest<import("@cloudflare/workers-types").Fetcher>({
         fetch: vi.fn(async () => new Response()),
-      } as unknown as import("@cloudflare/workers-types").Fetcher,
+      }),
     };
 
     await runBirthdayJob(env);

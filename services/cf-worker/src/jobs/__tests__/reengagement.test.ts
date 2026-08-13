@@ -7,10 +7,27 @@ function daysAgo(n: number): string {
   return d.toISOString();
 }
 
+interface ReengagementCandidate {
+  id: string | null;
+  first_name: string | null;
+  gender?: string | null;
+  location?: string | null;
+  preferences?: string | null;
+  last_active: string;
+  last_reengagement_stage: number | null;
+  last_reengagement_at?: string | null;
+}
+
+interface TestCastInput {}
+
+function castForTest<T>(value: TestCastInput): T {
+  return value as T;
+}
+
 describe("runReengagementJob", () => {
   const createEnv = (
     opts: {
-      candidates?: Array<Record<string, unknown>>;
+      candidates?: Array<ReengagementCandidate>;
       nearbyCount?: number;
       queueOk?: boolean;
     } = {},
@@ -22,13 +39,12 @@ describe("runReengagementJob", () => {
     const sendMock = vi.fn(async () => {
       if (!queueOk) throw new Error("queue down");
     });
-    const queue = { send: sendMock } as unknown as Queue;
+    const queue = { send: sendMock } as Queue & object;
 
     return {
-      DB: {
+      DB: castForTest<import("@cloudflare/workers-types").D1Database>({
         prepare: vi.fn((sql: string) => {
           const isCountQuery = sql.includes("COUNT(*)");
-          const isUpdate = sql.includes("UPDATE users");
           return {
             bind: vi.fn(() => ({
               all: vi.fn(async () => ({
@@ -39,15 +55,15 @@ describe("runReengagementJob", () => {
             })),
           };
         }),
-      } as unknown as import("@cloudflare/workers-types").D1Database,
+      }),
       NOTIFICATION_QUEUE: queue,
-      KV: {} as unknown as import("@cloudflare/workers-types").KVNamespace,
-      API_SERVICE: {
+      KV: castForTest<import("@cloudflare/workers-types").KVNamespace>({}),
+      API_SERVICE: castForTest<import("@cloudflare/workers-types").Fetcher>({
         fetch: vi.fn(async () => new Response()),
-      } as unknown as import("@cloudflare/workers-types").Fetcher,
-      BOT_SERVICE: {
+      }),
+      BOT_SERVICE: castForTest<import("@cloudflare/workers-types").Fetcher>({
         fetch: vi.fn(async () => new Response()),
-      } as unknown as import("@cloudflare/workers-types").Fetcher,
+      }),
       _send: sendMock,
     };
   };
@@ -377,7 +393,7 @@ describe("runReengagementJob", () => {
 
   it("handles DB failure gracefully", async () => {
     const env = {
-      DB: {
+      DB: castForTest<import("@cloudflare/workers-types").D1Database>({
         prepare: vi.fn(() => {
           throw new Error("DB down");
         }),
@@ -385,17 +401,17 @@ describe("runReengagementJob", () => {
         exec: vi.fn(),
         withSession: vi.fn(),
         dump: vi.fn(),
-      } as unknown as import("@cloudflare/workers-types").D1Database,
+      }),
       NOTIFICATION_QUEUE: {
         send: vi.fn(async () => {}),
-      } as unknown as Queue,
-      API_SERVICE: {
+      } as Queue & object,
+      API_SERVICE: castForTest<import("@cloudflare/workers-types").Fetcher>({
         fetch: vi.fn(),
-      } as unknown as import("@cloudflare/workers-types").Fetcher,
-      KV: {} as unknown as import("@cloudflare/workers-types").KVNamespace,
-      BOT_SERVICE: {
+      }),
+      KV: castForTest<import("@cloudflare/workers-types").KVNamespace>({}),
+      BOT_SERVICE: castForTest<import("@cloudflare/workers-types").Fetcher>({
         fetch: vi.fn(async () => new Response()),
-      } as unknown as import("@cloudflare/workers-types").Fetcher,
+      }),
     };
 
     await expect(runReengagementJob(env)).rejects.toThrow();
@@ -557,7 +573,7 @@ describe("runReengagementJob", () => {
       if (callCount === 1) throw new Error("first call fails");
     });
     const env = {
-      DB: {
+      DB: castForTest<import("@cloudflare/workers-types").D1Database>({
         prepare: vi.fn((sql: string) => {
           const isCountQuery = sql.includes("COUNT(*)");
           return {
@@ -593,15 +609,15 @@ describe("runReengagementJob", () => {
             })),
           };
         }),
-      } as unknown as import("@cloudflare/workers-types").D1Database,
-      NOTIFICATION_QUEUE: { send: sendMock } as unknown as Queue,
-      API_SERVICE: {
+      }),
+      NOTIFICATION_QUEUE: { send: sendMock } as Queue & object,
+      API_SERVICE: castForTest<import("@cloudflare/workers-types").Fetcher>({
         fetch: vi.fn(),
-      } as unknown as import("@cloudflare/workers-types").Fetcher,
-      KV: {} as unknown as import("@cloudflare/workers-types").KVNamespace,
-      BOT_SERVICE: {
+      }),
+      KV: castForTest<import("@cloudflare/workers-types").KVNamespace>({}),
+      BOT_SERVICE: castForTest<import("@cloudflare/workers-types").Fetcher>({
         fetch: vi.fn(async () => new Response()),
-      } as unknown as import("@cloudflare/workers-types").Fetcher,
+      }),
     };
 
     await expect(runReengagementJob(env)).resolves.toBeUndefined();
@@ -611,7 +627,7 @@ describe("runReengagementJob", () => {
   it("updates last_reengagement_at after successful notification", async () => {
     const runSpy = vi.fn(async () => ({ success: true }));
     const env = {
-      DB: {
+      DB: castForTest<import("@cloudflare/workers-types").D1Database>({
         prepare: vi.fn((sql: string) => {
           const isCountQuery = sql.includes("COUNT(*)");
           if (
@@ -645,17 +661,17 @@ describe("runReengagementJob", () => {
             })),
           };
         }),
-      } as unknown as import("@cloudflare/workers-types").D1Database,
+      }),
       NOTIFICATION_QUEUE: {
         send: vi.fn(async () => {}),
-      } as unknown as Queue,
-      API_SERVICE: {
+      } as Queue & object,
+      API_SERVICE: castForTest<import("@cloudflare/workers-types").Fetcher>({
         fetch: vi.fn(async () => new Response()),
-      } as unknown as import("@cloudflare/workers-types").Fetcher,
-      KV: {} as unknown as import("@cloudflare/workers-types").KVNamespace,
-      BOT_SERVICE: {
+      }),
+      KV: castForTest<import("@cloudflare/workers-types").KVNamespace>({}),
+      BOT_SERVICE: castForTest<import("@cloudflare/workers-types").Fetcher>({
         fetch: vi.fn(async () => new Response()),
-      } as unknown as import("@cloudflare/workers-types").Fetcher,
+      }),
     };
 
     await runReengagementJob(env);
@@ -665,7 +681,7 @@ describe("runReengagementJob", () => {
   it("does not update last_reengagement_at when queue send fails", async () => {
     const updateRun = vi.fn(async () => ({ success: true }));
     const env = {
-      DB: {
+      DB: castForTest<import("@cloudflare/workers-types").D1Database>({
         prepare: vi.fn((sql: string) => {
           const isCountQuery = sql.includes("COUNT(*)");
           if (
@@ -699,19 +715,19 @@ describe("runReengagementJob", () => {
             })),
           };
         }),
-      } as unknown as import("@cloudflare/workers-types").D1Database,
+      }),
       NOTIFICATION_QUEUE: {
         send: vi.fn(async () => {
           throw new Error("queue error");
         }),
-      } as unknown as Queue,
-      API_SERVICE: {
+      } as Queue & object,
+      API_SERVICE: castForTest<import("@cloudflare/workers-types").Fetcher>({
         fetch: vi.fn(async () => new Response()),
-      } as unknown as import("@cloudflare/workers-types").Fetcher,
-      KV: {} as unknown as import("@cloudflare/workers-types").KVNamespace,
-      BOT_SERVICE: {
+      }),
+      KV: castForTest<import("@cloudflare/workers-types").KVNamespace>({}),
+      BOT_SERVICE: castForTest<import("@cloudflare/workers-types").Fetcher>({
         fetch: vi.fn(async () => new Response()),
-      } as unknown as import("@cloudflare/workers-types").Fetcher,
+      }),
     };
 
     await runReengagementJob(env);
@@ -796,7 +812,7 @@ describe("runReengagementJob", () => {
   it("countNearbyUsers returns 0 on DB error without crashing job", async () => {
     let prepareCount = 0;
     const env = {
-      DB: {
+      DB: castForTest<import("@cloudflare/workers-types").D1Database>({
         prepare: vi.fn((sql: string) => {
           prepareCount++;
           if (prepareCount > 1 && sql.includes("COUNT(*)")) {
@@ -830,17 +846,17 @@ describe("runReengagementJob", () => {
             })),
           };
         }),
-      } as unknown as import("@cloudflare/workers-types").D1Database,
+      }),
       NOTIFICATION_QUEUE: {
         send: vi.fn(async () => {}),
-      } as unknown as Queue,
-      API_SERVICE: {
+      } as Queue & object,
+      API_SERVICE: castForTest<import("@cloudflare/workers-types").Fetcher>({
         fetch: vi.fn(async () => new Response()),
-      } as unknown as import("@cloudflare/workers-types").Fetcher,
-      KV: {} as unknown as import("@cloudflare/workers-types").KVNamespace,
-      BOT_SERVICE: {
+      }),
+      KV: castForTest<import("@cloudflare/workers-types").KVNamespace>({}),
+      BOT_SERVICE: castForTest<import("@cloudflare/workers-types").Fetcher>({
         fetch: vi.fn(async () => new Response()),
-      } as unknown as import("@cloudflare/workers-types").Fetcher,
+      }),
     };
 
     await expect(runReengagementJob(env)).resolves.toBeUndefined();

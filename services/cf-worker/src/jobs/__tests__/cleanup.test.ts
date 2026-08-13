@@ -1,7 +1,22 @@
 import { describe, it, expect, vi } from "vitest";
 import { runCleanupJob } from "../cleanup.js";
 
-function mockD1(rows: Array<Record<string, unknown>> = []) {
+interface CleanupUserRow {
+  id: string;
+  telegram_id: string;
+  hidden_from_matches: number;
+  media_deleted_at: string | null;
+  last_interaction_at: string;
+  media_urls: string;
+}
+
+interface TestCastInput {}
+
+function castForTest<T>(value: TestCastInput): T {
+  return value as T;
+}
+
+function mockD1(rows: Array<CleanupUserRow> = []) {
   const stored = [...rows];
   return {
     prepare(sql: string) {
@@ -58,12 +73,12 @@ describe("runCleanupJob", () => {
   it("should hide inactive profiles after 14 days", async () => {
     const db = mockD1([]);
     const env = {
-      DB: db as unknown as D1Database,
-      API_SERVICE: mockApiService() as unknown as Fetcher,
-      BOT_SERVICE: mockBotService() as unknown as Fetcher,
+      DB: castForTest<D1Database>(db),
+      API_SERVICE: castForTest<Fetcher>(mockApiService()),
+      BOT_SERVICE: castForTest<Fetcher>(mockBotService()),
       NOTIFICATION_QUEUE: {
         send: vi.fn(async () => {}),
-      } as unknown as Queue,
+      } as Queue & object,
       KV: {} as KVNamespace,
     };
 
@@ -94,12 +109,12 @@ describe("runCleanupJob", () => {
     const apiService = mockApiService();
     const botService = mockBotService();
     const env = {
-      DB: db as unknown as D1Database,
-      API_SERVICE: apiService as unknown as Fetcher,
-      BOT_SERVICE: botService as unknown as Fetcher,
+      DB: castForTest<D1Database>(db),
+      API_SERVICE: castForTest<Fetcher>(apiService),
+      BOT_SERVICE: castForTest<Fetcher>(botService),
       NOTIFICATION_QUEUE: {
         send: vi.fn(async () => {}),
-      } as unknown as Queue,
+      } as Queue & object,
       KV: {} as KVNamespace,
     };
 
@@ -139,12 +154,12 @@ describe("runCleanupJob", () => {
     };
     const botService = mockBotService();
     const env = {
-      DB: db as unknown as D1Database,
-      API_SERVICE: apiService as unknown as Fetcher,
-      BOT_SERVICE: botService as unknown as Fetcher,
+      DB: castForTest<D1Database>(db),
+      API_SERVICE: castForTest<Fetcher>(apiService),
+      BOT_SERVICE: castForTest<Fetcher>(botService),
       NOTIFICATION_QUEUE: {
         send: vi.fn(async () => {}),
-      } as unknown as Queue,
+      } as Queue & object,
       KV: {} as KVNamespace,
     };
 
@@ -177,12 +192,12 @@ describe("runCleanupJob", () => {
     };
     const botService = mockBotService();
     const env = {
-      DB: db as unknown as D1Database,
-      API_SERVICE: apiService as unknown as Fetcher,
-      BOT_SERVICE: botService as unknown as Fetcher,
+      DB: castForTest<D1Database>(db),
+      API_SERVICE: castForTest<Fetcher>(apiService),
+      BOT_SERVICE: castForTest<Fetcher>(botService),
       NOTIFICATION_QUEUE: {
         send: vi.fn(async () => {}),
-      } as unknown as Queue,
+      } as Queue & object,
       KV: {} as KVNamespace,
     };
 
@@ -219,12 +234,12 @@ describe("runCleanupJob", () => {
     const apiService = mockApiService();
     const botService = mockBotService();
     const env = {
-      DB: db as unknown as D1Database,
-      API_SERVICE: apiService as unknown as Fetcher,
-      BOT_SERVICE: botService as unknown as Fetcher,
+      DB: castForTest<D1Database>(db),
+      API_SERVICE: castForTest<Fetcher>(apiService),
+      BOT_SERVICE: castForTest<Fetcher>(botService),
       NOTIFICATION_QUEUE: {
         send: vi.fn(async () => {}),
-      } as unknown as Queue,
+      } as Queue & object,
       KV: {} as KVNamespace,
     };
 
@@ -250,12 +265,12 @@ describe("runCleanupJob", () => {
     const apiService = mockApiService();
     const botService = mockBotService();
     const env = {
-      DB: db as unknown as D1Database,
-      API_SERVICE: apiService as unknown as Fetcher,
-      BOT_SERVICE: botService as unknown as Fetcher,
+      DB: castForTest<D1Database>(db),
+      API_SERVICE: castForTest<Fetcher>(apiService),
+      BOT_SERVICE: castForTest<Fetcher>(botService),
       NOTIFICATION_QUEUE: {
         send: vi.fn(async () => {}),
-      } as unknown as Queue,
+      } as Queue & object,
       KV: {} as KVNamespace,
     };
 
