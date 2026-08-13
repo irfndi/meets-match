@@ -2,22 +2,30 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { helpCommand, aboutCommand } from "../help.js";
 import type { MyContext } from "../../types.js";
 
-function mockCtx(overrides: Record<string, unknown> = {}): MyContext {
-  return {
+function asMyContext<T>(ctx: T): MyContext {
+  return ctx as MyContext;
+}
+
+interface MockApiResponseOverrides {
+  user?: { language?: string };
+}
+
+function mockCtx(overrides: Partial<MyContext> = {}): MyContext {
+  return asMyContext({
     reply: vi.fn().mockResolvedValue(undefined),
     from: { id: 123, first_name: "Test", is_bot: false, language_code: "en" },
     chat: { id: 123, type: "private" },
     ...overrides,
-  } as unknown as MyContext;
+  });
 }
 
-function createMockEnv(responseOverrides: Record<string, unknown> = {}) {
+function createMockEnv(responseOverrides: MockApiResponseOverrides = {}) {
   return {
     KV: {
       get: vi.fn().mockResolvedValue(null),
       put: vi.fn().mockResolvedValue(undefined),
       delete: vi.fn().mockResolvedValue(undefined),
-    } as unknown as KVNamespace,
+    },
     API_SERVICE: {
       fetch: vi.fn().mockResolvedValue(
         new Response(JSON.stringify(responseOverrides), {
@@ -81,7 +89,7 @@ describe("Help Handlers", () => {
           get: vi.fn().mockResolvedValue(null),
           put: vi.fn().mockResolvedValue(undefined),
           delete: vi.fn().mockResolvedValue(undefined),
-        } as unknown as KVNamespace,
+        },
         API_SERVICE: {
           fetch: vi.fn().mockRejectedValue(new Error("Network error")),
         },
@@ -154,7 +162,7 @@ describe("Help Handlers", () => {
           get: vi.fn().mockResolvedValue(null),
           put: vi.fn().mockResolvedValue(undefined),
           delete: vi.fn().mockResolvedValue(undefined),
-        } as unknown as KVNamespace,
+        },
         API_SERVICE: {
           fetch: vi.fn().mockRejectedValue(new Error("Network error")),
         },

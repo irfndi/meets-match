@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { profileCommand } from "../profile.js";
 
 describe("profile handler", () => {
-  function createCtx(overrides: Record<string, unknown> = {}) {
+  function createCtx<T>(overrides?: T) {
     return {
       from: { id: 123, first_name: "Test" },
       chat: { id: 123 },
@@ -13,7 +13,7 @@ describe("profile handler", () => {
     } as any;
   }
 
-  function createEnv(userOverrides: Record<string, unknown> = {}) {
+  function createEnv<T>(userOverrides?: T) {
     return {
       API_SERVICE: {
         fetch: vi.fn(async () => ({

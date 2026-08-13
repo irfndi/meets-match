@@ -6,7 +6,6 @@ import {
 import {
   acquireActionLock,
   releaseActionLock,
-  getDMBypassStatus,
   useDMBypass,
 } from "../match.js";
 

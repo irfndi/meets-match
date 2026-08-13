@@ -10,13 +10,17 @@ import {
 } from "../user-utils.js";
 import type { MyContext } from "../../types.js";
 
+function asMyContext<T>(ctx: T): MyContext {
+  return ctx as MyContext;
+}
+
 function mockCtx(overrides: Partial<MyContext> = {}): MyContext {
-  return {
+  return asMyContext({
     from: { id: 123, first_name: "Test", username: "testuser" },
     reply: vi.fn().mockResolvedValue(undefined),
     answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
     ...overrides,
-  } as unknown as MyContext;
+  });
 }
 
 function createMockApiService(responseMap: Record<string, () => Response>) {
@@ -25,7 +29,7 @@ function createMockApiService(responseMap: Record<string, () => Response>) {
   );
   return {
     fetch: vi.fn().mockImplementation((req: Request | string) => {
-      const url = typeof req === "string" ? req : req.url;
+      const url = req instanceof Request ? req.url : req;
       for (const [pattern, factory] of sortedPatterns) {
         if (url.includes(pattern)) {
           return Promise.resolve(factory());
@@ -352,7 +356,7 @@ describe("parseBirthDate", () => {
     const now = new Date();
     // 11 years ago + 1 day to ensure age is 11
     const under12Year = now.getFullYear() - 11;
-    const date = `01.01.${under12Year}`;
+    const _date = `01.01.${under12Year}`;
     // If today is Jan 1 and we use Jan 1 => age could be 11 or 12 depending on time
     // Use a date one day after today to guarantee age < 12
     const tomorrow = new Date(now);
@@ -374,14 +378,14 @@ describe("parseBirthDate", () => {
   it("accepts age exactly 12", () => {
     const now = new Date();
     const exact12Year = now.getFullYear() - 12;
-    const date = `01.01.${exact12Year}`;
+    const _date = `01.01.${exact12Year}`;
     // This should work if today is before their birthday
     // Safer: just check that a known 12-year-old works
     // Use a date from exactly 12 years ago
     const month = String(now.getMonth() + 1).padStart(2, "0");
     const day = String(now.getDate()).padStart(2, "0");
     const exactDate = `${day}.${month}.${exact12Year}`;
-    const result = parseBirthDate(exactDate);
+    const _result = parseBirthDate(exactDate);
     // This could be null if timezone shifts it, but is fine for testing
     // Let's use a slightly older date
     const earlierYear = now.getFullYear() - 13;
@@ -502,12 +506,12 @@ describe("getDefaultPreferences", () => {
     };
     const result = getDefaultPreferences(user);
     expect(result).toBeDefined();
-    expect(typeof result).toBe("object");
+    expect(result).toBeTypeOf("object");
   });
 
   it("handles empty user data gracefully", () => {
     const result = getDefaultPreferences({});
     expect(result).toBeDefined();
-    expect(typeof result).toBe("object");
+    expect(result).toBeTypeOf("object");
   });
 });

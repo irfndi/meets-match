@@ -7,6 +7,10 @@ import {
   generateTraceId,
 } from "../journey.js";
 
+function asKVNamespace<T>(kv: T): KVNamespace {
+  return kv as KVNamespace;
+}
+
 function mockKV() {
   const store = new Map<string, string>();
   return {
@@ -30,7 +34,7 @@ describe("Journey Tracking", () => {
 
   describe("getJourney", () => {
     it("should return empty journey for new user", async () => {
-      const journey = await getJourney(kv as unknown as KVNamespace, "123");
+      const journey = await getJourney(asKVNamespace(kv), "123");
       expect(journey.events).toEqual([]);
     });
 
@@ -39,24 +43,24 @@ describe("Journey Tracking", () => {
         "journey:123",
         JSON.stringify({ events: [{ ts: "2024-01-01", action: "test" }] }),
       );
-      const journey = await getJourney(kv as unknown as KVNamespace, "123");
+      const journey = await getJourney(asKVNamespace(kv), "123");
       expect(journey.events).toHaveLength(1);
     });
 
     it("should handle corrupted data gracefully", async () => {
       await kv.put("journey:123", "not-json");
-      const journey = await getJourney(kv as unknown as KVNamespace, "123");
+      const journey = await getJourney(asKVNamespace(kv), "123");
       expect(journey.events).toEqual([]);
     });
   });
 
   describe("recordJourneyEvent", () => {
     it("should append event to journey", async () => {
-      await recordJourneyEvent(kv as unknown as KVNamespace, "123", {
+      await recordJourneyEvent(asKVNamespace(kv), "123", {
         action: "like",
         targetId: "456",
       });
-      const journey = await getJourney(kv as unknown as KVNamespace, "123");
+      const journey = await getJourney(asKVNamespace(kv), "123");
       expect(journey.events).toHaveLength(1);
       expect(journey.events[0].action).toBe("like");
       expect(journey.events[0].targetId).toBe("456");
@@ -64,19 +68,19 @@ describe("Journey Tracking", () => {
 
     it("should limit to max events", async () => {
       for (let i = 0; i < 25; i++) {
-        await recordJourneyEvent(kv as unknown as KVNamespace, "123", {
+        await recordJourneyEvent(asKVNamespace(kv), "123", {
           action: `event-${i}`,
         });
       }
-      const journey = await getJourney(kv as unknown as KVNamespace, "123");
+      const journey = await getJourney(asKVNamespace(kv), "123");
       expect(journey.events.length).toBeLessThanOrEqual(20);
     });
   });
 
   describe("recordJourneyError", () => {
     it("should store error trace", async () => {
-      await recordJourneyError(kv as unknown as KVNamespace, "123", "TRACE001");
-      const journey = await getJourney(kv as unknown as KVNamespace, "123");
+      await recordJourneyError(asKVNamespace(kv), "123", "TRACE001");
+      const journey = await getJourney(asKVNamespace(kv), "123");
       expect(journey.lastErrorTrace).toBe("TRACE001");
       expect(journey.lastErrorAt).toBeDefined();
     });
@@ -166,7 +170,7 @@ describe("Journey Tracking", () => {
       };
 
       await expect(
-        recordJourneyEvent(failingKv as unknown as KVNamespace, "123", {
+        recordJourneyEvent(asKVNamespace(failingKv), "123", {
           action: "test",
         }),
       ).resolves.toBeUndefined();
@@ -180,7 +184,7 @@ describe("Journey Tracking", () => {
       };
 
       await expect(
-        recordJourneyEvent(failingKv as unknown as KVNamespace, "123", {
+        recordJourneyEvent(asKVNamespace(failingKv), "123", {
           action: "test",
         }),
       ).resolves.toBeUndefined();
@@ -197,7 +201,7 @@ describe("Journey Tracking", () => {
 
       await expect(
         recordJourneyError(
-          failingKv as unknown as KVNamespace,
+          asKVNamespace(failingKv),
           "123",
           "TRACE001",
         ),
@@ -213,7 +217,7 @@ describe("Journey Tracking", () => {
 
       await expect(
         recordJourneyError(
-          failingKv as unknown as KVNamespace,
+          asKVNamespace(failingKv),
           "123",
           "TRACE001",
         ),

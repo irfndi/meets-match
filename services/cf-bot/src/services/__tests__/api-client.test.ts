@@ -1,6 +1,20 @@
 import { describe, it, expect, vi } from "vitest";
 import { ApiServiceClient, ApiError } from "../api-client.js";
 
+/** A JSON-serializable value used for test response/request bodies. */
+type JsonData =
+  | string
+  | number
+  | boolean
+  | null
+  | JsonData[]
+  | { [key: string]: JsonData };
+
+/** Single-assertion boundary helper for a Fetcher mock. */
+function asFetcher<T>(fetcher: T): Fetcher {
+  return fetcher as Fetcher;
+}
+
 // --------------------------------------------------------------------------
 // Test helpers
 // --------------------------------------------------------------------------
@@ -18,7 +32,7 @@ async function captureRequest(req: Request): Promise<CapturedRequest> {
   req.headers.forEach((val, key) => {
     rawHeaders[key] = val;
   });
-  let body: unknown = null;
+  let body: unknown;
   const ct = (req.headers.get("content-type") ?? "").toLowerCase();
   if (req.body && ct.includes("application/json")) {
     try {
@@ -40,7 +54,7 @@ function mockFetcher(response: Response) {
 }
 
 /** Shorthand: a successful JSON response. */
-function ok(data: unknown, init?: ResponseInit): Response {
+function ok(data: JsonData, init?: ResponseInit): Response {
   return new Response(JSON.stringify(data), {
     status: 200,
     ...init,
@@ -49,7 +63,7 @@ function ok(data: unknown, init?: ResponseInit): Response {
 }
 
 /** Shorthand: an error response with a non-2xx status code. */
-function err(status: number, body?: unknown): Response {
+function err(status: number, body?: JsonData): Response {
   return new Response(JSON.stringify(body ?? { error: "fail" }), {
     status,
     headers: { "Content-Type": "application/json" },
@@ -62,10 +76,12 @@ function err(status: number, body?: unknown): Response {
 
 type MockFetcher = ReturnType<typeof mockFetcher>;
 
-function createClient(response: Response): {
+interface CreatedClient {
   client: ApiServiceClient;
   fetcher: MockFetcher;
-} {
+}
+
+function createClient(response: Response): CreatedClient {
   const fetcher = mockFetcher(response);
   const client = new ApiServiceClient(fetcher as any);
   return { client, fetcher };
@@ -931,7 +947,7 @@ describe("Non-JSON error response", () => {
 
 describe("ApiServiceClient constructor", () => {
   it("accepts a Fetcher binding", () => {
-    const fetcher = { fetch: vi.fn(), connect: vi.fn() } as unknown as Fetcher;
+    const fetcher = asFetcher({ fetch: vi.fn(), connect: vi.fn() });
     const client = new ApiServiceClient(fetcher);
     expect(client).toBeInstanceOf(ApiServiceClient);
   });

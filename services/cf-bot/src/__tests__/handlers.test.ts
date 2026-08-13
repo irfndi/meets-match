@@ -6,8 +6,12 @@ import { matchesCommand } from "../handlers/matches.js";
 import { settingsCommand } from "../handlers/settings.js";
 import type { MyContext } from "../types.js";
 
+function asMyContext<T>(ctx: T): MyContext {
+  return ctx as MyContext;
+}
+
 function mockCtx(text?: string): MyContext {
-  return {
+  return asMyContext({
     reply: vi.fn().mockResolvedValue(undefined),
     answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
     deleteMessage: vi.fn().mockResolvedValue(undefined),
@@ -22,14 +26,13 @@ function mockCtx(text?: string): MyContext {
       : undefined,
     callbackQuery: undefined,
     chat: { id: 123, type: "private" as const },
-  } as unknown as MyContext;
+  });
 }
 
 function createMockApiService(responseMap: Record<string, () => Response>) {
   return {
     fetch: vi.fn().mockImplementation((req: Request) => {
-      const url =
-        typeof req === "string" ? req : (req as any).url || String(req);
+      const url = req.url;
       const sortedPatterns = Object.entries(responseMap).sort(
         (a, b) => b[0].length - a[0].length,
       );

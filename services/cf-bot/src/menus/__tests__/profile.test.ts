@@ -25,8 +25,12 @@ function mockKV() {
   };
 }
 
-function mockCtx(overrides: Partial<Record<string, unknown>> = {}): MyContext {
-  return {
+function asMyContext<T>(ctx: T): MyContext {
+  return ctx as MyContext;
+}
+
+function mockCtx(overrides: Partial<MyContext> = {}): MyContext {
+  return asMyContext({
     reply: vi.fn().mockResolvedValue(undefined),
     answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
     deleteMessage: vi.fn().mockResolvedValue(undefined),
@@ -40,19 +44,22 @@ function mockCtx(overrides: Partial<Record<string, unknown>> = {}): MyContext {
     },
     chat: { id: 123, type: "private" },
     ...overrides,
-  } as unknown as MyContext;
+  });
 }
 
 /**
  * Create an ApiService mock that maps URL patterns to Response factories.
  */
-function createMockApiService(responseMap: Record<string, () => Response>): {
+interface MockApiService {
   fetch: ReturnType<typeof vi.fn>;
-} {
+}
+
+function createMockApiService(
+  responseMap: Record<string, () => Response>,
+): MockApiService {
   return {
     fetch: vi.fn().mockImplementation((req: Request) => {
-      const url =
-        typeof req === "string" ? req : (req as any).url || String(req);
+      const url = req.url;
       const sortedPatterns = Object.entries(responseMap).sort(
         (a, b) => b[0].length - a[0].length,
       );
@@ -126,7 +133,7 @@ describe("handleProfileCallback", () => {
     kv = mockKV();
     ctx = mockCtx();
     env = {
-      KV: kv as unknown as KVNamespace,
+      KV: kv,
       API_SERVICE: createMockApiService({
         "/users/123": () =>
           new Response(JSON.stringify({ user: { language: "en" } }), {
@@ -445,7 +452,7 @@ describe("handleMediaCallback", () => {
     kv = mockKV();
     ctx = mockCtx();
     env = {
-      KV: kv as unknown as KVNamespace,
+      KV: kv,
       API_SERVICE: createMockApiService({
         "/users/123": () =>
           new Response(
@@ -538,8 +545,7 @@ describe("handleMediaCallback", () => {
     let userCallCount = 0;
     env.API_SERVICE = {
       fetch: vi.fn().mockImplementation((req: Request) => {
-        const url =
-          typeof req === "string" ? req : (req as any).url || String(req);
+        const url = req.url;
 
         if (url.includes("/media") && (req as any).method === "DELETE") {
           return Promise.resolve(

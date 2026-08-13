@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   buildLanguageKeyboard,
   startCommand,
@@ -16,7 +16,7 @@ describe("start handler", () => {
     });
   });
 
-  function createCtx(overrides: Record<string, unknown> = {}) {
+  function createCtx<T>(overrides?: T) {
     return {
       from: { id: 123, first_name: "Test" },
       message: { text: "/start" },
@@ -29,7 +29,7 @@ describe("start handler", () => {
     } as any;
   }
 
-  function createEnv(overrides: Record<string, unknown> = {}) {
+  function createEnv<T>(overrides?: T) {
     return {
       API_SERVICE: {
         fetch: vi.fn(async () => ({

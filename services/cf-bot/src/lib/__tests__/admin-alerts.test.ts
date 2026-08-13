@@ -6,7 +6,6 @@ import {
   queueAlert,
   sendAggregatedAlerts,
 } from "../admin-alerts.js";
-import type { ErrorContext } from "../error-feedback.js";
 
 function createMockApiService(responseMap: Record<string, () => Response>) {
   const sortedPatterns = Object.entries(responseMap).sort(

@@ -1,4 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { Env } from "../index.js";
+
+function asKVNamespace<T>(kv: T): KVNamespace {
+  return kv as KVNamespace;
+}
+
+function asFetcher<T>(fetcher: T): Fetcher {
+  return fetcher as Fetcher;
+}
 
 const mockBotInstance = {
   init: vi.fn().mockResolvedValue(undefined),
@@ -25,17 +34,17 @@ vi.mock("grammy", () => ({
   },
 }));
 
-function createEnv(overrides: Record<string, unknown> = {}) {
+function createEnv(overrides: Partial<Env> = {}) {
   return {
     DB: {} as D1Database,
-    KV: {
+    KV: asKVNamespace({
       get: vi.fn().mockResolvedValue(null),
       put: vi.fn().mockResolvedValue(undefined),
       delete: vi.fn().mockResolvedValue(undefined),
-    } as unknown as KVNamespace,
-    API_SERVICE: {
+    }),
+    API_SERVICE: asFetcher({
       fetch: vi.fn().mockResolvedValue(new Response(null, { status: 200 })),
-    } as unknown as Fetcher,
+    }),
     BOT_TOKEN: "test-token",
     ...overrides,
   };

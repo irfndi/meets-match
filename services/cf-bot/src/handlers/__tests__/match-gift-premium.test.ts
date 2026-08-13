@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import {
   startGiftPremiumSelection,
   handleGiftPremiumCallback,
@@ -16,7 +16,7 @@ describe("Gift Premium", () => {
     kv = mockKV();
     ctx = mockCtx();
     env = {
-      KV: kv as unknown as KVNamespace,
+      KV: kv,
       API_SERVICE: createMockApiService({
         "/users/123": () =>
           new Response(

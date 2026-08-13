@@ -19,21 +19,24 @@ function mockKV() {
   };
 }
 
+function asMyContext<T>(ctx: T): MyContext {
+  return ctx as MyContext;
+}
+
 function mockCtx(): MyContext {
-  return {
+  return asMyContext({
     reply: vi.fn().mockResolvedValue(undefined),
     answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
     from: { id: 123, first_name: "Test", is_bot: false, language_code: "en" },
     chat: { id: 123, type: "private" },
     message: { text: "Great app!" },
-  } as unknown as MyContext;
+  });
 }
 
 function createMockApiService(responseMap: Record<string, () => Response>) {
   return {
     fetch: vi.fn().mockImplementation((req: Request) => {
-      const url =
-        typeof req === "string" ? req : (req as any).url || String(req);
+      const url = req.url;
       const sortedPatterns = Object.entries(responseMap).sort(
         (a, b) => b[0].length - a[0].length,
       );
@@ -54,7 +57,7 @@ describe("Feedback Conversation", () => {
     kv = mockKV();
     ctx = mockCtx();
     env = {
-      KV: kv as unknown as KVNamespace,
+      KV: kv,
       API_SERVICE: createMockApiService({
         "/users/123": () =>
           new Response(

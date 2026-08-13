@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   activityTrackerMiddleware,
   lastActiveCache,
@@ -31,7 +31,7 @@ function createEnv(apiFetch?: ReturnType<typeof createMockApiFetch>) {
   } as any;
 }
 
-function createMockCtx(overrides: Record<string, unknown> = {}) {
+function createMockCtx<T>(overrides?: T) {
   return {
     from: {
       id: 123,
@@ -577,7 +577,7 @@ describe("activityTrackerMiddleware", () => {
     await middleware(ctx, next);
 
     expect(lastActiveCache.has("5")).toBe(true);
-    expect(typeof lastActiveCache.get("5")).toBe("number");
+    expect(lastActiveCache.get("5")).toBeTypeOf("number");
   });
 
   it("converts large numeric userId to string correctly", async () => {

@@ -1,6 +1,19 @@
 import { vi } from "vitest";
 import type { MyContext } from "../../types.js";
 
+/**
+ * Single-assertion boundary helpers for test mocks that cannot structurally
+ * satisfy the target Worker interface. Each performs exactly one assertion at
+ * the mock boundary instead of laundering the value through `unknown`.
+ */
+export function asKVNamespace<T>(kv: T): KVNamespace {
+  return kv as KVNamespace;
+}
+
+export function asMyContext<T>(ctx: T): MyContext {
+  return ctx as MyContext;
+}
+
 export function mockKV() {
   const store = new Map<string, string>();
   return {
@@ -16,7 +29,7 @@ export function mockKV() {
 }
 
 export function mockCtx(overrides?: Partial<MyContext>): MyContext {
-  return {
+  return asMyContext({
     reply: vi.fn().mockResolvedValue(undefined),
     answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
     deleteMessage: vi.fn().mockResolvedValue(undefined),
@@ -31,17 +44,19 @@ export function mockCtx(overrides?: Partial<MyContext>): MyContext {
     api: {
       createInvoiceLink: vi.fn().mockResolvedValue("https://t.me/invoice/test"),
       getMe: vi.fn().mockResolvedValue({ username: "meetsmatchbot" }),
-    } as any,
+    },
     ...overrides,
-  } as unknown as MyContext;
+  });
+}
+
+interface MockApiService {
+  fetch: (...args: unknown[]) => Promise<Response>;
+  _requests: Array<{ url: string; method: string; body: unknown }>;
 }
 
 export function createMockApiService(
   responseMap: Record<string, () => Response>,
-): {
-  fetch: (...args: unknown[]) => Promise<Response>;
-  _requests: Array<{ url: string; method: string; body: unknown }>;
-} {
+): MockApiService {
   const requests: Array<{
     url: string;
     method: string;
@@ -50,12 +65,13 @@ export function createMockApiService(
 
   const service = {
     fetch: vi.fn().mockImplementation(async (req: Request | string) => {
-      const url =
-        typeof req === "string" ? req : (req as any).url || String(req);
-      const method = typeof req === "string" ? "GET" : req.method || "GET";
+      const url = req instanceof Request ? req.url : req;
 
-      let body: unknown = undefined;
-      if (typeof req !== "string" && req.body) {
+      const method =
+        req instanceof Request && req.method ? req.method : "GET";
+
+      let body: unknown;
+      if (req instanceof Request && req.body) {
         try {
           const text = await req.clone().text();
           body = text ? JSON.parse(text) : undefined;

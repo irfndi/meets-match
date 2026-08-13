@@ -7,11 +7,15 @@ import {
   type LikeNotification,
 } from "../notifications.js";
 
+function asKVNamespace<T>(kv: T): KVNamespace {
+  return kv as KVNamespace;
+}
+
 function mockKV() {
   const store = new Map<string, string>();
   return {
     get: vi.fn(async (key: string) => store.get(key) ?? null),
-    put: vi.fn(async (key: string, value: string, _opts?: unknown) => {
+    put: vi.fn(async (key: string, value: string) => {
       store.set(key, value);
     }),
     delete: vi.fn(async (key: string) => {
@@ -23,7 +27,7 @@ function mockKV() {
 
 function mockEnv(kv = mockKV()) {
   return {
-    KV: kv as unknown as KVNamespace,
+    KV: asKVNamespace(kv),
     DB: {} as D1Database,
     API_SERVICE: {} as Fetcher,
     BOT_TOKEN: "test",

@@ -17,8 +17,12 @@ function mockKV() {
   };
 }
 
+function asMyContext<T>(ctx: T): MyContext {
+  return ctx as MyContext;
+}
+
 function mockCtx(overrides?: Partial<MyContext>): MyContext {
-  return {
+  return asMyContext({
     reply: vi.fn().mockResolvedValue(undefined),
     answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
     editMessageText: vi.fn().mockResolvedValue(undefined),
@@ -33,14 +37,13 @@ function mockCtx(overrides?: Partial<MyContext>): MyContext {
     },
     chat: { id: 123, type: "private" },
     ...overrides,
-  } as unknown as MyContext;
+  });
 }
 
 function createMockApiService(responseMap: Record<string, () => Response>) {
   return {
     fetch: vi.fn().mockImplementation((req: Request) => {
-      const url =
-        typeof req === "string" ? req : (req as any).url || String(req);
+      const url = req.url;
       const sortedPatterns = Object.entries(responseMap).sort(
         (a, b) => b[0].length - a[0].length,
       );
@@ -76,7 +79,7 @@ describe("Matches Handlers", () => {
     kv = mockKV();
     ctx = mockCtx();
     env = {
-      KV: kv as unknown as KVNamespace,
+      KV: kv,
       API_SERVICE: createMockApiService({
         "/users/123": () =>
           new Response(JSON.stringify({ user: completeUser }), { status: 200 }),
