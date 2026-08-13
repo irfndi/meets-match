@@ -68,6 +68,7 @@ export default Stack(
 
     // ── Workers ──────────────────────────────────────────────────────────
     const Api = yield* Cloudflare.Worker("Api", {
+      name: isProd ? "meetsmatch-api" : "meetsmatch-api-dev",
       main: "./services/cf-api/src/index.ts",
       env: {
         DB,
@@ -80,6 +81,7 @@ export default Stack(
     });
 
     const Tail = yield* Cloudflare.Worker("Tail", {
+      name: isProd ? "meetsmatch-tail" : "meetsmatch-tail-dev",
       main: "./services/cf-tail/src/index.ts",
       env: { ANALYTICS: BOT_METRICS },
     });
@@ -100,6 +102,7 @@ export default Stack(
     if (!isProd) botEnv.ADMIN_CHAT_ID = "1082762347";
 
     const Bot = yield* Cloudflare.Worker("Bot", {
+      name: isProd ? "meetsmatch-bot" : "meetsmatch-bot-dev",
       main: "./services/cf-bot/src/index.ts",
       crons: ["0 */6 * * *"],
       tailConsumers: [Tail],
@@ -107,6 +110,7 @@ export default Stack(
     });
 
     const Worker = yield* Cloudflare.Worker("Worker", {
+      name: isProd ? "meetsmatch-worker" : "meetsmatch-worker-dev",
       main: "./services/cf-worker/src/index.ts",
       // Dev has no cron triggers (Cloudflare free-plan limit), as before.
       crons: isProd
