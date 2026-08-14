@@ -43,7 +43,11 @@ export function isPermanentDeliveryError(cause: unknown): boolean {
       msg.includes("chat not found") ||
       msg.includes("bot was blocked by the user") ||
       msg.includes("user is deactivated") ||
-      msg.includes("forbidden: bot was blocked")
+      msg.includes("forbidden: bot was blocked") ||
+      // Telegram returns this when the user never started a chat with the
+      // bot, so the message can never be delivered.
+      msg.includes("can't initiate conversation") ||
+      msg.includes("cannot initiate conversation")
     );
   }
   return false;

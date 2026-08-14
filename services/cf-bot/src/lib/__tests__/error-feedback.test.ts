@@ -301,6 +301,21 @@ describe("Error Feedback", () => {
       ).toBe(true);
     });
 
+    it("detects 'bot can't initiate conversation with a user' as permanent", () => {
+      expect(
+        isPermanentDeliveryError(
+          new Error(
+            "403: Forbidden: bot can't initiate conversation with a user",
+          ),
+        ),
+      ).toBe(true);
+      expect(
+        isPermanentDeliveryError(
+          new Error("Forbidden: bot cannot initiate conversation with a user"),
+        ),
+      ).toBe(true);
+    });
+
     it("returns false for non-Error type", () => {
       expect(isPermanentDeliveryError("chat not found")).toBe(false);
       expect(isPermanentDeliveryError(null)).toBe(false);
