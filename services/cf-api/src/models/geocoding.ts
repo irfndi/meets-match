@@ -1,8 +1,18 @@
 import { Effect } from "effect";
 import type { KVNamespace } from "@cloudflare/workers-types";
 
-interface GeocodingAddress { city?: string; town?: string; village?: string; municipality?: string; country?: string; }
-interface GeocodingResult { lat?: string; lon?: string; address?: GeocodingAddress; }
+interface GeocodingAddress {
+  city?: string;
+  town?: string;
+  village?: string;
+  municipality?: string;
+  country?: string;
+}
+interface GeocodingResult {
+  lat?: string;
+  lon?: string;
+  address?: GeocodingAddress;
+}
 
 export interface Location {
   latitude: number;

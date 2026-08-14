@@ -11,7 +11,6 @@ interface TestRow {
   [key: string]: TestRowValue;
 }
 
-
 import { describe, it, expect } from "vitest";
 import { BlockRepository } from "../block.js";
 import { createMockD1, runEffect } from "@meetsmatch/cf-shared/testing";

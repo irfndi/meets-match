@@ -67,8 +67,7 @@ export function createMockApiService(
     fetch: vi.fn().mockImplementation(async (req: Request | string) => {
       const url = req instanceof Request ? req.url : req;
 
-      const method =
-        req instanceof Request && req.method ? req.method : "GET";
+      const method = req instanceof Request && req.method ? req.method : "GET";
 
       let body: unknown;
       if (req instanceof Request && req.body) {

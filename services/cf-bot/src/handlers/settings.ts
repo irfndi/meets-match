@@ -13,7 +13,11 @@ import {
   getDefaultPreferences,
 } from "../lib/user-utils.js";
 import { getMainMenuKeyboard } from "../lib/main-menu.js";
-import { createLogger, type Preferences, type User } from "@meetsmatch/cf-shared";
+import {
+  createLogger,
+  type Preferences,
+  type User,
+} from "@meetsmatch/cf-shared";
 import { replyWithError } from "../lib/error-feedback.js";
 
 const log = createLogger("cf-bot");

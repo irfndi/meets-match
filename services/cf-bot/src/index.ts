@@ -812,9 +812,9 @@ export default {
         }
       }
       try {
-        const bodyResult = Schema.decodeUnknownOption(SendNotificationBodySchema)(
-          await request.json(),
-        );
+        const bodyResult = Schema.decodeUnknownOption(
+          SendNotificationBodySchema,
+        )(await request.json());
         if (bodyResult._tag !== "Some") {
           return new Response(
             JSON.stringify({

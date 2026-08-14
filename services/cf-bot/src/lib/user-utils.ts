@@ -2,7 +2,10 @@ import type { MyContext } from "../types.js";
 import type { Env } from "../index.js";
 import { ApiServiceClient, ApiError } from "../services/api-client.js";
 import { createLogger, computeDefaultPreferences } from "@meetsmatch/cf-shared";
-import type { DefaultPreferenceInput, Preferences } from "@meetsmatch/cf-shared";
+import type {
+  DefaultPreferenceInput,
+  Preferences,
+} from "@meetsmatch/cf-shared";
 
 const log = createLogger("cf-bot");
 

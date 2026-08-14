@@ -17,7 +17,6 @@ function castForTest<T>(value: TestCastInput): T {
   return value as T;
 }
 
-
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { UserRepository } from "../user.js";
 import { createMockD1, runEffect } from "@meetsmatch/cf-shared/testing";
@@ -192,8 +191,8 @@ describe("UserRepository update", () => {
         }>(db)._captured;
         const updateCall = captured.at(-1);
         if (updateCall && updateCall.sql.includes("UPDATE users SET")) {
-          const prefsIdx = updateCall.values.findIndex(
-            (v) => String(v).includes("existing"),
+          const prefsIdx = updateCall.values.findIndex((v) =>
+            String(v).includes("existing"),
           );
           expect(prefsIdx).toBeGreaterThanOrEqual(0);
         }

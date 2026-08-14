@@ -11,10 +11,10 @@
   },
   "dependencies": {
     "@meetsmatch/cf-shared": "file:../../packages/cf-shared",
-    "effect": "4.0.0-rc.108"
+    "effect": "4.0.0-rc.109"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20260808.1",
+    "@cloudflare/workers-types": "^5.20260814.1",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"
   }

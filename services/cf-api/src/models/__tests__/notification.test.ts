@@ -11,7 +11,6 @@ interface TestRow {
   [key: string]: TestRowValue;
 }
 
-
 import { describe, it, expect } from "vitest";
 import { NotificationRepository } from "../notification.js";
 import { createMockD1, runEffect } from "@meetsmatch/cf-shared/testing";

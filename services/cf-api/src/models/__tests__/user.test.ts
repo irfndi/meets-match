@@ -17,7 +17,6 @@ function castForTest<T>(value: TestCastInput): T {
   return value as T;
 }
 
-
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { UserRepository } from "../user.js";
 import { createMockD1 } from "@meetsmatch/cf-shared/testing";
@@ -55,7 +54,9 @@ function mockD1() {
             run: async () => ({ success: true }),
             first: async () => {
               if (sql.includes("SELECT id FROM users"))
-                return store.get(String(values[0])) ? { id: String(values[0]) } : null;
+                return store.get(String(values[0]))
+                  ? { id: String(values[0]) }
+                  : null;
               if (sql.includes("FROM users WHERE id ="))
                 return store.get(String(values[0])) ?? null;
               return null;

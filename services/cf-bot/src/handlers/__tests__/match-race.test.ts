@@ -3,11 +3,7 @@ import {
   createRaceBarrier,
   createRacingMockKV,
 } from "@meetsmatch/cf-shared/testing/race-mocks";
-import {
-  acquireActionLock,
-  releaseActionLock,
-  useDMBypass,
-} from "../match.js";
+import { acquireActionLock, releaseActionLock, useDMBypass } from "../match.js";
 
 describe("acquireActionLock race conditions", () => {
   it.skip("prevents double-locking when two calls race (intended behavior)", async () => {

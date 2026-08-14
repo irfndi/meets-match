@@ -85,38 +85,26 @@ describe("Conversation State Management", () => {
       field: "bio",
       step: 0,
     });
-    const state = await getConversationState(
-      kv,
-      "123",
-    );
+    const state = await getConversationState(kv, "123");
     expect(state).not.toBeNull();
     expect(state!.field).toBe("bio");
   });
 
   it("should return null for missing state", async () => {
-    const state = await getConversationState(
-      kv,
-      "999",
-    );
+    const state = await getConversationState(kv, "999");
     expect(state).toBeNull();
   });
 
   it("should clear conversation state", async () => {
     await startConversation(kv, "123", "bio");
     await clearConversationState(kv, "123");
-    const state = await getConversationState(
-      kv,
-      "123",
-    );
+    const state = await getConversationState(kv, "123");
     expect(state).toBeNull();
   });
 
   it("should start conversation with field", async () => {
     await startConversation(kv, "123", "birthdate");
-    const state = await getConversationState(
-      kv,
-      "123",
-    );
+    const state = await getConversationState(kv, "123");
     expect(state!.field).toBe("birthdate");
     expect(state!.step).toBe(0);
   });
@@ -141,10 +129,7 @@ describe("Conversation Message Handling", () => {
     const result = await handleConversationMessage(ctx, mockEnv(kv));
     expect(result).toBe(true);
     expect(ctx.reply).toHaveBeenCalledWith("Cancelled.", expect.anything());
-    const state = await getConversationState(
-      kv,
-      "123",
-    );
+    const state = await getConversationState(kv, "123");
     expect(state).toBeNull();
   });
 
@@ -268,10 +253,7 @@ describe("continueOnboarding — explicit step sequence regression", () => {
       const result = await continueOnboarding(ctx, env, "123", lang);
 
       expect(result).toBe(true);
-      const state = await getConversationState(
-        kv,
-        "123",
-      );
+      const state = await getConversationState(kv, "123");
       expect(state!.field).toBe("name");
 
       // Should have "Use my Telegram name" button
@@ -299,10 +281,7 @@ describe("continueOnboarding — explicit step sequence regression", () => {
       const result = await continueOnboarding(ctx, env, "123", lang);
 
       expect(result).toBe(true);
-      const state = await getConversationState(
-        kv,
-        "123",
-      );
+      const state = await getConversationState(kv, "123");
       expect(state!.field).toBe("birthdate");
     },
   );
@@ -322,10 +301,7 @@ describe("continueOnboarding — explicit step sequence regression", () => {
       const result = await continueOnboarding(ctx, env, "123", lang);
 
       expect(result).toBe(true);
-      const state = await getConversationState(
-        kv,
-        "123",
-      );
+      const state = await getConversationState(kv, "123");
       expect(state!.field).toBe("gender");
     },
   );
@@ -346,10 +322,7 @@ describe("continueOnboarding — explicit step sequence regression", () => {
       const result = await continueOnboarding(ctx, env, "123", lang);
 
       expect(result).toBe(true);
-      const state = await getConversationState(
-        kv,
-        "123",
-      );
+      const state = await getConversationState(kv, "123");
       expect(state!.field).toBe("bio");
     },
   );
@@ -371,10 +344,7 @@ describe("continueOnboarding — explicit step sequence regression", () => {
       const result = await continueOnboarding(ctx, env, "123", lang);
 
       expect(result).toBe(true);
-      const state = await getConversationState(
-        kv,
-        "123",
-      );
+      const state = await getConversationState(kv, "123");
       expect(state!.field).toBe("location");
     },
   );
@@ -397,10 +367,7 @@ describe("continueOnboarding — explicit step sequence regression", () => {
       const result = await continueOnboarding(ctx, env, "123", lang);
 
       expect(result).toBe(true);
-      const state = await getConversationState(
-        kv,
-        "123",
-      );
+      const state = await getConversationState(kv, "123");
       expect(state!.field).toBe("media");
     },
   );
@@ -426,10 +393,7 @@ describe("continueOnboarding — explicit step sequence regression", () => {
       const result = await continueOnboarding(ctx, env, "123", lang);
 
       expect(result).toBe(true);
-      const state = await getConversationState(
-        kv,
-        "123",
-      );
+      const state = await getConversationState(kv, "123");
       // Should skip to interests (interests showOnce but not yet seen)
       expect(state!.field).toBe("interests");
     },
@@ -457,10 +421,7 @@ describe("continueOnboarding — explicit step sequence regression", () => {
       const result = await continueOnboarding(ctx, env, "123", lang);
 
       expect(result).toBe(true);
-      const state = await getConversationState(
-        kv,
-        "123",
-      );
+      const state = await getConversationState(kv, "123");
       expect(state!.field).toBe("interests");
 
       // Should have Skip button
@@ -499,10 +460,7 @@ describe("continueOnboarding — explicit step sequence regression", () => {
       const result = await continueOnboarding(ctx, env, "123", lang);
 
       expect(result).toBe(true);
-      const state = await getConversationState(
-        kv,
-        "123",
-      );
+      const state = await getConversationState(kv, "123");
       expect(state!.field).toBe("phone");
     },
   );
@@ -534,10 +492,7 @@ describe("continueOnboarding — explicit step sequence regression", () => {
       const result = await continueOnboarding(ctx, env, "123", lang);
 
       expect(result).toBe(true);
-      const state = await getConversationState(
-        kv,
-        "123",
-      );
+      const state = await getConversationState(kv, "123");
       expect(state!.field).toBe("phone");
 
       // Should have contact-sharing button
@@ -596,10 +551,7 @@ describe("continueOnboarding — explicit step sequence regression", () => {
       // 1. Should start with name
       let result = await continueOnboarding(ctx, env, "123", lang);
       expect(result).toBe(true);
-      let state = await getConversationState(
-        kv,
-        "123",
-      );
+      let state = await getConversationState(kv, "123");
       expect(state!.field).toBe("name");
 
       // 2. After name is shown, next call goes to birthdate

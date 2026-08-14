@@ -175,21 +175,21 @@ function pickType(
   dailySwipesUsed: number,
 ): PickedDailyType {
   if (state.hasPendingLikes) {
-        return {
-          type: "DAILY_LIKES_REMINDER",
-          message: pickVariant(LIKES_REMINDER_VARIANTS),
-        } satisfies PickedDailyType;
+    return {
+      type: "DAILY_LIKES_REMINDER",
+      message: pickVariant(LIKES_REMINDER_VARIANTS),
+    } satisfies PickedDailyType;
   }
   if (dailySwipesUsed === 0) {
-        return {
-          type: "DAILY_EXPLORE_PROMPT",
-          message: pickVariant(EXPLORE_PROMPT_VARIANTS),
-        } satisfies PickedDailyType;
+    return {
+      type: "DAILY_EXPLORE_PROMPT",
+      message: pickVariant(EXPLORE_PROMPT_VARIANTS),
+    } satisfies PickedDailyType;
   }
-      return {
-        type: "DAILY_ACTIVE_HAPPY",
-        message: pickVariant(HAPPY_VARIANTS),
-      } satisfies PickedDailyType;
+  return {
+    type: "DAILY_ACTIVE_HAPPY",
+    message: pickVariant(HAPPY_VARIANTS),
+  } satisfies PickedDailyType;
 }
 
 function processDailyCandidate(

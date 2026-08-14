@@ -41,7 +41,12 @@ async function captureRequest(req: Request): Promise<CapturedRequest> {
       body = await req.clone().text();
     }
   }
-  return { url: req.url, method: req.method, headers: rawHeaders, body: body ?? null };
+  return {
+    url: req.url,
+    method: req.method,
+    headers: rawHeaders,
+    body: body ?? null,
+  };
 }
 
 /** Create a mock Fetcher whose .fetch() returns a given Response. */

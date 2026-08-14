@@ -21,7 +21,10 @@ interface MockNotificationRow {
 }
 
 interface MockD1Options {
-  handler?: (sql: string, values: unknown[]) => {
+  handler?: (
+    sql: string,
+    values: unknown[],
+  ) => {
     results?: MockNotificationRow[];
   };
   /** Return value for each `.run()` call. Defaults to `{ changes: 1 }`. */
@@ -36,8 +39,9 @@ function createMockD1(options: MockD1Options = {}) {
       return {
         bind: vi.fn((...values: unknown[]) => ({
           run: vi.fn(async () => {
-            const runResult =
-              options.runResult?.(sql, values) ?? { changes: 1 };
+            const runResult = options.runResult?.(sql, values) ?? {
+              changes: 1,
+            };
             return {
               success: true,
               meta: {
@@ -353,9 +357,7 @@ describe("NotificationQueueConsumer", () => {
 
     const failedUpdate = (
       db.prepare as ReturnType<typeof vi.fn>
-    ).mock.calls.find(
-      (c) => (c[0] as string).includes("status = 'failed'"),
-    );
+    ).mock.calls.find((c) => (c[0] as string).includes("status = 'failed'"));
     expect(failedUpdate).toBeDefined();
   });
 });

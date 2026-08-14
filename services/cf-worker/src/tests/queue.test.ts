@@ -32,7 +32,8 @@ function createMockD1(notification: MockNotificationRow | null = null) {
     _queries: queries,
   };
   return castForTest<
-    D1Database & object & { _queries: Array<{ sql: string; values: unknown[] }> }
+    D1Database &
+      object & { _queries: Array<{ sql: string; values: unknown[] }> }
   >(mockD1);
 }
 

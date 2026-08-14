@@ -269,11 +269,14 @@ function deliverOrMarkFailed(
               type: body.type,
               payload: body.payload,
             }),
-                headers: (() => {
-                  const headers = new Headers({ "Content-Type": "application/json" });
-                  if (internalSecret) headers.set("x-internal-secret", internalSecret);
-                  return headers;
-                })(),
+            headers: (() => {
+              const headers = new Headers({
+                "Content-Type": "application/json",
+              });
+              if (internalSecret)
+                headers.set("x-internal-secret", internalSecret);
+              return headers;
+            })(),
           }),
         ),
       catch: (error) => new Error(String(error)),

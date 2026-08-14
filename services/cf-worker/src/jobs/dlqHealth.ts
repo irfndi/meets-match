@@ -29,9 +29,7 @@ export async function runDLQHealthCheck(env: Env): Promise<void> {
        AND dlq_at <= datetime('now', '-7 days')`,
     ).first();
 
-    const expiredCount = Number(
-      (expiredResult as CountRow | null)?.c ?? 0,
-    );
+    const expiredCount = Number((expiredResult as CountRow | null)?.c ?? 0);
     if (expiredCount > 0) {
       console.log(
         `[dlq-health] ${expiredCount} expired DLQ messages (>7 days)`,

@@ -172,8 +172,8 @@ function notifyMatches(
         new Error(`fetchMatches ${birthdayUserId}: ${String(error)}`),
     }).pipe(Effect.orElseSucceed(() => ({ results: [] as Array<unknown> })));
 
-    const matchIds = ((matches ?? []) as MatchRow[]).map(
-      (m) => String(m.match_user_id),
+    const matchIds = ((matches ?? []) as MatchRow[]).map((m) =>
+      String(m.match_user_id),
     );
     log.info(
       "notifyMatches",

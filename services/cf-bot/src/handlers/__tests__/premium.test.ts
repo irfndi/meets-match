@@ -202,9 +202,7 @@ const referralUser = {
  * Handlers map with a default GET /users/123 that makes ensureUserExists
  * succeed. Extra entries typically supply interaction-status or similar.
  */
-function withUser(
-  extra: ResponseMap = {},
-): ResponseMap {
+function withUser(extra: ResponseMap = {}): ResponseMap {
   return {
     "/users/123": () => ok({ user: existingUser }),
     ...extra,

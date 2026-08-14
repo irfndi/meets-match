@@ -1,11 +1,7 @@
 import { InlineKeyboard, Keyboard } from "grammy";
 import type { MyContext } from "../types.js";
 import type { Env } from "../index.js";
-import {
-  createLogger,
-  type Preferences,
-  User,
-} from "@meetsmatch/cf-shared";
+import { createLogger, type Preferences, User } from "@meetsmatch/cf-shared";
 import { Schema } from "effect";
 
 const log = createLogger("cf-bot");
@@ -537,9 +533,7 @@ function buildMatchCard(
       : genderRaw === "female"
         ? t("matchCardFemale", lang)
         : t("matchCardOther", lang);
-  const birthdayBadge = isBirthdayToday(otherUser.birthDate)
-    ? " 🎂"
-    : "";
+  const birthdayBadge = isBirthdayToday(otherUser.birthDate) ? " 🎂" : "";
 
   const loc = otherUser.location;
   const city = loc?.city;

@@ -21,7 +21,35 @@ import {
   computeDefaultPreferences,
 } from "@meetsmatch/cf-shared";
 interface MatchDbRow {
-  id?: string; user1_id?: string; user2_id?: string; status?: string; score?: string | null; created_at?: string; updated_at?: string; matched_at?: string | null; user1_action?: string; user2_action?: string; match_status?: string; match_updated_at?: string; viewed_at?: string | null; like_message?: string | null; username?: string | null; first_name?: string | null; last_name?: string | null; bio?: string | null; age?: number | string | null; birth_date?: string | null; gender?: string | null; interests?: string | null; media_urls?: string | null; location?: string | null; preferences?: string | null; is_active?: number | null; is_sleeping?: number | null; subscription_tier?: string | null; is_profile_complete?: number | null;
+  id?: string;
+  user1_id?: string;
+  user2_id?: string;
+  status?: string;
+  score?: string | null;
+  created_at?: string;
+  updated_at?: string;
+  matched_at?: string | null;
+  user1_action?: string;
+  user2_action?: string;
+  match_status?: string;
+  match_updated_at?: string;
+  viewed_at?: string | null;
+  like_message?: string | null;
+  username?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  bio?: string | null;
+  age?: number | string | null;
+  birth_date?: string | null;
+  gender?: string | null;
+  interests?: string | null;
+  media_urls?: string | null;
+  location?: string | null;
+  preferences?: string | null;
+  is_active?: number | null;
+  is_sleeping?: number | null;
+  subscription_tier?: string | null;
+  is_profile_complete?: number | null;
 }
 
 import { UserRepository } from "./user.js";
@@ -99,9 +127,7 @@ export class MatchRepository {
           .prepare(sql)
           .bind(...values)
           .all();
-        return (results ?? []).map((r) =>
-          this.toMatch(r as MatchDbRow),
-        );
+        return (results ?? []).map((r) => this.toMatch(r as MatchDbRow));
       },
       catch: (error) => new DatabaseError("getList", error),
     });
@@ -951,9 +977,7 @@ export class MatchRepository {
           )
           .all();
 
-        return (results ?? []).map((r) =>
-          this.rowToUser(r as MatchDbRow),
-        );
+        return (results ?? []).map((r) => this.rowToUser(r as MatchDbRow));
       },
       catch: (error) => new DatabaseError("getPendingLikes", error),
     });

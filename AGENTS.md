@@ -45,14 +45,14 @@ The entire application runs on **Cloudflare Workers** as three independently dep
 - **Language**: TypeScript 7.0.2 (native), ES2024 target, ES2022 modules, `"type": "module"`
 - **Package Manager**: pnpm 11.1.2 (workspaces enabled)
 - **Monorepo**: pnpm workspaces (`packages/*`, `services/cf-*`)
-- **FP Framework**: [Effect TS](https://effect.website/) (4.0.0-beta.103) — typed error handling, schemas, and composable effects in cf-shared/cf-api/cf-worker
-- **Infrastructure**: [Alchemy](https://alchemy.run) (2.0.0-beta.70) — `alchemy.run.ts` declares all Workers + Cloudflare resources as one Effect stack; deploys replace per-service `wrangler.toml` flows
+- **FP Framework**: [Effect TS](https://effect.website/) (4.0.0-rc.109) — typed error handling, schemas, and composable effects in cf-shared/cf-api/cf-worker
+- **Infrastructure**: [Alchemy](https://alchemy.run) (2.0.0-beta.72) — `alchemy.run.ts` declares all Workers + Cloudflare resources as one Effect stack; deploys replace per-service `wrangler.toml` flows
 - **Bot Framework**: [Grammy](https://grammy.dev/) (^1.45.1) with `@grammyjs/conversations` and `@grammyjs/menu`
 - **HTTP Routing**: Custom request router in cf-api (no external framework)
 - **Database**: Cloudflare D1 (SQLite) with raw SQL via `D1Database.prepare()`; migrations applied automatically on alchemy deploy (`migrationsDir` in `alchemy.run.ts`)
 - **Testing**: Vitest (^4.1.10) with `@vitest/coverage-v8`, `fast-check` for property-based tests
 - **Lint**: Oxlint (^1.77.0) with the `effecttsgo` plugin — type-aware linting patched by `@effect/tsgo` (see `.oxlintrc.json`)
-- **Format**: Oxfmt (^0.62.0) with `.oxfmtrc.json` (prettier-compatible defaults)
+- **Format**: Oxfmt (^0.63.0) with `.oxfmtrc.json` (prettier-compatible defaults)
 - **Type checking**: `tsgo` (fast, per project) and `tsc --build --force` (safe)
 - **Version Generation**: Custom `scripts/generate-version.ts` (git tag or short hash)
 
@@ -162,7 +162,8 @@ make db-check     # Verify local D1 connectivity (wrangler, dev tooling only)
 
 ### Effect v4 notes
 
-- The repo runs `effect@4.0.0-beta.103` — pinned below beta.104 because alchemy 2.0.0-beta.70's compiled runtime still uses `Schema.TaggedErrorClass` (renamed to `Schema.TaggedError` in beta.104). Bump `effect` and `alchemy` together, and verify `pnpm exec alchemy --help` still works.
+- The repo runs `effect@4.0.0-rc.109` and `alchemy@2.0.0-beta.72`. Bump `effect`, `@effect/platform-*`, and `alchemy` together, and verify `pnpm exec alchemy --help` still works (alchemy's `effect` peer range is `>=4.0.0-beta.105`).
+- Oxlint is pinned to `1.77.0` (not `latest`) because `@effect/tsgo@0.36.4`'s `effect-tsgo patch --oxlint` integration only ships native artifacts through oxlint 1.77.0. Do not bump oxlint until a matching `@effect/tsgo` release ships the 1.78.x artifact.
 - v3→v4 renames used across the code: `Effect.either`→`Effect.result`, `Effect.catchAll`→`Effect.catch`, `Effect.orElse`→`Effect.catch`/`Effect.matchEffect`, `Cause.failureOption`→`Cause.findErrorOption`, `Schema.Literal(a,b)`→`Schema.Literals([a,b])`, `Schema.filter`→`Schema.check(Schema.makeFilter(...))`, `ConfigProvider.fromMap`→`ConfigProvider.fromUnknown`, `Layer.setConfigProvider`→`ConfigProvider.layer`, `effect/Either`→`effect/Result`, `effect/ParseResult`→`effect/SchemaIssue`, `Context.Tag`→`Context.Service`.
 - The `effecttsgo` oxlint plugin flags v3 APIs against the v4 surface (`outdated-api`) — treat its warnings as errors.
 

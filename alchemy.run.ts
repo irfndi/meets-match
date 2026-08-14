@@ -94,9 +94,9 @@ export default Stack(
       ERROR_ANALYTICS: BOT_ERRORS,
       ENVIRONMENT: environment,
       BOT_TOKEN: Config.redacted("BOT_TOKEN"),
-      TELEGRAM_WEBHOOK_SECRET: Config.redacted(
-        "TELEGRAM_WEBHOOK_SECRET",
-      ).pipe(Config.withDefault(Redacted.make(""))),
+      TELEGRAM_WEBHOOK_SECRET: Config.redacted("TELEGRAM_WEBHOOK_SECRET").pipe(
+        Config.withDefault(Redacted.make("")),
+      ),
       API_SECRET: apiSecret,
     };
     if (!isProd) botEnv.ADMIN_CHAT_ID = "1082762347";

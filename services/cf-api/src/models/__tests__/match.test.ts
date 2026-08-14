@@ -17,7 +17,6 @@ function castForTest<T>(value: TestCastInput): T {
   return value as T;
 }
 
-
 import { describe, it, expect, vi } from "vitest";
 import { Effect } from "effect";
 import { MatchRepository, calculateMatchScore, haversine } from "../match.js";
@@ -36,10 +35,12 @@ function createMockD1(
   const capturedSql: string[] = [];
   const capturedValues: unknown[][] = [];
 
-  const mockD1 = castForTest<D1Database & {
-    _capturedSql: string[];
-    _capturedValues: unknown[][];
-  }>({
+  const mockD1 = castForTest<
+    D1Database & {
+      _capturedSql: string[];
+      _capturedValues: unknown[][];
+    }
+  >({
     prepare: vi.fn((sql: string) => {
       capturedSql.push(sql);
       return {
@@ -77,9 +78,7 @@ function createMockD1(
   return mockD1;
 }
 
-function createDbRow(
-  overrides: Partial<TestRow> = {},
-): TestRow {
+function createDbRow(overrides: Partial<TestRow> = {}): TestRow {
   return {
     id: "100",
     first_name: "Test",
@@ -100,9 +99,7 @@ function createDbRow(
   };
 }
 
-function createUser(
-  overrides: Partial<TestRow> = {},
-): TestRow {
+function createUser(overrides: Partial<TestRow> = {}): TestRow {
   return {
     id: "100",
     username: undefined,
@@ -1053,9 +1050,7 @@ describe("computeDefaultPreferences", () => {
  * the next result from the queue. Suitable for CRUD methods that make
  * multiple sequential DB calls.
  */
-function createSequentialMockD1(
-  firstQueue: Array<TestRow | null>,
-) {
+function createSequentialMockD1(firstQueue: Array<TestRow | null>) {
   let firstIdx = 0;
   const capturedSql: string[] = [];
   const capturedValues: unknown[][] = [];
@@ -1089,9 +1084,7 @@ function createSequentialMockD1(
 /**
  * Build a DB row (snake_case) matching what toMatch() expects.
  */
-function createMatchRow(
-  overrides: Partial<TestRow> = {},
-): TestRow {
+function createMatchRow(overrides: Partial<TestRow> = {}): TestRow {
   return {
     id: "match-1",
     user1_id: "user-a",
@@ -1771,9 +1764,7 @@ describe("MatchRepository.getList", () => {
 // ─── getPendingLikes (extended) ──────────────────────────────────────────────
 
 describe("MatchRepository.getPendingLikes (extended)", () => {
-  function createPendingLikesMockD1(
-    allResults: Array<TestRow>,
-  ) {
+  function createPendingLikesMockD1(allResults: Array<TestRow>) {
     const capturedSql: string[] = [];
     const capturedValues: unknown[][] = [];
 

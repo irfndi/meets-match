@@ -340,7 +340,9 @@ function userToSql(u: SeedUser): string {
   ];
 
   return `(${values
-    .map((v) => String(v) === "NULL" || String(v).startsWith("datetime") ? v : `'${v}'`)
+    .map((v) =>
+      String(v) === "NULL" || String(v).startsWith("datetime") ? v : `'${v}'`,
+    )
     .join(", ")})`;
 }
 

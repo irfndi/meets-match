@@ -17,7 +17,6 @@ function castForTest<T>(value: TestCastInput): T {
   return value as T;
 }
 
-
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ApiRouter } from "../router.js";
 

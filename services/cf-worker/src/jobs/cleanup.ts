@@ -246,11 +246,14 @@ function cleanUserMedia(
                   new Request(`http://api/users/${row.id}/media`, {
                     method: "DELETE",
                     body: JSON.stringify({ url: media.url }),
-          headers: (() => {
-            const headers = new Headers({ "Content-Type": "application/json" });
-            if (env.API_SECRET) headers.set("x-api-secret", env.API_SECRET);
-            return headers;
-          })(),
+                    headers: (() => {
+                      const headers = new Headers({
+                        "Content-Type": "application/json",
+                      });
+                      if (env.API_SECRET)
+                        headers.set("x-api-secret", env.API_SECRET);
+                      return headers;
+                    })(),
                   }),
                 ),
               catch: (error) => new Error(String(error)),

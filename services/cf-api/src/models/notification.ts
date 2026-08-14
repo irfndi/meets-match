@@ -11,8 +11,28 @@ import {
 } from "@meetsmatch/cf-shared";
 import { NotFoundError, DatabaseError } from "@meetsmatch/cf-shared";
 
-interface NotificationDbRow { id?: string; user_id?: string; type?: string; channel?: string; payload?: string | null; status?: string; priority?: number; attempt_count?: number; max_attempts?: number; created_at?: string; updated_at?: string | null; delivered_at?: string | null; last_error?: string | null; dlq_at?: string | null; scheduled_at?: string | null; failed_at?: string | null; c?: number | string; }
-interface CountRow { c?: number | string; }
+interface NotificationDbRow {
+  id?: string;
+  user_id?: string;
+  type?: string;
+  channel?: string;
+  payload?: string | null;
+  status?: string;
+  priority?: number;
+  attempt_count?: number;
+  max_attempts?: number;
+  created_at?: string;
+  updated_at?: string | null;
+  delivered_at?: string | null;
+  last_error?: string | null;
+  dlq_at?: string | null;
+  scheduled_at?: string | null;
+  failed_at?: string | null;
+  c?: number | string;
+}
+interface CountRow {
+  c?: number | string;
+}
 
 export class NotificationRepository {
   constructor(private readonly db: D1Database) {}
@@ -158,9 +178,7 @@ export class NotificationRepository {
           .first();
         return {
           pendingCount: Number((pending as CountRow).c ?? 0),
-          processingCount: Number(
-            (processing as CountRow).c ?? 0,
-          ),
+          processingCount: Number((processing as CountRow).c ?? 0),
           deliveredCount: Number((delivered as CountRow).c ?? 0),
           failedCount: Number((failed as CountRow).c ?? 0),
           dlqCount: Number((dlq as CountRow).c ?? 0),
@@ -245,9 +263,7 @@ export class NotificationRepository {
     });
   }
 
-  private toNotification(
-    row: NotificationDbRow,
-  ): typeof Notification.Type {
+  private toNotification(row: NotificationDbRow): typeof Notification.Type {
     return {
       id: String(row.id),
       userId: String(row.user_id),

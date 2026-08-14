@@ -278,9 +278,7 @@ async function countNearbyUsers(
         )
         .bind(userId, ...gp)
         .all();
-      return Number(
-        (results?.[0] as NearbyCountRow | undefined)?.c ?? 0,
-      );
+      return Number((results?.[0] as NearbyCountRow | undefined)?.c ?? 0);
     }
     const g = (gender ?? "").toLowerCase();
     if (g === "male" || g === "female") {
@@ -295,9 +293,7 @@ async function countNearbyUsers(
         )
         .bind(userId, oppositeGender)
         .all();
-      return Number(
-        (results?.[0] as NearbyCountRow | undefined)?.c ?? 0,
-      );
+      return Number((results?.[0] as NearbyCountRow | undefined)?.c ?? 0);
     }
     const { results } = await db
       .prepare(
@@ -308,9 +304,7 @@ async function countNearbyUsers(
       )
       .bind(userId)
       .all();
-    return Number(
-      (results?.[0] as NearbyCountRow | undefined)?.c ?? 0,
-    );
+    return Number((results?.[0] as NearbyCountRow | undefined)?.c ?? 0);
   } catch (error) {
     log.error(
       "countNearbyUsers",

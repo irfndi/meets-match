@@ -325,7 +325,8 @@ export const matchesCallbacks = async (
         const client = new ApiServiceClient(env.API_SERVICE, env.API_SECRET);
         const userRes = await client.getUser({ userId: targetUserId });
         const targetUser: OtherUser = userRes.user;
-        const name = targetUser.displayName ?? targetUser.first_name ?? "Unknown";
+        const name =
+          targetUser.displayName ?? targetUser.first_name ?? "Unknown";
         const age = targetUser.age ?? "?";
         const bio = targetUser.bio ? `\n📝 ${targetUser.bio}` : "";
         const interests = targetUser.interests

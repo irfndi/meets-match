@@ -65,16 +65,20 @@ export function createMockD1(
     _captured: captured,
   };
 
-  return castForTest<import("@cloudflare/workers-types").D1Database & {
-    _captured: typeof captured;
-  }>(mockD1);
+  return castForTest<
+    import("@cloudflare/workers-types").D1Database & {
+      _captured: typeof captured;
+    }
+  >(mockD1);
 }
 
 export function createMockKV(initial: Record<string, string> = {}) {
   const store = new Map<string, string>(Object.entries(initial));
-  return castForTest<import("@cloudflare/workers-types").KVNamespace & {
-    _store: Map<string, string>;
-  }>({
+  return castForTest<
+    import("@cloudflare/workers-types").KVNamespace & {
+      _store: Map<string, string>;
+    }
+  >({
     get: vi.fn(async (key: string) => store.get(key) ?? null),
     put: vi.fn(async (key: string, value: string) => store.set(key, value)),
     delete: vi.fn(async (key: string) => store.delete(key)),
@@ -90,9 +94,11 @@ export function createMockR2() {
     string,
     { body: ReadableStream; httpMetadata?: { contentType?: string } }
   >();
-  return castForTest<import("@cloudflare/workers-types").R2Bucket & {
-    _objects: Map<string, unknown>;
-  }>({
+  return castForTest<
+    import("@cloudflare/workers-types").R2Bucket & {
+      _objects: Map<string, unknown>;
+    }
+  >({
     put: vi.fn(
       async (
         key: string,

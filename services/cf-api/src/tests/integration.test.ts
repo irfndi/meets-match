@@ -17,7 +17,6 @@ function castForTest<T>(value: TestCastInput): T {
   return value as T;
 }
 
-
 import { describe, it, expect, beforeEach } from "vitest";
 import type { R2Bucket } from "@cloudflare/workers-types";
 import { ApiRouter } from "../http/router.js";

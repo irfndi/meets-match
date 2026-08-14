@@ -200,11 +200,7 @@ describe("Journey Tracking", () => {
       };
 
       await expect(
-        recordJourneyError(
-          asKVNamespace(failingKv),
-          "123",
-          "TRACE001",
-        ),
+        recordJourneyError(asKVNamespace(failingKv), "123", "TRACE001"),
       ).resolves.toBeUndefined();
     });
 
@@ -216,11 +212,7 @@ describe("Journey Tracking", () => {
       };
 
       await expect(
-        recordJourneyError(
-          asKVNamespace(failingKv),
-          "123",
-          "TRACE001",
-        ),
+        recordJourneyError(asKVNamespace(failingKv), "123", "TRACE001"),
       ).resolves.toBeUndefined();
     });
   });
