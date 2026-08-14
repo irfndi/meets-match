@@ -257,6 +257,12 @@ pnpm deploy:dev      # dev stage (--yes)
 pnpm deploy:prod     # prod stage with --adopt --yes
 ```
 
+Prefer CI for prod deploys (tags). Local `pnpm deploy:*` uses the checked-out
+`src/lib/version.ts` and can report a stale version / `development` environment:
+regenerate it first with `pnpm exec tsx scripts/generate-version.ts` (and set
+`CF_ENV=production` for a local prod deploy). CI regenerates version files on
+`pnpm install` via `postinstall`, so CI deploys always carry the tag + env.
+
 ## Development Conventions
 
 ### Version Files
