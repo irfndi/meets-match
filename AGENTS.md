@@ -141,11 +141,15 @@ pnpm typecheck:safe   # tsc --build --force (safe, slow)
 make typecheck
 
 # Deployment (alchemy)
-pnpm deploy:dev     # dev stage
-pnpm deploy:prod    # prod stage, adopts existing cloud resources (--adopt)
+pnpm deploy:dev     # dev stage (--yes: non-interactive, applies without prompting)
+pnpm deploy:prod    # prod stage, adopts existing cloud resources (--adopt --yes)
 pnpm deploy         # alias for deploy:prod
 make deploy         # quality gates + dev stage
 make deploy-prod    # prod stage with adoption
+
+# The --yes flag is required: alchemy prints a plan and then exits without
+# applying when it detects a non-interactive terminal. CI deploy jobs rely on
+# these scripts, so keep --yes in them.
 
 # Database
 make db-check     # Verify local D1 connectivity (wrangler, dev tooling only)
@@ -249,8 +253,8 @@ Alchemy stages mirror the old wrangler environments:
 
 ```bash
 pnpm plan            # preview prod
-pnpm deploy:dev      # dev stage
-pnpm deploy:prod     # prod stage with --adopt
+pnpm deploy:dev      # dev stage (--yes)
+pnpm deploy:prod     # prod stage with --adopt --yes
 ```
 
 ## Development Conventions
