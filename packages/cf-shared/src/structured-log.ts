@@ -22,9 +22,23 @@ declare const console: {
 };
 
 export type LogLevel = "error" | "warn" | "info" | "debug";
-type LogValue = string | number | boolean | null | undefined | object;
 
-export type LogContext = object & { userId?: string };
+/**
+ * JSON-serializable value accepted in log context. Recursive so callers can
+ * pass nested arrays and objects without tripping excess-property checks.
+ */
+export type LogValue =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | LogValue[]
+  | { [key: string]: LogValue };
+
+export interface LogContext {
+  [key: string]: LogValue;
+}
 
 export interface StructuredLogEntry {
   timestamp: string;

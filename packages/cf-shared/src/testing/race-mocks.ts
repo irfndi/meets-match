@@ -1,6 +1,13 @@
 import { vi } from "vitest";
 
-type MockValue = string | number | boolean | null;
+type MockValue =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | MockValue[]
+  | { [key: string]: MockValue };
 interface MockRow {
   [key: string]: MockValue;
 }
@@ -178,10 +185,12 @@ export function createRacingMockD1(options: {
     _captured: captured,
   };
 
-  return castForTest<import("@cloudflare/workers-types").D1Database & {
-    _store: Map<string, MockRow>;
-    _captured: Array<{ sql: string; values: unknown[] }>;
-  }>(mock);
+  return castForTest<
+    import("@cloudflare/workers-types").D1Database & {
+      _store: Map<string, MockRow>;
+      _captured: Array<{ sql: string; values: unknown[] }>;
+    }
+  >(mock);
 }
 
 /**
@@ -204,11 +213,17 @@ export function createRacingMockKV(options: {
       if (pause) await pause;
       return store.get(key) ?? null;
     }),
-    put: vi.fn(async (key: string, value: string, _opts?: { expiration?: number; expirationTtl?: number }) => {
-      const pause = options.pauseBeforePut?.(key);
-      if (pause) await pause;
-      store.set(key, value);
-    }),
+    put: vi.fn(
+      async (
+        key: string,
+        value: string,
+        _opts?: { expiration?: number; expirationTtl?: number },
+      ) => {
+        const pause = options.pauseBeforePut?.(key);
+        if (pause) await pause;
+        store.set(key, value);
+      },
+    ),
     delete: vi.fn(async (key: string) => {
       const pause = options.pauseBeforeDelete?.(key);
       if (pause) await pause;
@@ -218,7 +233,9 @@ export function createRacingMockKV(options: {
     _store: store,
   };
 
-  return castForTest<import("@cloudflare/workers-types").KVNamespace & {
-    _store: Map<string, string>;
-  }>(mock);
+  return castForTest<
+    import("@cloudflare/workers-types").KVNamespace & {
+      _store: Map<string, string>;
+    }
+  >(mock);
 }
