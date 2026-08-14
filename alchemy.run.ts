@@ -93,7 +93,9 @@ export default Stack(
       MEDIA_BUCKET: MEDIA,
       ERROR_ANALYTICS: BOT_ERRORS,
       ENVIRONMENT: environment,
-      BOT_TOKEN: Config.redacted("BOT_TOKEN"),
+      // Each stage talks to its own Telegram bot: prod uses BOT_TOKEN, dev
+      // uses BOT_TOKEN_DEV so the staging bot never replies as the prod bot.
+      BOT_TOKEN: Config.redacted(isProd ? "BOT_TOKEN" : "BOT_TOKEN_DEV"),
       TELEGRAM_WEBHOOK_SECRET: Config.redacted("TELEGRAM_WEBHOOK_SECRET").pipe(
         Config.withDefault(Redacted.make("")),
       ),

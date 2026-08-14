@@ -247,7 +247,8 @@ Alchemy stages mirror the old wrangler environments:
 ### Required Secrets
 
 - `CLOUDFLARE_ACCOUNT_ID` + `CLOUDFLARE_API_TOKEN` — GitHub Actions vars/secrets for alchemy provider auth.
-- `BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `API_SECRET` — GitHub Actions secrets, bound by alchemy at deploy time.
+- `BOT_TOKEN` (prod bot), `BOT_TOKEN_DEV` (dev bot) — Telegram bot tokens, bound per stage by alchemy.
+- `TELEGRAM_WEBHOOK_SECRET`, `API_SECRET` — GitHub Actions secrets, bound by alchemy at deploy time.
 
 ### Manual Deployment
 

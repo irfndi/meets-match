@@ -67,7 +67,7 @@ jobs:
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          BOT_TOKEN_DEV: ${{ secrets.BOT_TOKEN_DEV }}
           TELEGRAM_WEBHOOK_SECRET: ${{ secrets.TELEGRAM_WEBHOOK_SECRET }}
           API_SECRET: ${{ secrets.API_SECRET }}
 
