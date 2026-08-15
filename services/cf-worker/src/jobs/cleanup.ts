@@ -77,21 +77,21 @@ function cleanupEffect(env: Env): Effect.Effect<void, Error, never> {
   const producer = new NotificationQueueProducer(env.NOTIFICATION_QUEUE);
   const db = env.DB;
   return Effect.gen(function* () {
-    const now = new Date();
+    const nowTime = Date.now();
     const likeExpireCutoff = new Date(
-      now.getTime() - 30 * 24 * 60 * 60 * 1000,
+      nowTime - 30 * 24 * 60 * 60 * 1000,
     ).toISOString();
     const matchRecycleCutoff = new Date(
-      now.getTime() - 14 * 24 * 60 * 60 * 1000,
+      nowTime - 14 * 24 * 60 * 60 * 1000,
     ).toISOString();
     const hideCutoff = new Date(
-      now.getTime() - 14 * 24 * 60 * 60 * 1000,
+      nowTime - 14 * 24 * 60 * 60 * 1000,
     ).toISOString();
     const deleteCutoff = new Date(
-      now.getTime() - 30 * 24 * 60 * 60 * 1000,
+      nowTime - 30 * 24 * 60 * 60 * 1000,
     ).toISOString();
     const viewCutoff = new Date(
-      now.getTime() - 90 * 24 * 60 * 60 * 1000,
+      nowTime - 90 * 24 * 60 * 60 * 1000,
     ).toISOString();
 
     // 1. Expire stale pending likes (>30 days)

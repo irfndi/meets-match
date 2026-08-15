@@ -41,3 +41,7 @@
 
 **Learning:** In worker jobs like `reengagement`, passing the result of `JSON.parse` directly into multiple function calls (e.g., `countNearbyUsers` and `getGenderLabel`) without caching the result causes redundant parses of the same JSON string, leading to unnecessary CPU and memory overhead during batch processing.
 **Action:** Parse fields like `user.preferences` once per candidate, store the parsed object in a local variable, and reuse it across multiple helper functions to avoid redundant parsing.
+## 2026-08-15 - Unnecessary Date Object Allocations
+
+**Learning:** Creating `Date` objects solely to obtain their numerical timestamp or to validate a date string causes unnecessary memory allocation and garbage collection. Specifically, `new Date().getTime()` and `new Date(invalidString)` in hot or frequently called code paths waste resources.
+**Action:** Use `Date.now()` to get the current timestamp directly without allocating an object. Use `Date.parse(dateString)` to validate date strings; only instantiate `new Date(parsedTime)` if the parsing succeeds (i.e. does not return `NaN`).
