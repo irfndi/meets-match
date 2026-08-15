@@ -106,8 +106,9 @@ export class UserRepository {
         const user = req.user;
         let age = user.age ?? null;
         if (age == null && user.birthDate) {
-          const birthDate = new Date(user.birthDate);
-          if (!Number.isNaN(birthDate.getTime())) {
+          const parsedBirthTime = Date.parse(user.birthDate);
+          if (!Number.isNaN(parsedBirthTime)) {
+            const birthDate = new Date(parsedBirthTime);
             const now = new Date();
             age = now.getFullYear() - birthDate.getFullYear();
             const monthDelta = now.getMonth() - birthDate.getMonth();
@@ -235,8 +236,9 @@ export class UserRepository {
           fields.push("birth_date = ?");
           values.push(user.birthDate);
           // Auto-compute age from birth_date
-          const birthDate = new Date(user.birthDate);
-          if (!Number.isNaN(birthDate.getTime())) {
+          const parsedBirthTime = Date.parse(user.birthDate);
+          if (!Number.isNaN(parsedBirthTime)) {
+            const birthDate = new Date(parsedBirthTime);
             const now = new Date();
             let age = now.getFullYear() - birthDate.getFullYear();
             const m = now.getMonth() - birthDate.getMonth();
