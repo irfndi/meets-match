@@ -41,3 +41,7 @@
 
 **Learning:** In worker jobs like `reengagement`, passing the result of `JSON.parse` directly into multiple function calls (e.g., `countNearbyUsers` and `getGenderLabel`) without caching the result causes redundant parses of the same JSON string, leading to unnecessary CPU and memory overhead during batch processing.
 **Action:** Parse fields like `user.preferences` once per candidate, store the parsed object in a local variable, and reuse it across multiple helper functions to avoid redundant parsing.
+
+## 2026-08-29 - Time Parsing in Worker Jobs
+**Learning:** Using `new Date().getTime()` or `new Date(now.getTime() - offset).toISOString()` causes unnecessary Date object allocation. When generating timestamps relative to `Date.now()`, calculating the offset using raw numbers avoids allocating intermediate Date objects just to call `getTime()`.
+**Action:** Use `Date.now()` directly and compute numeric offsets, storing the base value if multiple cutoff times are required in the same scope.
