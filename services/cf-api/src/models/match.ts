@@ -908,7 +908,13 @@ export class MatchRepository {
             return { user: candidate, score: baseScore, rawRow: row };
           })
           .filter(
-            (s): s is { user: typeof User.Type; score: number; rawRow: MatchDbRow } => s !== null,
+            (
+              s,
+            ): s is {
+              user: typeof User.Type;
+              score: number;
+              rawRow: MatchDbRow;
+            } => s !== null,
           );
 
         // 4. Sort by score descending
@@ -1035,7 +1041,11 @@ export class MatchRepository {
           ) as typeof import("@meetsmatch/cf-shared").Gender.Type)
         : undefined,
       interests: row.interests ? JSON.parse(String(row.interests)) : [],
-      mediaUrls: preParsed?.skipMediaUrls ? [] : (row.media_urls ? JSON.parse(String(row.media_urls)) : []),
+      mediaUrls: preParsed?.skipMediaUrls
+        ? []
+        : row.media_urls
+          ? JSON.parse(String(row.media_urls))
+          : [],
       location:
         preParsed?.location ??
         (row.location ? JSON.parse(String(row.location)) : undefined),
