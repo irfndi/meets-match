@@ -835,6 +835,7 @@ export class MatchRepository {
               preferences:
                 candidatePrefs ??
                 (row.preferences ? JSON.parse(String(row.preferences)) : {}),
+              skipMediaUrls: true,
             });
 
             // --- Calculate base score ---
@@ -904,10 +905,10 @@ export class MatchRepository {
             }
             baseScore *= randomFactor;
 
-            return { user: candidate, score: baseScore };
+            return { user: candidate, score: baseScore, rawRow: row };
           })
           .filter(
-            (s): s is { user: typeof User.Type; score: number } => s !== null,
+            (s): s is { user: typeof User.Type; score: number; rawRow: MatchDbRow } => s !== null,
           );
 
         // 4. Sort by score descending
@@ -915,6 +916,13 @@ export class MatchRepository {
 
         // 5. Return top limit
         const selected = scored.slice(0, limit);
+
+        // Parse deferred mediaUrls only for the final selected candidates
+        for (const s of selected) {
+          s.user.mediaUrls = s.rawRow.media_urls
+            ? JSON.parse(String(s.rawRow.media_urls))
+            : [];
+        }
 
         // 6. Record profile views (batched for efficiency)
         if (selected.length > 0) {
@@ -1010,6 +1018,7 @@ export class MatchRepository {
     preParsed?: {
       location?: typeof User.Type.location;
       preferences?: typeof User.Type.preferences;
+      skipMediaUrls?: boolean;
     },
   ): typeof User.Type {
     return {
@@ -1026,7 +1035,7 @@ export class MatchRepository {
           ) as typeof import("@meetsmatch/cf-shared").Gender.Type)
         : undefined,
       interests: row.interests ? JSON.parse(String(row.interests)) : [],
-      mediaUrls: row.media_urls ? JSON.parse(String(row.media_urls)) : [],
+      mediaUrls: preParsed?.skipMediaUrls ? [] : (row.media_urls ? JSON.parse(String(row.media_urls)) : []),
       location:
         preParsed?.location ??
         (row.location ? JSON.parse(String(row.location)) : undefined),
