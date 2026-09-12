@@ -718,7 +718,10 @@ export class MatchRepository {
             // small user bases still surface matches.
             let candidatePrefs: typeof User.Type.preferences | undefined;
             if (!relaxFilters) {
-              candidatePrefs = (row.preferences ? JSON.parse(String(row.preferences)) : null) || {};
+              candidatePrefs =
+                (row.preferences
+                  ? JSON.parse(String(row.preferences))
+                  : null) || {};
               if (
                 candidatePrefs?.genderPreference &&
                 candidatePrefs.genderPreference.length > 0 &&
@@ -832,7 +835,10 @@ export class MatchRepository {
               location: candidateLocation,
               preferences:
                 candidatePrefs ??
-                ((row.preferences ? JSON.parse(String(row.preferences)) : null) || {}),
+                ((row.preferences
+                  ? JSON.parse(String(row.preferences))
+                  : null) ||
+                  {}),
               mediaUrls: [], // Deferred for performance
             });
 
@@ -906,7 +912,13 @@ export class MatchRepository {
             return { user: candidate, score: baseScore, row };
           })
           .filter(
-            (s): s is { user: typeof User.Type; score: number; row: MatchDbRow } => s !== null,
+            (
+              s,
+            ): s is {
+              user: typeof User.Type;
+              score: number;
+              row: MatchDbRow;
+            } => s !== null,
           );
 
         // 4. Sort by score descending
@@ -931,7 +943,7 @@ export class MatchRepository {
 
         return selected.map((s) => {
           if (s.row.media_urls) {
-            s.user.mediaUrls = (JSON.parse(String(s.row.media_urls)) || []);
+            s.user.mediaUrls = JSON.parse(String(s.row.media_urls)) || [];
           }
           return s.user;
         });
@@ -1030,7 +1042,8 @@ export class MatchRepository {
             row.gender,
           ) as typeof import("@meetsmatch/cf-shared").Gender.Type)
         : undefined,
-      interests: (row.interests ? JSON.parse(String(row.interests)) : null) || [],
+      interests:
+        (row.interests ? JSON.parse(String(row.interests)) : null) || [],
       mediaUrls:
         preParsed?.mediaUrls ??
         ((row.media_urls ? JSON.parse(String(row.media_urls)) : null) || []),
