@@ -718,9 +718,10 @@ export class MatchRepository {
             // small user bases still surface matches.
             let candidatePrefs: typeof User.Type.preferences | undefined;
             if (!relaxFilters) {
-              candidatePrefs = row.preferences
-                ? JSON.parse(String(row.preferences))
-                : {};
+              candidatePrefs =
+                (row.preferences
+                  ? JSON.parse(String(row.preferences))
+                  : null) || {};
               if (
                 candidatePrefs?.genderPreference &&
                 candidatePrefs.genderPreference.length > 0 &&
@@ -834,7 +835,11 @@ export class MatchRepository {
               location: candidateLocation,
               preferences:
                 candidatePrefs ??
-                (row.preferences ? JSON.parse(String(row.preferences)) : {}),
+                ((row.preferences
+                  ? JSON.parse(String(row.preferences))
+                  : null) ||
+                  {}),
+              mediaUrls: [], // Deferred for performance
             });
 
             // --- Calculate base score ---
@@ -904,10 +909,16 @@ export class MatchRepository {
             }
             baseScore *= randomFactor;
 
-            return { user: candidate, score: baseScore };
+            return { user: candidate, score: baseScore, row };
           })
           .filter(
-            (s): s is { user: typeof User.Type; score: number } => s !== null,
+            (
+              s,
+            ): s is {
+              user: typeof User.Type;
+              score: number;
+              row: MatchDbRow;
+            } => s !== null,
           );
 
         // 4. Sort by score descending
@@ -930,7 +941,15 @@ export class MatchRepository {
           await this.db.batch(statements);
         }
 
-        return selected.map((s) => s.user);
+        return selected.map((s) => {
+          if (s.row.media_urls) {
+            return {
+              ...s.user,
+              mediaUrls: JSON.parse(String(s.row.media_urls)) || [],
+            };
+          }
+          return s.user;
+        });
       },
       catch: (error) => new DatabaseError("getPotentialMatches", error),
     });
@@ -1010,6 +1029,7 @@ export class MatchRepository {
     preParsed?: {
       location?: typeof User.Type.location;
       preferences?: typeof User.Type.preferences;
+      mediaUrls?: typeof User.Type.mediaUrls;
     },
   ): typeof User.Type {
     return {
@@ -1025,14 +1045,17 @@ export class MatchRepository {
             row.gender,
           ) as typeof import("@meetsmatch/cf-shared").Gender.Type)
         : undefined,
-      interests: row.interests ? JSON.parse(String(row.interests)) : [],
-      mediaUrls: row.media_urls ? JSON.parse(String(row.media_urls)) : [],
+      interests:
+        (row.interests ? JSON.parse(String(row.interests)) : null) || [],
+      mediaUrls:
+        preParsed?.mediaUrls ??
+        ((row.media_urls ? JSON.parse(String(row.media_urls)) : null) || []),
       location:
         preParsed?.location ??
-        (row.location ? JSON.parse(String(row.location)) : undefined),
+        ((row.location ? JSON.parse(String(row.location)) : null) || undefined),
       preferences:
         preParsed?.preferences ??
-        (row.preferences ? JSON.parse(String(row.preferences)) : {}),
+        ((row.preferences ? JSON.parse(String(row.preferences)) : null) || {}),
       isActive: row.is_active ? Number(row.is_active) === 1 : true,
       isSleeping: row.is_sleeping ? Number(row.is_sleeping) === 1 : false,
       subscriptionTier: row.subscription_tier
