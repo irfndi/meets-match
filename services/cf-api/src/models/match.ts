@@ -943,10 +943,7 @@ export class MatchRepository {
 
         return selected.map((s) => {
           if (s.row.media_urls) {
-            return {
-              ...s.user,
-              mediaUrls: JSON.parse(String(s.row.media_urls)) || [],
-            };
+            return { ...s.user, mediaUrls: JSON.parse(String(s.row.media_urls)) || [] };
           }
           return s.user;
         });
