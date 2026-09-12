@@ -41,3 +41,7 @@
 
 **Learning:** In worker jobs like `reengagement`, passing the result of `JSON.parse` directly into multiple function calls (e.g., `countNearbyUsers` and `getGenderLabel`) without caching the result causes redundant parses of the same JSON string, leading to unnecessary CPU and memory overhead during batch processing.
 **Action:** Parse fields like `user.preferences` once per candidate, store the parsed object in a local variable, and reuse it across multiple helper functions to avoid redundant parsing.
+
+## 2026-09-12 - Defer JSON parsing of large arrays in high-volume filtering loops
+**Learning:** In Cloudflare D1/SQLite matching queries (e.g. `getPotentialMatches`), parsing large JSON strings (like `media_urls` or `interests`) for every single fetched candidate inside a `.map()` causes significant synchronous overhead, especially when most candidates are filtered out or truncated later.
+**Action:** Wait to `JSON.parse` large list fields until after strict filters pass or limit truncation is applied. For arrays, always guard parsing of nullable string fields using `|| []` to handle `JSON.parse("null")` cases securely and avoid crashing downstream iterators.
