@@ -829,13 +829,20 @@ export class MatchRepository {
             // All hard constraints passed.
             // Create a lightweight proxy object for scoring instead of fully parsing
             // the candidate row (which would parse media_urls and allocate a full User object).
-            const candidatePrefsForScoring = candidatePrefs ??
-                (row.preferences ? JSON.parse(String(row.preferences)) : {});
-            const candidateInterestsForScoring = row.interests ? JSON.parse(String(row.interests)) : [];
+            const candidatePrefsForScoring =
+              candidatePrefs ??
+              (row.preferences ? JSON.parse(String(row.preferences)) : {});
+            const candidateInterestsForScoring = row.interests
+              ? JSON.parse(String(row.interests))
+              : [];
 
             const scoreCandidate = {
               age: row.age ? Number(row.age) : undefined,
-              gender: row.gender ? String(row.gender) as typeof import("@meetsmatch/cf-shared").Gender.Type : undefined,
+              gender: row.gender
+                ? (String(
+                    row.gender,
+                  ) as typeof import("@meetsmatch/cf-shared").Gender.Type)
+                : undefined,
               location: candidateLocation,
               preferences: candidatePrefsForScoring,
               interests: candidateInterestsForScoring,
@@ -897,7 +904,9 @@ export class MatchRepository {
             }
 
             // Premium boost: higher base random range for paid tiers
-            const candidateTier = row.subscription_tier ? String(row.subscription_tier) : "free";
+            const candidateTier = row.subscription_tier
+              ? String(row.subscription_tier)
+              : "free";
             let randomFactor: number;
             if (candidateTier === "premium_plus") {
               randomFactor = 1.0 + Math.random() * 0.3; // 1.0 - 1.3 (up to +30%)
@@ -914,19 +923,19 @@ export class MatchRepository {
               preParsed: {
                 location: candidateLocation,
                 preferences: candidatePrefsForScoring,
-                interests: candidateInterestsForScoring
-              }
+                interests: candidateInterestsForScoring,
+              },
             };
           })
-          .filter(
-            (s): s is NonNullable<typeof s> => s !== null,
-          );
+          .filter((s): s is NonNullable<typeof s> => s !== null);
 
         // 4. Sort by score descending
         scored.sort((a, b) => b.score - a.score);
 
         // 5. Return top limit and fully parse them
-        const selected = scored.slice(0, limit).map(s => this.rowToUser(s.row, s.preParsed));
+        const selected = scored
+          .slice(0, limit)
+          .map((s) => this.rowToUser(s.row, s.preParsed));
 
         // 6. Record profile views (batched for efficiency)
         if (selected.length > 0) {
