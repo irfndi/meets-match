@@ -41,3 +41,8 @@
 
 **Learning:** In worker jobs like `reengagement`, passing the result of `JSON.parse` directly into multiple function calls (e.g., `countNearbyUsers` and `getGenderLabel`) without caching the result causes redundant parses of the same JSON string, leading to unnecessary CPU and memory overhead during batch processing.
 **Action:** Parse fields like `user.preferences` once per candidate, store the parsed object in a local variable, and reuse it across multiple helper functions to avoid redundant parsing.
+
+## 2026-09-19 - Defer Full Entity Allocation in Match Scoring
+
+**Learning:** When evaluating up to 100 candidates in `getPotentialMatches`, calling `rowToUser` for every candidate allocating a full `User` object and parsing all JSON fields like `media_urls` causes unnecessary overhead, as most will be discarded after sorting.
+**Action:** Use a lightweight proxy object to only parse properties necessary for calculating the match score, and defer the full `rowToUser` entity allocation until *after* the top candidates have been sorted and selected.

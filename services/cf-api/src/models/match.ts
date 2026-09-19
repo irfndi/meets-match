@@ -826,19 +826,30 @@ export class MatchRepository {
               }
             }
 
-            // All hard constraints passed. Now we can fully parse the candidate row
-            // for scoring purposes (which needs interests, tier, etc.)
-            // Pass the pre-parsed `candidateLocation` and `candidatePrefs` to
-            // avoid re-parsing inside `rowToUser` (Sourcery review concern).
-            const candidate = this.rowToUser(row, {
+            // All hard constraints passed.
+            // Create a lightweight proxy object for scoring instead of fully parsing
+            // the candidate row (which would parse media_urls and allocate a full User object).
+            const candidatePrefsForScoring =
+              candidatePrefs ??
+              (row.preferences ? JSON.parse(String(row.preferences)) : {});
+            const candidateInterestsForScoring = row.interests
+              ? JSON.parse(String(row.interests))
+              : [];
+
+            const scoreCandidate = {
+              age: row.age ? Number(row.age) : undefined,
+              gender: row.gender
+                ? (String(
+                    row.gender,
+                  ) as typeof import("@meetsmatch/cf-shared").Gender.Type)
+                : undefined,
               location: candidateLocation,
-              preferences:
-                candidatePrefs ??
-                (row.preferences ? JSON.parse(String(row.preferences)) : {}),
-            });
+              preferences: candidatePrefsForScoring,
+              interests: candidateInterestsForScoring,
+            } as typeof User.Type;
 
             // --- Calculate base score ---
-            let baseScore = calculateMatchScore(currentUser, candidate, {
+            let baseScore = calculateMatchScore(currentUser, scoreCandidate, {
               precomputedDistance,
               user1InterestsSet: currentUserInterestsSet,
             }).total;
@@ -893,7 +904,9 @@ export class MatchRepository {
             }
 
             // Premium boost: higher base random range for paid tiers
-            const candidateTier = candidate.subscriptionTier ?? "free";
+            const candidateTier = row.subscription_tier
+              ? String(row.subscription_tier)
+              : "free";
             let randomFactor: number;
             if (candidateTier === "premium_plus") {
               randomFactor = 1.0 + Math.random() * 0.3; // 1.0 - 1.3 (up to +30%)
@@ -904,33 +917,41 @@ export class MatchRepository {
             }
             baseScore *= randomFactor;
 
-            return { user: candidate, score: baseScore };
+            return {
+              row,
+              score: baseScore,
+              preParsed: {
+                location: candidateLocation,
+                preferences: candidatePrefsForScoring,
+                interests: candidateInterestsForScoring,
+              },
+            };
           })
-          .filter(
-            (s): s is { user: typeof User.Type; score: number } => s !== null,
-          );
+          .filter((s): s is NonNullable<typeof s> => s !== null);
 
         // 4. Sort by score descending
         scored.sort((a, b) => b.score - a.score);
 
-        // 5. Return top limit
-        const selected = scored.slice(0, limit);
+        // 5. Return top limit and fully parse them
+        const selected = scored
+          .slice(0, limit)
+          .map((s) => this.rowToUser(s.row, s.preParsed));
 
         // 6. Record profile views (batched for efficiency)
         if (selected.length > 0) {
-          const statements = selected.map((s) =>
+          const statements = selected.map((user) =>
             this.db
               .prepare(
                 `INSERT INTO profile_views (viewer_id, viewed_id, viewed_at)
                VALUES (?, ?, CURRENT_TIMESTAMP)
                ON CONFLICT(viewer_id, viewed_id) DO UPDATE SET viewed_at = CURRENT_TIMESTAMP`,
               )
-              .bind(currentUser.id, s.user.id),
+              .bind(currentUser.id, user.id),
           );
           await this.db.batch(statements);
         }
 
-        return selected.map((s) => s.user);
+        return selected;
       },
       catch: (error) => new DatabaseError("getPotentialMatches", error),
     });
@@ -1010,6 +1031,7 @@ export class MatchRepository {
     preParsed?: {
       location?: typeof User.Type.location;
       preferences?: typeof User.Type.preferences;
+      interests?: string[];
     },
   ): typeof User.Type {
     return {
@@ -1025,7 +1047,9 @@ export class MatchRepository {
             row.gender,
           ) as typeof import("@meetsmatch/cf-shared").Gender.Type)
         : undefined,
-      interests: row.interests ? JSON.parse(String(row.interests)) : [],
+      interests:
+        preParsed?.interests ??
+        (row.interests ? JSON.parse(String(row.interests)) : []),
       mediaUrls: row.media_urls ? JSON.parse(String(row.media_urls)) : [],
       location:
         preParsed?.location ??
