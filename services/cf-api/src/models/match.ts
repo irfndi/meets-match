@@ -841,7 +841,9 @@ export class MatchRepository {
             // --- Calculate base score ---
             let baseScore = calculateMatchScore(currentUser, candidate, {
               precomputedDistance,
-              user1InterestsSet: currentUserInterestsSet as Set<string> | undefined,
+              user1InterestsSet: currentUserInterestsSet as
+                | Set<string>
+                | undefined,
             }).total;
 
             // Variety: penalize recently shown profiles
@@ -908,7 +910,13 @@ export class MatchRepository {
             return { row, user: candidate, score: baseScore };
           })
           .filter(
-            (s): s is { row: MatchDbRow; user: typeof User.Type; score: number } => s !== null,
+            (
+              s,
+            ): s is {
+              row: MatchDbRow;
+              user: typeof User.Type;
+              score: number;
+            } => s !== null,
           );
 
         // 4. Sort by score descending
