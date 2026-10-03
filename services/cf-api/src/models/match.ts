@@ -835,12 +835,15 @@ export class MatchRepository {
               preferences:
                 candidatePrefs ??
                 (row.preferences ? JSON.parse(String(row.preferences)) : {}),
+              skipMediaUrls: true,
             });
 
             // --- Calculate base score ---
             let baseScore = calculateMatchScore(currentUser, candidate, {
               precomputedDistance,
-              user1InterestsSet: currentUserInterestsSet,
+              user1InterestsSet: currentUserInterestsSet as
+                | Set<string>
+                | undefined,
             }).total;
 
             // Variety: penalize recently shown profiles
@@ -904,10 +907,16 @@ export class MatchRepository {
             }
             baseScore *= randomFactor;
 
-            return { user: candidate, score: baseScore };
+            return { row, user: candidate, score: baseScore };
           })
           .filter(
-            (s): s is { user: typeof User.Type; score: number } => s !== null,
+            (
+              s,
+            ): s is {
+              row: MatchDbRow;
+              user: typeof User.Type;
+              score: number;
+            } => s !== null,
           );
 
         // 4. Sort by score descending
@@ -930,7 +939,16 @@ export class MatchRepository {
           await this.db.batch(statements);
         }
 
-        return selected.map((s) => s.user);
+        // 7. Parse expensive JSON fields (media_urls) only for the selected subset
+        return selected.map((s) => {
+          if (s.row.media_urls) {
+            return {
+              ...s.user,
+              mediaUrls: JSON.parse(String(s.row.media_urls)),
+            };
+          }
+          return s.user;
+        });
       },
       catch: (error) => new DatabaseError("getPotentialMatches", error),
     });
@@ -1010,6 +1028,7 @@ export class MatchRepository {
     preParsed?: {
       location?: typeof User.Type.location;
       preferences?: typeof User.Type.preferences;
+      skipMediaUrls?: boolean;
     },
   ): typeof User.Type {
     return {
@@ -1026,7 +1045,11 @@ export class MatchRepository {
           ) as typeof import("@meetsmatch/cf-shared").Gender.Type)
         : undefined,
       interests: row.interests ? JSON.parse(String(row.interests)) : [],
-      mediaUrls: row.media_urls ? JSON.parse(String(row.media_urls)) : [],
+      mediaUrls: preParsed?.skipMediaUrls
+        ? []
+        : row.media_urls
+          ? JSON.parse(String(row.media_urls))
+          : [],
       location:
         preParsed?.location ??
         (row.location ? JSON.parse(String(row.location)) : undefined),
