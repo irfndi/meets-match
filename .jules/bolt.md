@@ -41,3 +41,8 @@
 
 **Learning:** In worker jobs like `reengagement`, passing the result of `JSON.parse` directly into multiple function calls (e.g., `countNearbyUsers` and `getGenderLabel`) without caching the result causes redundant parses of the same JSON string, leading to unnecessary CPU and memory overhead during batch processing.
 **Action:** Parse fields like `user.preferences` once per candidate, store the parsed object in a local variable, and reuse it across multiple helper functions to avoid redundant parsing.
+
+## 2026-06-27 - Deferred JSON Parsing for Candidate Media Arrays
+
+**Learning:** Within the hot loop `getPotentialMatches`, `this.rowToUser` eagerly parsed `media_urls` from JSON for every candidate retrieved from the database. Since `limit * 10` rows might be retrieved but only `limit` candidates are actually returned, calling `JSON.parse` on large arrays of media object metadata for discarded candidates incurs significant unnecessary CPU overhead and garbage collection.
+**Action:** Extract large/expensive properties conditionally using a flag (`skipMediaUrls`). Skip the parse during the candidate filtering and scoring iteration map, return both the raw `row` and the partially populated `user` from the `.map()`, and only execute `JSON.parse` on `row.media_urls` for the final selected subset of candidates after sorting.
