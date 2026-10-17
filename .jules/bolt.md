@@ -41,3 +41,8 @@
 
 **Learning:** In worker jobs like `reengagement`, passing the result of `JSON.parse` directly into multiple function calls (e.g., `countNearbyUsers` and `getGenderLabel`) without caching the result causes redundant parses of the same JSON string, leading to unnecessary CPU and memory overhead during batch processing.
 **Action:** Parse fields like `user.preferences` once per candidate, store the parsed object in a local variable, and reuse it across multiple helper functions to avoid redundant parsing.
+
+## 2026-10-17 - Deferred parsing for discarded candidates
+
+**Learning:** When retrieving database rows (e.g., candidate matches), synchronously parsing large JSON fields like `mediaUrls` for every row introduces unnecessary overhead if only a small subset of these rows are ultimately returned (e.g., after slicing a limited number of top-scored candidates).
+**Action:** Defer the parsing of expensive JSON fields until after the result set is filtered, sorted, and limited. Pass empty values during the initial row mapping, return the raw row alongside the intermediate object, and perform the parsing loop exclusively on the final subset of selected candidates.

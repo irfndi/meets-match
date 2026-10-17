@@ -835,6 +835,7 @@ export class MatchRepository {
               preferences:
                 candidatePrefs ??
                 (row.preferences ? JSON.parse(String(row.preferences)) : {}),
+              mediaUrls: [], // Defer expensive parsing until after limiting
             });
 
             // --- Calculate base score ---
@@ -904,10 +905,10 @@ export class MatchRepository {
             }
             baseScore *= randomFactor;
 
-            return { user: candidate, score: baseScore };
+            return { user: candidate, score: baseScore, row };
           })
           .filter(
-            (s): s is { user: typeof User.Type; score: number } => s !== null,
+            (s): s is { user: typeof User.Type; score: number; row: MatchDbRow } => s !== null,
           );
 
         // 4. Sort by score descending
@@ -916,7 +917,15 @@ export class MatchRepository {
         // 5. Return top limit
         const selected = scored.slice(0, limit);
 
-        // 6. Record profile views (batched for efficiency)
+        // 6. Parse expensive deferred fields for selected only
+        for (const s of selected) {
+          if (s.row.media_urls) {
+             const parsed = JSON.parse(String(s.row.media_urls));
+             (s.user as any).mediaUrls = parsed === null ? [] : parsed;
+          }
+        }
+
+        // 7. Record profile views (batched for efficiency)
         if (selected.length > 0) {
           const statements = selected.map((s) =>
             this.db
@@ -1010,6 +1019,7 @@ export class MatchRepository {
     preParsed?: {
       location?: typeof User.Type.location;
       preferences?: typeof User.Type.preferences;
+      mediaUrls?: typeof User.Type.mediaUrls;
     },
   ): typeof User.Type {
     return {
@@ -1026,7 +1036,11 @@ export class MatchRepository {
           ) as typeof import("@meetsmatch/cf-shared").Gender.Type)
         : undefined,
       interests: row.interests ? JSON.parse(String(row.interests)) : [],
-      mediaUrls: row.media_urls ? JSON.parse(String(row.media_urls)) : [],
+      mediaUrls: preParsed?.mediaUrls !== undefined ? preParsed.mediaUrls :
+        (row.media_urls ? (() => {
+          const parsed = JSON.parse(String(row.media_urls));
+          return parsed === null ? [] : parsed;
+        })() : []),
       location:
         preParsed?.location ??
         (row.location ? JSON.parse(String(row.location)) : undefined),
