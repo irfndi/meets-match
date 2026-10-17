@@ -908,7 +908,13 @@ export class MatchRepository {
             return { user: candidate, score: baseScore, row };
           })
           .filter(
-            (s): s is { user: typeof User.Type; score: number; row: MatchDbRow } => s !== null,
+            (
+              s,
+            ): s is {
+              user: typeof User.Type;
+              score: number;
+              row: MatchDbRow;
+            } => s !== null,
           );
 
         // 4. Sort by score descending
@@ -920,8 +926,8 @@ export class MatchRepository {
         // 6. Parse expensive deferred fields for selected only
         for (const s of selected) {
           if (s.row.media_urls) {
-             const parsed = JSON.parse(String(s.row.media_urls));
-             (s.user as any).mediaUrls = parsed === null ? [] : parsed;
+            const parsed = JSON.parse(String(s.row.media_urls));
+            (s.user as any).mediaUrls = parsed === null ? [] : parsed;
           }
         }
 
@@ -1036,11 +1042,15 @@ export class MatchRepository {
           ) as typeof import("@meetsmatch/cf-shared").Gender.Type)
         : undefined,
       interests: row.interests ? JSON.parse(String(row.interests)) : [],
-      mediaUrls: preParsed?.mediaUrls !== undefined ? preParsed.mediaUrls :
-        (row.media_urls ? (() => {
-          const parsed = JSON.parse(String(row.media_urls));
-          return parsed === null ? [] : parsed;
-        })() : []),
+      mediaUrls:
+        preParsed?.mediaUrls !== undefined
+          ? preParsed.mediaUrls
+          : row.media_urls
+            ? (() => {
+                const parsed = JSON.parse(String(row.media_urls));
+                return parsed === null ? [] : parsed;
+              })()
+            : [],
       location:
         preParsed?.location ??
         (row.location ? JSON.parse(String(row.location)) : undefined),
